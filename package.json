@@ -1,0 +1,71 @@
+{
+  "name": "@yohawing/three-mmd-loader",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/yohawing/three-mmd-loader.git"
+  },
+  "homepage": "https://github.com/yohawing/three-mmd-loader#readme",
+  "bugs": {
+    "url": "https://github.com/yohawing/three-mmd-loader/issues"
+  },
+  "keywords": [
+    "three",
+    "threejs",
+    "mmd",
+    "mikumikudance",
+    "pmx",
+    "pmd",
+    "vmd",
+    "vpd",
+    "loader",
+    "animation"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./parser": {
+      "types": "./dist/parser/index.d.ts",
+      "default": "./dist/parser/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "default": "./dist/runtime/index.js"
+    },
+    "./three": {
+      "types": "./dist/three/index.d.ts",
+      "default": "./dist/three/index.js"
+    },
+    "./physics": {
+      "types": "./dist/physics/index.d.ts",
+      "default": "./dist/physics/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "smoke:dist": "node scripts/dist-export-smoke.mjs",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "peerDependencies": {
+    "three": "^0.176.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.26.0",
+    "@types/node": "^22.15.3",
+    "@types/three": "^0.176.0",
+    "eslint": "^9.26.0",
+    "three": "^0.176.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.32.0",
+    "vitest": "^3.1.3"
+  },
+  "files": [
+    "dist"
+  ]
+}
