@@ -5,7 +5,8 @@ import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
 import { createThreeBufferGeometry } from "./geometry.js";
 import { parseLoaderMmdModelData } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
-import { createThreeMmdMaterials } from "./materials.js";
+import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
+import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
 import { createThreeSkeleton } from "./skeleton.js";
@@ -13,6 +14,7 @@ import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry } from "./geometry.js";
 export { isModelSource } from "./modelSource.js";
+export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 export { mmdWorldMatrixToThree } from "./runtime-sync.js";
 export { createThreeSkeleton } from "./skeleton.js";
 export {
@@ -35,6 +37,8 @@ export type {
   ThreeMmdVertexMorphOffset
 } from "./geometry.js";
 export type { ModelSource } from "./modelSource.js";
+export type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
+export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
 export type {
   MmdWorldMatrixBuffer,
   MmdWorldMatrixColumnMajorTuple
@@ -50,15 +54,8 @@ export type {
 export interface ThreeMmdLoaderOptions {
   readonly textureResolver?: TextureResolver;
   readonly textureMap?: TextureMap;
+  readonly textureLoader?: ThreeMmdTextureLoader;
   readonly runtime?: DefaultMmdRuntimeOptions;
-}
-
-export interface TextureLoadDiagnostic {
-  readonly level: "warning";
-  readonly code: "TEXTURE_RESOLVE_FAILED";
-  readonly materialIndex: number;
-  readonly textureKind: "diffuse" | "sphere" | "toon";
-  readonly path: string;
 }
 
 export interface ThreeMmdModel {
@@ -88,11 +85,18 @@ export class ThreeMmdLoader {
     const modelData = parseLoaderMmdModelData(bytes);
     validateLoadModelAssemblyInput(modelData);
     const mesh = createThreeMmdMesh(modelData);
+    const materials = normalizeMeshMaterials(mesh.material);
+    const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
+      textureResolver: this.options.textureResolver,
+      textureMap: this.options.textureMap,
+      textureLoader: this.options.textureLoader,
+      modelUrl: typeof source === "string" ? source : undefined
+    });
     return {
       mesh,
       runtime: new DefaultMmdRuntime(this.options.runtime),
       source,
-      textureDiagnostics: []
+      textureDiagnostics
     };
   }
 
@@ -150,6 +154,15 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
   return mesh;
 }
 
+function normalizeMeshMaterials(
+  material: THREE.Material | THREE.Material[]
+): THREE.MeshToonMaterial[] {
+  const materials = Array.isArray(material) ? material : [material];
+  return materials.filter((candidate): candidate is THREE.MeshToonMaterial => {
+    return candidate instanceof THREE.MeshToonMaterial;
+  });
+}
+
 function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
   if (typeof options !== "object" || options === null || Array.isArray(options)) {
     throw new TypeError("ThreeMmdLoader options must be an object");
@@ -172,6 +185,15 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
       if (!isTextureMapValue(value)) {
         throw new TypeError(`ThreeMmdLoader textureMap entry "${path}" must be a string, URL, or Blob`);
       }
+    }
+  }
+
+  if (options.textureLoader !== undefined) {
+    if (typeof options.textureLoader !== "object" || options.textureLoader === null) {
+      throw new TypeError("ThreeMmdLoader textureLoader must be an object");
+    }
+    if (typeof options.textureLoader.load !== "function") {
+      throw new TypeError("ThreeMmdLoader textureLoader.load must be a function");
     }
   }
 

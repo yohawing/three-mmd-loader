@@ -1,6 +1,40 @@
 import * as THREE from "three";
 
 import type { MaterialInfo } from "../parser/model/modelTypes.js";
+import {
+  createTextureResolver,
+  resolveMmdToonTextureReference
+} from "./textures.js";
+import type { TextureMap, TextureResolver } from "./textures.js";
+
+export interface TextureLoadDiagnostic {
+  readonly level: "warning";
+  readonly code: "TEXTURE_RESOLVE_FAILED";
+  readonly materialIndex: number;
+  readonly textureKind: "diffuse" | "sphere" | "toon";
+  readonly path: string;
+}
+
+export interface ThreeMmdTextureLoader {
+  load(
+    url: string,
+    onLoad?: (texture: THREE.Texture) => void,
+    onProgress?: (event: ProgressEvent) => void,
+    onError?: (error: unknown) => void
+  ): THREE.Texture;
+}
+
+export interface ThreeMmdMaterialTextureOptions {
+  readonly textureResolver?: TextureResolver;
+  readonly textureMap?: TextureMap;
+  readonly textureLoader?: ThreeMmdTextureLoader;
+  readonly modelUrl?: string;
+}
+
+export type ThreeMmdSphereMappedToonMaterial = THREE.MeshToonMaterial & {
+  envMap?: THREE.Texture | null;
+  combine?: THREE.Combine;
+};
 
 export function createThreeMmdMaterials(
   materials: readonly MaterialInfo[]
@@ -41,6 +75,80 @@ export function createThreeMmdMaterials(
   });
 }
 
+export async function applyThreeMmdMaterialTextures(
+  threeMaterials: readonly THREE.MeshToonMaterial[],
+  mmdMaterials: readonly MaterialInfo[],
+  options: ThreeMmdMaterialTextureOptions = {}
+): Promise<TextureLoadDiagnostic[]> {
+  const diagnostics: TextureLoadDiagnostic[] = [];
+  const resolver = createTextureResolver(
+    options.textureResolver,
+    options.textureMap ?? (options.modelUrl ? {} : undefined)
+  );
+  const textureLoader = options.textureLoader ?? new THREE.TextureLoader();
+
+  await Promise.all(
+    mmdMaterials.map(async (mmdMaterial, materialIndex) => {
+      const material = threeMaterials[materialIndex];
+      if (!material) {
+        return;
+      }
+
+      const diffuse = await loadResolvedTexture(
+        materialIndex,
+        "diffuse",
+        mmdMaterial.texturePath,
+        resolver,
+        textureLoader,
+        options.modelUrl,
+        diagnostics
+      );
+      if (diffuse) {
+        material.map = diffuse;
+      }
+
+      const toonReference = resolveMmdToonTextureReference(mmdMaterial);
+      const toon = await loadResolvedTexture(
+        materialIndex,
+        "toon",
+        toonReference.path,
+        resolver,
+        textureLoader,
+        options.modelUrl,
+        diagnostics
+      );
+      if (toon) {
+        toon.minFilter = THREE.NearestFilter;
+        toon.magFilter = THREE.NearestFilter;
+        material.gradientMap = toon;
+      }
+
+      const sphere = await loadResolvedTexture(
+        materialIndex,
+        "sphere",
+        mmdMaterial.sphereTexturePath,
+        resolver,
+        textureLoader,
+        options.modelUrl,
+        diagnostics
+      );
+      if (sphere) {
+        sphere.mapping = THREE.EquirectangularReflectionMapping;
+        const sphereMappedMaterial = material as ThreeMmdSphereMappedToonMaterial;
+        sphereMappedMaterial.envMap = sphere;
+        sphereMappedMaterial.combine =
+          mmdMaterial.sphereMode === "add" ? THREE.AddOperation : THREE.MultiplyOperation;
+      }
+
+      if (diffuse || toon || sphere) {
+        material.needsUpdate = true;
+      }
+    })
+  );
+
+  return diagnostics;
+}
+
 function createFallbackMmdMaterial(): THREE.MeshToonMaterial {
   const material = new THREE.MeshToonMaterial({
     color: new THREE.Color(0.8, 0.8, 0.8),
@@ -53,4 +161,90 @@ function createFallbackMmdMaterial(): THREE.MeshToonMaterial {
     englishName: "fallback"
   };
   return material;
+}
+
+async function loadResolvedTexture(
+  materialIndex: number,
+  textureKind: TextureLoadDiagnostic["textureKind"],
+  path: string,
+  resolver: TextureResolver | undefined,
+  textureLoader: ThreeMmdTextureLoader,
+  modelUrl: string | undefined,
+  diagnostics: TextureLoadDiagnostic[]
+): Promise<THREE.Texture | undefined> {
+  if (!path) {
+    return undefined;
+  }
+
+  let resolved: string | URL | Blob | undefined;
+  try {
+    resolved = await resolver?.resolve(path, modelUrl);
+  } catch {
+    diagnostics.push(createTextureDiagnostic(materialIndex, textureKind, path));
+    return undefined;
+  }
+
+  if (!resolved) {
+    diagnostics.push(createTextureDiagnostic(materialIndex, textureKind, path));
+    return undefined;
+  }
+
+  try {
+    return await loadTexture(textureLoader, resolved);
+  } catch {
+    diagnostics.push(createTextureDiagnostic(materialIndex, textureKind, path));
+    return undefined;
+  }
+}
+
+function loadTexture(
+  textureLoader: ThreeMmdTextureLoader,
+  resolved: string | URL | Blob
+): Promise<THREE.Texture> {
+  const objectUrl = createObjectUrl(resolved);
+  const url = objectUrl ?? (resolved instanceof URL ? resolved.toString() : resolved);
+  if (typeof url !== "string") {
+    return Promise.reject(new TypeError("TEXTURE_BLOB_OBJECT_URL_UNAVAILABLE"));
+  }
+
+  return new Promise((resolve, reject) => {
+    textureLoader.load(
+      url,
+      (texture) => {
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
+        texture.flipY = false;
+        resolve(texture);
+      },
+      undefined,
+      (error) => {
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
+        reject(error);
+      }
+    );
+  });
+}
+
+function createObjectUrl(resolved: string | URL | Blob): string | undefined {
+  if (typeof Blob !== "undefined" && resolved instanceof Blob) {
+    return typeof URL.createObjectURL === "function" ? URL.createObjectURL(resolved) : undefined;
+  }
+  return undefined;
+}
+
+function createTextureDiagnostic(
+  materialIndex: number,
+  textureKind: TextureLoadDiagnostic["textureKind"],
+  path: string
+): TextureLoadDiagnostic {
+  return {
+    level: "warning",
+    code: "TEXTURE_RESOLVE_FAILED",
+    materialIndex,
+    textureKind,
+    path
+  };
 }
