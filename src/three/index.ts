@@ -110,7 +110,7 @@ export class ThreeMmdLoader {
     validateModelSource(source, "loadAnimation");
     const bytes = await readModelSourceBytes(source);
     if (bytes.byteLength === 0) {
-      throw createUnimplementedError("loadAnimation");
+      throw createEmptySourceError("loadAnimation");
     }
     const animation = parseVmd(bytes);
     return {
@@ -125,7 +125,7 @@ export class ThreeMmdLoader {
     validateModelSource(source, "loadPose");
     const bytes = await readModelSourceBytes(source);
     if (bytes.byteLength === 0) {
-      throw createUnimplementedError("loadPose");
+      throw createEmptySourceError("loadPose");
     }
     return {
       source,
@@ -141,7 +141,7 @@ export class ThreeMmdLoader {
     validateModelSource(source, "loadPoseAnimation");
     const bytes = await readModelSourceBytes(source);
     if (bytes.byteLength === 0) {
-      throw createUnimplementedError("loadPoseAnimation");
+      throw createEmptySourceError("loadPoseAnimation");
     }
     const pose = parseVpd(bytes);
     const animation = createMmdAnimationFromPose(pose, name);
@@ -164,8 +164,11 @@ export class ThreeMmdLoader {
   }
 }
 
-function createUnimplementedError(method: string): Error {
-  return new Error(`ThreeMmdLoader.${method} is not implemented in this migration slice`);
+function createEmptySourceError(method: string): Error {
+  return new Error(
+    `ThreeMmdLoader.${method} source must not be empty; ` +
+      `ThreeMmdLoader.${method} is not implemented in this migration slice for empty sources`
+  );
 }
 
 function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
