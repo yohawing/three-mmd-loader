@@ -69,6 +69,27 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.geometry.index?.count ?? 0).toBe(0);
   });
 
+  it("loads a synthetic PMX model with empty geometry indices into a skinned mesh", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(createMinimalPmxModelBytes({ materialCount: 1 }));
+
+    expect(model.mesh.isSkinnedMesh).toBe(true);
+    expect(model.mesh.skeleton.bones.length).toBeGreaterThanOrEqual(0);
+    expect(model.mesh.geometry.index?.count ?? 0).toBe(0);
+  });
+
+  it("loads a synthetic PMX model with empty materials into a skinned mesh", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(createMinimalPmxModelBytes({ materialCount: 0 }));
+
+    expect(model.mesh.isSkinnedMesh).toBe(true);
+    expect(model.mesh.skeleton.bones.length).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(model.mesh.material)).toBe(false);
+    expect(model.mesh.geometry.index?.count ?? 0).toBe(0);
+  });
+
   it("exposes unimplemented async animation loading methods explicitly", async () => {
     const loader = new ThreeMmdLoader();
 
@@ -108,3 +129,99 @@ describe("ThreeMmdLoader", () => {
     );
   });
 });
+
+function createMinimalPmxModelBytes(options: { readonly materialCount: 0 | 1 }): Uint8Array {
+  const bytes: number[] = [];
+  const encoder = new TextEncoder();
+  const u8 = (value: number) => bytes.push(value & 0xff);
+  const i32 = (value: number) => {
+    const buffer = new ArrayBuffer(4);
+    new DataView(buffer).setInt32(0, value, true);
+    bytes.push(...new Uint8Array(buffer));
+  };
+  const f32 = (value: number) => {
+    const buffer = new ArrayBuffer(4);
+    new DataView(buffer).setFloat32(0, value, true);
+    bytes.push(...new Uint8Array(buffer));
+  };
+  const text = (value: string) => {
+    const encoded = encoder.encode(value);
+    i32(encoded.byteLength);
+    bytes.push(...encoded);
+  };
+  const count = (value = 0) => i32(value);
+
+  bytes.push(...encoder.encode("PMX "));
+  f32(2);
+  u8(8);
+  u8(1);
+  u8(0);
+  u8(1);
+  u8(1);
+  u8(1);
+  u8(1);
+  u8(1);
+  u8(1);
+  text("synthetic empty mesh");
+  text("SyntheticEmptyMesh");
+  text("");
+  text("");
+  count(1);
+  writeVertex();
+  count(0);
+  count(0);
+  count(options.materialCount);
+  if (options.materialCount === 1) {
+    writeMaterial();
+  }
+  count(0);
+  count(0);
+  count(0);
+  count(0);
+  count(0);
+
+  return new Uint8Array(bytes);
+
+  function writeVertex() {
+    f32(0);
+    f32(0);
+    f32(0);
+    f32(0);
+    f32(1);
+    f32(0);
+    f32(0);
+    f32(0);
+    u8(0);
+    u8(0);
+    f32(1);
+  }
+
+  function writeMaterial() {
+    text("mat");
+    text("mat");
+    f32(0.8);
+    f32(0.8);
+    f32(0.8);
+    f32(1);
+    f32(0);
+    f32(0);
+    f32(0);
+    f32(1);
+    f32(0.2);
+    f32(0.2);
+    f32(0.2);
+    u8(0);
+    f32(0);
+    f32(0);
+    f32(0);
+    f32(1);
+    f32(1);
+    u8(0xff);
+    u8(0xff);
+    u8(0);
+    u8(1);
+    u8(0);
+    text("");
+    i32(0);
+  }
+}
