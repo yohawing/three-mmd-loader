@@ -10,6 +10,12 @@ export interface CcdIkBone {
 export interface CcdIkLink {
   readonly boneIndex: number;
   readonly enabled?: boolean;
+  readonly angleLimit?: CcdIkLinkAngleLimit;
+}
+
+export interface CcdIkLinkAngleLimit {
+  readonly minimumAngle: Vec3Tuple;
+  readonly maximumAngle: Vec3Tuple;
 }
 
 export interface CcdIkChain {
@@ -118,6 +124,12 @@ export class CcdIkSolver {
           input.pose.rotations[link.boneIndex] = normalizeQuaternion(
             multiplyQuaternions(invertQuaternion(parentWorldRotation), newWorldRotation)
           );
+          if (link.angleLimit !== undefined) {
+            input.pose.rotations[link.boneIndex] = clampQuaternionToEulerLimit(
+              input.pose.rotations[link.boneIndex],
+              link.angleLimit
+            );
+          }
 
           composeWorldState(input.bones, input.pose.rotations, worldState);
         }
@@ -172,6 +184,15 @@ function validateInput(input: CcdIkSolveInput): void {
     }
     for (const link of chain.links) {
       assertBoneIndex(input.bones, link.boneIndex, "link boneIndex");
+      if (link.angleLimit !== undefined) {
+        assertFiniteVector(link.angleLimit.minimumAngle, "link minimumAngle");
+        assertFiniteVector(link.angleLimit.maximumAngle, "link maximumAngle");
+        for (let axis = 0; axis < 3; axis++) {
+          if (link.angleLimit.minimumAngle[axis] > link.angleLimit.maximumAngle[axis]) {
+            throw new RangeError("CCD IK link angle limit minimum must not exceed maximum");
+          }
+        }
+      }
     }
   }
 }
@@ -320,4 +341,52 @@ function rotateVector(vector: Vec3Tuple, rotation: QuatTuple): [number, number, 
     invertQuaternion(normalized)
   );
   return [rotated[0], rotated[1], rotated[2]];
+}
+
+function clampQuaternionToEulerLimit(
+  rotation: QuatTuple,
+  limit: CcdIkLinkAngleLimit
+): [number, number, number, number] {
+  const euler = quaternionToEulerXyz(rotation);
+  return eulerXyzToQuaternion([
+    clamp(euler[0], limit.minimumAngle[0], limit.maximumAngle[0]),
+    clamp(euler[1], limit.minimumAngle[1], limit.maximumAngle[1]),
+    clamp(euler[2], limit.minimumAngle[2], limit.maximumAngle[2])
+  ]);
+}
+
+function quaternionToEulerXyz(rotation: QuatTuple): [number, number, number] {
+  const [x, y, z, w] = normalizeQuaternion(rotation);
+  const sinrCosp = 2 * (w * x + y * z);
+  const cosrCosp = 1 - 2 * (x * x + y * y);
+  const roll = Math.atan2(sinrCosp, cosrCosp);
+
+  const sinp = 2 * (w * y - z * x);
+  const pitch =
+    Math.abs(sinp) >= 1 ? Math.sign(sinp) * (Math.PI / 2) : Math.asin(clamp(sinp, -1, 1));
+
+  const sinyCosp = 2 * (w * z + x * y);
+  const cosyCosp = 1 - 2 * (y * y + z * z);
+  const yaw = Math.atan2(sinyCosp, cosyCosp);
+
+  return [roll, pitch, yaw];
+}
+
+function eulerXyzToQuaternion(euler: Vec3Tuple): [number, number, number, number] {
+  const halfX = euler[0] * 0.5;
+  const halfY = euler[1] * 0.5;
+  const halfZ = euler[2] * 0.5;
+  const sx = Math.sin(halfX);
+  const cx = Math.cos(halfX);
+  const sy = Math.sin(halfY);
+  const cy = Math.cos(halfY);
+  const sz = Math.sin(halfZ);
+  const cz = Math.cos(halfZ);
+
+  return normalizeQuaternion([
+    sx * cy * cz + cx * sy * sz,
+    cx * sy * cz - sx * cy * sz,
+    cx * cy * sz + sx * sy * cz,
+    cx * cy * cz - sx * sy * sz
+  ]);
 }

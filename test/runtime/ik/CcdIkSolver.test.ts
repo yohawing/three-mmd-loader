@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { CcdIkSolver, type CcdIkBone, type MutableQuatTuple } from "../../../src/runtime/index.js";
+import {
+  CcdIkSolver,
+  createCcdIkSolveInputFromMmdIk,
+  mmdIkChainToCcdIkChain,
+  type CcdIkBone,
+  type MutableQuatTuple,
+  type MmdIkRuntimeChain
+} from "../../../src/runtime/index.js";
 
 const IDENTITY: MutableQuatTuple = [0, 0, 0, 1];
 
@@ -226,6 +233,111 @@ describe("CcdIkSolver", () => {
     expect(unclamped.result.finalDistances[0]).toBeLessThan(1e-5);
   });
 
+  it("clamps solved link rotations to the configured local angle limit", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1, 1, 0] }
+    ];
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [
+            {
+              boneIndex: 1,
+              angleLimit: {
+                minimumAngle: [-Math.PI, -Math.PI, 0],
+                maximumAngle: [Math.PI, Math.PI, Math.PI / 4]
+              }
+            }
+          ],
+          iterationCount: 4,
+          maxAnglePerIteration: Math.PI
+        }
+      ]
+    });
+
+    expect(result.finalDistances[0]).toBeGreaterThan(0.5);
+    expect(rotations[1][0]).toBeCloseTo(0, 5);
+    expect(rotations[1][1]).toBeCloseTo(0, 5);
+    expect(rotations[1][2]).toBeCloseTo(Math.sin(Math.PI / 8), 5);
+    expect(rotations[1][3]).toBeCloseTo(Math.cos(Math.PI / 8), 5);
+  });
+
+  it("creates a CCD solve input from an MMD IK runtime chain", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1, 1, 0] }
+    ];
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+    const chain: MmdIkRuntimeChain = {
+      boneIndex: 3,
+      targetBoneIndex: 2,
+      links: [
+        {
+          boneIndex: 1,
+          angleLimit: {
+            minimumAngle: [-Math.PI, -Math.PI, 0],
+            maximumAngle: [Math.PI, Math.PI, Math.PI / 4]
+          }
+        }
+      ],
+      iterationCount: 4,
+      maxAnglePerIteration: Math.PI,
+      tolerance: 1e-6
+    };
+
+    expect(mmdIkChainToCcdIkChain(chain)).toEqual({
+      goalBoneIndex: 3,
+      effectorBoneIndex: 2,
+      links: [
+        {
+          boneIndex: 1,
+          enabled: undefined,
+          angleLimit: {
+            minimumAngle: [-Math.PI, -Math.PI, 0],
+            maximumAngle: [Math.PI, Math.PI, Math.PI / 4]
+          }
+        }
+      ],
+      iterationCount: 4,
+      maxAnglePerIteration: Math.PI,
+      tolerance: 1e-6
+    });
+
+    const input = createCcdIkSolveInputFromMmdIk({
+      bones,
+      pose: { rotations },
+      chains: [chain]
+    });
+    const result = new CcdIkSolver().solve(input);
+
+    expect(result.chainCount).toBe(1);
+    expect(input.bones).toEqual(bones);
+    expect(input.bones).not.toBe(bones);
+    expect(result.finalDistances[0]).toBeGreaterThan(0.5);
+    expect(rotations[1][2]).toBeCloseTo(Math.sin(Math.PI / 8), 5);
+  });
+
   it("returns a finite distance without mutating pose when iterationCount is zero", () => {
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },
@@ -372,5 +484,28 @@ describe("CcdIkSolver", () => {
         ]
       })
     ).toThrow("CCD IK tolerance must be a finite non-negative number");
+
+    expect(() =>
+      solver.solve({
+        bones,
+        pose: { rotations },
+        chains: [
+          {
+            goalBoneIndex: 0,
+            effectorBoneIndex: 1,
+            links: [
+              {
+                boneIndex: 0,
+                angleLimit: {
+                  minimumAngle: [0, 1, 0],
+                  maximumAngle: [0, 0, 0]
+                }
+              }
+            ],
+            iterationCount: 1
+          }
+        ]
+      })
+    ).toThrow("CCD IK link angle limit minimum must not exceed maximum");
   });
 });
