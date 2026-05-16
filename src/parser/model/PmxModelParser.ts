@@ -86,44 +86,17 @@ export function parsePmx(bytes: Uint8Array): ParsedPmx {
   const englishComment = readText();
 
   const vertexCount = reader.i32();
-  const positions = new Float32Array(vertexCount * 3);
-  const normals = new Float32Array(vertexCount * 3);
-  const uvs = new Float32Array(vertexCount * 2);
-  const additionalUvs = Array.from(
-    { length: additionalUvCount },
-    () => new Float32Array(vertexCount * 4)
-  );
-  const skinIndices = new Uint16Array(vertexCount * 4);
-  const skinWeights = new Float32Array(vertexCount * 4);
-  const edgeScale = new Float32Array(vertexCount);
-  const sdef = {
-    enabled: new Float32Array(vertexCount),
-    c: new Float32Array(vertexCount * 3),
-    r0: new Float32Array(vertexCount * 3),
-    r1: new Float32Array(vertexCount * 3),
-    rw0: new Float32Array(vertexCount * 3),
-    rw1: new Float32Array(vertexCount * 3)
-  };
-  let sdefVertexCount = 0;
-  for (let i = 0; i < vertexCount; i++) {
-    const weightType = readVertex(
-      reader,
-      additionalUvCount,
-      indexSizes,
-      positions,
-      normals,
-      uvs,
-      additionalUvs,
-      skinIndices,
-      skinWeights,
-      edgeScale,
-      sdef,
-      i
-    );
-    if (weightType === 3) {
-      sdefVertexCount += 1;
-    }
-  }
+  const {
+    positions,
+    normals,
+    uvs,
+    additionalUvs,
+    skinIndices,
+    skinWeights,
+    edgeScale,
+    sdef,
+    sdefVertexCount
+  } = readVerticesWithBoneIndexSizeFallback(reader, vertexCount, additionalUvCount, indexSizes);
 
   const indexCount = reader.i32();
   const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
@@ -255,6 +228,94 @@ export function parsePmx(bytes: Uint8Array): ParsedPmx {
   };
 }
 
+interface PmxVertexBuffers {
+  positions: Float32Array;
+  normals: Float32Array;
+  uvs: Float32Array;
+  additionalUvs: Float32Array[];
+  skinIndices: Uint16Array;
+  skinWeights: Float32Array;
+  edgeScale: Float32Array;
+  sdef: NonNullable<GeometryBuffers["sdef"]>;
+  sdefVertexCount: number;
+}
+
+function readVerticesWithBoneIndexSizeFallback(
+  reader: BinaryReader,
+  vertexCount: number,
+  additionalUvCount: number,
+  indexSizes: PmxIndexSizes
+): PmxVertexBuffers {
+  const startOffset = reader.offset;
+  const candidateBoneIndexSizes = uniqueNumbers([indexSizes.bone, 1, 2, 4]);
+  let lastError: unknown;
+
+  for (const boneIndexSize of candidateBoneIndexSizes) {
+    reader.offset = startOffset;
+    const candidateIndexSizes = { ...indexSizes, bone: boneIndexSize };
+    const buffers = createPmxVertexBuffers(vertexCount, additionalUvCount);
+    try {
+      for (let i = 0; i < vertexCount; i++) {
+        const weightType = readVertex(
+          reader,
+          additionalUvCount,
+          candidateIndexSizes,
+          buffers.positions,
+          buffers.normals,
+          buffers.uvs,
+          buffers.additionalUvs,
+          buffers.skinIndices,
+          buffers.skinWeights,
+          buffers.edgeScale,
+          buffers.sdef,
+          i
+        );
+        if (weightType === 3) {
+          buffers.sdefVertexCount += 1;
+        }
+      }
+      if (isPostVertexSectionPlausible(reader, indexSizes)) {
+        return buffers;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  reader.offset = startOffset;
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error("Unable to read PMX vertex payload");
+}
+
+function createPmxVertexBuffers(
+  vertexCount: number,
+  additionalUvCount: number
+): PmxVertexBuffers {
+  return {
+    positions: new Float32Array(vertexCount * 3),
+    normals: new Float32Array(vertexCount * 3),
+    uvs: new Float32Array(vertexCount * 2),
+    additionalUvs: Array.from(
+      { length: additionalUvCount },
+      () => new Float32Array(vertexCount * 4)
+    ),
+    skinIndices: new Uint16Array(vertexCount * 4),
+    skinWeights: new Float32Array(vertexCount * 4),
+    edgeScale: new Float32Array(vertexCount),
+    sdef: {
+      enabled: new Float32Array(vertexCount),
+      c: new Float32Array(vertexCount * 3),
+      r0: new Float32Array(vertexCount * 3),
+      r1: new Float32Array(vertexCount * 3),
+      rw0: new Float32Array(vertexCount * 3),
+      rw1: new Float32Array(vertexCount * 3)
+    },
+    sdefVertexCount: 0
+  };
+}
+
 function readVertex(
   reader: BinaryReader,
   additionalUvCount: number,
@@ -320,6 +381,38 @@ function readVertex(
   }
   edgeScale[index] = reader.f32();
   return weightType;
+}
+
+function isPostVertexSectionPlausible(reader: BinaryReader, indexSizes: PmxIndexSizes): boolean {
+  const vertexIndexCount = peekI32(reader, reader.offset);
+  if (vertexIndexCount === undefined || vertexIndexCount < 0) {
+    return false;
+  }
+
+  const vertexIndexBytes = vertexIndexCount * indexSizes.vertex;
+  if (!Number.isSafeInteger(vertexIndexBytes)) {
+    return false;
+  }
+
+  const textureCountOffset = reader.offset + 4 + vertexIndexBytes;
+  const textureCount = peekI32(reader, textureCountOffset);
+  if (textureCount === undefined || textureCount < 0) {
+    return false;
+  }
+
+  const remainingAfterTextureCount = reader.view.byteLength - (textureCountOffset + 4);
+  return textureCount * 4 <= remainingAfterTextureCount;
+}
+
+function peekI32(reader: BinaryReader, offset: number): number | undefined {
+  if (offset < 0 || offset + 4 > reader.view.byteLength) {
+    return undefined;
+  }
+  return reader.view.getInt32(offset, true);
+}
+
+function uniqueNumbers(values: readonly number[]): number[] {
+  return [...new Set(values)];
 }
 
 function readSdefParameters(

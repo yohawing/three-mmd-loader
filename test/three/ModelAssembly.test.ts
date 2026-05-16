@@ -24,6 +24,26 @@ describe("loader model assembly", () => {
     expect(modelData.rigidBodies).toHaveLength(0);
   });
 
+  it("assembles PMX fixtures that need vertex bone index size fallback", async () => {
+    const bytes = await readFile(resolve("..", "data/unittest/joint_orient_test.pmx"));
+
+    const modelData = parseLoaderMmdModelData(bytes);
+
+    expect(modelData.metadata.format).toBe("pmx");
+    expect(modelData.geometry.positions.length).toBe(24 * 3);
+    expect(modelData.skeleton.bones.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("assembles meshless PMX fixtures without requiring geometry indices", async () => {
+    const bytes = await readFile(resolve("..", "data/unittest/test_fix_axis.pmx"));
+
+    const modelData = parseLoaderMmdModelData(bytes);
+
+    expect(modelData.metadata.format).toBe("pmx");
+    expect(modelData.geometry.indices).toHaveLength(0);
+    expect(modelData.skeleton.bones.length).toBeGreaterThanOrEqual(1);
+  });
+
   it("assembles a generated license-clean PMD triangle into internal MMD model data", () => {
     const modelData = parseLoaderMmdModelData(createMinimalPmdTriangleBytes());
 

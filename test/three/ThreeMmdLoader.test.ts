@@ -58,6 +58,17 @@ describe("ThreeMmdLoader", () => {
     expect(model.textureDiagnostics).toEqual([]);
   });
 
+  it("loads a meshless PMX model into a skinned mesh with empty geometry indices", async () => {
+    const loader = new ThreeMmdLoader();
+    const source: ModelSource = await readFile(resolve("..", "data/unittest/test_fix_axis.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(model.mesh.isSkinnedMesh).toBe(true);
+    expect(model.mesh.skeleton.bones.length).toBeGreaterThanOrEqual(1);
+    expect(model.mesh.geometry.index?.count ?? 0).toBe(0);
+  });
+
   it("exposes unimplemented async animation loading methods explicitly", async () => {
     const loader = new ThreeMmdLoader();
 

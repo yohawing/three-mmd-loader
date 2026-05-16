@@ -83,7 +83,6 @@ export class ThreeMmdLoader {
     validateModelSource(source, "loadModel");
     const bytes = await readModelSourceBytes(source);
     const modelData = parseLoaderMmdModelData(bytes);
-    validateLoadModelAssemblyInput(modelData);
     const mesh = createThreeMmdMesh(modelData);
     const materials = normalizeMeshMaterials(mesh.material);
     const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
@@ -118,12 +117,6 @@ export class ThreeMmdLoader {
 
 function createUnimplementedError(method: string): Error {
   return new Error(`ThreeMmdLoader.${method} is not implemented in this migration slice`);
-}
-
-function validateLoadModelAssemblyInput(modelData: LoaderMmdModelData): void {
-  if (modelData.geometry.indices.length === 0) {
-    throw new RangeError("ThreeMmdLoader.loadModel model geometry must contain indices");
-  }
 }
 
 function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
