@@ -45,7 +45,9 @@ export class DefaultMmdRuntime implements MmdRuntime {
         this.mixer.setTime(seconds);
       }
     }
+    this.applyAppendTransforms();
     this.solveIk();
+    this.mesh?.skeleton.update();
     return this.frameState();
   }
 
@@ -113,7 +115,48 @@ export class DefaultMmdRuntime implements MmdRuntime {
     rotations.forEach((rotation, index) => {
       mesh.skeleton.bones[index]?.quaternion.fromArray(rotation);
     });
-    mesh.skeleton.update();
+  }
+
+  private applyAppendTransforms(): void {
+    const mesh = this.mesh;
+    if (!mesh) {
+      return;
+    }
+
+    const bones = mesh.skeleton.bones;
+    for (let index = 0; index < bones.length; index += 1) {
+      const bone = bones[index];
+      if (!bone) {
+        continue;
+      }
+      const appendTransform = bone.userData.mmdAppendTransform as
+        | { readonly parentIndex: number; readonly weight: number }
+        | undefined;
+      const flags = bone.userData.mmdFlags as
+        | {
+            readonly appendRotate?: boolean;
+            readonly appendTranslate?: boolean;
+            readonly appendLocal?: boolean;
+          }
+        | undefined;
+      if (!appendTransform || (!flags?.appendRotate && !flags?.appendTranslate)) {
+        continue;
+      }
+
+      const sourceBone = bones[appendTransform.parentIndex];
+      if (!sourceBone) {
+        continue;
+      }
+      const weight = appendTransform.weight;
+
+      if (flags.appendRotate) {
+        const slerpQ = new THREE.Quaternion().slerp(sourceBone.quaternion, weight);
+        bone.quaternion.multiply(slerpQ);
+      }
+      if (flags.appendTranslate) {
+        bone.position.addScaledVector(sourceBone.position, weight);
+      }
+    }
   }
 }
 

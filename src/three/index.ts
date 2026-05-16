@@ -187,6 +187,7 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     rigidBodyCount: modelData.rigidBodies.length,
     jointCount: modelData.joints.length
   };
+  mesh.userData.mmdIkChains = createRuntimeIkChains(modelData);
 
   const skeleton = createThreeSkeleton(modelData.skeleton);
   skeleton.bones.forEach((bone, index) => {
@@ -194,6 +195,15 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     if (boneData) {
       bone.userData.mmdBoneName = boneData.name;
       bone.userData.mmdEnglishBoneName = boneData.englishName;
+    }
+    if (boneData?.appendTransform) {
+      bone.userData.mmdAppendTransform = boneData.appendTransform;
+    }
+    if (boneData?.flags) {
+      bone.userData.mmdFlags = boneData.flags;
+    }
+    if (boneData?.layer !== undefined) {
+      bone.userData.mmdLayer = boneData.layer;
     }
   });
   skeleton.bones.forEach((bone) => {
@@ -203,6 +213,38 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
   });
   mesh.bind(skeleton);
   return mesh;
+}
+
+function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {
+  return modelData.skeleton.bones
+    .map((bone, boneIndex) => {
+      if (!bone.ik) {
+        return null;
+      }
+      return {
+        goalBoneIndex: boneIndex,
+        effectorBoneIndex: bone.ik.targetIndex,
+        iterationCount: bone.ik.loopCount,
+        maxAnglePerIteration: bone.ik.limitAngle,
+        links: bone.ik.links.map((link) => ({
+          boneIndex: link.boneIndex,
+          enabled: true,
+          limitsKind:
+            link.limits === undefined
+              ? undefined
+              : link.limits.kind === "pmdKnee"
+                ? "pmdKnee"
+                : "pmxLinkLimit",
+          angleLimit: link.limits
+            ? {
+                minimumAngle: link.limits.lower,
+                maximumAngle: link.limits.upper
+              }
+            : undefined
+        }))
+      };
+    })
+    .filter((chain): chain is NonNullable<typeof chain> => chain !== null);
 }
 
 function createMorphTargetDictionary(

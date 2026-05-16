@@ -11,6 +11,7 @@ export interface CcdIkLink {
   readonly boneIndex: number;
   readonly enabled?: boolean;
   readonly angleLimit?: CcdIkLinkAngleLimit;
+  readonly limitsKind?: "pmdKnee" | "pmxLinkLimit";
 }
 
 export interface CcdIkLinkAngleLimit {
@@ -129,6 +130,15 @@ export class CcdIkSolver {
               input.pose.rotations[link.boneIndex],
               link.angleLimit
             );
+            if (
+              link.limitsKind === "pmxLinkLimit" &&
+              !isQuaternionWithinEulerLimit(input.pose.rotations[link.boneIndex], link.angleLimit)
+            ) {
+              input.pose.rotations[link.boneIndex] = clampQuaternionToEulerLimit(
+                input.pose.rotations[link.boneIndex],
+                link.angleLimit
+              );
+            }
           }
 
           composeWorldState(input.bones, input.pose.rotations, worldState);
@@ -192,6 +202,13 @@ function validateInput(input: CcdIkSolveInput): void {
             throw new RangeError("CCD IK link angle limit minimum must not exceed maximum");
           }
         }
+      }
+      if (
+        link.limitsKind !== undefined &&
+        link.limitsKind !== "pmdKnee" &&
+        link.limitsKind !== "pmxLinkLimit"
+      ) {
+        throw new RangeError("CCD IK link limitsKind must be pmdKnee or pmxLinkLimit");
       }
     }
   }
@@ -353,6 +370,17 @@ function clampQuaternionToEulerLimit(
     clamp(euler[1], limit.minimumAngle[1], limit.maximumAngle[1]),
     clamp(euler[2], limit.minimumAngle[2], limit.maximumAngle[2])
   ]);
+}
+
+function isQuaternionWithinEulerLimit(rotation: QuatTuple, limit: CcdIkLinkAngleLimit): boolean {
+  const epsilon = 1e-6;
+  const euler = quaternionToEulerXyz(rotation);
+  return euler.every((angle, axis) => {
+    return (
+      angle >= limit.minimumAngle[axis] - epsilon &&
+      angle <= limit.maximumAngle[axis] + epsilon
+    );
+  });
 }
 
 function quaternionToEulerXyz(rotation: QuatTuple): [number, number, number] {

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import { ThreeMmdLoader } from "../../src/index.js";
@@ -56,6 +57,63 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.geometry.getAttribute("position").count).toBe(14);
     expect(model.mesh.geometry.index?.count).toBe(36);
     expect(model.textureDiagnostics).toEqual([]);
+  });
+
+  it("exposes PMX IK chains on mesh userData when the fixture contains IK", async () => {
+    const loader = new ThreeMmdLoader();
+    const source: ModelSource = await readFile(resolve("..", "data/unittest/test_basic_bone.pmx"));
+
+    const model = await loader.loadModel(source);
+    const chains = model.mesh.userData.mmdIkChains;
+    expect(Array.isArray(chains)).toBe(true);
+    expect(chains.length).toBeGreaterThan(0);
+    expect(chains[0]).toMatchObject({
+      goalBoneIndex: expect.any(Number),
+      effectorBoneIndex: expect.any(Number),
+      links: expect.any(Array)
+    });
+    expect(chains[0].links.length).toBeGreaterThan(0);
+  });
+
+  it("evaluates a runtime frame for an IK-enabled mesh without throwing", async () => {
+    const loader = new ThreeMmdLoader();
+    const source: ModelSource = await readFile(resolve("..", "data/unittest/test_basic_bone.pmx"));
+
+    const model = await loader.loadModel(source);
+    const clip = new THREE.AnimationClip("ik-smoke", -1, []);
+
+    expect(model.mesh.userData.mmdIkChains.length).toBeGreaterThan(0);
+    if (!model.runtime) {
+      throw new Error("Expected a runtime");
+    }
+    expect(() => {
+      model.runtime?.setAnimation(clip, model.mesh);
+      model.runtime?.evaluate(1 / 30);
+    }).not.toThrow();
+  });
+
+  it("wires append transform metadata from the append bone fixture", async () => {
+    const loader = new ThreeMmdLoader();
+    const source: ModelSource = await readFile(resolve("..", "data/unittest/test_append_bone.pmx"));
+
+    const model = await loader.loadModel(source);
+    const appendBones = model.mesh.skeleton.bones.filter((bone) => {
+      return bone.userData.mmdAppendTransform !== undefined;
+    });
+
+    expect(appendBones.length).toBeGreaterThan(0);
+    expect(appendBones[0]?.userData.mmdAppendTransform).toEqual(
+      expect.objectContaining({
+        parentIndex: expect.any(Number),
+        weight: expect.any(Number)
+      })
+    );
+    expect(appendBones[0]?.userData.mmdFlags).toEqual(
+      expect.objectContaining({
+        appendRotate: expect.any(Boolean),
+        appendTranslate: expect.any(Boolean)
+      })
+    );
   });
 
   it("loads a meshless PMX model into a skinned mesh with empty geometry indices", async () => {

@@ -17,6 +17,7 @@ export interface MmdIkRuntimeLink {
   readonly boneIndex: number;
   readonly enabled?: boolean;
   readonly angleLimit?: CcdIkLinkAngleLimit;
+  readonly limitsKind?: CcdIkLink["limitsKind"];
 }
 
 export interface MmdIkRuntimeChain {
@@ -62,6 +63,7 @@ function mmdIkLinkToCcdIkLink(link: MmdIkRuntimeLink): CcdIkLink {
   return {
     boneIndex: link.boneIndex,
     enabled: link.enabled,
-    angleLimit: link.angleLimit
+    angleLimit: link.angleLimit,
+    limitsKind: link.limitsKind
   };
 }
