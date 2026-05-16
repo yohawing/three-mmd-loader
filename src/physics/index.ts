@@ -1,3 +1,10 @@
+export {
+  AmmoMmdPhysicsBackend,
+  createAmmoMmdPhysicsBackend,
+  type AmmoNamespace,
+  type AmmoPhysicsBackendOptions
+} from "./ammoMmdPhysicsBackend.js";
+
 export type MmdPhysicsDiagnosticLevel = "warning" | "error";
 
 export interface MmdPhysicsDiagnostic {

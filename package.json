@@ -52,6 +52,9 @@
     "test": "vitest run",
     "lint": "eslint ."
   },
+  "dependencies": {
+    "ammo.js": "^0.0.10"
+  },
   "peerDependencies": {
     "three": "^0.176.0"
   },
