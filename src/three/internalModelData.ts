@@ -1,36 +1,40 @@
 import type { MmdModelFormat, PmdMetadata, PmdSectionInventory, PmxMetadata, PmxSectionInventory } from "../parser/index.js";
 import type {
-  ThreeMmdGeometryBuffers,
-  ThreeMmdGeometryMaterial,
-  ThreeMmdGeometryMorph
-} from "./geometry.js";
+  Diagnostic,
+  DisplayFrameData,
+  JointData,
+  MaterialInfo,
+  MorphData,
+  RigidBodyData,
+  SoftBodyData
+} from "../parser/model/modelTypes.js";
+import type { ThreeMmdGeometryBuffers } from "./geometry.js";
 import type { ThreeMmdSkeletonData } from "./skeleton.js";
 
 export type LoaderMmdCoordinateSystem = "mmd-right-handed-y-up";
 
 export interface LoaderMmdModelMetadata {
   readonly format: MmdModelFormat;
+  readonly version: number;
+  readonly encoding: "utf-8" | "utf-16-le" | "shift-jis" | "unknown";
   readonly name: string;
   readonly englishName: string;
   readonly comment: string;
   readonly englishComment: string;
-}
-
-export interface LoaderMmdMaterialData extends ThreeMmdGeometryMaterial {
-  readonly name: string;
-  readonly englishName: string;
-  readonly diffuseTexturePath?: string;
-  readonly sphereTexturePath?: string;
-  readonly toonTexturePath?: string;
+  readonly diagnostics: readonly Diagnostic[];
 }
 
 export interface LoaderMmdModelData {
   readonly coordinateSystem: LoaderMmdCoordinateSystem;
   readonly metadata: LoaderMmdModelMetadata;
   readonly geometry: ThreeMmdGeometryBuffers;
-  readonly materials: readonly LoaderMmdMaterialData[];
-  readonly morphs: readonly ThreeMmdGeometryMorph[];
+  readonly materials: readonly MaterialInfo[];
+  readonly morphs: readonly MorphData[];
   readonly skeleton: ThreeMmdSkeletonData;
+  readonly displayFrames: readonly DisplayFrameData[];
+  readonly rigidBodies: readonly RigidBodyData[];
+  readonly joints: readonly JointData[];
+  readonly softBodies: readonly SoftBodyData[];
 }
 
 export type LoaderMmdModelContainerMetadata = PmxMetadata | PmdMetadata;
@@ -52,10 +56,13 @@ export function createLoaderMmdMetadata(
 ): LoaderMmdModelMetadata {
   return {
     format: metadata.format,
+    version: metadata.header.version,
+    encoding: metadata.format === "pmx" ? metadata.header.encoding : metadata.encoding,
     name: metadata.name,
     englishName: metadata.englishName,
     comment: metadata.comment,
-    englishComment: metadata.englishComment
+    englishComment: metadata.englishComment,
+    diagnostics: []
   };
 }
 
@@ -78,6 +85,17 @@ function validateMetadata(metadata: LoaderMmdModelMetadata): void {
   validateString("ENGLISH_NAME", metadata.englishName);
   validateString("COMMENT", metadata.comment);
   validateString("ENGLISH_COMMENT", metadata.englishComment);
+  if (!Number.isFinite(metadata.version)) {
+    throw new TypeError("LOADER_MMD_MODEL_VERSION_NON_FINITE");
+  }
+  if (
+    metadata.encoding !== "utf-8" &&
+    metadata.encoding !== "utf-16-le" &&
+    metadata.encoding !== "shift-jis" &&
+    metadata.encoding !== "unknown"
+  ) {
+    throw new TypeError(`LOADER_MMD_MODEL_ENCODING_INVALID:${metadata.encoding}`);
+  }
 }
 
 function validateGeometryShape(geometry: ThreeMmdGeometryBuffers): void {
@@ -112,18 +130,18 @@ function validateGeometryShape(geometry: ThreeMmdGeometryBuffers): void {
   }
 }
 
-function validateMaterials(materials: readonly LoaderMmdMaterialData[]): void {
+function validateMaterials(materials: readonly MaterialInfo[]): void {
   materials.forEach((material, index) => {
     validateString(`MATERIAL_NAME:${index}`, material.name);
     validateString(`MATERIAL_ENGLISH_NAME:${index}`, material.englishName);
     validateNonNegativeInteger(`MATERIAL_FACE_COUNT:${index}`, material.faceCount);
-    validateOptionalString(`MATERIAL_DIFFUSE_TEXTURE:${index}`, material.diffuseTexturePath);
+    validateOptionalString(`MATERIAL_TEXTURE:${index}`, material.texturePath);
     validateOptionalString(`MATERIAL_SPHERE_TEXTURE:${index}`, material.sphereTexturePath);
     validateOptionalString(`MATERIAL_TOON_TEXTURE:${index}`, material.toonTexturePath);
   });
 }
 
-function validateMorphs(morphs: readonly ThreeMmdGeometryMorph[]): void {
+function validateMorphs(morphs: readonly MorphData[]): void {
   morphs.forEach((morph, morphIndex) => {
     morph.vertexOffsets?.forEach((offset, offsetIndex) => {
       validateNonNegativeInteger(`MORPH_VERTEX:${morphIndex}:${offsetIndex}`, offset.vertexIndex);

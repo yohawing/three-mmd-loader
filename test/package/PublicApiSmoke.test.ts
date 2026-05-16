@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  BinaryReader,
   detectModelFormat,
   parsePmdSectionInventory,
   parsePmxMetadata,
@@ -16,27 +15,21 @@ import {
 import {
   DefaultMmdRuntime,
   ThreeMmdLoader,
-  MODEL_SOURCE_STRING_UNRESOLVED,
-  createBonePhysicsToggleBuffer,
   createThreeBufferGeometry,
   createThreeSkeleton,
   createDisabledMmdPhysicsBackend,
   createMmdBuiltInToonTextureMap,
   isModelSource,
-  legacyMmdRigidBodyModeToPhysicsMotionType,
   mmdWorldMatrixToThree,
-  resolveMappedTexture,
-  readModelSourceBytes
+  resolveMappedTexture
 } from "../../src/index.js";
 
 describe("public API smoke", () => {
   it("runs the README parser sample against the one-bone PMX fixture", async () => {
     const bytes = await readFile(resolve("..", "data/unittest/test_1bone_cube.pmx"));
     const format = detectModelFormat(bytes);
-    const reader = new BinaryReader(bytes);
 
     expect(format).toBe("pmx");
-    expect(reader.remaining).toBe(bytes.byteLength);
 
     if (format === "pmx") {
       const metadata = parsePmxMetadata(bytes);
@@ -106,29 +99,11 @@ center
     );
   });
 
-  it("exports ModelSource helpers from the public barrel", async () => {
+  it("exports ModelSource validation from the public barrel", () => {
     const bytes = new Uint8Array([1, 2, 3]);
 
     expect(isModelSource("model.pmx")).toBe(true);
     expect(isModelSource(bytes)).toBe(true);
-    await expect(readModelSourceBytes(bytes)).resolves.toEqual(new Uint8Array([1, 2, 3]));
-    await expect(readModelSourceBytes("model.pmx")).rejects.toThrow(MODEL_SOURCE_STRING_UNRESOLVED);
-  });
-
-  it("exports representative legacy physics bridge helpers from the public barrel", () => {
-    expect(legacyMmdRigidBodyModeToPhysicsMotionType("static")).toBe("static");
-    expect(legacyMmdRigidBodyModeToPhysicsMotionType("dynamicBone")).toBe("dynamicWithBone");
-    expect(
-      Array.from(
-        createBonePhysicsToggleBuffer(
-          [
-            { name: "センター", englishName: "center" },
-            { name: "髪", englishName: "hair" }
-          ],
-          { center: false, 髪: true }
-        )
-      )
-    ).toEqual([0, 1]);
   });
 
   it("imports root package facades and exposes explicit loader errors", async () => {

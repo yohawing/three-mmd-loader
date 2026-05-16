@@ -12,10 +12,13 @@ function createMinimalModelData() {
     coordinateSystem: "mmd-right-handed-y-up" as const,
     metadata: {
       format: "pmx" as const,
+      version: 2,
+      encoding: "utf-8" as const,
       name: "モデル",
       englishName: "Model",
       comment: "",
-      englishComment: ""
+      englishComment: "",
+      diagnostics: []
     },
     geometry: {
       positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
@@ -98,10 +101,13 @@ describe("internal loader model data contract", () => {
 
     expect(createLoaderMmdMetadata(metadata)).toEqual({
       format: "pmx",
+      version: 2,
+      encoding: "utf-8",
       name: "モデル",
       englishName: "Model",
       comment: "コメント",
-      englishComment: "Comment"
+      englishComment: "Comment",
+      diagnostics: []
     });
   });
 

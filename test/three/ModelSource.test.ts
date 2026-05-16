@@ -4,7 +4,7 @@ import {
   isModelSource,
   MODEL_SOURCE_STRING_UNRESOLVED,
   readModelSourceBytes
-} from "../../src/index.js";
+} from "../../src/three/modelSource.js";
 
 describe("ModelSource", () => {
   it("recognizes supported source shapes without reading them", () => {

@@ -6,7 +6,6 @@ import { TextEncoder } from "node:util";
 import {
   DefaultMmdRuntime as PackageRootDefaultMmdRuntime,
   ThreeMmdLoader as PackageRootThreeMmdLoader,
-  MODEL_SOURCE_STRING_UNRESOLVED as PACKAGE_ROOT_MODEL_SOURCE_STRING_UNRESOLVED,
   createMmdBuiltInToonTextureMap as createPackageRootMmdBuiltInToonTextureMap,
   mmdWorldMatrixToThree as packageRootMmdWorldMatrixToThree,
   parsePmdMetadata as parsePackageRootPmdMetadata,
@@ -18,7 +17,6 @@ import {
   parseVpdMetadata as parsePackageRootVpdMetadata,
   parseVpdPoseInventory as parsePackageRootVpdPoseInventory,
   resolveMappedTexture as resolvePackageRootMappedTexture,
-  readModelSourceBytes as readPackageRootModelSourceBytes,
   parseVpdPose as parsePackageRootVpdPose
 } from "@yohawing/three-mmd-loader";
 import {
@@ -34,7 +32,6 @@ import {
 } from "@yohawing/three-mmd-loader/parser";
 import {
   createDisabledMmdPhysicsBackend as createPackageDisabledMmdPhysicsBackend,
-  mapLegacyMmdRigidBodyToPhysicsRigidBody as mapPackageLegacyMmdRigidBodyToPhysicsRigidBody,
   validateConcreteMmdPhysicsStepContext as validatePackageConcreteMmdPhysicsStepContext
 } from "@yohawing/three-mmd-loader/physics";
 import { DefaultMmdRuntime as PackageDefaultMmdRuntime } from "@yohawing/three-mmd-loader/runtime";
@@ -43,14 +40,11 @@ import {
   createThreeBufferGeometry as createPackageThreeBufferGeometry,
   createThreeSkeleton as createPackageThreeSkeleton,
   mmdWorldMatrixToThree as packageMmdWorldMatrixToThree,
-  MODEL_SOURCE_STRING_UNRESOLVED as PACKAGE_THREE_MODEL_SOURCE_STRING_UNRESOLVED,
-  readModelSourceBytes as readPackageModelSourceBytes,
   ThreeMmdLoader as PackageThreeMmdLoader
 } from "@yohawing/three-mmd-loader/three";
 import {
   DefaultMmdRuntime as RootDefaultMmdRuntime,
   ThreeMmdLoader as RootThreeMmdLoader,
-  MODEL_SOURCE_STRING_UNRESOLVED as ROOT_MODEL_SOURCE_STRING_UNRESOLVED,
   createMmdBuiltInToonTextureMap as createRootMmdBuiltInToonTextureMap,
   createDisabledMmdPhysicsBackend as createRootDisabledMmdPhysicsBackend,
   mmdWorldMatrixToThree as rootMmdWorldMatrixToThree,
@@ -63,11 +57,9 @@ import {
   parseVpdMetadata as parseRootVpdMetadata,
   parseVpdPoseInventory as parseRootVpdPoseInventory,
   resolveMappedTexture as resolveRootMappedTexture,
-  readModelSourceBytes as readRootModelSourceBytes,
   parseVpdPose as parseRootVpdPose
 } from "../dist/index.js";
 import {
-  BinaryReader,
   detectModelFormat,
   parsePmdMetadata,
   parsePmdSectionInventory,
@@ -81,7 +73,6 @@ import {
 } from "../dist/parser/index.js";
 import {
   createDisabledMmdPhysicsBackend,
-  mapLegacyMmdRigidBodyToPhysicsRigidBody,
   validateConcreteMmdPhysicsStepContext
 } from "../dist/physics/index.js";
 import { DefaultMmdRuntime } from "../dist/runtime/index.js";
@@ -90,14 +81,11 @@ import {
   createThreeBufferGeometry,
   createThreeSkeleton,
   mmdWorldMatrixToThree,
-  MODEL_SOURCE_STRING_UNRESOLVED,
-  readModelSourceBytes,
   ThreeMmdLoader
 } from "../dist/three/index.js";
 
 const pmxBytes = await readFile(resolve("..", "data/unittest/test_1bone_cube.pmx"));
 assert.equal(detectModelFormat(pmxBytes), "pmx");
-assert.equal(new BinaryReader(pmxBytes).remaining, pmxBytes.byteLength);
 assert.equal(parsePmxMetadata(pmxBytes).name, "テスト用モデル");
 assert.equal(parsePmxSectionInventory(pmxBytes).counts.bones, 1);
 assert.equal(parseRootPmxMetadata(pmxBytes).name, "テスト用モデル");
@@ -221,47 +209,28 @@ assert.equal(
   "body"
 );
 
-const modelSourceBytes = new Uint8Array([1, 2, 3]);
-assert.equal(await readModelSourceBytes(modelSourceBytes), modelSourceBytes);
-assert.equal(await readRootModelSourceBytes(modelSourceBytes), modelSourceBytes);
-assert.equal(await readPackageModelSourceBytes(modelSourceBytes), modelSourceBytes);
-assert.equal(await readPackageRootModelSourceBytes(modelSourceBytes), modelSourceBytes);
-assert.equal(MODEL_SOURCE_STRING_UNRESOLVED, "MODEL_SOURCE_STRING_UNRESOLVED");
-assert.equal(ROOT_MODEL_SOURCE_STRING_UNRESOLVED, "MODEL_SOURCE_STRING_UNRESOLVED");
-assert.equal(PACKAGE_ROOT_MODEL_SOURCE_STRING_UNRESOLVED, "MODEL_SOURCE_STRING_UNRESOLVED");
-assert.equal(PACKAGE_THREE_MODEL_SOURCE_STRING_UNRESOLVED, "MODEL_SOURCE_STRING_UNRESOLVED");
-assert.match(
-  await readModelSourceBytes("model.pmx").then(
-    () => "",
-    (error) => String(error instanceof Error ? error.message : error)
-  ),
-  /MODEL_SOURCE_STRING_UNRESOLVED/
-);
-
 const smokeRigidBody = {
+  index: 0,
   boneIndex: 0,
-  group: 1,
-  mask: 0xffff,
-  shape: "sphere",
-  size: [1, 1, 1],
-  position: [0, 0, 0],
-  rotation: [0, 0, 0],
+  motionType: "static",
+  shape: { type: "sphere", size: [1, 1, 1] },
+  localTranslation: [0, 0, 0],
+  localRotation: [0, 0, 0, 1],
   mass: 0,
   linearDamping: 0,
   angularDamping: 0,
   restitution: 0,
   friction: 0.5,
-  mode: "static"
+  collisionGroup: 1,
+  collisionMask: 0xffff
 };
-const distRigidBody = mapLegacyMmdRigidBodyToPhysicsRigidBody(smokeRigidBody, 0);
-const packageRigidBody = mapPackageLegacyMmdRigidBodyToPhysicsRigidBody(smokeRigidBody, 0);
 const concreteContext = {
   seconds: 0,
   deltaSeconds: 1 / 60,
   frame: 0,
   frameRate: 60,
   skeleton: { bones: [{ index: 0, parentIndex: -1, restTranslation: [0, 0, 0] }] },
-  rigidBodies: [distRigidBody],
+  rigidBodies: [smokeRigidBody],
   joints: [],
   inputTranslations: new Float32Array(3),
   inputRotations: new Float32Array([0, 0, 0, 1]),
@@ -274,13 +243,7 @@ const concreteContext = {
   bonePhysicsToggles: new Uint8Array([1])
 };
 assert.equal(validateConcreteMmdPhysicsStepContext(concreteContext).valid, true);
-assert.equal(
-  validatePackageConcreteMmdPhysicsStepContext({
-    ...concreteContext,
-    rigidBodies: [packageRigidBody]
-  }).valid,
-  true
-);
+assert.equal(validatePackageConcreteMmdPhysicsStepContext(concreteContext).valid, true);
 
 const loader = new ThreeMmdLoader();
 const rootLoader = new RootThreeMmdLoader();
@@ -299,7 +262,10 @@ async function expectLoaderMethodNotImplemented(loaderInstance, method) {
 }
 
 for (const loaderInstance of [loader, rootLoader, packageLoader, packageRootLoader]) {
-  await expectLoaderMethodNotImplemented(loaderInstance, "loadModel");
+  const model = await loaderInstance.loadModel(pmxBytes);
+  assert.equal(model.mesh.name, "TestModel");
+  assert.equal(model.mesh.skeleton.bones.length, 1);
+  assert.equal(model.mesh.geometry.getAttribute("position").count, 14);
   await expectLoaderMethodNotImplemented(loaderInstance, "loadAnimation");
   await expectLoaderMethodNotImplemented(loaderInstance, "loadPose");
   await expectLoaderMethodNotImplemented(loaderInstance, "loadPoseAnimation");

@@ -1,13 +1,3 @@
-export type {
-  DisabledMmdPhysicsBackendOptions,
-  MmdPhysicsBackend,
-  MmdPhysicsDiagnostic,
-  MmdPhysicsDiagnosticLevel,
-  MmdPhysicsResetContext,
-  MmdPhysicsStepContext,
-  MmdPhysicsStepResult
-} from "../physics/index.js";
-
 export * from "./ik/index.js";
 
 export interface MmdFrameState {

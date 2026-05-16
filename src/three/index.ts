@@ -1,21 +1,18 @@
-import type * as THREE from "three";
+import * as THREE from "three";
 
-import {
-  detectModelFormat,
-  parsePmdMetadata,
-  parsePmdSectionInventory,
-  parsePmxMetadata,
-  parsePmxSectionInventory
-} from "../parser/index.js";
+import { DefaultMmdRuntime } from "../runtime/index.js";
 import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
-import type { LoaderMmdModelContainer } from "./internalModelData.js";
-import { createLoaderMmdMetadata } from "./internalModelData.js";
+import { createThreeBufferGeometry } from "./geometry.js";
+import { parseLoaderMmdModelData } from "./modelAssembly.js";
+import type { LoaderMmdModelData } from "./internalModelData.js";
+import { createThreeMmdMaterials } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
+import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry } from "./geometry.js";
-export { isModelSource, MODEL_SOURCE_STRING_UNRESOLVED, readModelSourceBytes } from "./modelSource.js";
+export { isModelSource } from "./modelSource.js";
 export { mmdWorldMatrixToThree } from "./runtime-sync.js";
 export { createThreeSkeleton } from "./skeleton.js";
 export {
@@ -87,9 +84,16 @@ export class ThreeMmdLoader {
 
   async loadModel(source: ModelSource): Promise<ThreeMmdModel> {
     validateModelSource(source, "loadModel");
-    const container = await readModelContainer(source);
-    const metadata = createLoaderMmdMetadata(container.metadata);
-    throw createUnimplementedError(`loadModel ${metadata.format} model data assembly`);
+    const bytes = await readModelSourceBytes(source);
+    const modelData = parseLoaderMmdModelData(bytes);
+    validateLoadModelAssemblyInput(modelData);
+    const mesh = createThreeMmdMesh(modelData);
+    return {
+      mesh,
+      runtime: new DefaultMmdRuntime(this.options.runtime),
+      source,
+      textureDiagnostics: []
+    };
   }
 
   async loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation> {
@@ -112,27 +116,38 @@ function createUnimplementedError(method: string): Error {
   return new Error(`ThreeMmdLoader.${method} is not implemented in this migration slice`);
 }
 
-async function readModelContainer(source: ModelSource): Promise<LoaderMmdModelContainer> {
-  const bytes = await readModelSourceBytes(source);
-  const format = detectModelFormat(bytes);
-
-  if (format === "pmx") {
-    return {
-      format,
-      metadata: parsePmxMetadata(bytes),
-      inventory: parsePmxSectionInventory(bytes)
-    };
+function validateLoadModelAssemblyInput(modelData: LoaderMmdModelData): void {
+  if (modelData.geometry.indices.length === 0) {
+    throw new RangeError("ThreeMmdLoader.loadModel model geometry must contain indices");
   }
+}
 
-  if (format === "pmd") {
-    return {
-      format,
-      metadata: parsePmdMetadata(bytes),
-      inventory: parsePmdSectionInventory(bytes)
-    };
-  }
+function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
+  const geometry = createThreeBufferGeometry(
+    modelData.geometry,
+    modelData.materials,
+    modelData.morphs
+  );
+  const materials = createThreeMmdMaterials(modelData.materials);
+  const mesh = new THREE.SkinnedMesh(geometry, materials.length === 1 ? materials[0] : materials);
+  mesh.name = modelData.metadata.englishName || modelData.metadata.name;
+  mesh.userData.mmdModel = {
+    format: modelData.metadata.format,
+    name: modelData.metadata.name,
+    englishName: modelData.metadata.englishName,
+    diagnostics: modelData.metadata.diagnostics.map((diagnostic) => ({ ...diagnostic })),
+    rigidBodyCount: modelData.rigidBodies.length,
+    jointCount: modelData.joints.length
+  };
 
-  throw new TypeError(`ThreeMmdLoader.loadModel source must be PMX or PMD, got ${format}`);
+  const skeleton = createThreeSkeleton(modelData.skeleton);
+  skeleton.bones.forEach((bone) => {
+    if (!bone.parent) {
+      mesh.add(bone);
+    }
+  });
+  mesh.bind(skeleton);
+  return mesh;
 }
 
 function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {

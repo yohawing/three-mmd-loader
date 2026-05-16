@@ -1,21 +1,5 @@
 export type MmdPhysicsDiagnosticLevel = "warning" | "error";
 
-export {
-  createBonePhysicsToggleBuffer,
-  legacyMmdEulerToQuaternion,
-  legacyMmdRigidBodyModeToPhysicsMotionType,
-  legacyMmdRigidBodyShapeToPhysicsShapeType,
-  mapLegacyMmdJointToPhysicsJoint,
-  mapLegacyMmdRigidBodyToPhysicsRigidBody,
-  writeQuaternionArrayToBuffer,
-  writeTuple3ArrayToBuffer
-} from "./legacyPhysicsBridge.js";
-export type {
-  LegacyMmdPhysicsBoneLike,
-  LegacyMmdPhysicsJointLike,
-  LegacyMmdPhysicsRigidBodyLike
-} from "./legacyPhysicsBridge.js";
-
 export interface MmdPhysicsDiagnostic {
   readonly level: MmdPhysicsDiagnosticLevel;
   readonly code: string;

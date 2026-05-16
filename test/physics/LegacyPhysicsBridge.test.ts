@@ -7,10 +7,10 @@ import {
   legacyMmdRigidBodyShapeToPhysicsShapeType,
   mapLegacyMmdJointToPhysicsJoint,
   mapLegacyMmdRigidBodyToPhysicsRigidBody,
-  validateConcreteMmdPhysicsStepContext,
   writeQuaternionArrayToBuffer,
   writeTuple3ArrayToBuffer
-} from "../../src/physics/index.js";
+} from "../../src/physics/legacyPhysicsBridge.js";
+import { validateConcreteMmdPhysicsStepContext } from "../../src/physics/index.js";
 
 describe("legacy MMD physics bridge helpers", () => {
   it("maps legacy rigid body mode, collision fields, and Euler rotation", () => {

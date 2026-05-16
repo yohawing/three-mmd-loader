@@ -44,13 +44,23 @@ describe("ThreeMmdLoader", () => {
     );
   });
 
-  it("exposes unimplemented async loading methods explicitly", async () => {
+  it("loads a PMX model into a minimal Three.js skinned mesh", async () => {
     const loader = new ThreeMmdLoader();
     const source: ModelSource = await readFile(resolve("..", "data/unittest/test_1bone_cube.pmx"));
 
-    await expect(loader.loadModel(source)).rejects.toThrow(
-      "ThreeMmdLoader.loadModel pmx model data assembly is not implemented in this migration slice"
-    );
+    const model = await loader.loadModel(source);
+
+    expect(model.mesh.name).toBe("TestModel");
+    expect(model.mesh.isSkinnedMesh).toBe(true);
+    expect(model.mesh.skeleton.bones).toHaveLength(1);
+    expect(model.mesh.geometry.getAttribute("position").count).toBe(14);
+    expect(model.mesh.geometry.index?.count).toBe(36);
+    expect(model.textureDiagnostics).toEqual([]);
+  });
+
+  it("exposes unimplemented async animation loading methods explicitly", async () => {
+    const loader = new ThreeMmdLoader();
+
     await expect(loader.loadAnimation(new Uint8Array())).rejects.toThrow(
       "ThreeMmdLoader.loadAnimation is not implemented in this migration slice"
     );

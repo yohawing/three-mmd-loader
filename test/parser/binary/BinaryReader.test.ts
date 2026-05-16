@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { BinaryReader, toUint8Array } from "../../../src/parser/index.js";
+import { BinaryReader, toUint8Array } from "../../../src/parser/binary/index.js";
 
 describe("BinaryReader", () => {
   it("reads little-endian numeric values and advances offsets", () => {

@@ -1,4 +1,3 @@
-export { BinaryReader, toUint8Array } from "./binary/index.js";
 export { detectModelFormat } from "./formatDetection.js";
 export type { MmdModelFormat } from "./formatDetection.js";
 export { parsePmdMetadata, parsePmdSectionInventory } from "./pmd/index.js";
