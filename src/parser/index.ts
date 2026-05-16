@@ -20,7 +20,7 @@ export type {
   PmxSectionCounts,
   PmxTextEncoding
 } from "./pmx/index.js";
-export { parseVmdMetadata, parseVmdSectionInventory } from "./vmd/index.js";
+export { parseVmd, parseVmdMetadata, parseVmdSectionInventory } from "./vmd/index.js";
 export type {
   VmdMetadata,
   VmdSectionCounts,
@@ -28,7 +28,7 @@ export type {
   VmdSectionName,
   VmdSectionRecord
 } from "./vmd/index.js";
-export { parseVpdMetadata, parseVpdPose, parseVpdPoseInventory } from "./vpd/index.js";
+export { parseVpd, parseVpdMetadata, parseVpdPose, parseVpdPoseInventory } from "./vpd/index.js";
 export type {
   VpdBoneBlockInventory,
   VpdBoneCountMismatch,
