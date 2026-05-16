@@ -9,6 +9,10 @@ coverage/
 *.log
 *.tmp
 
+# Local fixture data
+data/
+mmd_fixture_data.zip
+
 # OS / editor noise
 .DS_Store
 Thumbs.db
