@@ -1,0 +1,403 @@
+{
+  "schemaVersion": 1,
+  "kind": "yw-mmd-runtime-dump",
+  "backend": "wasm-js-provisional",
+  "coreVersion": "0.0.0+nanoem",
+  "coordinateSpace": "mmd-world",
+  "matrixOrder": "column-major",
+  "authoritative": false,
+  "diagnostics": [
+    {
+      "level": "warning",
+      "code": "ORACLE_BACKEND_NOT_NATIVE",
+      "message": "This dump uses the current JS runtime through the Wasm-backed core API. Replace this backend with native nanoem before treating it as an authoritative oracle."
+    }
+  ],
+  "sources": {
+    "model": "F:\\Develop\\MMDDev\\data\\for_unit_test\\test_1bone_cube.pmx",
+    "motion": "F:\\Develop\\MMDDev\\data\\for_unit_test\\test_1bone_cube_motion.vmd",
+    "cameraMotion": null,
+    "pose": null
+  },
+  "model": {
+    "metadata": {
+      "format": "pmx",
+      "version": 2,
+      "encoding": "utf-16-le",
+      "name": "テスト用モデル",
+      "englishName": "TestModel",
+      "comment": "exported by mmd_tools",
+      "englishComment": "exported by mmd_tools",
+      "counts": {
+        "vertices": 14,
+        "faces": 12,
+        "materials": 1,
+        "bones": 1,
+        "morphs": 0,
+        "displayFrames": 2,
+        "rigidBodies": 0,
+        "joints": 0,
+        "softBodies": 0
+      },
+      "indexSizes": {
+        "vertex": 1,
+        "texture": 1,
+        "material": 1,
+        "bone": 1,
+        "morph": 1,
+        "rigidBody": 1
+      },
+      "additionalUvCount": 0,
+      "diagnostics": []
+    },
+    "bones": [
+      {
+        "index": 0,
+        "name": "全ての親",
+        "englishName": "Root",
+        "parentIndex": -1
+      }
+    ],
+    "morphs": []
+  },
+  "motion": {
+    "modelName": "テスト用モデル_arm",
+    "counts": {
+      "bones": 6,
+      "morphs": 0,
+      "cameras": 0,
+      "lights": 0,
+      "selfShadows": 0,
+      "properties": 0
+    },
+    "maxFrame": 49
+  },
+  "cameraMotion": null,
+  "pose": null,
+  "frames": [
+    {
+      "frame": 0,
+      "seconds": 0,
+      "stages": {
+        "vmdInterpolation": {
+          "worldMatricesColumnMajor": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": null
+        },
+        "appendTransform": {
+          "worldMatricesColumnMajor": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": null
+        },
+        "ik": {
+          "worldMatricesColumnMajor": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": null
+        },
+        "physics": {
+          "worldMatricesColumnMajor": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": {
+            "mode": "none",
+            "backend": "none",
+            "activeRigidBodies": 0,
+            "activeJoints": 0,
+            "diagnostics": []
+          }
+        }
+      }
+    },
+    {
+      "frame": 15,
+      "seconds": 0.5,
+      "stages": {
+        "vmdInterpolation": {
+          "worldMatricesColumnMajor": [
+            0.8290639519691467,
+            -0.5559935569763184,
+            0.05936400219798088,
+            0,
+            0.5559935569763184,
+            0.8084475994110107,
+            -0.1930897980928421,
+            0,
+            0.05936400219798088,
+            0.1930897980928421,
+            0.9793835878372192,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": null
+        },
+        "appendTransform": {
+          "worldMatricesColumnMajor": [
+            0.8290639519691467,
+            -0.5559935569763184,
+            0.05936400219798088,
+            0,
+            0.5559935569763184,
+            0.8084475994110107,
+            -0.1930897980928421,
+            0,
+            0.05936400219798088,
+            0.1930897980928421,
+            0.9793835878372192,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": null
+        },
+        "ik": {
+          "worldMatricesColumnMajor": [
+            0.8290639519691467,
+            -0.5559935569763184,
+            0.05936400219798088,
+            0,
+            0.5559935569763184,
+            0.8084475994110107,
+            -0.1930897980928421,
+            0,
+            0.05936400219798088,
+            0.1930897980928421,
+            0.9793835878372192,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": null
+        },
+        "physics": {
+          "worldMatricesColumnMajor": [
+            0.8290639519691467,
+            -0.5559935569763184,
+            0.05936400219798088,
+            0,
+            0.5559935569763184,
+            0.8084475994110107,
+            -0.1930897980928421,
+            0,
+            0.05936400219798088,
+            0.1930897980928421,
+            0.9793835878372192,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": {
+            "mode": "none",
+            "backend": "none",
+            "activeRigidBodies": 0,
+            "activeJoints": 0,
+            "diagnostics": []
+          }
+        }
+      }
+    },
+    {
+      "frame": 30,
+      "seconds": 1,
+      "stages": {
+        "vmdInterpolation": {
+          "worldMatricesColumnMajor": [
+            0.7788786292076111,
+            0.6260114312171936,
+            0.03818098455667496,
+            0,
+            -0.6260114312171936,
+            0.7722858786582947,
+            0.1080932691693306,
+            0,
+            0.03818098455667496,
+            -0.1080932691693306,
+            0.9934073090553284,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": null
+        },
+        "appendTransform": {
+          "worldMatricesColumnMajor": [
+            0.7788786292076111,
+            0.6260114312171936,
+            0.03818098455667496,
+            0,
+            -0.6260114312171936,
+            0.7722858786582947,
+            0.1080932691693306,
+            0,
+            0.03818098455667496,
+            -0.1080932691693306,
+            0.9934073090553284,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": null
+        },
+        "ik": {
+          "worldMatricesColumnMajor": [
+            0.7788786292076111,
+            0.6260114312171936,
+            0.03818098455667496,
+            0,
+            -0.6260114312171936,
+            0.7722858786582947,
+            0.1080932691693306,
+            0,
+            0.03818098455667496,
+            -0.1080932691693306,
+            0.9934073090553284,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": null
+        },
+        "physics": {
+          "worldMatricesColumnMajor": [
+            0.7788786292076111,
+            0.6260114312171936,
+            0.03818098455667496,
+            0,
+            -0.6260114312171936,
+            0.7722858786582947,
+            0.1080932691693306,
+            0,
+            0.03818098455667496,
+            -0.1080932691693306,
+            0.9934073090553284,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          "morphWeights": [],
+          "camera": null,
+          "light": null,
+          "physics": {
+            "mode": "none",
+            "backend": "none",
+            "activeRigidBodies": 0,
+            "activeJoints": 0,
+            "diagnostics": []
+          }
+        }
+      }
+    }
+  ]
+}
