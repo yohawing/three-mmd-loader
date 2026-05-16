@@ -15,10 +15,13 @@ import {
 import {
   DefaultMmdRuntime,
   ThreeMmdLoader,
+  createAmmoMmdPhysicsBackend,
   createThreeBufferGeometry,
   createThreeSkeleton,
   createDisabledMmdPhysicsBackend,
   createMmdBuiltInToonTextureMap,
+  type AmmoNamespace,
+  type MmdPhysicsStepContext,
   isModelSource,
   mmdWorldMatrixToThree,
   resolveMappedTexture
@@ -125,4 +128,106 @@ center
       "Unable to detect MMD model format"
     );
   });
+
+  it("runs the README minimal loader sample against the one-bone PMX fixture", async () => {
+    const pmxBytes = await readFile(resolve("..", "data/unittest/test_1bone_cube.pmx"));
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(pmxBytes);
+
+    expect(model.mesh.name).toBe("TestModel");
+    expect(model.mesh.skeleton.bones).toHaveLength(1);
+    expect(model.mesh.geometry.getAttribute("position").count).toBe(14);
+  });
+
+  it("exports the concrete Ammo physics backend and follows the lifecycle gate", async () => {
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+
+    const backend = createAmmoMmdPhysicsBackend(Ammo);
+
+    expect(backend.disabled).toBe(false);
+    expect(backend.disposed).toBe(false);
+    expect(backend.step(createAmmoStepContext()).simulated).toBe(false);
+    expect(backend.disposed).toBe(false);
+
+    backend.dispose?.();
+    expect(backend.disposed).toBe(true);
+  });
+
+  it("loads a PMX model and disposes a concrete Ammo physics backend", async () => {
+    const pmxBytes = await readFile(resolve("..", "data/unittest/test_1bone_cube.pmx"));
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(pmxBytes);
+    const backend = createAmmoMmdPhysicsBackend(Ammo);
+
+    expect(model.mesh.name).toBe("TestModel");
+    expect(backend.disposed).toBe(false);
+
+    backend.dispose?.();
+    expect(backend.disposed).toBe(true);
+  });
 });
+
+function createAmmoStepContext(): MmdPhysicsStepContext {
+  const inputTranslations = new Float32Array([0, 0, 0]);
+  const inputRotations = new Float32Array([0, 0, 0, 1]);
+  const inputWorldMatricesColumnMajor = new Float32Array([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1
+  ]);
+
+  return {
+    seconds: 0,
+    deltaSeconds: 0,
+    frame: 0,
+    frameRate: 60,
+    skeleton: {
+      bones: [
+        {
+          index: 0,
+          name: "bone",
+          parentIndex: -1,
+          restTranslation: [0, 0, 0],
+          restRotation: [0, 0, 0, 1]
+        }
+      ]
+    },
+    rigidBodies: [
+      {
+        index: 0,
+        name: "body",
+        boneIndex: 0,
+        motionType: "dynamic",
+        shape: {
+          type: "sphere",
+          size: [0.25, 0.25, 0.25]
+        },
+        localTranslation: [0, 1, 0],
+        localRotation: [0, 0, 0, 1],
+        mass: 1,
+        linearDamping: 0,
+        angularDamping: 0,
+        restitution: 0,
+        friction: 0.5,
+        collisionGroup: 0,
+        collisionMask: 0xffff
+      }
+    ],
+    joints: [],
+    inputTranslations,
+    inputRotations,
+    inputWorldMatricesColumnMajor,
+    output: {
+      translations: new Float32Array(inputTranslations),
+      rotations: new Float32Array(inputRotations),
+      worldMatricesColumnMajor: new Float32Array(inputWorldMatricesColumnMajor),
+      updatedBoneIndices: []
+    }
+  };
+}

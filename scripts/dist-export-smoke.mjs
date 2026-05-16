@@ -31,6 +31,7 @@ import {
   parseVpdPose as parsePackageParserVpdPose
 } from "@yohawing/three-mmd-loader/parser";
 import {
+  createAmmoMmdPhysicsBackend as createPackageAmmoMmdPhysicsBackend,
   createDisabledMmdPhysicsBackend as createPackageDisabledMmdPhysicsBackend,
   validateConcreteMmdPhysicsStepContext as validatePackageConcreteMmdPhysicsStepContext
 } from "@yohawing/three-mmd-loader/physics";
@@ -245,6 +246,16 @@ const concreteContext = {
 assert.equal(validateConcreteMmdPhysicsStepContext(concreteContext).valid, true);
 assert.equal(validatePackageConcreteMmdPhysicsStepContext(concreteContext).valid, true);
 
+const ammoModule = await import("ammo.js");
+const Ammo = ammoModule.default ?? ammoModule;
+const ammoBackend = createPackageAmmoMmdPhysicsBackend(Ammo);
+assert.equal(ammoBackend.disabled, false);
+assert.equal(ammoBackend.disposed, false);
+assert.equal(ammoBackend.step(createAmmoStepContext()).simulated, false);
+assert.equal(ammoBackend.disposed, false);
+ammoBackend.dispose?.();
+assert.equal(ammoBackend.disposed, true);
+
 const loader = new ThreeMmdLoader();
 const rootLoader = new RootThreeMmdLoader();
 const packageLoader = new PackageThreeMmdLoader();
@@ -338,4 +349,64 @@ function createMinimalVmdBytes() {
   u32(0);
 
   return new Uint8Array(bytes);
+}
+
+function createAmmoStepContext() {
+  const inputTranslations = new Float32Array([0, 0, 0]);
+  const inputRotations = new Float32Array([0, 0, 0, 1]);
+  const inputWorldMatricesColumnMajor = new Float32Array([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1
+  ]);
+
+  return {
+    seconds: 0,
+    deltaSeconds: 0,
+    frame: 0,
+    frameRate: 60,
+    skeleton: {
+      bones: [
+        {
+          index: 0,
+          name: "bone",
+          parentIndex: -1,
+          restTranslation: [0, 0, 0],
+          restRotation: [0, 0, 0, 1]
+        }
+      ]
+    },
+    rigidBodies: [
+      {
+        index: 0,
+        name: "body",
+        boneIndex: 0,
+        motionType: "dynamic",
+        shape: {
+          type: "sphere",
+          size: [0.25, 0.25, 0.25]
+        },
+        localTranslation: [0, 1, 0],
+        localRotation: [0, 0, 0, 1],
+        mass: 1,
+        linearDamping: 0,
+        angularDamping: 0,
+        restitution: 0,
+        friction: 0.5,
+        collisionGroup: 0,
+        collisionMask: 0xffff
+      }
+    ],
+    joints: [],
+    inputTranslations,
+    inputRotations,
+    inputWorldMatricesColumnMajor,
+    output: {
+      translations: new Float32Array(inputTranslations),
+      rotations: new Float32Array(inputRotations),
+      worldMatricesColumnMajor: new Float32Array(inputWorldMatricesColumnMajor),
+      updatedBoneIndices: []
+    }
+  };
 }
