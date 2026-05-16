@@ -11,6 +11,42 @@ import {
 
 const IDENTITY: MutableQuatTuple = [0, 0, 0, 1];
 
+function eulerXyzToQuaternionForTest(euler: readonly [number, number, number]): MutableQuatTuple {
+  const halfX = euler[0] * 0.5;
+  const halfY = euler[1] * 0.5;
+  const halfZ = euler[2] * 0.5;
+  const sx = Math.sin(halfX);
+  const cx = Math.cos(halfX);
+  const sy = Math.sin(halfY);
+  const cy = Math.cos(halfY);
+  const sz = Math.sin(halfZ);
+  const cz = Math.cos(halfZ);
+  const rotation: MutableQuatTuple = [
+    sx * cy * cz + cx * sy * sz,
+    cx * sy * cz - sx * cy * sz,
+    cx * cy * sz + sx * sy * cz,
+    cx * cy * cz - sx * sy * sz
+  ];
+  const length = Math.hypot(...rotation);
+  return [rotation[0] / length, rotation[1] / length, rotation[2] / length, rotation[3] / length];
+}
+
+function rotateVectorForTest(
+  vector: readonly [number, number, number],
+  rotation: readonly [number, number, number, number]
+): [number, number, number] {
+  const [qx, qy, qz, qw] = rotation;
+  const [vx, vy, vz] = vector;
+  const tx = 2 * (qy * vz - qz * vy);
+  const ty = 2 * (qz * vx - qx * vz);
+  const tz = 2 * (qx * vy - qy * vx);
+  return [
+    vx + qw * tx + qy * tz - qz * ty,
+    vy + qw * ty + qz * tx - qx * tz,
+    vz + qw * tz + qx * ty - qy * tx
+  ];
+}
+
 describe("CcdIkSolver", () => {
   it("solves a simple finite one-link CCD chain", () => {
     const bones: CcdIkBone[] = [
@@ -274,6 +310,44 @@ describe("CcdIkSolver", () => {
     expect(rotations[1][1]).toBeCloseTo(0, 5);
     expect(rotations[1][2]).toBeCloseTo(Math.sin(Math.PI / 8), 5);
     expect(rotations[1][3]).toBeCloseTo(Math.cos(Math.PI / 8), 5);
+  });
+
+  it("preserves multi-axis XYZ Euler rotations inside the configured angle limit", () => {
+    const euler = [0.3, 0.4, 0.5] as const;
+    const rotation = eulerXyzToQuaternionForTest(euler);
+    const targetPosition = rotateVectorForTest([1, 1e-7, 0], rotation);
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: -1, translation: targetPosition }
+    ];
+    const rotations: MutableQuatTuple[] = [[...rotation], [...IDENTITY], [...IDENTITY]];
+
+    new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 2,
+          effectorBoneIndex: 1,
+          links: [
+            {
+              boneIndex: 0,
+              angleLimit: {
+                minimumAngle: [euler[0] - 0.01, euler[1] - 0.01, euler[2] - 0.01],
+                maximumAngle: [euler[0] + 0.01, euler[1] + 0.01, euler[2] + 0.01]
+              }
+            }
+          ],
+          iterationCount: 1,
+          tolerance: 0
+        }
+      ]
+    });
+
+    for (let axis = 0; axis < rotation.length; axis++) {
+      expect(Math.abs(rotations[0][axis] - rotation[axis])).toBeLessThanOrEqual(1e-6);
+    }
   });
 
   it("creates a CCD solve input from an MMD IK runtime chain", () => {
