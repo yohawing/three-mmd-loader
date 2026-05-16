@@ -146,8 +146,8 @@ center
         }
       ]
     });
-    await expect(loader.loadModel(new Uint8Array())).rejects.toThrow(
-      "ThreeMmdLoader.loadModel is not implemented in this migration slice"
+    await expect(loader.loadModel(new Uint8Array([1, 2, 3, 4]))).rejects.toThrow(
+      "Unable to detect MMD model format"
     );
   });
 });

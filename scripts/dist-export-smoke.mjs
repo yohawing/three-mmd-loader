@@ -288,12 +288,13 @@ const packageLoader = new PackageThreeMmdLoader();
 const packageRootLoader = new PackageRootThreeMmdLoader();
 
 async function expectLoaderMethodNotImplemented(loaderInstance, method) {
+  const source = method === "loadModel" ? pmxBytes : new Uint8Array();
   assert.match(
-    await loaderInstance[method](new Uint8Array()).then(
+    await loaderInstance[method](source).then(
       () => "",
       (error) => String(error instanceof Error ? error.message : error)
     ),
-    new RegExp(`ThreeMmdLoader\\.${method} is not implemented`)
+    new RegExp(`ThreeMmdLoader\\.${method}.*is not implemented`)
   );
 }
 

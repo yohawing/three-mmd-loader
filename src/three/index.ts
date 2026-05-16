@@ -1,7 +1,17 @@
 import type * as THREE from "three";
 
+import {
+  detectModelFormat,
+  parsePmdMetadata,
+  parsePmdSectionInventory,
+  parsePmxMetadata,
+  parsePmxSectionInventory
+} from "../parser/index.js";
 import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
+import type { LoaderMmdModelContainer } from "./internalModelData.js";
+import { createLoaderMmdMetadata } from "./internalModelData.js";
 import { isModelSource } from "./modelSource.js";
+import { readModelSourceBytes } from "./modelSource.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry } from "./geometry.js";
@@ -77,7 +87,9 @@ export class ThreeMmdLoader {
 
   async loadModel(source: ModelSource): Promise<ThreeMmdModel> {
     validateModelSource(source, "loadModel");
-    throw createUnimplementedError("loadModel");
+    const container = await readModelContainer(source);
+    const metadata = createLoaderMmdMetadata(container.metadata);
+    throw createUnimplementedError(`loadModel ${metadata.format} model data assembly`);
   }
 
   async loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation> {
@@ -98,6 +110,29 @@ export class ThreeMmdLoader {
 
 function createUnimplementedError(method: string): Error {
   return new Error(`ThreeMmdLoader.${method} is not implemented in this migration slice`);
+}
+
+async function readModelContainer(source: ModelSource): Promise<LoaderMmdModelContainer> {
+  const bytes = await readModelSourceBytes(source);
+  const format = detectModelFormat(bytes);
+
+  if (format === "pmx") {
+    return {
+      format,
+      metadata: parsePmxMetadata(bytes),
+      inventory: parsePmxSectionInventory(bytes)
+    };
+  }
+
+  if (format === "pmd") {
+    return {
+      format,
+      metadata: parsePmdMetadata(bytes),
+      inventory: parsePmdSectionInventory(bytes)
+    };
+  }
+
+  throw new TypeError(`ThreeMmdLoader.loadModel source must be PMX or PMD, got ${format}`);
 }
 
 function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {

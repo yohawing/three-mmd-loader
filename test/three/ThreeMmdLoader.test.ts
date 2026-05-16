@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { ThreeMmdLoader } from "../../src/index.js";
@@ -43,19 +46,27 @@ describe("ThreeMmdLoader", () => {
 
   it("exposes unimplemented async loading methods explicitly", async () => {
     const loader = new ThreeMmdLoader();
-    const source: ModelSource = new Uint8Array();
+    const source: ModelSource = await readFile(resolve("..", "data/unittest/test_1bone_cube.pmx"));
 
     await expect(loader.loadModel(source)).rejects.toThrow(
-      "ThreeMmdLoader.loadModel is not implemented in this migration slice"
+      "ThreeMmdLoader.loadModel pmx model data assembly is not implemented in this migration slice"
     );
-    await expect(loader.loadAnimation(source)).rejects.toThrow(
+    await expect(loader.loadAnimation(new Uint8Array())).rejects.toThrow(
       "ThreeMmdLoader.loadAnimation is not implemented in this migration slice"
     );
-    await expect(loader.loadPose(source)).rejects.toThrow(
+    await expect(loader.loadPose(new Uint8Array())).rejects.toThrow(
       "ThreeMmdLoader.loadPose is not implemented in this migration slice"
     );
-    await expect(loader.loadPoseAnimation(source, "pose")).rejects.toThrow(
+    await expect(loader.loadPoseAnimation(new Uint8Array(), "pose")).rejects.toThrow(
       "ThreeMmdLoader.loadPoseAnimation is not implemented in this migration slice"
+    );
+  });
+
+  it("rejects loadModel bytes before model assembly when the model format is unknown", async () => {
+    const loader = new ThreeMmdLoader();
+
+    await expect(loader.loadModel(new Uint8Array([1, 2, 3, 4]))).rejects.toThrow(
+      "Unable to detect MMD model format"
     );
   });
 
