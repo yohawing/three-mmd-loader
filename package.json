@@ -50,7 +50,6 @@
     "build": "tsc -p tsconfig.json",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "test": "vitest run",
-    "test:integration": "vitest run --config integration/vitest.config.integration.ts",
     "lint": "eslint ."
   },
   "dependencies": {

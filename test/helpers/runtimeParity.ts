@@ -53,7 +53,7 @@ export function extractMmdWorldMatrices(mesh: THREE.SkinnedMesh): number[] {
 }
 
 export function loadOracleDump(filename: string): OracleDump {
-  const content = readFileSync(resolve("data", "unittest", "oracles", filename), "utf8");
+  const content = readFileSync(resolve("test/fixtures", "oracles", filename), "utf8");
   return JSON.parse(content) as OracleDump;
 }
 
