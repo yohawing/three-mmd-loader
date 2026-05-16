@@ -18,5 +18,5 @@ export const VMD_FIXTURES = [
 ] as const;
 
 export function loadFixtureBytes(filename: string): Promise<Uint8Array> {
-  return readFile(resolve("..", "data/unittest", filename));
+  return readFile(resolve("data/unittest", filename));
 }
