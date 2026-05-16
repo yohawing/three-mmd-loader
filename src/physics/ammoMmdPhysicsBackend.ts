@@ -219,7 +219,9 @@ export interface AmmoSolverInfo {
 export interface AmmoWorld {
   setGravity(gravity: AmmoVector3): void;
   addRigidBody(body: AmmoRigidBody, group?: number, mask?: number): void;
+  removeRigidBody?(body: AmmoRigidBody): void;
   addConstraint?(constraint: AmmoConstraint, disableCollisionsBetweenLinkedBodies: boolean): void;
+  removeConstraint?(constraint: AmmoConstraint): void;
   getDispatcher?(): AmmoDispatcher;
   getSolverInfo?(): AmmoSolverInfo;
   stepSimulation(timeStep: number, maxSubSteps: number, fixedTimeStep: number): void;
@@ -327,6 +329,8 @@ const BT_CONSTRAINT_STOP_ERP_PARAM = 2;
 
 interface AmmoRigidBodyBinding {
   rigidBody: AmmoRigidBody;
+  shape: AmmoShape;
+  motionState: AmmoMotionState;
   rigidBodyPointer: number | undefined;
   body: AmmoRigidBodyData;
   effectiveMode: AmmoRigidBodyData["mode"];
@@ -348,6 +352,9 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
   readonly disabled = false;
   private world: AmmoWorld | undefined;
   private bindings: AmmoRigidBodyBinding[] = [];
+  private constraints: AmmoConstraint[] = [];
+  private constraintFrames: AmmoTransform[] = [];
+  private worldResources: object[] = [];
   private lastSeconds: number | undefined;
   private pendingResetPoseSync = false;
   private disposedState = false;
@@ -421,7 +428,11 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
   }
 
   reset(_context?: MmdPhysicsResetContext): void {
+    this.destroyWorldResources();
     this.bindings = [];
+    this.constraints = [];
+    this.constraintFrames = [];
+    this.worldResources = [];
     this.world = undefined;
     this.lastSeconds = undefined;
     this.pendingResetPoseSync = true;
@@ -574,10 +585,14 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       joints: identityContext.joints
     };
     const Ammo = this.ammo;
-    const collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
-    const dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);
-    const broadphase = new Ammo.btDbvtBroadphase();
-    const solver = new Ammo.btSequentialImpulseConstraintSolver();
+    const collisionConfiguration = this.registerWorldResource(
+      new Ammo.btDefaultCollisionConfiguration()
+    );
+    const dispatcher = this.registerWorldResource(
+      new Ammo.btCollisionDispatcher(collisionConfiguration)
+    );
+    const broadphase = this.registerWorldResource(new Ammo.btDbvtBroadphase());
+    const solver = this.registerWorldResource(new Ammo.btSequentialImpulseConstraintSolver());
     this.world = new Ammo.btDiscreteDynamicsWorld(
       dispatcher,
       broadphase,
@@ -586,21 +601,18 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     );
     this.configureSolver(this.world);
     const gravity = this.options.gravity ?? DEFAULT_GRAVITY;
-    this.world.setGravity(new Ammo.btVector3(gravity[0], gravity[1], gravity[2]));
+    const gravityVector = new Ammo.btVector3(gravity[0], gravity[1], gravity[2]);
+    this.world.setGravity(gravityVector);
+    this.destroy(gravityVector);
 
     for (const body of context.rigidBodies) {
-      const rigidBody = this.createRigidBody(body, context);
-      this.world.addRigidBody(rigidBody, collisionGroupMask(body.group), collisionFilterMask(body));
-      this.bindings.push({
-        rigidBody,
-        rigidBodyPointer: Ammo.getPointer?.(rigidBody),
-        body,
-        effectiveMode: body.mode,
-        baseCollisionFlags: rigidBody.getCollisionFlags?.(),
-        temporalKinematic: false,
-        physicsEnabled: undefined,
-        disabledSyncMode: undefined
-      });
+      const binding = this.createRigidBodyBinding(body, context);
+      this.world.addRigidBody(
+        binding.rigidBody,
+        collisionGroupMask(body.group),
+        collisionFilterMask(body)
+      );
+      this.bindings.push(binding);
     }
     this.promotePhysicsWithBoneChildren(context);
     this.createConstraints(context);
@@ -639,32 +651,57 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     }
   }
 
-  private createRigidBody(body: AmmoRigidBodyData, context: AmmoStepContext): AmmoRigidBody {
+  private createRigidBodyBinding(
+    body: AmmoRigidBodyData,
+    context: AmmoStepContext
+  ): AmmoRigidBodyBinding {
     const Ammo = this.ammo;
     const shape = this.createShape(body);
     const transform = new Ammo.btTransform();
-    transform.setIdentity();
-    const bodyWorld = this.bodyWorldTransform(body, context);
-    const physicsBodyWorld = mmdTransformToPhysics(bodyWorld);
-    this.setTransformOrigin(transform, physicsBodyWorld.position);
-    this.setTransformQuaternion(transform, physicsBodyWorld.rotation);
-    const motionState = new Ammo.btDefaultMotionState(transform);
-    const mass = body.mode === "static" ? 0 : Math.max(body.mass, MIN_DYNAMIC_BODY_MASS);
-    const inertia = new Ammo.btVector3(0, 0, 0);
-    if (mass > 0) {
-      shape.calculateLocalInertia(mass, inertia);
+    try {
+      transform.setIdentity();
+      const bodyWorld = this.bodyWorldTransform(body, context);
+      const physicsBodyWorld = mmdTransformToPhysics(bodyWorld);
+      this.setTransformOrigin(transform, physicsBodyWorld.position);
+      this.setTransformQuaternion(transform, physicsBodyWorld.rotation);
+      const motionState = new Ammo.btDefaultMotionState(transform);
+      const mass = body.mode === "static" ? 0 : Math.max(body.mass, MIN_DYNAMIC_BODY_MASS);
+      const inertia = new Ammo.btVector3(0, 0, 0);
+      try {
+        if (mass > 0) {
+          shape.calculateLocalInertia(mass, inertia);
+        }
+        const info = new Ammo.btRigidBodyConstructionInfo(mass, motionState, shape, inertia);
+        try {
+          info.set_m_additionalDamping?.(this.options.additionalDamping ?? false);
+          const rigidBody = new Ammo.btRigidBody(info);
+          rigidBody.setDamping(body.linearDamping, body.angularDamping);
+          rigidBody.setRestitution(body.restitution);
+          rigidBody.setFriction(body.friction);
+          rigidBody.setSleepingThresholds?.(0, 0);
+          this.configureCollisionFlags(rigidBody, body);
+          this.configureAdditionalDamping(rigidBody);
+          return {
+            rigidBody,
+            shape,
+            motionState,
+            rigidBodyPointer: Ammo.getPointer?.(rigidBody),
+            body,
+            effectiveMode: body.mode,
+            baseCollisionFlags: rigidBody.getCollisionFlags?.(),
+            temporalKinematic: false,
+            physicsEnabled: undefined,
+            disabledSyncMode: undefined
+          };
+        } finally {
+          this.destroy(info);
+        }
+      } finally {
+        this.destroy(inertia);
+      }
+    } finally {
+      this.destroy(transform);
     }
-    const info = new Ammo.btRigidBodyConstructionInfo(mass, motionState, shape, inertia);
-    this.destroy(inertia);
-    info.set_m_additionalDamping?.(this.options.additionalDamping ?? false);
-    const rigidBody = new Ammo.btRigidBody(info);
-    rigidBody.setDamping(body.linearDamping, body.angularDamping);
-    rigidBody.setRestitution(body.restitution);
-    rigidBody.setFriction(body.friction);
-    rigidBody.setSleepingThresholds?.(0, 0);
-    this.configureCollisionFlags(rigidBody, body);
-    this.configureAdditionalDamping(rigidBody);
-    return rigidBody;
   }
 
   private configureCollisionFlags(rigidBody: AmmoRigidBody, body: AmmoRigidBodyData): void {
@@ -778,9 +815,13 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       const frameB = this.createJointFrame(joint, bindingB.body);
       const constraint = this.createJointConstraint(joint, bindingA, bindingB, frameA, frameB);
       if (!constraint) {
+        this.destroy(frameB);
+        this.destroy(frameA);
         continue;
       }
       world.addConstraint(constraint, false);
+      this.constraints.push(constraint);
+      this.constraintFrames.push(frameA, frameB);
     }
   }
 
@@ -807,10 +848,21 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     }
     const constraint = new Constraint(bindingA.rigidBody, bindingB.rigidBody, frameA, frameB, true);
     const limits = mmdJointLimitsToPhysics(joint);
-    constraint.setLinearLowerLimit(this.vector(limits.translationLowerLimit));
-    constraint.setLinearUpperLimit(this.vector(limits.translationUpperLimit));
-    constraint.setAngularLowerLimit(this.vector(limits.rotationLowerLimit));
-    constraint.setAngularUpperLimit(this.vector(limits.rotationUpperLimit));
+    const linearLowerLimit = this.vector(limits.translationLowerLimit);
+    const linearUpperLimit = this.vector(limits.translationUpperLimit);
+    const angularLowerLimit = this.vector(limits.rotationLowerLimit);
+    const angularUpperLimit = this.vector(limits.rotationUpperLimit);
+    try {
+      constraint.setLinearLowerLimit(linearLowerLimit);
+      constraint.setLinearUpperLimit(linearUpperLimit);
+      constraint.setAngularLowerLimit(angularLowerLimit);
+      constraint.setAngularUpperLimit(angularUpperLimit);
+    } finally {
+      this.destroy(angularUpperLimit);
+      this.destroy(angularLowerLimit);
+      this.destroy(linearUpperLimit);
+      this.destroy(linearLowerLimit);
+    }
     this.configureConstraintStopErp(constraint);
     this.configureSpring(constraint, joint);
     return constraint;
@@ -1223,7 +1275,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     const Ammo = this.ammo;
     const transform = new Ammo.btTransform();
     const worldCache = new PhysicsWorldTransformCache(context);
-    for (const binding of this.bindings) {
+    for (const binding of sortBindingsByBoneDepth(this.bindings, context)) {
       const { body, rigidBody } = binding;
       if (
         (binding.effectiveMode !== "dynamic" && binding.effectiveMode !== "dynamicWithBone") ||
@@ -1277,6 +1329,38 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
   private destroy(value: object | undefined): void {
     if (value) {
       this.ammo.destroy?.(value);
+    }
+  }
+
+  private registerWorldResource<T extends object>(value: T): T {
+    this.worldResources.push(value);
+    return value;
+  }
+
+  private destroyWorldResources(): void {
+    const world = this.world;
+    for (let i = this.constraints.length - 1; i >= 0; i -= 1) {
+      const constraint = this.constraints[i];
+      if (constraint) {
+        world?.removeConstraint?.(constraint);
+        this.destroy(constraint);
+      }
+    }
+    for (let i = this.constraintFrames.length - 1; i >= 0; i -= 1) {
+      this.destroy(this.constraintFrames[i]);
+    }
+    for (let i = this.bindings.length - 1; i >= 0; i -= 1) {
+      const binding = this.bindings[i];
+      if (binding) {
+        world?.removeRigidBody?.(binding.rigidBody);
+        this.destroy(binding.rigidBody);
+        this.destroy(binding.motionState);
+        this.destroy(binding.shape);
+      }
+    }
+    this.destroy(world);
+    for (let i = this.worldResources.length - 1; i >= 0; i -= 1) {
+      this.destroy(this.worldResources[i]);
     }
   }
 }
@@ -1478,6 +1562,60 @@ function isRigidBodyPhysicsEnabled(body: AmmoRigidBodyData, context: AmmoStepCon
     return toggle !== false && toggle !== 0;
   }
   return true;
+}
+
+function sortBindingsByBoneDepth(
+  bindings: readonly AmmoRigidBodyBinding[],
+  context: AmmoStepContext
+): AmmoRigidBodyBinding[] {
+  const depths = new Map<number, number>();
+  return bindings
+    .map((binding, order) => ({
+      binding,
+      order,
+      depth: rigidBodyBoneDepth(binding.body, context, depths)
+    }))
+    .sort((left, right) => left.depth - right.depth || left.order - right.order)
+    .map((entry) => entry.binding);
+}
+
+function rigidBodyBoneDepth(
+  body: AmmoRigidBodyData,
+  context: AmmoStepContext,
+  depths: Map<number, number>
+): number {
+  if (body.boneIndex < 0 || body.boneIndex >= context.skeleton.bones.length) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  return boneDepth(body.boneIndex, context, depths, new Set());
+}
+
+function boneDepth(
+  boneIndex: number,
+  context: AmmoStepContext,
+  depths: Map<number, number>,
+  visiting: Set<number>
+): number {
+  const cached = depths.get(boneIndex);
+  if (cached !== undefined) {
+    return cached;
+  }
+  if (visiting.has(boneIndex)) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  const bone = context.skeleton.bones[boneIndex];
+  if (!bone) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  visiting.add(boneIndex);
+  const parentIndex = bone.parentIndex;
+  const depth =
+    parentIndex < 0 || parentIndex >= context.skeleton.bones.length
+      ? 0
+      : boneDepth(parentIndex, context, depths, visiting) + 1;
+  visiting.delete(boneIndex);
+  depths.set(boneIndex, depth);
+  return depth;
 }
 
 function scaleVector(

@@ -9,10 +9,11 @@ import type { TextureMap, TextureResolver } from "./textures.js";
 
 export interface TextureLoadDiagnostic {
   readonly level: "warning";
-  readonly code: "TEXTURE_RESOLVE_FAILED";
+  readonly code: "TEXTURE_RESOLVE_FAILED" | "SPHERE_MAP_NOT_SUPPORTED";
   readonly materialIndex: number;
   readonly textureKind: "diffuse" | "sphere" | "toon";
   readonly path: string;
+  readonly sphereMode?: MaterialInfo["sphereMode"];
 }
 
 export interface ThreeMmdTextureLoader {
@@ -123,24 +124,18 @@ export async function applyThreeMmdMaterialTextures(
         material.gradientMap = toon;
       }
 
-      const sphere = await loadResolvedTexture(
-        materialIndex,
-        "sphere",
-        mmdMaterial.sphereTexturePath,
-        resolver,
-        textureLoader,
-        options.modelUrl,
-        diagnostics
-      );
-      if (sphere) {
-        sphere.mapping = THREE.EquirectangularReflectionMapping;
-        const sphereMappedMaterial = material as ThreeMmdSphereMappedToonMaterial;
-        sphereMappedMaterial.envMap = sphere;
-        sphereMappedMaterial.combine =
-          mmdMaterial.sphereMode === "add" ? THREE.AddOperation : THREE.MultiplyOperation;
+      if (mmdMaterial.sphereTexturePath) {
+        diagnostics.push({
+          level: "warning",
+          code: "SPHERE_MAP_NOT_SUPPORTED",
+          materialIndex,
+          textureKind: "sphere",
+          path: mmdMaterial.sphereTexturePath,
+          sphereMode: mmdMaterial.sphereMode
+        });
       }
 
-      if (diffuse || toon || sphere) {
+      if (diffuse || toon) {
         material.needsUpdate = true;
       }
     })

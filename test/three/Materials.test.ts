@@ -6,10 +6,7 @@ import {
   createThreeMmdMaterials
 } from "../../src/three/index.js";
 import type { MaterialInfo } from "../../src/parser/model/modelTypes.js";
-import type {
-  ThreeMmdSphereMappedToonMaterial,
-  ThreeMmdTextureLoader
-} from "../../src/three/index.js";
+import type { ThreeMmdTextureLoader } from "../../src/three/index.js";
 
 function createMaterialInfo(overrides: Partial<MaterialInfo> = {}): MaterialInfo {
   return {
@@ -53,13 +50,13 @@ function createTextureLoaderMock(): ThreeMmdTextureLoader {
 }
 
 describe("Three.js MMD materials", () => {
-  it("loads diffuse, model-local toon, and sphere textures into MeshToonMaterial slots", async () => {
+  it("loads diffuse and model-local toon textures while reporting unsupported sphere maps", async () => {
     const mmdMaterials = [
       createMaterialInfo({
         texturePath: "textures/body.png",
         toonTexturePath: "toon/local.bmp",
         sphereTexturePath: "sphere/body.spa",
-        sphereMode: "add"
+        sphereMode: "subTexture"
       })
     ];
     const materials = createThreeMmdMaterials(mmdMaterials);
@@ -73,13 +70,20 @@ describe("Three.js MMD materials", () => {
       textureLoader: createTextureLoaderMock()
     });
 
-    expect(diagnostics).toEqual([]);
+    expect(diagnostics).toEqual([
+      {
+        level: "warning",
+        code: "SPHERE_MAP_NOT_SUPPORTED",
+        materialIndex: 0,
+        textureKind: "sphere",
+        path: "sphere/body.spa",
+        sphereMode: "subTexture"
+      }
+    ]);
     expect(materials[0]?.map?.name).toBe("resolved/body.png");
     expect(materials[0]?.gradientMap?.name).toBe("resolved/local-toon.png");
     expect(materials[0]?.gradientMap?.minFilter).toBe(THREE.NearestFilter);
-    const sphereMappedMaterial = materials[0] as ThreeMmdSphereMappedToonMaterial | undefined;
-    expect(sphereMappedMaterial?.envMap?.name).toBe("resolved/body-sphere.png");
-    expect(sphereMappedMaterial?.combine).toBe(THREE.AddOperation);
+    expect(materials[0]?.envMap).toBeUndefined();
   });
 
   it("loads built-in shared toon references through the texture map", async () => {
@@ -113,8 +117,7 @@ describe("Three.js MMD materials", () => {
 
     expect(materials[0]?.map).toBeNull();
     expect(materials[0]?.gradientMap).toBeNull();
-    const sphereMappedMaterial = materials[0] as ThreeMmdSphereMappedToonMaterial | undefined;
-    expect(sphereMappedMaterial?.envMap).toBeUndefined();
+    expect(materials[0]?.envMap).toBeUndefined();
     expect(diagnostics).toEqual([
       {
         level: "warning",
@@ -132,10 +135,11 @@ describe("Three.js MMD materials", () => {
       },
       {
         level: "warning",
-        code: "TEXTURE_RESOLVE_FAILED",
+        code: "SPHERE_MAP_NOT_SUPPORTED",
         materialIndex: 0,
         textureKind: "sphere",
-        path: "missing/body.sph"
+        path: "missing/body.sph",
+        sphereMode: "none"
       }
     ]);
   });
