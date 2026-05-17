@@ -48,6 +48,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "example:viewer": "npm run build && node scripts/serve-example-viewer.mjs",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "test": "vitest run",
     "lint": "eslint ."

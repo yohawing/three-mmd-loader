@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to npm and create/update the GitHub Release"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Build release package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke dist exports
+        run: npm run smoke:dist
+
+      - name: Check package publishability
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          if (pkg.private === true) {
+            throw new Error('package.json still has "private": true. Remove it before publishing.');
+          }
+          if (!pkg.name || !pkg.version) {
+            throw new Error('package.json must include name and version before publishing.');
+          }
+          NODE
+
+      - name: Check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const tag = process.env.GITHUB_REF_NAME;
+          if (tag !== `v${pkg.version}`) {
+            throw new Error(`Tag ${tag} does not match package version v${pkg.version}.`);
+          }
+          NODE
+
+      - name: Create npm package
+        run: npm pack --json > npm-pack.json
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: |
+            *.tgz
+            npm-pack.json
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: package
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || inputs.publish
+
+    permissions:
+      contents: write
+      id-token: write
+
+    environment:
+      name: npm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+
+      - name: Publish to npm
+        run: npm publish ./*.tgz --access public
+
+      - name: Create or update GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          package_file="$(ls ./*.tgz | head -n 1)"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$package_file" --clobber
+          else
+            gh release create "$tag" "$package_file" --generate-notes --verify-tag
+          fi
