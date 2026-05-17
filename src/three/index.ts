@@ -9,6 +9,7 @@ import { createThreeBufferGeometry } from "./geometry.js";
 import { parseLoaderMmdModelData } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
 import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
+import { attachMmdSdefSkinning } from "./material/material-sdef.js";
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
@@ -40,6 +41,11 @@ export {
 } from "./material/material-shader-hooks.js";
 export { syncMmdMaterialStates, syncMmdSpecularDirection } from "./material/material-sync.js";
 export {
+  attachMmdSdefSkinning,
+  computeMmdSdefSkinnedNormal,
+  computeMmdSdefSkinnedPosition
+} from "./material/material-sdef.js";
+export {
   createMmdBuiltInToonTextureMap,
   createTextureResolver,
   defaultSharedToonTexturePath,
@@ -61,6 +67,7 @@ export type {
 export type { ModelSource } from "./modelSource.js";
 export type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
+export type { MmdSdefNormalSkinningInput, MmdSdefSkinningInput } from "./material/material-sdef.js";
 export type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
 export type { MmdWorldMatrixBuffer, MmdWorldMatrixColumnMajorTuple } from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
@@ -197,6 +204,9 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     modelData.morphs
   );
   const materials = createThreeMmdMaterials(modelData.materials);
+  if (geometry.userData.mmdSdef) {
+    materials.forEach((material) => attachMmdSdefSkinning(material));
+  }
   const mesh = new THREE.SkinnedMesh(geometry, materials.length === 1 ? materials[0] : materials);
   mesh.morphTargetDictionary = createMorphTargetDictionary(modelData.morphs);
   mesh.morphTargetInfluences = new Array(modelData.morphs.length).fill(0);
