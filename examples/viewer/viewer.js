@@ -19,6 +19,7 @@ const viewerShell = document.querySelector(".viewer-shell");
 const statusText = document.querySelector("#status");
 const modelNameText = document.querySelector("#model-name");
 const motionNameText = document.querySelector("#motion-name");
+const audioNameText = document.querySelector("#audio-name");
 const frameValueText = document.querySelector("#frame-value");
 const timeline = document.querySelector("#timeline");
 const playToggle = document.querySelector("#play-toggle");
@@ -244,6 +245,7 @@ function loadAudioFile(file) {
   }
   const objectUrl = URL.createObjectURL(file);
   setAudioSource(objectUrl, { objectUrl });
+  setDisplayedText(audioNameText, file.name);
   setStatus("", "ready");
 }
 
@@ -270,6 +272,7 @@ function clearAudioSource() {
     URL.revokeObjectURL(audioObjectUrl);
     audioObjectUrl = undefined;
   }
+  setDisplayedText(audioNameText, "");
 }
 
 async function loadModel(
