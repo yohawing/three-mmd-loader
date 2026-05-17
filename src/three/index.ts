@@ -9,11 +9,15 @@ import { createThreeBufferGeometry } from "./geometry.js";
 import { parseLoaderMmdModelData } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
 import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
+import {
+  computeMmdMaterialRenderOrder,
+  syncMmdModelShadowFlags
+} from "./material/material-metadata.js";
 import { attachMmdSdefSkinning } from "./material/material-sdef.js";
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
-import { createMmdOutlineMeshes } from "./outline.js";
+import { createMmdMaterialRenderOrderMeshes, createMmdOutlineMeshes } from "./outline.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
@@ -32,7 +36,8 @@ export {
   mmdMaterialDepthWrite,
   mmdMaterialMorphCanAffectAlpha,
   mmdMaterialSuppressesColorAtAlpha,
-  mmdMaterialTransparencyMode
+  mmdMaterialTransparencyMode,
+  syncMmdModelShadowFlags
 } from "./material/material-metadata.js";
 export {
   attachMmdMaterialFactors,
@@ -44,6 +49,7 @@ export { syncMmdMaterialStates, syncMmdSpecularDirection } from "./material/mate
 export {
   attachMmdOutlineExpansion,
   computeMmdOutlineScale,
+  createMmdMaterialRenderOrderMeshes,
   createMmdOutlineMesh,
   createMmdOutlineMeshes,
   syncMmdOutlineMaterialStates
@@ -76,7 +82,11 @@ export type { ModelSource } from "./modelSource.js";
 export type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
 export type { MmdSdefNormalSkinningInput, MmdSdefSkinningInput } from "./material/material-sdef.js";
-export type { MmdOutlineModelSource, MmdOutlineOptions } from "./outline.js";
+export type {
+  MmdMaterialRenderOrderMeshOptions,
+  MmdOutlineModelSource,
+  MmdOutlineOptions
+} from "./outline.js";
 export type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
 export type { MmdWorldMatrixBuffer, MmdWorldMatrixColumnMajorTuple } from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
@@ -98,6 +108,7 @@ export interface ThreeMmdLoaderOptions {
 export interface ThreeMmdModel {
   readonly mesh: THREE.SkinnedMesh;
   readonly outlineMeshes: readonly THREE.SkinnedMesh[];
+  readonly renderOrderMeshes: readonly THREE.SkinnedMesh[];
   readonly runtime?: MmdRuntime;
   readonly source: ModelSource;
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
@@ -136,9 +147,23 @@ export class ThreeMmdLoader {
     });
     const outlineMeshes = createMmdOutlineMeshes({ mesh, materials: modelData.materials });
     outlineMeshes.forEach((outline) => mesh.add(outline));
+    const renderOrder = computeMmdMaterialRenderOrder(
+      materials.map((material, materialIndex) => ({
+        materialIndex,
+        transparencyMode: material.userData.mmdMaterial?.transparencyMode ?? "opaque"
+      }))
+    );
+    mesh.userData.mmdMaterialRenderOrder = renderOrder;
+    syncMmdModelShadowFlags(mesh, modelData.materials);
+    outlineMeshes.forEach((outline) => syncMmdModelShadowFlags(outline, modelData.materials));
+    const renderOrderMeshes = createMmdMaterialRenderOrderMeshes({
+      mesh,
+      materials: modelData.materials
+    });
     return {
       mesh,
       outlineMeshes,
+      renderOrderMeshes,
       runtime: new DefaultMmdRuntime(this.options.runtime),
       source,
       textureDiagnostics

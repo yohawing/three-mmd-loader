@@ -2,8 +2,14 @@ import type { MaterialInfo, MaterialRuntimeState } from "../parser/model/modelTy
 import * as THREE from "three";
 
 import {
+  computeMmdMaterialRenderOrder,
+  mmdMaterialCastsShadow,
   mmdMaterialSuppressesColorAtAlpha
 } from "./material/material-metadata.js";
+import type {
+  MmdMaterialRenderOrderEntry
+} from "./material/material-metadata.js";
+import type { MmdMaterialTransparencyMode } from "./textures.js";
 import { clampColor } from "./utils.js";
 
 const MMD_OUTLINE_MODEL_SPACE_SCALE = 30;
@@ -18,6 +24,10 @@ export interface MmdOutlineOptions {
 export interface MmdOutlineModelSource {
   readonly mesh: THREE.SkinnedMesh;
   readonly materials: readonly MaterialInfo[];
+}
+
+export interface MmdMaterialRenderOrderMeshOptions {
+  readonly renderOrderBase?: number;
 }
 
 export function createMmdOutlineMesh(
@@ -218,6 +228,52 @@ function mmdOutlineExpansionWidth(
 ): number {
   const edgeSize = hasEdge ? material.edgeSize : options.forceFallback ? 0.5 : 0;
   return Math.min(Math.max(edgeSize, 0), 3) / MMD_OUTLINE_MODEL_SPACE_SCALE;
+}
+
+export function createMmdMaterialRenderOrderMeshes(
+  model: MmdOutlineModelSource,
+  options: MmdMaterialRenderOrderMeshOptions = {}
+): THREE.SkinnedMesh[] {
+  const sourceMaterials = Array.isArray(model.mesh.material)
+    ? model.mesh.material
+    : [model.mesh.material];
+  const renderOrder =
+    (model.mesh.userData.mmdMaterialRenderOrder as MmdMaterialRenderOrderEntry[] | undefined) ??
+    computeMmdMaterialRenderOrder(
+      sourceMaterials.map((material, materialIndex) => ({
+        materialIndex,
+        transparencyMode:
+          (material.userData.mmdMaterial?.transparencyMode as MmdMaterialTransparencyMode) ??
+          "opaque"
+      }))
+    );
+  const groups = model.mesh.geometry.groups;
+  const renderOrderBase = options.renderOrderBase ?? model.mesh.renderOrder;
+  const meshes: THREE.SkinnedMesh[] = [];
+  for (const entry of renderOrder) {
+    const group = groups.find((item) => item.materialIndex === entry.materialIndex);
+    const material = sourceMaterials[entry.materialIndex];
+    if (!group || !material) {
+      continue;
+    }
+    const geometry = model.mesh.geometry.clone();
+    geometry.clearGroups();
+    geometry.addGroup(group.start, group.count, 0);
+    geometry.setDrawRange(group.start, group.count);
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    mesh.name = `${model.mesh.name || "mmd"} material ${entry.materialIndex}`;
+    mesh.bind(model.mesh.skeleton, model.mesh.bindMatrix);
+    mesh.morphTargetDictionary = model.mesh.morphTargetDictionary;
+    mesh.morphTargetInfluences = model.mesh.morphTargetInfluences;
+    mesh.renderOrder = renderOrderBase + entry.renderOrder;
+    mesh.frustumCulled = model.mesh.frustumCulled;
+    const materialInfo = model.materials[entry.materialIndex];
+    mesh.castShadow = !!materialInfo && mmdMaterialCastsShadow(materialInfo.flags);
+    mesh.receiveShadow = !!materialInfo?.flags.selfShadow;
+    mesh.userData.mmdMaterialRenderProxy = { ...entry };
+    meshes.push(mesh);
+  }
+  return meshes;
 }
 
 export function computeMmdOutlineScale(materials: readonly MaterialInfo[]): number {

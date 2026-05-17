@@ -51,6 +51,14 @@ export function mmdMaterialCastsShadow(flags: MaterialFlags): boolean {
   return flags.groundShadow || flags.selfShadowMap;
 }
 
+export function syncMmdModelShadowFlags(
+  mesh: THREE.Object3D,
+  materials: readonly MaterialInfo[]
+): void {
+  mesh.castShadow = materials.some((material) => mmdMaterialCastsShadow(material.flags));
+  mesh.receiveShadow = materials.some((material) => material.flags.selfShadow);
+}
+
 export function mmdMaterialSuppressesColorAtAlpha(
   alpha: number,
   flags: MaterialFlags | undefined
