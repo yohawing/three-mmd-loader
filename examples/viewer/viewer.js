@@ -28,8 +28,6 @@ const timeline = document.querySelector("#timeline");
 const speedInput = document.querySelector("#speed");
 const speedValueText = document.querySelector("#speed-value");
 const playToggle = document.querySelector("#play-toggle");
-const showGridInput = document.querySelector("#show-grid");
-const showSkeletonInput = document.querySelector("#show-skeleton");
 const wireframeInput = document.querySelector("#wireframe");
 const loadMenu = document.querySelector("#load-menu");
 const modelFileInput = document.querySelector("#model-file");
@@ -46,7 +44,7 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x171a1d, 1);
+renderer.setClearColor(0xffffff, 1);
 
 const scene = new THREE.Scene();
 
@@ -56,11 +54,6 @@ camera.position.set(0, 1.1, 9);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.target.set(0, 0.9, 0);
-
-const grid = new THREE.GridHelper(40, 40, 0x5d6a72, 0x30383d);
-scene.add(grid);
-const axes = new THREE.AxesHelper(4);
-scene.add(axes);
 
 const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
 keyLight.position.set(3, 4, 5);
@@ -76,7 +69,6 @@ let currentModel;
 let currentMotion;
 let pendingMotionSource;
 let pendingMotionLabel;
-let skeletonHelper;
 let elapsedSeconds = 0;
 let isPlaying = false;
 let isSeeking = false;
@@ -186,15 +178,6 @@ function bindControls() {
   timeline?.addEventListener("change", () => {
     isSeeking = false;
   });
-  showGridInput?.addEventListener("change", () => {
-    grid.visible = showGridInput.checked;
-    axes.visible = showGridInput.checked;
-  });
-  showSkeletonInput?.addEventListener("change", () => {
-    if (skeletonHelper) {
-      skeletonHelper.visible = showSkeletonInput.checked;
-    }
-  });
   wireframeInput?.addEventListener("change", () => {
     setWireframe(wireframeInput.checked);
   });
@@ -257,11 +240,6 @@ async function loadModel(
     currentModel = await modelLoader.loadModel(source);
     currentModel.mesh.frustumCulled = false;
     scene.add(currentModel.mesh);
-    skeletonHelper = new THREE.SkeletonHelper(currentModel.mesh);
-    skeletonHelper.material.depthTest = false;
-    skeletonHelper.material.color.set(0x9bdcff);
-    skeletonHelper.visible = showSkeletonInput?.checked ?? true;
-    scene.add(skeletonHelper);
     modelNameText.textContent = currentModel.mesh.name || label;
     boneCountText.textContent = String(currentModel.mesh.skeleton.bones.length);
     elapsedSeconds = 0;
@@ -302,11 +280,6 @@ async function loadModelFolder(files) {
     currentModel = await folderLoader.loadModel(modelFile);
     currentModel.mesh.frustumCulled = false;
     scene.add(currentModel.mesh);
-    skeletonHelper = new THREE.SkeletonHelper(currentModel.mesh);
-    skeletonHelper.material.depthTest = false;
-    skeletonHelper.material.color.set(0x9bdcff);
-    skeletonHelper.visible = showSkeletonInput?.checked ?? true;
-    scene.add(skeletonHelper);
     modelNameText.textContent = currentModel.mesh.name || modelFile.name;
     boneCountText.textContent = String(currentModel.mesh.skeleton.bones.length);
     elapsedSeconds = 0;
@@ -407,9 +380,6 @@ function evaluateRuntime() {
     elapsedSeconds %= maxTime;
   }
   currentModel.runtime.evaluate(elapsedSeconds);
-  if (skeletonHelper) {
-    skeletonHelper.updateMatrixWorld(true);
-  }
   timeline.value = String(elapsedSeconds);
   updatePlaybackDisplay();
 }
@@ -422,11 +392,6 @@ function clearModel() {
     for (const material of normalizeMaterials(currentModel.mesh.material)) {
       material.dispose();
     }
-  }
-  if (skeletonHelper) {
-    scene.remove(skeletonHelper);
-    skeletonHelper.dispose();
-    skeletonHelper = undefined;
   }
   currentModel = undefined;
   currentMotion = undefined;
