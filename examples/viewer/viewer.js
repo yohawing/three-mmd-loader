@@ -9,8 +9,10 @@ import { ThreeMmdLoader } from "../../dist/three/index.js";
 
 const ammoNamespace = await initAmmoNamespace();
 
-const sampleModelUrl = "../../test/fixtures/test_1bone_cube.pmx";
-const sampleMotionUrl = "../../test/fixtures/test_1bone_cube_motion.vmd";
+const sampleModelUrl =
+  "/__mmd_data/pmx/Tda式初音ミクV4X_Ver1.00/Tda式初音ミクV4X_Ver1.00.pmx";
+const sampleMotionUrl = "/__mmd_data/vmd/桃源恋歌配布用motion/ノーマルTda式用.vmd";
+const debugEnabled = new window.URLSearchParams(location.search).has("debug");
 
 const canvas = document.querySelector("#viewer-canvas");
 const stage = document.querySelector(".stage");
@@ -78,8 +80,9 @@ let skeletonHelper;
 let elapsedSeconds = 0;
 let isPlaying = false;
 let isSeeking = false;
+const debugMaterialState = new Map();
 
-window.mmdViewer = {
+const viewerApi = {
   camera,
   controls,
   renderer,
@@ -93,6 +96,10 @@ window.mmdViewer = {
     return currentMotion;
   }
 };
+if (debugEnabled) {
+  viewerApi.debug = createViewerDebugApi();
+}
+window.mmdViewer = viewerApi;
 
 bindControls();
 resize();
@@ -408,6 +415,7 @@ function evaluateRuntime() {
 }
 
 function clearModel() {
+  restoreDebugMaterials();
   if (currentModel) {
     scene.remove(currentModel.mesh);
     currentModel.mesh.geometry.dispose();
@@ -474,6 +482,137 @@ function setWireframe(enabled) {
 
 function normalizeMaterials(material) {
   return Array.isArray(material) ? material : [material];
+}
+
+function createViewerDebugApi() {
+  return {
+    showNormals() {
+      const normalMaterial = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+      for (const mesh of currentDebugMeshes()) {
+        rememberDebugMaterial(mesh);
+        mesh.material = normalMaterial;
+      }
+      return "normal material enabled";
+    },
+    restoreMaterials: restoreDebugMaterials,
+    flatShading(enabled) {
+      for (const material of currentDebugMaterials()) {
+        if ("flatShading" in material) {
+          material.flatShading = !!enabled;
+          material.needsUpdate = true;
+        }
+      }
+      return `flatShading=${!!enabled}`;
+    },
+    toonOff() {
+      for (const mesh of currentDebugMeshes()) {
+        rememberDebugMaterial(mesh);
+        mesh.material = normalizeMaterials(mesh.material).map((material) => {
+          const lambert = new THREE.MeshLambertMaterial({
+            color: material.color instanceof THREE.Color ? material.color : 0xffffff,
+            map: "map" in material ? material.map : null,
+            alphaMap: "alphaMap" in material ? material.alphaMap : null,
+            transparent: material.transparent,
+            opacity: material.opacity,
+            alphaTest: material.alphaTest,
+            side: material.side,
+            depthWrite: material.depthWrite,
+            wireframe: material.wireframe
+          });
+          lambert.name = `${material.name || "material"} debug lambert`;
+          return lambert;
+        });
+        if (!Array.isArray(debugMaterialState.get(mesh)?.material) && mesh.material.length === 1) {
+          mesh.material = mesh.material[0];
+        }
+      }
+      return "MeshLambertMaterial debug override enabled";
+    },
+    outlineOff() {
+      currentModel?.outlineMeshes?.forEach((outline) => {
+        outline.visible = false;
+      });
+      return "outline hidden";
+    },
+    dumpFaceNormals() {
+      const mesh = currentModel?.mesh;
+      if (!mesh) {
+        return [];
+      }
+      const samples = sampleFaceNormals(mesh);
+      window.console?.table(samples);
+      return samples;
+    }
+  };
+}
+
+function currentDebugMeshes() {
+  if (!currentModel) {
+    return [];
+  }
+  return [currentModel.mesh, ...(currentModel.outlineMeshes ?? [])];
+}
+
+function currentDebugMaterials() {
+  return currentDebugMeshes().flatMap((mesh) => normalizeMaterials(mesh.material));
+}
+
+function rememberDebugMaterial(mesh) {
+  if (!debugMaterialState.has(mesh)) {
+    debugMaterialState.set(mesh, { material: mesh.material });
+  }
+}
+
+function restoreDebugMaterials() {
+  for (const [mesh, state] of debugMaterialState) {
+    mesh.material = state.material;
+  }
+  debugMaterialState.clear();
+  return "materials restored";
+}
+
+function sampleFaceNormals(mesh) {
+  const geometry = mesh.geometry;
+  const normal = geometry.getAttribute("normal");
+  const position = geometry.getAttribute("position");
+  const index = geometry.index?.array;
+  if (!normal || !position || !index) {
+    return [];
+  }
+  const materials = normalizeMaterials(mesh.material);
+  const faceMaterialIndex = materials.findIndex((material) => {
+    const metadata = material.userData?.mmdMaterial;
+    return /face00|face|顔/i.test(`${metadata?.name ?? ""} ${material.name ?? ""}`);
+  });
+  const materialIndex = faceMaterialIndex >= 0 ? faceMaterialIndex : 0;
+  const group =
+    geometry.groups.find((item) => item.materialIndex === materialIndex) ?? geometry.groups[0];
+  if (!group) {
+    return [];
+  }
+  const samples = [];
+  const seen = new Set();
+  for (let offset = group.start; offset < group.start + group.count; offset += 1) {
+    const vertexIndex = Number(index[offset]);
+    if (seen.has(vertexIndex) || position.getY(vertexIndex) <= 1.5) {
+      continue;
+    }
+    seen.add(vertexIndex);
+    samples.push({
+      vertexIndex,
+      materialIndex,
+      x: position.getX(vertexIndex),
+      y: position.getY(vertexIndex),
+      z: position.getZ(vertexIndex),
+      nx: normal.getX(vertexIndex),
+      ny: normal.getY(vertexIndex),
+      nz: normal.getZ(vertexIndex)
+    });
+    if (samples.length >= 10) {
+      break;
+    }
+  }
+  return samples;
 }
 
 function resize() {
@@ -640,7 +779,7 @@ function createPhysicsBackend() {
 async function initAmmoNamespace() {
   const ammoCandidate = typeof window !== "undefined" ? window.Ammo : undefined;
   if (!ammoCandidate) {
-    console.warn("[viewer] window.Ammo not found; physics will be disabled.");
+    window.console?.warn("[viewer] window.Ammo not found; physics will be disabled.");
     return undefined;
   }
   try {
@@ -650,7 +789,7 @@ async function initAmmoNamespace() {
     }
     return ammoCandidate;
   } catch (error) {
-    console.warn("[viewer] Failed to initialize Ammo.js:", error);
+    window.console?.warn("[viewer] Failed to initialize Ammo.js:", error);
     return undefined;
   }
 }
