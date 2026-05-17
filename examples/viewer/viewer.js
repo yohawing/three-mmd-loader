@@ -282,7 +282,6 @@ async function loadModel(
     clearModel();
     currentModel = await modelLoader.loadModel(source);
     currentModel.mesh.frustumCulled = false;
-    initializeRuntimeForCurrentModel();
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
     setDisplayedText(modelNameText, label);
@@ -321,7 +320,6 @@ async function loadModelFolder(files) {
     clearModel();
     currentModel = await folderLoader.loadModel(modelFile);
     currentModel.mesh.frustumCulled = false;
-    initializeRuntimeForCurrentModel();
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
     setDisplayedText(modelNameText, modelFile.name);
@@ -414,13 +412,6 @@ function renderStillFrame() {
   evaluateRuntime();
   controls.update();
   renderer.render(scene, camera);
-}
-
-function initializeRuntimeForCurrentModel() {
-  currentModel?.runtime?.setAnimation(
-    new THREE.AnimationClip("__rest_pose__", -1, []),
-    currentModel.mesh
-  );
 }
 
 function evaluateRuntime(options = {}) {

@@ -128,8 +128,8 @@ describe("AmmoMmdPhysicsBackend", () => {
     const resetStep = backend.step(context);
 
     expect(resetStep.simulated).toBe(false);
-    expect(Array.from(context.output.translations ?? [])).toEqual([0, 5, -0]);
-    expect(context.output.updatedBoneIndices).toEqual([0]);
+    expect(Array.from(context.output.translations ?? [])).toEqual([0, 0, 0]);
+    expect(context.output.updatedBoneIndices).toEqual([]);
     backend.dispose?.();
   });
 });

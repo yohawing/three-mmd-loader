@@ -411,7 +411,6 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     if (this.pendingResetPoseSync) {
       this.syncAllBodiesToCurrentPose(ammoContext);
       this.applyBodyPhysicsToggles(ammoContext);
-      this.syncDynamicBodies(ammoContext, { dynamicWithBoneRotationFeedbackScale: 1 });
       this.restoreTemporalKinematicBodies();
       const fixedTimeStep = this.options.fixedTimeStep ?? DEFAULT_FIXED_TIME_STEP;
       const resetCatchUpSteps = Math.max(
