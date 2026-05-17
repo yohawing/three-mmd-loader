@@ -55,6 +55,7 @@ type LinkLimits = {
 };
 
 const maxIkLoopCount = 256;
+const matrixElementCount = 16;
 
 export class CcdIkSolver {
   solve(input: CcdIkSolveInput): CcdIkSolveResult {
@@ -73,14 +74,23 @@ export class CcdIkSolver {
         Math.max(Math.trunc(chain.iterationCount), 0),
         maxIkLoopCount
       );
-      totalIterations += solveChain(
+      totalIterations +=
+        solveTwoBonePlaneChain(
+          input.bones,
+          translations,
+          input.pose.rotations,
+          matrices,
+          chain,
+          iterationCount
+        ) ??
+        solveChain(
         input.bones,
         translations,
         input.pose.rotations,
         matrices,
         chain,
         iterationCount
-      );
+        );
       finalDistances.push(
         vectorLength(
           subtractVectors(
@@ -261,6 +271,108 @@ function maxAnglePerIteration(chain: CcdIkChain): number {
   return Math.max(chain.maxAnglePerIteration, 0);
 }
 
+function solveTwoBonePlaneChain(
+  bones: readonly CcdIkBone[],
+  translations: readonly [number, number, number][],
+  rotations: MutableQuatTuple[],
+  matrices: Float32Array,
+  chain: CcdIkChain,
+  iterationCount: number
+): number | undefined {
+  if (iterationCount <= 0 || chain.links.length !== 2) {
+    return undefined;
+  }
+  const midLink = chain.links[0];
+  const rootLink = chain.links[1];
+  if (!midLink || !rootLink || midLink.enabled === false || rootLink.enabled === false) {
+    return undefined;
+  }
+  const midLimits = toLinkLimits(midLink.angleLimit);
+  const axisIndex = getSingleAxisLimit(midLimits);
+  if (!midLimits || axisIndex === null) {
+    return undefined;
+  }
+  const rootIndex = rootLink.boneIndex;
+  const midIndex = midLink.boneIndex;
+  const effectorIndex = chain.effectorBoneIndex;
+  if (
+    rootIndex === effectorIndex ||
+    midIndex === effectorIndex ||
+    bones[midIndex]?.parentIndex !== rootIndex ||
+    bones[effectorIndex]?.parentIndex !== midIndex
+  ) {
+    return undefined;
+  }
+
+  const upper = translations[midIndex] ?? [0, 0, 0];
+  const lower = translations[effectorIndex] ?? [0, 0, 0];
+  const upperLength = vectorLength(upper);
+  const lowerLength = vectorLength(lower);
+  if (upperLength < 1e-8 || lowerLength < 1e-8) {
+    return undefined;
+  }
+
+  const rootPosition = matrixTranslation(matrices, rootIndex);
+  const goalPosition = matrixTranslation(matrices, chain.goalBoneIndex);
+  const targetVector = transformDirectionByInverseMatrix(
+    subtractVectors(goalPosition, rootPosition),
+    matrices,
+    rootIndex
+  );
+  const targetLength = vectorLength(targetVector);
+  if (targetLength < 1e-8) {
+    return undefined;
+  }
+
+  const reachableLength = clamp(
+    targetLength,
+    Math.abs(upperLength - lowerLength),
+    upperLength + lowerLength
+  );
+  const rawBendAngle = Math.acos(
+    clamp(
+      (reachableLength * reachableLength - upperLength * upperLength - lowerLength * lowerLength) /
+        (2 * upperLength * lowerLength),
+      -1,
+      1
+    )
+  );
+  const bendAngle = chooseLimitedBendAngle(rawBendAngle, midLimits, axisIndex);
+  const axis = axisTuple(axisIndex);
+  rotations[midIndex] = axisAngleQuaternion(axis, bendAngle);
+  composeWorldMatrices(bones, translations, rotations, matrices);
+
+  const currentVector = transformDirectionByInverseMatrix(
+    subtractVectors(matrixTranslation(matrices, effectorIndex), rootPosition),
+    matrices,
+    rootIndex
+  );
+  const rootDelta = quaternionFromUnitVectors(
+    normalizeVector(currentVector),
+    normalizeVector(targetVector)
+  );
+  rotations[rootIndex] = multiplyQuaternions(rotations[rootIndex] ?? [0, 0, 0, 1], rootDelta);
+  composeWorldMatrices(bones, translations, rotations, matrices);
+  return 1;
+}
+
+function chooseLimitedBendAngle(
+  rawAngle: number,
+  limits: LinkLimits,
+  axisIndex: number
+): number {
+  const lower = limits.lower[axisIndex];
+  const upper = limits.upper[axisIndex];
+  const candidates = [rawAngle, -rawAngle].map((angle) => clamp(angle, lower, upper));
+  return Math.abs(candidates[0] - rawAngle) < Math.abs(candidates[1] + rawAngle)
+    ? candidates[0]
+    : candidates[1];
+}
+
+function axisTuple(axisIndex: number): [number, number, number] {
+  return axisIndex === 0 ? [1, 0, 0] : axisIndex === 1 ? [0, 1, 0] : [0, 0, 1];
+}
+
 function solvePlaneLink({
   bones,
   translations,
@@ -294,8 +406,7 @@ function solvePlaneLink({
   readonly limitAngle: number;
   readonly axisIndex: number;
 }): void {
-  const rotateAxis: [number, number, number] =
-    axisIndex === 0 ? [1, 0, 0] : axisIndex === 1 ? [0, 1, 0] : [0, 0, 1];
+  const rotateAxis = axisTuple(axisIndex);
   const ikPosition = matrixTranslation(matrices, ikBoneIndex);
   const targetPosition = matrixTranslation(matrices, ikTargetIndex);
   const linkPosition = matrixTranslation(matrices, link.boneIndex);
@@ -345,7 +456,11 @@ function solvePlaneLink({
   }
   newAngle = clamp(newAngle, limits.lower[axisIndex], limits.upper[axisIndex]);
   state.planeModeAngle = newAngle;
-  ikRotations[link.boneIndex] = axisAngleQuaternion(rotateAxis, newAngle);
+  const baseRotation = baseRotations[link.boneIndex] ?? [0, 0, 0, 1];
+  ikRotations[link.boneIndex] = multiplyQuaternions(
+    axisAngleQuaternion(rotateAxis, newAngle),
+    invertQuaternion(baseRotation)
+  );
   applyEffectiveRotation(rotations, baseRotations, ikRotations, link.boneIndex);
   composeWorldMatrices(bones, translations, rotations, matrices);
 }
@@ -427,9 +542,55 @@ function composeWorldMatrices(
   rotations: readonly QuatTuple[],
   matrices: Float32Array
 ): void {
+  const local = new Float32Array(matrixElementCount);
+  if (isParentBeforeChildOrdered(bones)) {
+    for (let index = 0; index < bones.length; index += 1) {
+      composeWorldMatrixInOrder(index, bones, translations, rotations, matrices, local);
+    }
+    return;
+  }
   const states = new Uint8Array(bones.length);
   for (let index = 0; index < bones.length; index += 1) {
-    composeWorldMatrix(index, bones, translations, rotations, matrices, states);
+    composeWorldMatrix(index, bones, translations, rotations, matrices, states, local);
+  }
+}
+
+function isParentBeforeChildOrdered(bones: readonly CcdIkBone[]): boolean {
+  for (let index = 0; index < bones.length; index += 1) {
+    const parentIndex = bones[index]?.parentIndex ?? -1;
+    if (parentIndex >= index) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function composeWorldMatrixInOrder(
+  index: number,
+  bones: readonly CcdIkBone[],
+  translations: readonly [number, number, number][],
+  rotations: readonly QuatTuple[],
+  matrices: Float32Array,
+  local: Float32Array
+): void {
+  composeColumnMajorMatrixInto(
+    translations[index] ?? [0, 0, 0],
+    rotations[index] ?? [0, 0, 0, 1],
+    local
+  );
+  const targetOffset = index * matrixElementCount;
+  const parentIndex = bones[index]?.parentIndex ?? -1;
+  if (parentIndex >= 0) {
+    multiplyColumnMajorMatricesInto(
+      matrices,
+      parentIndex * matrixElementCount,
+      local,
+      0,
+      matrices,
+      targetOffset
+    );
+  } else {
+    setMatrix(matrices, targetOffset, local, 0);
   }
 }
 
@@ -439,7 +600,8 @@ function composeWorldMatrix(
   translations: readonly [number, number, number][],
   rotations: readonly QuatTuple[],
   matrices: Float32Array,
-  states: Uint8Array
+  states: Uint8Array,
+  local: Float32Array
 ): void {
   if (states[index] === 2) {
     return;
@@ -449,28 +611,39 @@ function composeWorldMatrix(
   }
 
   states[index] = 1;
-  const local = composeColumnMajorMatrix(
-    translations[index] ?? [0, 0, 0],
-    rotations[index] ?? [0, 0, 0, 1]
-  );
+  const targetOffset = index * matrixElementCount;
   const parentIndex = bones[index]?.parentIndex ?? -1;
   if (parentIndex >= 0) {
-    composeWorldMatrix(parentIndex, bones, translations, rotations, matrices, states);
-    multiplyColumnMajorMatrices(
-      matrices.subarray(parentIndex * 16, parentIndex * 16 + 16),
+    composeWorldMatrix(parentIndex, bones, translations, rotations, matrices, states, local);
+    composeColumnMajorMatrixInto(
+      translations[index] ?? [0, 0, 0],
+      rotations[index] ?? [0, 0, 0, 1],
+      local
+    );
+    multiplyColumnMajorMatricesInto(
+      matrices,
+      parentIndex * matrixElementCount,
       local,
-      matrices.subarray(index * 16, index * 16 + 16)
+      0,
+      matrices,
+      targetOffset
     );
   } else {
-    matrices.set(local, index * 16);
+    composeColumnMajorMatrixInto(
+      translations[index] ?? [0, 0, 0],
+      rotations[index] ?? [0, 0, 0, 1],
+      local
+    );
+    setMatrix(matrices, targetOffset, local, 0);
   }
   states[index] = 2;
 }
 
-function composeColumnMajorMatrix(
+function composeColumnMajorMatrixInto(
   translation: [number, number, number],
-  rotation: QuatTuple
-): Float32Array {
+  rotation: QuatTuple,
+  target: Float32Array
+): void {
   const [x, y, z, w] = normalizeQuaternion(rotation);
   const x2 = x + x;
   const y2 = y + y;
@@ -484,42 +657,52 @@ function composeColumnMajorMatrix(
   const wx = w * x2;
   const wy = w * y2;
   const wz = w * z2;
-  return new Float32Array([
-    1 - (yy + zz),
-    xy + wz,
-    xz - wy,
-    0,
-    xy - wz,
-    1 - (xx + zz),
-    yz + wx,
-    0,
-    xz + wy,
-    yz - wx,
-    1 - (xx + yy),
-    0,
-    translation[0],
-    translation[1],
-    translation[2],
-    1
-  ]);
+  target[0] = 1 - (yy + zz);
+  target[1] = xy + wz;
+  target[2] = xz - wy;
+  target[3] = 0;
+  target[4] = xy - wz;
+  target[5] = 1 - (xx + zz);
+  target[6] = yz + wx;
+  target[7] = 0;
+  target[8] = xz + wy;
+  target[9] = yz - wx;
+  target[10] = 1 - (xx + yy);
+  target[11] = 0;
+  target[12] = translation[0];
+  target[13] = translation[1];
+  target[14] = translation[2];
+  target[15] = 1;
 }
 
-function multiplyColumnMajorMatrices(
+function multiplyColumnMajorMatricesInto(
   left: Float32Array,
+  leftOffset: number,
   right: Float32Array,
-  target: Float32Array
+  rightOffset: number,
+  target: Float32Array,
+  targetOffset: number
 ): void {
-  const out = new Float32Array(16);
   for (let column = 0; column < 4; column += 1) {
     for (let row = 0; row < 4; row += 1) {
-      out[column * 4 + row] =
-        left[row] * right[column * 4] +
-        left[4 + row] * right[column * 4 + 1] +
-        left[8 + row] * right[column * 4 + 2] +
-        left[12 + row] * right[column * 4 + 3];
+      target[targetOffset + column * 4 + row] =
+        left[leftOffset + row] * right[rightOffset + column * 4] +
+        left[leftOffset + 4 + row] * right[rightOffset + column * 4 + 1] +
+        left[leftOffset + 8 + row] * right[rightOffset + column * 4 + 2] +
+        left[leftOffset + 12 + row] * right[rightOffset + column * 4 + 3];
     }
   }
-  target.set(out);
+}
+
+function setMatrix(
+  target: Float32Array,
+  targetOffset: number,
+  source: Float32Array,
+  sourceOffset: number
+): void {
+  for (let index = 0; index < matrixElementCount; index += 1) {
+    target[targetOffset + index] = source[sourceOffset + index];
+  }
 }
 
 function matrixTranslation(matrices: Float32Array, index: number): [number, number, number] {
@@ -575,20 +758,20 @@ function getSingleAxisLimit(limits: LinkLimits | undefined): number | null {
   const x = limits.lower[0] !== 0 || limits.upper[0] !== 0;
   const y = limits.lower[1] !== 0 || limits.upper[1] !== 0;
   const z = limits.lower[2] !== 0 || limits.upper[2] !== 0;
-  if (x && isZeroWidthAxisLimit(limits, 1) && isZeroWidthAxisLimit(limits, 2)) {
+  if (x && hasZeroEndpointAxisLimit(limits, 1) && hasZeroEndpointAxisLimit(limits, 2)) {
     return 0;
   }
-  if (y && isZeroWidthAxisLimit(limits, 0) && isZeroWidthAxisLimit(limits, 2)) {
+  if (y && hasZeroEndpointAxisLimit(limits, 0) && hasZeroEndpointAxisLimit(limits, 2)) {
     return 1;
   }
-  if (z && isZeroWidthAxisLimit(limits, 0) && isZeroWidthAxisLimit(limits, 1)) {
+  if (z && hasZeroEndpointAxisLimit(limits, 0) && hasZeroEndpointAxisLimit(limits, 1)) {
     return 2;
   }
   return null;
 }
 
-function isZeroWidthAxisLimit(limits: LinkLimits, axis: number): boolean {
-  return limits.lower[axis] === 0 && limits.upper[axis] === 0;
+function hasZeroEndpointAxisLimit(limits: LinkLimits, axis: number): boolean {
+  return limits.lower[axis] === 0 || limits.upper[axis] === 0;
 }
 
 function clampLimitedRotation(
@@ -683,6 +866,21 @@ function axisAngleQuaternion(
   const half = angle / 2;
   const scale = Math.sin(half);
   return normalizeQuaternion([axis[0] * scale, axis[1] * scale, axis[2] * scale, Math.cos(half)]);
+}
+
+function quaternionFromUnitVectors(
+  from: [number, number, number],
+  to: [number, number, number]
+): [number, number, number, number] {
+  const dot = clamp(dotVectors(from, to), -1, 1);
+  if (dot > 1 - 1e-8) {
+    return [0, 0, 0, 1];
+  }
+  if (dot < -1 + 1e-8) {
+    return axisAngleQuaternion(stablePerpendicularAxis(from), Math.PI);
+  }
+  const axis = crossVectors(from, to);
+  return normalizeQuaternion([axis[0], axis[1], axis[2], 1 + dot]);
 }
 
 function multiplyQuaternions(left: QuatTuple, right: QuatTuple): [number, number, number, number] {
