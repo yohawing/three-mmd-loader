@@ -9,9 +9,15 @@ import { createThreeBufferGeometry } from "./geometry.js";
 import { parseLoaderMmdModelData } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
 import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
+import {
+  computeMmdMaterialRenderOrder,
+  syncMmdModelShadowFlags
+} from "./material/material-metadata.js";
+import { attachMmdSdefSkinning } from "./material/material-sdef.js";
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
+import { createMmdMaterialRenderOrderMeshes, createMmdOutlineMeshes } from "./outline.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
@@ -19,8 +25,40 @@ export { createThreeBufferGeometry } from "./geometry.js";
 export { createThreeAnimationClip, createThreePoseAnimationClip } from "./animation.js";
 export { isModelSource } from "./modelSource.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
-export { mmdWorldMatrixToThree } from "./runtime-sync.js";
+export { mmdWorldMatrixToThree, syncThreeMmdRuntimeToMesh } from "./runtime-sync.js";
 export { createThreeSkeleton } from "./skeleton.js";
+export {
+  attachMmdMaterialMetadata,
+  computeMmdMaterialRenderOrder,
+  materialTransparencyMode,
+  mmdMaterialAlphaTest,
+  mmdMaterialCastsShadow,
+  mmdMaterialDepthWrite,
+  mmdMaterialMorphCanAffectAlpha,
+  mmdMaterialSuppressesColorAtAlpha,
+  mmdMaterialTransparencyMode,
+  syncMmdModelShadowFlags
+} from "./material/material-metadata.js";
+export {
+  attachMmdMaterialFactors,
+  attachMmdSphereTexture,
+  materialHasTextureMap,
+  mmdSphereModeToUniform
+} from "./material/material-shader-hooks.js";
+export { syncMmdMaterialStates, syncMmdSpecularDirection } from "./material/material-sync.js";
+export {
+  attachMmdOutlineExpansion,
+  computeMmdOutlineScale,
+  createMmdMaterialRenderOrderMeshes,
+  createMmdOutlineMesh,
+  createMmdOutlineMeshes,
+  syncMmdOutlineMaterialStates
+} from "./outline.js";
+export {
+  attachMmdSdefSkinning,
+  computeMmdSdefSkinnedNormal,
+  computeMmdSdefSkinnedPosition
+} from "./material/material-sdef.js";
 export {
   createMmdBuiltInToonTextureMap,
   createTextureResolver,
@@ -43,11 +81,19 @@ export type {
 export type { ModelSource } from "./modelSource.js";
 export type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
+export type { MmdSdefNormalSkinningInput, MmdSdefSkinningInput } from "./material/material-sdef.js";
+export type {
+  MmdMaterialRenderOrderMeshOptions,
+  MmdOutlineModelSource,
+  MmdOutlineOptions
+} from "./outline.js";
+export type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
 export type { MmdWorldMatrixBuffer, MmdWorldMatrixColumnMajorTuple } from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
 export type {
   MmdToonTextureMaterial,
   MmdToonTextureReference,
+  MmdMaterialTransparencyMode,
   TextureMap,
   TextureResolver
 } from "./textures.js";
@@ -61,6 +107,8 @@ export interface ThreeMmdLoaderOptions {
 
 export interface ThreeMmdModel {
   readonly mesh: THREE.SkinnedMesh;
+  readonly outlineMeshes: readonly THREE.SkinnedMesh[];
+  readonly renderOrderMeshes: readonly THREE.SkinnedMesh[];
   readonly runtime?: MmdRuntime;
   readonly source: ModelSource;
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
@@ -93,10 +141,29 @@ export class ThreeMmdLoader {
       textureResolver: this.options.textureResolver,
       textureMap: this.options.textureMap,
       textureLoader: this.options.textureLoader,
-      modelUrl: typeof source === "string" ? source : undefined
+      modelUrl: typeof source === "string" ? source : undefined,
+      geometry: mesh.geometry,
+      morphs: modelData.morphs
+    });
+    const outlineMeshes = createMmdOutlineMeshes({ mesh, materials: modelData.materials });
+    outlineMeshes.forEach((outline) => mesh.add(outline));
+    const renderOrder = computeMmdMaterialRenderOrder(
+      materials.map((material, materialIndex) => ({
+        materialIndex,
+        transparencyMode: material.userData.mmdMaterial?.transparencyMode ?? "opaque"
+      }))
+    );
+    mesh.userData.mmdMaterialRenderOrder = renderOrder;
+    syncMmdModelShadowFlags(mesh, modelData.materials);
+    outlineMeshes.forEach((outline) => syncMmdModelShadowFlags(outline, modelData.materials));
+    const renderOrderMeshes = createMmdMaterialRenderOrderMeshes({
+      mesh,
+      materials: modelData.materials
     });
     return {
       mesh,
+      outlineMeshes,
+      renderOrderMeshes,
       runtime: new DefaultMmdRuntime(this.options.runtime),
       source,
       textureDiagnostics
@@ -175,6 +242,9 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     modelData.morphs
   );
   const materials = createThreeMmdMaterials(modelData.materials);
+  if (geometry.userData.mmdSdef) {
+    materials.forEach((material) => attachMmdSdefSkinning(material));
+  }
   const mesh = new THREE.SkinnedMesh(geometry, materials.length === 1 ? materials[0] : materials);
   mesh.morphTargetDictionary = createMorphTargetDictionary(modelData.morphs);
   mesh.morphTargetInfluences = new Array(modelData.morphs.length).fill(0);

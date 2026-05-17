@@ -13,6 +13,7 @@
         }
       }
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/ammo.js@0.0.10/ammo.js"></script>
   </head>
   <body>
     <main class="viewer-shell">
@@ -23,20 +24,19 @@
         </div>
 
         <nav class="menu-actions" aria-label="Model and motion loading">
-          <button id="load-sample-scene" type="button">Sample</button>
-          <button id="load-sample-model" type="button">Sample Model</button>
-          <button id="load-sample-motion" type="button">Sample VMD</button>
-          <button id="choose-model" type="button">Model</button>
-          <button id="choose-model-folder" type="button">Folder</button>
-          <button id="choose-motion" type="button">VMD</button>
-          <button id="choose-pose" type="button">VPD</button>
+          <details class="load-menu" id="load-menu">
+            <summary>Load</summary>
+            <div class="load-menu-panel" role="menu" aria-label="Load options">
+              <button id="load-sample-scene" type="button" role="menuitem">Sample scene</button>
+              <button id="load-sample-model" type="button" role="menuitem">Sample model</button>
+              <button id="load-sample-motion" type="button" role="menuitem">Sample VMD</button>
+              <button id="choose-model" type="button" role="menuitem">Model file...</button>
+              <button id="choose-model-folder" type="button" role="menuitem">Model folder...</button>
+              <button id="choose-motion" type="button" role="menuitem">Motion (VMD)...</button>
+              <button id="choose-pose" type="button" role="menuitem">Pose (VPD)...</button>
+            </div>
+          </details>
         </nav>
-
-        <div class="view-toggles" aria-label="Viewport options">
-          <label><input id="show-grid" type="checkbox" checked /> Grid</label>
-          <label><input id="show-skeleton" type="checkbox" checked /> Skeleton</label>
-          <label><input id="wireframe" type="checkbox" /> Wire</label>
-        </div>
 
         <input id="model-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
         <input id="model-folder" type="file" webkitdirectory directory multiple />
@@ -46,6 +46,17 @@
 
       <section class="stage" aria-label="MMD model viewport">
         <canvas id="viewer-canvas"></canvas>
+        <div class="empty-state" id="empty-state">
+          Drop a PMX/PMD file, or click Load -> Sample scene
+        </div>
+        <div class="viewport-tools" aria-label="Viewport options">
+          <div class="segmented" role="group" aria-label="Viewport display toggles">
+            <label><input id="show-grid" type="checkbox" checked /> <span>Grid</span></label>
+            <label><input id="show-skeleton" type="checkbox" checked /> <span>Skeleton</span></label>
+            <label><input id="wireframe" type="checkbox" /> <span>Wire</span></label>
+          </div>
+          <button id="reset-view" type="button">Reset View</button>
+        </div>
         <div class="drop-target" id="drop-target">
           <strong>Drop model folders, PMX / PMD, VMD, or VPD files</strong>
           <span>Model textures are resolved when a folder is selected.</span>
@@ -58,16 +69,13 @@
           <div><dt>Motion</dt><dd id="motion-name">none</dd></div>
           <div><dt>Bones</dt><dd id="bone-count">0</dd></div>
         </dl>
-        <p>
-          <span id="model-file-name">PMX / PMD or model folder</span>
-          <span id="motion-file-name">VMD</span>
-          <span id="pose-file-name">VPD</span>
-        </p>
+        <span id="model-file-name" hidden>PMX / PMD or model folder</span>
+        <span id="motion-file-name" hidden>VMD</span>
+        <span id="pose-file-name" hidden>VPD</span>
       </div>
 
       <footer class="transport" aria-label="Playback controls">
-        <button id="play-toggle" type="button">Pause</button>
-        <button id="reset-view" type="button">Reset View</button>
+        <button id="play-toggle" type="button">Play</button>
         <label>
           <span id="frame-value">0</span>
           <input id="timeline" type="range" min="0" max="10" value="0" step="0.001" />
@@ -75,6 +83,7 @@
         <label>
           Speed
           <input id="speed" type="range" min="0" max="2" value="1" step="0.05" />
+          <output id="speed-value" for="speed">1.0x</output>
         </label>
       </footer>
     </main>

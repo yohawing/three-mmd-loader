@@ -40,6 +40,7 @@ export default tseslint.config(
         HTMLCanvasElement: "readonly",
         HTMLInputElement: "readonly",
         URL: "readonly",
+        console: "readonly",
         document: "readonly",
         fetch: "readonly",
         location: "readonly",

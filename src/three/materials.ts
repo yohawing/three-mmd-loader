@@ -1,10 +1,19 @@
 import * as THREE from "three";
 
-import type { MaterialInfo } from "../parser/model/modelTypes.js";
+import type { MaterialInfo, MorphData } from "../parser/model/modelTypes.js";
 import {
-  createTextureResolver,
-  resolveMmdToonTextureReference
-} from "./textures.js";
+  attachMmdMaterialMetadata,
+  mmdMaterialAlphaTest,
+  mmdMaterialDepthWrite,
+  mmdMaterialSuppressesColorAtAlpha,
+  mmdMaterialTransparencyMode
+} from "./material/material-metadata.js";
+import { attachMmdMaterialFactors, attachMmdSphereTexture } from "./material/material-shader-hooks.js";
+import {
+  evaluateMmdDefaultMaterialTransparency,
+  loadMmdDefaultMaterialTextureSet
+} from "./material/material-texture-set.js";
+import { createFallbackMmdMaterial, createTextureResolver } from "./textures.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 
 export interface TextureLoadDiagnostic {
@@ -30,6 +39,8 @@ export interface ThreeMmdMaterialTextureOptions {
   readonly textureMap?: TextureMap;
   readonly textureLoader?: ThreeMmdTextureLoader;
   readonly modelUrl?: string;
+  readonly geometry?: THREE.BufferGeometry;
+  readonly morphs?: readonly MorphData[];
 }
 
 export type ThreeMmdSphereMappedToonMaterial = THREE.MeshToonMaterial & {
@@ -45,33 +56,23 @@ export function createThreeMmdMaterials(
   }
 
   return materials.map((material, materialIndex) => {
-    const transparent = material.diffuse[3] < 1;
+    const transparencyMode = mmdMaterialTransparencyMode(material, false);
+    const transparent = transparencyMode === "alphaBlend";
     const threeMaterial = new THREE.MeshToonMaterial({
       color: new THREE.Color(material.diffuse[0], material.diffuse[1], material.diffuse[2]),
+      emissive: new THREE.Color(0, 0, 0),
       opacity: material.diffuse[3],
       transparent,
-      depthWrite: !transparent,
+      depthWrite: mmdMaterialDepthWrite(transparencyMode),
+      colorWrite: !mmdMaterialSuppressesColorAtAlpha(material.diffuse[3], material.flags),
+      alphaTest: mmdMaterialAlphaTest(material, false),
       side: material.flags.doubleSided ? THREE.DoubleSide : THREE.FrontSide
     });
     threeMaterial.name = material.englishName || material.name || `material_${materialIndex}`;
-    threeMaterial.visible = material.diffuse[3] > 0;
-    threeMaterial.userData.mmdMaterial = {
-      materialIndex,
-      name: material.name,
-      englishName: material.englishName,
-      diffuse: [...material.diffuse],
-      specular: [...material.specular],
-      specularPower: material.specularPower,
-      ambient: [...material.ambient],
-      edgeColor: [...material.edgeColor],
-      edgeSize: material.edgeSize,
-      flags: { ...material.flags },
-      texturePath: material.texturePath,
-      sphereTexturePath: material.sphereTexturePath,
-      sphereMode: material.sphereMode,
-      toonTexturePath: material.toonTexturePath,
-      sharedToonIndex: material.sharedToonIndex
-    };
+    threeMaterial.visible =
+      material.diffuse[3] > 0 ||
+      mmdMaterialSuppressesColorAtAlpha(material.diffuse[3], material.flags);
+    attachMmdMaterialMetadata(threeMaterial, material, materialIndex, transparencyMode);
     return threeMaterial;
   });
 }
@@ -95,33 +96,49 @@ export async function applyThreeMmdMaterialTextures(
         return;
       }
 
-      const diffuse = await loadResolvedTexture(
+      const { texture, gradientMap, sphereTexture } = await loadMmdDefaultMaterialTextureSet(
+        mmdMaterial,
         materialIndex,
-        "diffuse",
-        mmdMaterial.texturePath,
-        resolver,
-        textureLoader,
         options.modelUrl,
-        diagnostics
+        resolver,
+        diagnostics,
+        textureLoader
       );
-      if (diffuse) {
-        material.map = diffuse;
+      if (texture) {
+        material.map = texture;
       }
-
-      const toonReference = resolveMmdToonTextureReference(mmdMaterial);
-      const toon = await loadResolvedTexture(
-        materialIndex,
-        "toon",
-        toonReference.path,
-        resolver,
-        textureLoader,
-        options.modelUrl,
-        diagnostics
-      );
-      if (toon) {
-        toon.minFilter = THREE.NearestFilter;
-        toon.magFilter = THREE.NearestFilter;
-        material.gradientMap = toon;
+      if (gradientMap) {
+        material.gradientMap = gradientMap;
+      }
+      if (options.geometry) {
+        const { transparencyMode, textureTransparencyMode, morphAlphaTransparent } =
+          evaluateMmdDefaultMaterialTransparency(
+            mmdMaterial,
+            options.morphs ?? [],
+            options.geometry,
+            materialIndex,
+            texture
+          );
+        material.transparent = transparencyMode === "alphaBlend";
+        material.depthWrite = mmdMaterialDepthWrite(transparencyMode);
+        material.colorWrite = !mmdMaterialSuppressesColorAtAlpha(
+          mmdMaterial.diffuse[3],
+          mmdMaterial.flags
+        );
+        material.alphaTest = mmdMaterialAlphaTest(
+          mmdMaterial,
+          !!texture,
+          textureTransparencyMode
+        );
+        attachMmdMaterialMetadata(material, mmdMaterial, materialIndex, transparencyMode);
+        material.userData.mmdMaterial.textureTransparencyMode = textureTransparencyMode;
+        if (morphAlphaTransparent) {
+          material.userData.mmdMaterial.morphAlphaTransparent = true;
+        }
+      }
+      if (sphereTexture) {
+        material.userData.mmdSphereTexture = sphereTexture;
+        attachMmdSphereTexture(material, mmdMaterial.sphereMode, sphereTexture);
       }
 
       if (mmdMaterial.sphereTexturePath) {
@@ -135,111 +152,12 @@ export async function applyThreeMmdMaterialTextures(
         });
       }
 
-      if (diffuse || toon) {
+      attachMmdMaterialFactors(material);
+      if (texture || gradientMap || sphereTexture) {
         material.needsUpdate = true;
       }
     })
   );
 
   return diagnostics;
-}
-
-function createFallbackMmdMaterial(): THREE.MeshToonMaterial {
-  const material = new THREE.MeshToonMaterial({
-    color: new THREE.Color(0.8, 0.8, 0.8),
-    side: THREE.DoubleSide
-  });
-  material.name = "mmd_fallback_material";
-  material.userData.mmdMaterial = {
-    materialIndex: 0,
-    name: "fallback",
-    englishName: "fallback"
-  };
-  return material;
-}
-
-async function loadResolvedTexture(
-  materialIndex: number,
-  textureKind: TextureLoadDiagnostic["textureKind"],
-  path: string,
-  resolver: TextureResolver | undefined,
-  textureLoader: ThreeMmdTextureLoader,
-  modelUrl: string | undefined,
-  diagnostics: TextureLoadDiagnostic[]
-): Promise<THREE.Texture | undefined> {
-  if (!path) {
-    return undefined;
-  }
-
-  let resolved: string | URL | Blob | undefined;
-  try {
-    resolved = await resolver?.resolve(path, modelUrl);
-  } catch {
-    diagnostics.push(createTextureDiagnostic(materialIndex, textureKind, path));
-    return undefined;
-  }
-
-  if (!resolved) {
-    diagnostics.push(createTextureDiagnostic(materialIndex, textureKind, path));
-    return undefined;
-  }
-
-  try {
-    return await loadTexture(textureLoader, resolved);
-  } catch {
-    diagnostics.push(createTextureDiagnostic(materialIndex, textureKind, path));
-    return undefined;
-  }
-}
-
-function loadTexture(
-  textureLoader: ThreeMmdTextureLoader,
-  resolved: string | URL | Blob
-): Promise<THREE.Texture> {
-  const objectUrl = createObjectUrl(resolved);
-  const url = objectUrl ?? (resolved instanceof URL ? resolved.toString() : resolved);
-  if (typeof url !== "string") {
-    return Promise.reject(new TypeError("TEXTURE_BLOB_OBJECT_URL_UNAVAILABLE"));
-  }
-
-  return new Promise((resolve, reject) => {
-    textureLoader.load(
-      url,
-      (texture) => {
-        if (objectUrl) {
-          URL.revokeObjectURL(objectUrl);
-        }
-        texture.flipY = false;
-        resolve(texture);
-      },
-      undefined,
-      (error) => {
-        if (objectUrl) {
-          URL.revokeObjectURL(objectUrl);
-        }
-        reject(error);
-      }
-    );
-  });
-}
-
-function createObjectUrl(resolved: string | URL | Blob): string | undefined {
-  if (typeof Blob !== "undefined" && resolved instanceof Blob) {
-    return typeof URL.createObjectURL === "function" ? URL.createObjectURL(resolved) : undefined;
-  }
-  return undefined;
-}
-
-function createTextureDiagnostic(
-  materialIndex: number,
-  textureKind: TextureLoadDiagnostic["textureKind"],
-  path: string
-): TextureLoadDiagnostic {
-  return {
-    level: "warning",
-    code: "TEXTURE_RESOLVE_FAILED",
-    materialIndex,
-    textureKind,
-    path
-  };
 }

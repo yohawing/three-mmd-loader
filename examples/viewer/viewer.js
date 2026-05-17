@@ -1,13 +1,22 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
+import {
+  createAmmoMmdPhysicsBackend,
+  createDisabledMmdPhysicsBackend
+} from "../../dist/physics/index.js";
 import { ThreeMmdLoader } from "../../dist/three/index.js";
+
+const ammoNamespace = await initAmmoNamespace();
 
 const sampleModelUrl = "../../test/fixtures/test_1bone_cube.pmx";
 const sampleMotionUrl = "../../test/fixtures/test_1bone_cube_motion.vmd";
 
 const canvas = document.querySelector("#viewer-canvas");
 const stage = document.querySelector(".stage");
+const topBar = document.querySelector(".top-bar");
+const transportBar = document.querySelector(".transport");
+const viewerShell = document.querySelector(".viewer-shell");
 const statusText = document.querySelector("#status");
 const modelNameText = document.querySelector("#model-name");
 const motionNameText = document.querySelector("#motion-name");
@@ -15,10 +24,12 @@ const frameValueText = document.querySelector("#frame-value");
 const boneCountText = document.querySelector("#bone-count");
 const timeline = document.querySelector("#timeline");
 const speedInput = document.querySelector("#speed");
+const speedValueText = document.querySelector("#speed-value");
 const playToggle = document.querySelector("#play-toggle");
 const showGridInput = document.querySelector("#show-grid");
 const showSkeletonInput = document.querySelector("#show-skeleton");
 const wireframeInput = document.querySelector("#wireframe");
+const loadMenu = document.querySelector("#load-menu");
 const modelFileInput = document.querySelector("#model-file");
 const modelFolderInput = document.querySelector("#model-folder");
 const motionFileInput = document.querySelector("#motion-file");
@@ -36,25 +47,27 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor(0x171a1d, 1);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x171a1d, 24, 64);
 
-const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 1000);
-camera.position.set(2.8, 2.2, 4.5);
+const camera = new THREE.PerspectiveCamera(22, 1, 0.01, 1000);
+camera.position.set(0, 1.1, 9);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.target.set(0, 0.9, 0);
 
-const grid = new THREE.GridHelper(12, 24, 0x5d6a72, 0x30383d);
+const grid = new THREE.GridHelper(40, 40, 0x5d6a72, 0x30383d);
 scene.add(grid);
-const axes = new THREE.AxesHelper(1.2);
+const axes = new THREE.AxesHelper(4);
 scene.add(axes);
 
-const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
 keyLight.position.set(3, 4, 5);
 scene.add(keyLight);
-scene.add(new THREE.AmbientLight(0x9eb4c8, 1.2));
+const fillLight = new THREE.HemisphereLight(0xeaf0f6, 0x2a2f33, 0.55);
+scene.add(fillLight);
+scene.add(new THREE.AmbientLight(0xffffff, 0.15));
 
+let activePhysicsBackend;
 const loader = new ThreeMmdLoader({ runtime: { frameRate: 30 } });
 const clock = new THREE.Clock();
 let currentModel;
@@ -63,7 +76,7 @@ let pendingMotionSource;
 let pendingMotionLabel;
 let skeletonHelper;
 let elapsedSeconds = 0;
-let isPlaying = true;
+let isPlaying = false;
 let isSeeking = false;
 
 window.mmdViewer = {
@@ -84,10 +97,27 @@ window.mmdViewer = {
 bindControls();
 resize();
 await loadSampleScene();
+clock.getDelta();
 renderer.setAnimationLoop(render);
 
 function bindControls() {
   window.addEventListener("resize", resize);
+  document.addEventListener("click", (event) => {
+    if (loadMenu && !loadMenu.contains(event.target)) {
+      closeLoadMenu();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && loadMenu) {
+      closeLoadMenu();
+      loadMenu.querySelector("summary")?.focus();
+    }
+  });
+  loadMenu?.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => {
+      closeLoadMenu();
+    });
+  });
   document.querySelector("#load-sample-model")?.addEventListener("click", () => {
     void loadModelFromUrl(sampleModelUrl);
   });
@@ -161,26 +191,44 @@ function bindControls() {
   wireframeInput?.addEventListener("change", () => {
     setWireframe(wireframeInput.checked);
   });
+  speedInput?.addEventListener("input", updateSpeedDisplay);
   bindDropTarget();
+  updateSpeedDisplay();
+  updatePlaybackDisplay();
+  updateStageState();
 }
 
 async function loadSampleScene() {
   await loadModelFromUrl(sampleModelUrl);
   await loadMotionFromUrl(sampleMotionUrl);
+  if (currentModel) {
+    elapsedSeconds = 0;
+    timeline.value = "0";
+    updatePlaybackDisplay();
+    setStatus(`Loaded model: ${sampleModelUrl.split("/").at(-1)}`, "ready");
+  }
 }
 
 async function loadModelFromUrl(url) {
-  setStatus(`Loading ${url}`);
-  const bytes = await fetchBytes(url);
-  modelFileName.textContent = url.split("/").at(-1) ?? url;
-  await loadModel(bytes, url.split("/").at(-1) ?? url, createUrlTextureLoader(url));
+  try {
+    setStatus(`Loading ${url}`, "loading");
+    const bytes = await fetchBytes(url);
+    modelFileName.textContent = url.split("/").at(-1) ?? url;
+    await loadModel(bytes, url.split("/").at(-1) ?? url, createUrlTextureLoader(url));
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+  }
 }
 
 async function loadMotionFromUrl(url) {
-  setStatus(`Loading ${url}`);
-  const bytes = await fetchBytes(url);
-  motionFileName.textContent = url.split("/").at(-1) ?? url;
-  await loadMotion(bytes, url.split("/").at(-1) ?? url);
+  try {
+    setStatus(`Loading ${url}`, "loading");
+    const bytes = await fetchBytes(url);
+    motionFileName.textContent = url.split("/").at(-1) ?? url;
+    await loadMotion(bytes, url.split("/").at(-1) ?? url);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+  }
 }
 
 async function fetchBytes(url) {
@@ -191,8 +239,13 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-async function loadModel(source, label = source.name ?? "model", modelLoader = loader) {
+async function loadModel(
+  source,
+  label = source.name ?? "model",
+  modelLoader = createModelLoader()
+) {
   try {
+    setStatus(`Loading model: ${label}`, "loading");
     clearModel();
     currentModel = await modelLoader.loadModel(source);
     currentModel.mesh.frustumCulled = false;
@@ -205,6 +258,9 @@ async function loadModel(source, label = source.name ?? "model", modelLoader = l
     modelNameText.textContent = currentModel.mesh.name || label;
     boneCountText.textContent = String(currentModel.mesh.skeleton.bones.length);
     elapsedSeconds = 0;
+    timeline.max = "0.001";
+    timeline.value = "0";
+    updatePlaybackDisplay();
     fitCameraToObject(currentModel.mesh);
     setWireframe(wireframeInput?.checked ?? false);
     if (pendingMotionSource) {
@@ -212,29 +268,29 @@ async function loadModel(source, label = source.name ?? "model", modelLoader = l
     } else if (currentMotion?.clip) {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
     }
-    setStatus(`Loaded model: ${label}`);
+    setStatus(`Loaded model: ${label}`, "ready");
+    updateStageState();
     renderStillFrame();
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+    updateStageState();
   }
 }
 
 async function loadModelFolder(files) {
   const modelFile = findModelFile(files);
   if (!modelFile) {
-    setStatus("No PMX or PMD model found in the selected folder.");
+    setStatus("No PMX or PMD model found in the selected folder.", "error");
     return;
   }
 
   const textureMap = createFolderTextureMap(files, modelFile);
-  const folderLoader = new ThreeMmdLoader({
-    runtime: { frameRate: 30 },
-    textureMap
-  });
+  const folderLoader = createModelLoader({ textureMap });
   const folderName = modelFile.webkitRelativePath.split("/")[0] || "folder";
   modelFileName.textContent = `${folderName}/${modelFile.name}`;
 
   try {
+    setStatus(`Loading model folder: ${folderName}`, "loading");
     clearModel();
     currentModel = await folderLoader.loadModel(modelFile);
     currentModel.mesh.frustumCulled = false;
@@ -247,17 +303,23 @@ async function loadModelFolder(files) {
     modelNameText.textContent = currentModel.mesh.name || modelFile.name;
     boneCountText.textContent = String(currentModel.mesh.skeleton.bones.length);
     elapsedSeconds = 0;
+    timeline.max = "0.001";
+    timeline.value = "0";
+    updatePlaybackDisplay();
     fitCameraToObject(currentModel.mesh);
     setWireframe(wireframeInput?.checked ?? false);
     if (pendingMotionSource) {
       await loadMotion(pendingMotionSource, pendingMotionLabel);
     }
     setStatus(
-      `Loaded model folder: ${folderName} (${Object.keys(textureMap).length} texture paths indexed)`
+      `Loaded model folder: ${folderName} (${Object.keys(textureMap).length} texture paths indexed)`,
+      "ready"
     );
+    updateStageState();
     renderStillFrame();
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+    updateStageState();
   }
 }
 
@@ -267,9 +329,10 @@ async function loadMotion(source, label = source.name ?? "motion") {
       pendingMotionSource = source;
       pendingMotionLabel = label;
       motionNameText.textContent = label;
-      setStatus(`Queued VMD motion: ${label}. Load a model to apply it.`);
+      setStatus(`Queued VMD motion: ${label}. Load a model to apply it.`, "ready");
       return;
     }
+    setStatus(`Loading motion: ${label}`, "loading");
     pendingMotionSource = source;
     pendingMotionLabel = label;
     currentMotion = await loader.loadAnimation(source, currentModel);
@@ -277,33 +340,38 @@ async function loadMotion(source, label = source.name ?? "motion") {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
       timeline.max = String(Math.max(currentMotion.clip.duration, 0.001));
       elapsedSeconds = 0;
+      timeline.value = "0";
     }
     motionNameText.textContent = currentMotion.name || label;
-    setStatus(`Loaded motion: ${label}`);
+    updatePlaybackDisplay();
+    setStatus(`Loaded motion: ${label}`, "ready");
     renderStillFrame();
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    setStatus(error instanceof Error ? error.message : String(error), "error");
   }
 }
 
 async function loadPose(source, label = source.name ?? "pose") {
   try {
     if (!currentModel) {
-      setStatus("Load a model before loading a pose.");
+      setStatus("Load a model before loading a pose.", "error");
       return;
     }
+    setStatus(`Loading pose: ${label}`, "loading");
     const poseAnimation = await loader.loadPoseAnimation(source, label, currentModel);
     if (poseAnimation.clip) {
       currentMotion = poseAnimation;
       currentModel.runtime?.setAnimation(poseAnimation.clip, currentModel.mesh);
       elapsedSeconds = 0;
       timeline.max = "1";
+      timeline.value = "0";
       motionNameText.textContent = poseAnimation.name ?? label;
     }
-    setStatus(`Loaded pose: ${label}`);
+    updatePlaybackDisplay();
+    setStatus(`Loaded pose: ${label}`, "ready");
     renderStillFrame();
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    setStatus(error instanceof Error ? error.message : String(error), "error");
   }
 }
 
@@ -331,12 +399,12 @@ function evaluateRuntime() {
   if (elapsedSeconds > maxTime && maxTime > 0) {
     elapsedSeconds %= maxTime;
   }
-  const frameState = currentModel.runtime.evaluate(elapsedSeconds);
+  currentModel.runtime.evaluate(elapsedSeconds);
   if (skeletonHelper) {
     skeletonHelper.updateMatrixWorld(true);
   }
   timeline.value = String(elapsedSeconds);
-  frameValueText.textContent = String(frameState.frame);
+  updatePlaybackDisplay();
 }
 
 function clearModel() {
@@ -357,7 +425,13 @@ function clearModel() {
   modelNameText.textContent = "none";
   motionNameText.textContent = "none";
   boneCountText.textContent = "0";
-  frameValueText.textContent = "0";
+  elapsedSeconds = 0;
+  if (timeline) {
+    timeline.max = "0.001";
+    timeline.value = "0";
+  }
+  updatePlaybackDisplay();
+  updateStageState();
 }
 
 function fitCameraToObject(object) {
@@ -369,7 +443,7 @@ function fitCameraToObject(object) {
   const sphere = bounds.getBoundingSphere(new THREE.Sphere());
   const radius = Math.max(sphere.radius, 0.75);
   controls.target.copy(sphere.center);
-  camera.position.copy(sphere.center).add(new THREE.Vector3(radius * 1.8, radius * 1.4, radius * 2.7));
+  camera.position.copy(sphere.center).add(new THREE.Vector3(0, radius * 0.15, radius * 5.2));
   camera.near = Math.max(radius / 100, 0.01);
   camera.far = Math.max(radius * 40, 100);
   camera.updateProjectionMatrix();
@@ -377,8 +451,12 @@ function fitCameraToObject(object) {
 }
 
 function resetView() {
+  if (currentModel) {
+    fitCameraToObject(currentModel.mesh);
+    return;
+  }
   controls.target.set(0, 0.9, 0);
-  camera.position.set(2.8, 2.2, 4.5);
+  camera.position.set(0, 1.1, 9);
   camera.near = 0.01;
   camera.far = 1000;
   camera.updateProjectionMatrix();
@@ -404,6 +482,7 @@ function resize() {
   renderer.setSize(width, height, false);
   camera.aspect = width / Math.max(height, 1);
   camera.updateProjectionMatrix();
+  updateChromeHeights();
 }
 
 function bindDropTarget() {
@@ -433,8 +512,46 @@ function bindDropTarget() {
   });
 }
 
-function setStatus(message) {
+function setStatus(message, state = "ready") {
   statusText.textContent = message;
+  statusText.classList.toggle("is-loading", state === "loading");
+  topBar?.classList.toggle("is-error", state === "error");
+}
+
+function closeLoadMenu() {
+  loadMenu?.removeAttribute("open");
+}
+
+function updatePlaybackDisplay() {
+  const duration = currentMotion?.clip?.duration ?? 0;
+  const currentTime = Number.isFinite(elapsedSeconds) ? elapsedSeconds : 0;
+  frameValueText.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
+}
+
+function updateSpeedDisplay() {
+  const speed = Number.parseFloat(speedInput?.value ?? "1");
+  speedValueText.textContent = `${(Number.isFinite(speed) ? speed : 1).toFixed(1)}x`;
+}
+
+function updateStageState() {
+  stage?.classList.toggle("is-empty", !currentModel);
+}
+
+function updateChromeHeights() {
+  if (!viewerShell || !topBar) {
+    return;
+  }
+  viewerShell.style.setProperty("--top-bar-height", `${topBar.offsetHeight}px`);
+  if (transportBar) {
+    viewerShell.style.setProperty("--transport-height", `${transportBar.offsetHeight}px`);
+  }
+}
+
+function formatTime(seconds) {
+  const safeSeconds = Math.max(Number.isFinite(seconds) ? seconds : 0, 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds - minutes * 60;
+  return `${String(minutes).padStart(2, "0")}:${remainingSeconds.toFixed(2).padStart(5, "0")}`;
 }
 
 function findModelFile(files) {
@@ -484,12 +601,56 @@ function stripPrefix(path, prefix) {
 }
 
 function createUrlTextureLoader(modelUrl) {
-  return new ThreeMmdLoader({
-    runtime: { frameRate: 30 },
+  return createModelLoader({
     textureResolver: {
       async resolve(path) {
-        return new URL(path.replaceAll("\\", "/"), new URL(".", new URL(modelUrl, location.href))).toString();
+        return new URL(
+          path.replaceAll("\\", "/"),
+          new URL(".", new URL(modelUrl, location.href))
+        ).toString();
       }
     }
   });
+}
+
+function createModelLoader(extraOptions = {}) {
+  return new ThreeMmdLoader({
+    ...extraOptions,
+    runtime: {
+      frameRate: 30,
+      physicsBackend: createPhysicsBackend()
+    }
+  });
+}
+
+function createPhysicsBackend() {
+  if (activePhysicsBackend && !activePhysicsBackend.disposed) {
+    activePhysicsBackend.dispose?.();
+  }
+  if (ammoNamespace) {
+    activePhysicsBackend = createAmmoMmdPhysicsBackend(ammoNamespace);
+  } else {
+    activePhysicsBackend = createDisabledMmdPhysicsBackend({
+      reason: "Ammo.js failed to load; physics simulation disabled."
+    });
+  }
+  return activePhysicsBackend;
+}
+
+async function initAmmoNamespace() {
+  const ammoCandidate = typeof window !== "undefined" ? window.Ammo : undefined;
+  if (!ammoCandidate) {
+    console.warn("[viewer] window.Ammo not found; physics will be disabled.");
+    return undefined;
+  }
+  try {
+    if (typeof ammoCandidate === "function") {
+      const result = ammoCandidate();
+      return await Promise.resolve(result);
+    }
+    return ammoCandidate;
+  } catch (error) {
+    console.warn("[viewer] Failed to initialize Ammo.js:", error);
+    return undefined;
+  }
 }
