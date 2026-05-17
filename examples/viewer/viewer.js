@@ -20,6 +20,7 @@ const showGridInput = document.querySelector("#show-grid");
 const showSkeletonInput = document.querySelector("#show-skeleton");
 const wireframeInput = document.querySelector("#wireframe");
 const modelFileInput = document.querySelector("#model-file");
+const modelFolderInput = document.querySelector("#model-folder");
 const motionFileInput = document.querySelector("#motion-file");
 const poseFileInput = document.querySelector("#pose-file");
 const modelFileName = document.querySelector("#model-file-name");
@@ -97,6 +98,9 @@ function bindControls() {
   document.querySelector("#choose-model")?.addEventListener("click", () => {
     modelFileInput?.click();
   });
+  document.querySelector("#choose-model-folder")?.addEventListener("click", () => {
+    modelFolderInput?.click();
+  });
   document.querySelector("#choose-motion")?.addEventListener("click", () => {
     motionFileInput?.click();
   });
@@ -108,6 +112,12 @@ function bindControls() {
     if (file) {
       modelFileName.textContent = file.name;
       void loadModel(file);
+    }
+  });
+  modelFolderInput?.addEventListener("change", (event) => {
+    const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
+    if (files && files.length > 0) {
+      void loadModelFolder(Array.from(files));
     }
   });
   motionFileInput?.addEventListener("change", (event) => {
@@ -201,6 +211,47 @@ async function loadModel(source, label = source.name ?? "model") {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
     }
     setStatus(`Loaded model: ${label}`);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function loadModelFolder(files) {
+  const modelFile = findModelFile(files);
+  if (!modelFile) {
+    setStatus("No PMX or PMD model found in the selected folder.");
+    return;
+  }
+
+  const textureMap = createFolderTextureMap(files, modelFile);
+  const folderLoader = new ThreeMmdLoader({
+    runtime: { frameRate: 30 },
+    textureMap
+  });
+  const folderName = modelFile.webkitRelativePath.split("/")[0] || "folder";
+  modelFileName.textContent = `${folderName}/${modelFile.name}`;
+
+  try {
+    clearModel();
+    currentModel = await folderLoader.loadModel(modelFile);
+    currentModel.mesh.frustumCulled = false;
+    scene.add(currentModel.mesh);
+    skeletonHelper = new THREE.SkeletonHelper(currentModel.mesh);
+    skeletonHelper.material.depthTest = false;
+    skeletonHelper.material.color.set(0x9bdcff);
+    skeletonHelper.visible = showSkeletonInput?.checked ?? true;
+    scene.add(skeletonHelper);
+    modelNameText.textContent = currentModel.mesh.name || modelFile.name;
+    boneCountText.textContent = String(currentModel.mesh.skeleton.bones.length);
+    elapsedSeconds = 0;
+    fitCameraToObject(currentModel.mesh);
+    setWireframe(wireframeInput?.checked ?? false);
+    if (pendingMotionSource) {
+      await loadMotion(pendingMotionSource, pendingMotionLabel);
+    }
+    setStatus(
+      `Loaded model folder: ${folderName} (${Object.keys(textureMap).length} texture paths indexed)`
+    );
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   }
@@ -372,4 +423,50 @@ function bindDropTarget() {
 
 function setStatus(message) {
   statusText.textContent = message;
+}
+
+function findModelFile(files) {
+  return files.find((file) => {
+    const lowerName = file.name.toLowerCase();
+    return lowerName.endsWith(".pmx") || lowerName.endsWith(".pmd");
+  });
+}
+
+function createFolderTextureMap(files, modelFile) {
+  const textureMap = {};
+  const modelDirectory = directoryName(normalizeRelativePath(modelFile.webkitRelativePath));
+
+  for (const file of files) {
+    if (!isTextureFile(file)) {
+      continue;
+    }
+
+    const relativePath = normalizeRelativePath(file.webkitRelativePath || file.name);
+    const relativeToModel = modelDirectory
+      ? stripPrefix(relativePath, `${modelDirectory}/`)
+      : relativePath;
+
+    textureMap[relativePath] = file;
+    textureMap[relativeToModel] = file;
+    textureMap[file.name] = file;
+  }
+
+  return textureMap;
+}
+
+function isTextureFile(file) {
+  return /\.(bmp|gif|jpe?g|png|tga|webp)$/i.test(file.name);
+}
+
+function normalizeRelativePath(path) {
+  return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+function directoryName(path) {
+  const slashIndex = path.lastIndexOf("/");
+  return slashIndex === -1 ? "" : path.slice(0, slashIndex);
+}
+
+function stripPrefix(path, prefix) {
+  return path.startsWith(prefix) ? path.slice(prefix.length) : path;
 }

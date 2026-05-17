@@ -44,10 +44,14 @@
           <div class="file-picker">
             <div>
               <strong>Model</strong>
-              <span id="model-file-name">PMX / PMD</span>
+              <span id="model-file-name">PMX / PMD or model folder</span>
             </div>
-            <button id="choose-model" type="button">Choose Model</button>
+            <div class="stacked-buttons">
+              <button id="choose-model" type="button">Choose Model</button>
+              <button id="choose-model-folder" type="button">Choose Folder</button>
+            </div>
             <input id="model-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
+            <input id="model-folder" type="file" webkitdirectory directory multiple />
           </div>
           <div class="file-picker">
             <div>

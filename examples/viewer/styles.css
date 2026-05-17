@@ -138,7 +138,7 @@ label {
   grid-template-columns: minmax(0, 1fr) 126px;
   gap: 10px;
   align-items: center;
-  min-height: 58px;
+  min-height: 64px;
   padding: 10px;
   border: 1px solid #37424a;
   border-radius: 6px;
@@ -166,6 +166,15 @@ label {
 
 .file-picker input[type="file"] {
   display: none;
+}
+
+.stacked-buttons {
+  display: grid;
+  gap: 6px;
+}
+
+.stacked-buttons button {
+  min-height: 32px;
 }
 
 input[type="range"] {
