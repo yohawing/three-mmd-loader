@@ -19,7 +19,7 @@ export { createThreeBufferGeometry } from "./geometry.js";
 export { createThreeAnimationClip, createThreePoseAnimationClip } from "./animation.js";
 export { isModelSource } from "./modelSource.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
-export { mmdWorldMatrixToThree } from "./runtime-sync.js";
+export { mmdWorldMatrixToThree, syncThreeMmdRuntimeToMesh } from "./runtime-sync.js";
 export { createThreeSkeleton } from "./skeleton.js";
 export {
   attachMmdMaterialMetadata,
@@ -38,6 +38,7 @@ export {
   materialHasTextureMap,
   mmdSphereModeToUniform
 } from "./material/material-shader-hooks.js";
+export { syncMmdMaterialStates, syncMmdSpecularDirection } from "./material/material-sync.js";
 export {
   createMmdBuiltInToonTextureMap,
   createTextureResolver,

@@ -1,5 +1,8 @@
 import * as THREE from "three";
 
+import type { MmdModel, MmdRuntime } from "../parser/model/modelTypes.js";
+import { syncMmdMaterialStates } from "./material/material-sync.js";
+
 export type MmdWorldMatrixColumnMajorTuple = readonly [
   number,
   number,
@@ -63,4 +66,54 @@ export function mmdWorldMatrixToThree(matrices: MmdWorldMatrixBuffer, index = 0)
     0,
     1
   );
+}
+
+export function syncThreeMmdRuntimeToMesh(
+  model: Pick<MmdModel, "skeleton">,
+  mesh: THREE.SkinnedMesh,
+  runtime: Pick<
+    MmdRuntime,
+    "boneMatrices" | "morphWeights" | "propertyState" | "materialStates"
+  >
+): void {
+  syncRuntimeBoneTransforms(model, mesh, runtime.boneMatrices());
+  syncRuntimeMorphWeights(mesh, runtime.morphWeights());
+  mesh.visible = runtime.propertyState().visible;
+  syncMmdMaterialStates(mesh.material, runtime.materialStates());
+}
+
+function syncRuntimeMorphWeights(mesh: THREE.SkinnedMesh, weights: Float32Array): void {
+  if (!mesh.morphTargetInfluences) {
+    return;
+  }
+  mesh.morphTargetInfluences.forEach((_value, index, influences) => {
+    influences[index] = weights[index] ?? 0;
+  });
+}
+
+function syncRuntimeBoneTransforms(
+  model: Pick<MmdModel, "skeleton">,
+  mesh: THREE.SkinnedMesh,
+  coreMatrices: Float32Array
+): void {
+  const bones = mesh.skeleton.bones;
+  const worldMatrices = bones.map((_, index) => mmdWorldMatrixToThree(coreMatrices, index));
+  for (let index = 0; index < bones.length; index += 1) {
+    const bone = bones[index];
+    const parentIndex = model.skeleton().bones[index]?.parentIndex ?? -1;
+    const localMatrix =
+      parentIndex >= 0
+        ? new THREE.Matrix4()
+            .copy(worldMatrices[parentIndex])
+            .invert()
+            .multiply(worldMatrices[index])
+        : worldMatrices[index];
+    localMatrix.decompose(bone.position, bone.quaternion, bone.scale);
+    bone.updateMatrix();
+  }
+  mesh.updateMatrixWorld(true);
+  mesh.skeleton.update();
+  if (mesh.skeleton.boneTexture) {
+    mesh.skeleton.boneTexture.needsUpdate = true;
+  }
 }
