@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import type { MaterialInfo } from "../parser/model/modelTypes.js";
+import { attachMmdSphereTexture } from "./material/material-shader-hooks.js";
 import { loadMmdDefaultMaterialTextureSet } from "./material/material-texture-set.js";
 import { createFallbackMmdMaterial, createTextureResolver } from "./textures.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
@@ -109,6 +110,7 @@ export async function applyThreeMmdMaterialTextures(
       }
       if (sphereTexture) {
         material.userData.mmdSphereTexture = sphereTexture;
+        attachMmdSphereTexture(material, mmdMaterial.sphereMode, sphereTexture);
       }
 
       if (mmdMaterial.sphereTexturePath) {

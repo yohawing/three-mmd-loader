@@ -21,6 +21,7 @@ export { isModelSource } from "./modelSource.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 export { mmdWorldMatrixToThree } from "./runtime-sync.js";
 export { createThreeSkeleton } from "./skeleton.js";
+export { attachMmdSphereTexture, mmdSphereModeToUniform } from "./material/material-shader-hooks.js";
 export {
   createMmdBuiltInToonTextureMap,
   createTextureResolver,
