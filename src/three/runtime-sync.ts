@@ -2,6 +2,7 @@ import * as THREE from "three";
 
 import type { MmdModel, MmdRuntime } from "../parser/model/modelTypes.js";
 import { syncMmdMaterialStates } from "./material/material-sync.js";
+import { syncMmdOutlineMaterialStates } from "./outline.js";
 
 export type MmdWorldMatrixColumnMajorTuple = readonly [
   number,
@@ -79,7 +80,13 @@ export function syncThreeMmdRuntimeToMesh(
   syncRuntimeBoneTransforms(model, mesh, runtime.boneMatrices());
   syncRuntimeMorphWeights(mesh, runtime.morphWeights());
   mesh.visible = runtime.propertyState().visible;
-  syncMmdMaterialStates(mesh.material, runtime.materialStates());
+  const materialStates = runtime.materialStates();
+  syncMmdMaterialStates(mesh.material, materialStates);
+  mesh.children.forEach((child) => {
+    if (child instanceof THREE.SkinnedMesh && child.userData.mmdOutlineProxy) {
+      syncMmdOutlineMaterialStates(child.material, materialStates);
+    }
+  });
 }
 
 function syncRuntimeMorphWeights(mesh: THREE.SkinnedMesh, weights: Float32Array): void {

@@ -13,6 +13,7 @@ import { attachMmdSdefSkinning } from "./material/material-sdef.js";
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
+import { createMmdOutlineMeshes } from "./outline.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
@@ -41,6 +42,13 @@ export {
 } from "./material/material-shader-hooks.js";
 export { syncMmdMaterialStates, syncMmdSpecularDirection } from "./material/material-sync.js";
 export {
+  attachMmdOutlineExpansion,
+  computeMmdOutlineScale,
+  createMmdOutlineMesh,
+  createMmdOutlineMeshes,
+  syncMmdOutlineMaterialStates
+} from "./outline.js";
+export {
   attachMmdSdefSkinning,
   computeMmdSdefSkinnedNormal,
   computeMmdSdefSkinnedPosition
@@ -68,6 +76,7 @@ export type { ModelSource } from "./modelSource.js";
 export type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
 export type { MmdSdefNormalSkinningInput, MmdSdefSkinningInput } from "./material/material-sdef.js";
+export type { MmdOutlineModelSource, MmdOutlineOptions } from "./outline.js";
 export type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
 export type { MmdWorldMatrixBuffer, MmdWorldMatrixColumnMajorTuple } from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
@@ -88,6 +97,7 @@ export interface ThreeMmdLoaderOptions {
 
 export interface ThreeMmdModel {
   readonly mesh: THREE.SkinnedMesh;
+  readonly outlineMeshes: readonly THREE.SkinnedMesh[];
   readonly runtime?: MmdRuntime;
   readonly source: ModelSource;
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
@@ -124,8 +134,11 @@ export class ThreeMmdLoader {
       geometry: mesh.geometry,
       morphs: modelData.morphs
     });
+    const outlineMeshes = createMmdOutlineMeshes({ mesh, materials: modelData.materials });
+    outlineMeshes.forEach((outline) => mesh.add(outline));
     return {
       mesh,
+      outlineMeshes,
       runtime: new DefaultMmdRuntime(this.options.runtime),
       source,
       textureDiagnostics
