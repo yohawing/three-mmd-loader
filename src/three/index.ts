@@ -63,7 +63,7 @@ export {
   createMmdBuiltInToonTextureMap,
   createTextureResolver,
   defaultSharedToonTexturePath,
-  isBuiltInToonTexturePath,
+  getDefaultToonGradientMap,
   normalizeMmdTexturePath,
   resolveMappedTexture,
   resolveMmdToonTextureReference
