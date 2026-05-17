@@ -1,7 +1,13 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
+import {
+  createAmmoMmdPhysicsBackend,
+  createDisabledMmdPhysicsBackend
+} from "../../dist/physics/index.js";
 import { ThreeMmdLoader } from "../../dist/three/index.js";
+
+const ammoNamespace = await initAmmoNamespace();
 
 const sampleModelUrl = "../../test/fixtures/test_1bone_cube.pmx";
 const sampleMotionUrl = "../../test/fixtures/test_1bone_cube_motion.vmd";
@@ -61,6 +67,7 @@ const fillLight = new THREE.HemisphereLight(0xeaf0f6, 0x2a2f33, 0.55);
 scene.add(fillLight);
 scene.add(new THREE.AmbientLight(0xffffff, 0.15));
 
+let activePhysicsBackend;
 const loader = new ThreeMmdLoader({ runtime: { frameRate: 30 } });
 const clock = new THREE.Clock();
 let currentModel;
@@ -232,7 +239,11 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-async function loadModel(source, label = source.name ?? "model", modelLoader = loader) {
+async function loadModel(
+  source,
+  label = source.name ?? "model",
+  modelLoader = createModelLoader()
+) {
   try {
     setStatus(`Loading model: ${label}`, "loading");
     clearModel();
@@ -274,10 +285,7 @@ async function loadModelFolder(files) {
   }
 
   const textureMap = createFolderTextureMap(files, modelFile);
-  const folderLoader = new ThreeMmdLoader({
-    runtime: { frameRate: 30 },
-    textureMap
-  });
+  const folderLoader = createModelLoader({ textureMap });
   const folderName = modelFile.webkitRelativePath.split("/")[0] || "folder";
   modelFileName.textContent = `${folderName}/${modelFile.name}`;
 
@@ -593,8 +601,7 @@ function stripPrefix(path, prefix) {
 }
 
 function createUrlTextureLoader(modelUrl) {
-  return new ThreeMmdLoader({
-    runtime: { frameRate: 30 },
+  return createModelLoader({
     textureResolver: {
       async resolve(path) {
         return new URL(
@@ -604,4 +611,46 @@ function createUrlTextureLoader(modelUrl) {
       }
     }
   });
+}
+
+function createModelLoader(extraOptions = {}) {
+  return new ThreeMmdLoader({
+    ...extraOptions,
+    runtime: {
+      frameRate: 30,
+      physicsBackend: createPhysicsBackend()
+    }
+  });
+}
+
+function createPhysicsBackend() {
+  if (activePhysicsBackend && !activePhysicsBackend.disposed) {
+    activePhysicsBackend.dispose?.();
+  }
+  if (ammoNamespace) {
+    activePhysicsBackend = createAmmoMmdPhysicsBackend(ammoNamespace);
+  } else {
+    activePhysicsBackend = createDisabledMmdPhysicsBackend({
+      reason: "Ammo.js failed to load; physics simulation disabled."
+    });
+  }
+  return activePhysicsBackend;
+}
+
+async function initAmmoNamespace() {
+  const ammoCandidate = typeof window !== "undefined" ? window.Ammo : undefined;
+  if (!ammoCandidate) {
+    console.warn("[viewer] window.Ammo not found; physics will be disabled.");
+    return undefined;
+  }
+  try {
+    if (typeof ammoCandidate === "function") {
+      const result = ammoCandidate();
+      return await Promise.resolve(result);
+    }
+    return ammoCandidate;
+  } catch (error) {
+    console.warn("[viewer] Failed to initialize Ammo.js:", error);
+    return undefined;
+  }
 }
