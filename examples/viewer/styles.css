@@ -358,6 +358,26 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
+.physics-error {
+  position: absolute;
+  z-index: 2;
+  right: var(--chrome-gap);
+  bottom: calc(var(--chrome-gap) + var(--transport-height) + 12px);
+  left: var(--chrome-gap);
+  padding: 8px 10px;
+  border: 1px solid rgb(180 35 35 / 35%);
+  border-radius: var(--radius);
+  background: rgb(255 247 247 / 96%);
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 10px 24px rgb(30 44 58 / 10%);
+}
+
+.physics-error[hidden] {
+  display: none;
+}
+
 @media (max-width: 920px) {
   .top-bar {
     align-items: start;

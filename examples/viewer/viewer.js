@@ -7,8 +7,6 @@ import {
 } from "../../dist/physics/index.js";
 import { ThreeMmdLoader, syncMmdSpecularDirection } from "../../dist/three/index.js";
 
-const ammoNamespace = await initAmmoNamespace();
-
 const debugEnabled = new window.URLSearchParams(location.search).has("debug");
 
 const canvas = document.querySelector("#viewer-canvas");
@@ -17,6 +15,7 @@ const topBar = document.querySelector(".top-bar");
 const transportBar = document.querySelector(".transport");
 const viewerShell = document.querySelector(".viewer-shell");
 const statusText = document.querySelector("#status");
+const physicsErrorBanner = document.querySelector("#physics-error");
 const modelNameText = document.querySelector("#model-name");
 const motionNameText = document.querySelector("#motion-name");
 const audioNameText = document.querySelector("#audio-name");
@@ -35,6 +34,8 @@ const bgmAudio = document.querySelector("#bgm-audio");
 if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error("Viewer canvas is missing");
 }
+
+const ammoNamespace = await initAmmoNamespaceSafely();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1018,19 +1019,32 @@ function createPhysicsBackend() {
     activePhysicsBackend.dispose?.();
   }
   if (ammoNamespace) {
-    activePhysicsBackend = createAmmoMmdPhysicsBackend(ammoNamespace);
+    try {
+      activePhysicsBackend = createAmmoMmdPhysicsBackend(ammoNamespace);
+    } catch (error) {
+      reportAmmoInitializationFailure("createAmmoMmdPhysicsBackend", error);
+      activePhysicsBackend = createDisabledPhysicsBackend(
+        "Ammo.js physics backend failed to initialize; physics simulation disabled."
+      );
+    }
   } else {
-    activePhysicsBackend = createDisabledMmdPhysicsBackend({
-      reason: "Ammo.js failed to load; physics simulation disabled."
-    });
+    activePhysicsBackend = createDisabledPhysicsBackend(
+      "Ammo.js failed to load; physics simulation disabled."
+    );
   }
   return activePhysicsBackend;
 }
 
 async function initAmmoNamespace() {
-  const ammoCandidate = typeof window !== "undefined" ? window.Ammo : undefined;
+  let ammoCandidate;
+  try {
+    ammoCandidate = typeof window !== "undefined" ? window.Ammo : undefined;
+  } catch (error) {
+    reportAmmoInitializationFailure("window.Ammo", error);
+    return undefined;
+  }
   if (!ammoCandidate) {
-    window.console?.warn("[viewer] window.Ammo not found; physics will be disabled.");
+    reportAmmoInitializationFailure("window.Ammo", new Error("window.Ammo is not available."));
     return undefined;
   }
   try {
@@ -1040,7 +1054,59 @@ async function initAmmoNamespace() {
     }
     return ammoCandidate;
   } catch (error) {
-    window.console?.warn("[viewer] Failed to initialize Ammo.js:", error);
+    reportAmmoInitializationFailure("Ammo()", error);
     return undefined;
+  }
+}
+
+async function initAmmoNamespaceSafely() {
+  try {
+    return await initAmmoNamespace();
+  } catch (error) {
+    reportAmmoInitializationFailure("initAmmoNamespace", error);
+    return undefined;
+  }
+}
+
+function createDisabledPhysicsBackend(reason) {
+  return createDisabledMmdPhysicsBackend({ reason });
+}
+
+function reportAmmoInitializationFailure(phase, error) {
+  const details = createAmmoInitializationErrorDetails(phase, error);
+  window.console?.error("[viewer] Ammo initialization failed", details);
+  showPhysicsUnavailableMessage(createPhysicsUnavailableMessage(details));
+}
+
+function createAmmoInitializationErrorDetails(phase, error) {
+  const errorName = error instanceof Error && error.name ? error.name : "Error";
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const details = {
+    phase,
+    errorName,
+    errorMessage
+  };
+  if (error instanceof Error && error.stack) {
+    details.stack = error.stack;
+  }
+  return details;
+}
+
+function createPhysicsUnavailableMessage(details) {
+  if (isAmmoMemoryAllocationFailure(details)) {
+    return "Physics unavailable: Ammo could not allocate memory. Free a tab and reload to enable physics.";
+  }
+  return `Physics unavailable: ${details.errorName}: ${details.errorMessage}`;
+}
+
+function isAmmoMemoryAllocationFailure(details) {
+  return details.errorName === "RangeError" && /allocation/i.test(details.errorMessage);
+}
+
+function showPhysicsUnavailableMessage(message) {
+  setStatus(message, "error");
+  if (physicsErrorBanner) {
+    physicsErrorBanner.textContent = message;
+    physicsErrorBanner.hidden = false;
   }
 }
