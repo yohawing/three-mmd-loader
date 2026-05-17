@@ -85,7 +85,7 @@ import {
   ThreeMmdLoader
 } from "../dist/three/index.js";
 
-const pmxBytes = await readFile(resolve("..", "data/unittest/test_1bone_cube.pmx"));
+const pmxBytes = await readFile(resolve("test", "fixtures", "test_1bone_cube.pmx"));
 assert.equal(detectModelFormat(pmxBytes), "pmx");
 assert.equal(parsePmxMetadata(pmxBytes).name, "テスト用モデル");
 assert.equal(parsePmxSectionInventory(pmxBytes).counts.bones, 1);
