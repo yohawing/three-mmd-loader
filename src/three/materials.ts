@@ -1,8 +1,18 @@
 import * as THREE from "three";
 
-import type { MaterialInfo } from "../parser/model/modelTypes.js";
+import type { MaterialInfo, MorphData } from "../parser/model/modelTypes.js";
+import {
+  attachMmdMaterialMetadata,
+  mmdMaterialAlphaTest,
+  mmdMaterialDepthWrite,
+  mmdMaterialSuppressesColorAtAlpha,
+  mmdMaterialTransparencyMode
+} from "./material/material-metadata.js";
 import { attachMmdMaterialFactors, attachMmdSphereTexture } from "./material/material-shader-hooks.js";
-import { loadMmdDefaultMaterialTextureSet } from "./material/material-texture-set.js";
+import {
+  evaluateMmdDefaultMaterialTransparency,
+  loadMmdDefaultMaterialTextureSet
+} from "./material/material-texture-set.js";
 import { createFallbackMmdMaterial, createTextureResolver } from "./textures.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 
@@ -29,6 +39,8 @@ export interface ThreeMmdMaterialTextureOptions {
   readonly textureMap?: TextureMap;
   readonly textureLoader?: ThreeMmdTextureLoader;
   readonly modelUrl?: string;
+  readonly geometry?: THREE.BufferGeometry;
+  readonly morphs?: readonly MorphData[];
 }
 
 export type ThreeMmdSphereMappedToonMaterial = THREE.MeshToonMaterial & {
@@ -44,33 +56,23 @@ export function createThreeMmdMaterials(
   }
 
   return materials.map((material, materialIndex) => {
-    const transparent = material.diffuse[3] < 1;
+    const transparencyMode = mmdMaterialTransparencyMode(material, false);
+    const transparent = transparencyMode === "alphaBlend";
     const threeMaterial = new THREE.MeshToonMaterial({
       color: new THREE.Color(material.diffuse[0], material.diffuse[1], material.diffuse[2]),
+      emissive: new THREE.Color(0, 0, 0),
       opacity: material.diffuse[3],
       transparent,
-      depthWrite: !transparent,
+      depthWrite: mmdMaterialDepthWrite(transparencyMode),
+      colorWrite: !mmdMaterialSuppressesColorAtAlpha(material.diffuse[3], material.flags),
+      alphaTest: mmdMaterialAlphaTest(material, false),
       side: material.flags.doubleSided ? THREE.DoubleSide : THREE.FrontSide
     });
     threeMaterial.name = material.englishName || material.name || `material_${materialIndex}`;
-    threeMaterial.visible = material.diffuse[3] > 0;
-    threeMaterial.userData.mmdMaterial = {
-      materialIndex,
-      name: material.name,
-      englishName: material.englishName,
-      diffuse: [...material.diffuse],
-      specular: [...material.specular],
-      specularPower: material.specularPower,
-      ambient: [...material.ambient],
-      edgeColor: [...material.edgeColor],
-      edgeSize: material.edgeSize,
-      flags: { ...material.flags },
-      texturePath: material.texturePath,
-      sphereTexturePath: material.sphereTexturePath,
-      sphereMode: material.sphereMode,
-      toonTexturePath: material.toonTexturePath,
-      sharedToonIndex: material.sharedToonIndex
-    };
+    threeMaterial.visible =
+      material.diffuse[3] > 0 ||
+      mmdMaterialSuppressesColorAtAlpha(material.diffuse[3], material.flags);
+    attachMmdMaterialMetadata(threeMaterial, material, materialIndex, transparencyMode);
     return threeMaterial;
   });
 }
@@ -107,6 +109,32 @@ export async function applyThreeMmdMaterialTextures(
       }
       if (gradientMap) {
         material.gradientMap = gradientMap;
+      }
+      if (options.geometry) {
+        const { transparencyMode, textureTransparencyMode, morphAlphaTransparent } =
+          evaluateMmdDefaultMaterialTransparency(
+            mmdMaterial,
+            options.morphs ?? [],
+            options.geometry,
+            materialIndex,
+            texture
+          );
+        material.transparent = transparencyMode === "alphaBlend";
+        material.depthWrite = mmdMaterialDepthWrite(transparencyMode);
+        material.colorWrite = !mmdMaterialSuppressesColorAtAlpha(
+          mmdMaterial.diffuse[3],
+          mmdMaterial.flags
+        );
+        material.alphaTest = mmdMaterialAlphaTest(
+          mmdMaterial,
+          !!texture,
+          textureTransparencyMode
+        );
+        attachMmdMaterialMetadata(material, mmdMaterial, materialIndex, transparencyMode);
+        material.userData.mmdMaterial.textureTransparencyMode = textureTransparencyMode;
+        if (morphAlphaTransparent) {
+          material.userData.mmdMaterial.morphAlphaTransparent = true;
+        }
       }
       if (sphereTexture) {
         material.userData.mmdSphereTexture = sphereTexture;

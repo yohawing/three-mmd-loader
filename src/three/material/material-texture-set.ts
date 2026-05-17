@@ -1,9 +1,18 @@
-import type { MaterialInfo } from "../../parser/model/modelTypes.js";
+import type { MaterialInfo, MorphData } from "../../parser/model/modelTypes.js";
 import type * as THREE from "three";
 
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "../materials.js";
-import type { TextureResolver } from "../textures.js";
-import { loadMaterialTextureWithDiagnostics, loadToonTexture } from "../textures.js";
+import type { MmdMaterialTransparencyMode, TextureResolver } from "../textures.js";
+import {
+  evaluateMmdTextureAlphaGeometry,
+  evaluateMmdTextureAlphaTexture,
+  loadMaterialTextureWithDiagnostics,
+  loadToonTexture
+} from "../textures.js";
+import {
+  mmdMaterialMorphCanAffectAlpha,
+  mmdMaterialTransparencyMode
+} from "./material-metadata.js";
 
 export interface MmdDefaultMaterialTextureSet {
   readonly texture: THREE.Texture | undefined;
@@ -53,4 +62,32 @@ export async function loadMmdDefaultMaterialTextureSet(
       : undefined
   ]);
   return { texture, gradientMap, sphereTexture };
+}
+
+export function evaluateMmdDefaultMaterialTransparency(
+  material: MaterialInfo,
+  morphs: readonly MorphData[],
+  geometry: THREE.BufferGeometry,
+  materialIndex: number,
+  texture: THREE.Texture | undefined
+): {
+  readonly transparencyMode: MmdMaterialTransparencyMode;
+  readonly textureTransparencyMode: MmdMaterialTransparencyMode | undefined;
+  readonly morphAlphaTransparent: boolean;
+} {
+  const textureTransparencyMode = texture
+    ? (evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
+      evaluateMmdTextureAlphaTexture(texture))
+    : undefined;
+  const baseTransparencyMode = mmdMaterialTransparencyMode(
+    material,
+    !!texture,
+    textureTransparencyMode
+  );
+  const morphAlphaTransparent = mmdMaterialMorphCanAffectAlpha(morphs, materialIndex);
+  return {
+    transparencyMode: morphAlphaTransparent ? "alphaBlend" : baseTransparencyMode,
+    textureTransparencyMode,
+    morphAlphaTransparent
+  };
 }

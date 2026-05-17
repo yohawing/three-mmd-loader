@@ -22,6 +22,17 @@ export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materi
 export { mmdWorldMatrixToThree } from "./runtime-sync.js";
 export { createThreeSkeleton } from "./skeleton.js";
 export {
+  attachMmdMaterialMetadata,
+  computeMmdMaterialRenderOrder,
+  materialTransparencyMode,
+  mmdMaterialAlphaTest,
+  mmdMaterialCastsShadow,
+  mmdMaterialDepthWrite,
+  mmdMaterialMorphCanAffectAlpha,
+  mmdMaterialSuppressesColorAtAlpha,
+  mmdMaterialTransparencyMode
+} from "./material/material-metadata.js";
+export {
   attachMmdMaterialFactors,
   attachMmdSphereTexture,
   materialHasTextureMap,
@@ -49,11 +60,13 @@ export type {
 export type { ModelSource } from "./modelSource.js";
 export type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
+export type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
 export type { MmdWorldMatrixBuffer, MmdWorldMatrixColumnMajorTuple } from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
 export type {
   MmdToonTextureMaterial,
   MmdToonTextureReference,
+  MmdMaterialTransparencyMode,
   TextureMap,
   TextureResolver
 } from "./textures.js";
@@ -99,7 +112,9 @@ export class ThreeMmdLoader {
       textureResolver: this.options.textureResolver,
       textureMap: this.options.textureMap,
       textureLoader: this.options.textureLoader,
-      modelUrl: typeof source === "string" ? source : undefined
+      modelUrl: typeof source === "string" ? source : undefined,
+      geometry: mesh.geometry,
+      morphs: modelData.morphs
     });
     return {
       mesh,
