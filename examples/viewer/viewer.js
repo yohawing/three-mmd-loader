@@ -55,6 +55,11 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.target.set(0, 0.9, 0);
 
+const grid = new THREE.GridHelper(40, 40, 0x888888, 0xcccccc);
+scene.add(grid);
+const axes = new THREE.AxesHelper(4);
+scene.add(axes);
+
 const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
 keyLight.position.set(3, 4, 5);
 scene.add(keyLight);
