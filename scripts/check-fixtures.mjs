@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Run every PMD / PMX / VMD / VPD path listed in data/fixtures.json through the
+// Run every PMD / PMX / VMD / VPD path listed in a fixture inventory through the
 // full parsers in `dist/`. Reports per-file pass / fail / warning diagnostics
 // and writes a JSON report to tmp/fixture-parse-report.json.
+// Defaults to the in-repo sample inventory at test/fixtures/fixtures.sample.json.
 //
 // Usage:
-//   node scripts/check-fixtures.mjs                 # run all categories
+//   node scripts/check-fixtures.mjs                 # run all categories from the in-repo sample
 //   node scripts/check-fixtures.mjs pmx vmd         # subset by category
 //   node scripts/check-fixtures.mjs --limit 20      # limit per category
 //   node scripts/check-fixtures.mjs --bail          # stop at first failure
@@ -27,7 +28,7 @@ import { ThreeMmdLoader } from "../dist/three/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "..");
-const defaultFixturesPath = resolve(projectRoot, "..", "data", "fixtures.json");
+const defaultFixturesPath = resolve(projectRoot, "test", "fixtures", "fixtures.sample.json");
 
 const KNOWN_CATEGORIES = ["pmx", "pmd", "vmd", "vpd"];
 const THREE_MODEL_CATEGORIES = new Set(["pmx", "pmd"]);
@@ -81,10 +82,10 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const fixturesPath = args.fixturesPath
     ?? (process.env.FIXTURES_JSON ? resolve(process.env.FIXTURES_JSON) : defaultFixturesPath);
-  // fixtures.json sits at MMDDev/data/fixtures.json but lists paths like
-  // "data/pmd/...", so resolve against the parent of the json's directory.
-  const fixturesRoot = resolve(dirname(fixturesPath), "..");
   const fixtures = JSON.parse(await readFile(fixturesPath, "utf8"));
+  const fixturesRoot = typeof fixtures.basePath === "string"
+    ? resolve(dirname(fixturesPath), fixtures.basePath)
+    : resolve(dirname(fixturesPath), "..");
   const byExtension = fixtures?.paths?.releaseSmoke?.byExtension ?? {};
 
   const results = { startedAt: new Date().toISOString(), categories: {} };

@@ -1,0 +1,23 @@
+{
+  "$schema": "./fixtures.schema.json",
+  "schemaVersion": 1,
+  "basePath": ".",
+  "paths": {
+    "releaseSmoke": {
+      "byExtension": {
+        "pmx": {
+          "oneBoneCube": "test_1bone_cube.pmx",
+          "appendBone": "test_append_bone.pmx",
+          "jointOrient": "joint_orient_test.pmx"
+        },
+        "pmd": {},
+        "vmd": {
+          "oneBoneCubeMotion": "test_1bone_cube_motion.vmd",
+          "jointOrientMotion": "joint_orient_test.vmd"
+        },
+        "vpd": {}
+      }
+    }
+  },
+  "description": "Small in-repository fixture inventory for parser and Three.js loader smoke checks."
+}
