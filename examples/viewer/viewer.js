@@ -28,6 +28,8 @@ const modelFileInput = document.querySelector("#model-file");
 const modelFolderInput = document.querySelector("#model-folder");
 const motionFileInput = document.querySelector("#motion-file");
 const poseFileInput = document.querySelector("#pose-file");
+const audioFileInput = document.querySelector("#audio-file");
+const bgmAudio = document.querySelector("#bgm-audio");
 
 if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error("Viewer canvas is missing");
@@ -66,6 +68,8 @@ let pendingMotionLabel;
 let elapsedSeconds = 0;
 let isPlaying = false;
 let isSeeking = false;
+let audioObjectUrl;
+let isSyncingAudioState = false;
 const debugMaterialState = new Map();
 
 const viewerApi = {
@@ -122,6 +126,9 @@ function bindControls() {
   document.querySelector("#choose-pose")?.addEventListener("click", () => {
     poseFileInput?.click();
   });
+  document.querySelector("#choose-audio")?.addEventListener("click", () => {
+    audioFileInput?.click();
+  });
   modelFileInput?.addEventListener("change", (event) => {
     const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
     if (file) {
@@ -146,18 +153,57 @@ function bindControls() {
       void loadPose(file);
     }
   });
+  audioFileInput?.addEventListener("change", (event) => {
+    const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
+    if (file) {
+      loadAudioFile(file);
+    }
+  });
   playToggle?.addEventListener("click", () => {
-    isPlaying = !isPlaying;
-    updatePlayToggle();
+    void setPlaybackPlaying(!isPlaying);
   });
   timeline?.addEventListener("input", () => {
     isSeeking = true;
     elapsedSeconds = Number.parseFloat(timeline.value);
     evaluateRuntime({ physics: false });
+    syncAudioToMotionTime();
   });
   timeline?.addEventListener("change", () => {
     isSeeking = false;
   });
+  if (isAudioElement(bgmAudio)) {
+    bgmAudio.addEventListener("play", () => {
+      if (!isSyncingAudioState && currentMotion?.clip) {
+        setPlaybackState(true);
+      }
+    });
+    bgmAudio.addEventListener("pause", () => {
+      if (!isSyncingAudioState && currentMotion?.clip) {
+        setPlaybackState(false);
+      }
+    });
+    bgmAudio.addEventListener("seeking", syncMotionToAudioTime);
+    bgmAudio.addEventListener("seeked", syncMotionToAudioTime);
+    bgmAudio.addEventListener("timeupdate", () => {
+      if (!isPlaying || !currentMotion?.clip) {
+        return;
+      }
+      syncMotionToAudioTime({ evaluate: false });
+    });
+    bgmAudio.addEventListener("ended", () => {
+      if (!bgmAudio.loop) {
+        setPlaybackState(false);
+      }
+    });
+    bgmAudio.addEventListener("loadedmetadata", () => {
+      setStatus("", "ready");
+    });
+    bgmAudio.addEventListener("error", () => {
+      const message = "Failed to load audio source.";
+      window.console?.warn("[viewer]", message, bgmAudio.error);
+      setStatus(message, "error");
+    });
+  }
   bindDropTarget();
   updatePlaybackDisplay();
   updateStageState();
@@ -191,6 +237,41 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
+function loadAudioFile(file) {
+  if (!isAudioFile(file)) {
+    setStatus("Select a WAV, MP3, or OGG audio file.", "error");
+    return;
+  }
+  const objectUrl = URL.createObjectURL(file);
+  setAudioSource(objectUrl, { objectUrl });
+  setStatus("", "ready");
+}
+
+function setAudioSource(src, options = {}) {
+  if (!isAudioElement(bgmAudio)) {
+    return;
+  }
+  clearAudioSource();
+  bgmAudio.src = src;
+  bgmAudio.loop = currentMotion?.clip !== undefined;
+  bgmAudio.load();
+  if (options.objectUrl) {
+    audioObjectUrl = options.objectUrl;
+  }
+}
+
+function clearAudioSource() {
+  if (isAudioElement(bgmAudio)) {
+    bgmAudio.pause();
+    bgmAudio.removeAttribute("src");
+    bgmAudio.load();
+  }
+  if (audioObjectUrl) {
+    URL.revokeObjectURL(audioObjectUrl);
+    audioObjectUrl = undefined;
+  }
+}
+
 async function loadModel(
   source,
   label = source.name ?? "model",
@@ -201,6 +282,7 @@ async function loadModel(
     clearModel();
     currentModel = await modelLoader.loadModel(source);
     currentModel.mesh.frustumCulled = false;
+    initializeRuntimeForCurrentModel();
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
     setDisplayedText(modelNameText, label);
@@ -239,6 +321,7 @@ async function loadModelFolder(files) {
     clearModel();
     currentModel = await folderLoader.loadModel(modelFile);
     currentModel.mesh.frustumCulled = false;
+    initializeRuntimeForCurrentModel();
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
     setDisplayedText(modelNameText, modelFile.name);
@@ -277,10 +360,12 @@ async function loadMotion(source, label = source.name ?? "motion") {
       timeline.max = String(Math.max(currentMotion.clip.duration, 0.001));
       elapsedSeconds = 0;
       timeline.value = "0";
+      syncAudioToMotionTime();
     }
     setDisplayedText(motionNameText, label);
     updatePlaybackDisplay();
     updateTransportState();
+    syncPlaybackToCurrentAudioState();
     setStatus("", "ready");
     renderStillFrame();
   } catch (error) {
@@ -315,7 +400,9 @@ async function loadPose(source, label = source.name ?? "pose") {
 
 function render() {
   const delta = clock.getDelta();
-  if (isPlaying && !isSeeking) {
+  if (isPlaying && !isSeeking && hasActiveAudioSource()) {
+    syncMotionToAudioTime({ evaluate: false });
+  } else if (isPlaying && !isSeeking) {
     elapsedSeconds += delta;
   }
   evaluateRuntime();
@@ -329,6 +416,13 @@ function renderStillFrame() {
   renderer.render(scene, camera);
 }
 
+function initializeRuntimeForCurrentModel() {
+  currentModel?.runtime?.setAnimation(
+    new THREE.AnimationClip("__rest_pose__", -1, []),
+    currentModel.mesh
+  );
+}
+
 function evaluateRuntime(options = {}) {
   if (!currentModel?.runtime) {
     return;
@@ -336,6 +430,7 @@ function evaluateRuntime(options = {}) {
   const maxTime = Number.parseFloat(timeline?.max ?? "10");
   if (elapsedSeconds > maxTime && maxTime > 0) {
     elapsedSeconds %= maxTime;
+    syncAudioToMotionTime();
   }
   currentModel.runtime.evaluate(elapsedSeconds, {
     physics: options.physics ?? (!isSeeking && elapsedSeconds > 0)
@@ -446,6 +541,19 @@ function createViewerDebugApi() {
       });
       return "outline hidden";
     },
+    evaluateAt(seconds, options = {}) {
+      elapsedSeconds = Number(seconds);
+      if (timeline && elapsedSeconds > Number.parseFloat(timeline.max)) {
+        timeline.max = String(elapsedSeconds);
+      }
+      evaluateRuntime(options);
+      controls.update();
+      renderer.render(scene, camera);
+      return this.state();
+    },
+    state() {
+      return createSmokeState();
+    },
     dumpFaceNormals() {
       const mesh = currentModel?.mesh;
       if (!mesh) {
@@ -481,6 +589,79 @@ function restoreDebugMaterials() {
   }
   debugMaterialState.clear();
   return "materials restored";
+}
+
+function createSmokeState() {
+  const model = currentModel;
+  const runtime = model?.runtime;
+  const debugState = runtime?.debugState();
+  const rigidBodyTransforms = runtime?.debugRigidBodyWorldTransformsColumnMajor?.() ?? [];
+  const ikStage = debugState?.stages.ik;
+  const physicsStage = debugState?.stages.physics;
+  return {
+    ready: !!model,
+    timeSeconds: elapsedSeconds,
+    modelName: model?.mesh.name ?? null,
+    rigidBodyCount: model?.mesh.userData.mmdModel?.rigidBodyCount ?? 0,
+    jointCount: model?.mesh.userData.mmdModel?.jointCount ?? 0,
+    rigidBodyTransformCount: rigidBodyTransforms.length,
+    rigidBodyBounds: matrixTranslationBounds(rigidBodyTransforms),
+    matricesFinite: finiteArray(physicsStage?.worldMatricesColumnMajor ?? []),
+    morphWeightsFinite: finiteArray(physicsStage?.morphWeights ?? []),
+    physicsMaxBonePositionDelta: maxStageTranslationDelta(ikStage, physicsStage),
+    diagnostics: activePhysicsBackend?.diagnostics?.() ?? []
+  };
+}
+
+function finiteArray(values) {
+  return Array.from(values).every(Number.isFinite);
+}
+
+function matrixTranslationBounds(matrices) {
+  const translations = matrices
+    .filter((matrix) => matrix.length >= 16)
+    .map((matrix) => [matrix[12], matrix[13], matrix[14]]);
+  if (translations.length === 0 || !translations.flat().every(Number.isFinite)) {
+    return null;
+  }
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const translation of translations) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      min[axis] = Math.min(min[axis], translation[axis]);
+      max[axis] = Math.max(max[axis], translation[axis]);
+    }
+  }
+  const center = [(min[0] + max[0]) * 0.5, (min[1] + max[1]) * 0.5, (min[2] + max[2]) * 0.5];
+  const radius = Math.max(
+    ...translations.map((translation) =>
+      Math.hypot(
+        translation[0] - center[0],
+        translation[1] - center[1],
+        translation[2] - center[2]
+      )
+    )
+  );
+  return { min, max, radius };
+}
+
+function maxStageTranslationDelta(before, after) {
+  const beforeMatrices = before?.worldMatricesColumnMajor ?? [];
+  const afterMatrices = after?.worldMatricesColumnMajor ?? [];
+  const count = Math.floor(Math.min(beforeMatrices.length, afterMatrices.length) / 16);
+  let maxDelta = 0;
+  for (let index = 0; index < count; index += 1) {
+    const offset = index * 16;
+    const delta = Math.hypot(
+      afterMatrices[offset + 12] - beforeMatrices[offset + 12],
+      afterMatrices[offset + 13] - beforeMatrices[offset + 13],
+      afterMatrices[offset + 14] - beforeMatrices[offset + 14]
+    );
+    if (Number.isFinite(delta)) {
+      maxDelta = Math.max(maxDelta, delta);
+    }
+  }
+  return maxDelta;
 }
 
 function sampleFaceNormals(mesh) {
@@ -554,18 +735,26 @@ function bindDropTarget() {
 async function handleDroppedFiles(dataTransfer) {
   const files = await collectDroppedFiles(dataTransfer);
   const modelFile = findModelFile(files);
-  if (modelFile && files.length > 1) {
+  const shouldLoadModelFolder =
+    modelFile && files.some((file) => file.webkitRelativePath?.includes("/"));
+  if (shouldLoadModelFolder) {
     await loadModelFolder(files);
-    return;
+  } else if (modelFile) {
+    await loadModel(modelFile);
   }
   for (const file of files) {
+    if (file === modelFile) {
+      continue;
+    }
     const lowerName = file.name.toLowerCase();
     if (lowerName.endsWith(".pmx") || lowerName.endsWith(".pmd")) {
-      void loadModel(file);
+      await loadModel(file);
     } else if (lowerName.endsWith(".vmd")) {
-      void loadMotion(file);
+      await loadMotion(file);
     } else if (lowerName.endsWith(".vpd")) {
-      void loadPose(file);
+      await loadPose(file);
+    } else if (isAudioFile(file)) {
+      loadAudioFile(file);
     }
   }
 }
@@ -644,6 +833,70 @@ function updatePlayToggle() {
   playToggle?.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
 }
 
+async function setPlaybackPlaying(playing) {
+  setPlaybackState(playing);
+  if (!isAudioElement(bgmAudio) || !hasActiveAudioSource()) {
+    return;
+  }
+  isSyncingAudioState = true;
+  try {
+    if (playing) {
+      syncAudioToMotionTime();
+      await bgmAudio.play();
+    } else {
+      bgmAudio.pause();
+    }
+  } catch (error) {
+    setPlaybackState(false);
+    const message = error instanceof Error ? error.message : String(error);
+    window.console?.warn("[viewer] Failed to update audio playback:", error);
+    setStatus(message, "error");
+  } finally {
+    isSyncingAudioState = false;
+  }
+}
+
+function setPlaybackState(playing) {
+  isPlaying = playing;
+  updatePlayToggle();
+}
+
+function syncPlaybackToCurrentAudioState() {
+  if (!isAudioElement(bgmAudio) || !currentMotion?.clip || bgmAudio.paused) {
+    return;
+  }
+  setPlaybackState(true);
+  syncMotionToAudioTime({ evaluate: false });
+}
+
+function hasActiveAudioSource() {
+  return isAudioElement(bgmAudio) && bgmAudio.currentSrc.length > 0;
+}
+
+function syncMotionToAudioTime(options = {}) {
+  if (!isAudioElement(bgmAudio) || !currentMotion?.clip) {
+    return;
+  }
+  const audioTime = Number.isFinite(bgmAudio.currentTime) ? bgmAudio.currentTime : 0;
+  elapsedSeconds = audioTime;
+  if (options.evaluate !== false) {
+    evaluateRuntime({ physics: options.physics ?? false });
+  }
+}
+
+function syncAudioToMotionTime() {
+  if (!isAudioElement(bgmAudio) || !hasActiveAudioSource()) {
+    return;
+  }
+  const duration = Number.isFinite(bgmAudio.duration) ? bgmAudio.duration : undefined;
+  const targetTime = duration ? Math.min(elapsedSeconds, Math.max(duration - 0.001, 0)) : elapsedSeconds;
+  try {
+    bgmAudio.currentTime = Math.max(targetTime, 0);
+  } catch (error) {
+    window.console?.warn("[viewer] Failed to seek audio:", error);
+  }
+}
+
 function closeLoadMenu() {
   loadMenu?.removeAttribute("open");
 }
@@ -662,6 +915,9 @@ function updateTransportState() {
   const hasMotion = currentMotion?.clip !== undefined;
   if (transportBar) {
     transportBar.hidden = !hasMotion;
+  }
+  if (isAudioElement(bgmAudio)) {
+    bgmAudio.loop = hasMotion;
   }
   viewerShell?.classList.toggle("has-motion", hasMotion);
 }
@@ -714,6 +970,14 @@ function createFolderTextureMap(files, modelFile) {
 
 function isTextureFile(file) {
   return /\.(bmp|gif|jpe?g|png|tga|webp)$/i.test(file.name);
+}
+
+function isAudioFile(file) {
+  return /\.(mp3|ogg|wav)$/i.test(file.name);
+}
+
+function isAudioElement(element) {
+  return element instanceof window.HTMLAudioElement;
 }
 
 function normalizeRelativePath(path) {

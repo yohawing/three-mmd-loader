@@ -292,6 +292,9 @@ function solveTwoBonePlaneChain(
   if (!midLimits || axisIndex === null) {
     return undefined;
   }
+  if (rootLink.angleLimit) {
+    return undefined;
+  }
   const rootIndex = rootLink.boneIndex;
   const midIndex = midLink.boneIndex;
   const effectorIndex = chain.effectorBoneIndex;
@@ -339,7 +342,10 @@ function solveTwoBonePlaneChain(
   );
   const bendAngle = chooseLimitedBendAngle(rawBendAngle, midLimits, axisIndex);
   const axis = axisTuple(axisIndex);
-  rotations[midIndex] = axisAngleQuaternion(axis, bendAngle);
+  rotations[midIndex] = multiplyQuaternions(
+    axisAngleQuaternion(axis, bendAngle),
+    rotations[midIndex] ?? [0, 0, 0, 1]
+  );
   composeWorldMatrices(bones, translations, rotations, matrices);
 
   const currentVector = transformDirectionByInverseMatrix(
