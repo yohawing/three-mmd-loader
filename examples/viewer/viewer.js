@@ -5,7 +5,7 @@ import {
   createAmmoMmdPhysicsBackend,
   createDisabledMmdPhysicsBackend
 } from "../../dist/physics/index.js";
-import { ThreeMmdLoader } from "../../dist/three/index.js";
+import { ThreeMmdLoader, syncMmdSpecularDirection } from "../../dist/three/index.js";
 
 const ammoNamespace = await initAmmoNamespace();
 
@@ -201,6 +201,7 @@ async function loadModel(
     clearModel();
     currentModel = await modelLoader.loadModel(source);
     currentModel.mesh.frustumCulled = false;
+    syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
     setDisplayedText(modelNameText, label);
     elapsedSeconds = 0;
@@ -238,6 +239,7 @@ async function loadModelFolder(files) {
     clearModel();
     currentModel = await folderLoader.loadModel(modelFile);
     currentModel.mesh.frustumCulled = false;
+    syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
     setDisplayedText(modelNameText, modelFile.name);
     elapsedSeconds = 0;
