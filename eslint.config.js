@@ -39,8 +39,10 @@ export default tseslint.config(
       globals: {
         HTMLCanvasElement: "readonly",
         HTMLInputElement: "readonly",
+        URL: "readonly",
         document: "readonly",
         fetch: "readonly",
+        location: "readonly",
         window: "readonly"
       }
     }
