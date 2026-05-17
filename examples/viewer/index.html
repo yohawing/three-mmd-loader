@@ -16,94 +16,67 @@
   </head>
   <body>
     <main class="viewer-shell">
+      <header class="top-bar" aria-label="Viewer menu">
+        <div class="brand">
+          <strong>MMD Viewer</strong>
+          <span id="status">Ready</span>
+        </div>
+
+        <nav class="menu-actions" aria-label="Model and motion loading">
+          <button id="load-sample-scene" type="button">Sample</button>
+          <button id="load-sample-model" type="button">Sample Model</button>
+          <button id="load-sample-motion" type="button">Sample VMD</button>
+          <button id="choose-model" type="button">Model</button>
+          <button id="choose-model-folder" type="button">Folder</button>
+          <button id="choose-motion" type="button">VMD</button>
+          <button id="choose-pose" type="button">VPD</button>
+        </nav>
+
+        <div class="view-toggles" aria-label="Viewport options">
+          <label><input id="show-grid" type="checkbox" checked /> Grid</label>
+          <label><input id="show-skeleton" type="checkbox" checked /> Skeleton</label>
+          <label><input id="wireframe" type="checkbox" /> Wire</label>
+        </div>
+
+        <input id="model-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
+        <input id="model-folder" type="file" webkitdirectory directory multiple />
+        <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
+        <input id="pose-file" type="file" accept=".vpd,text/plain" />
+      </header>
+
       <section class="stage" aria-label="MMD model viewport">
         <canvas id="viewer-canvas"></canvas>
         <div class="drop-target" id="drop-target">
-          <strong>Drop PMX / PMD / VMD / VPD files</strong>
-          <span>Model, motion, and pose files can be loaded independently.</span>
+          <strong>Drop model folders, PMX / PMD, VMD, or VPD files</strong>
+          <span>Model textures are resolved when a folder is selected.</span>
         </div>
       </section>
 
-      <aside class="panel" aria-label="Viewer controls">
-        <header class="panel-header">
-          <h1>MMD Viewer</h1>
-          <p>@yohawing/three-mmd-loader example</p>
-        </header>
+      <div class="hud" aria-label="Loaded file status">
+        <dl>
+          <div><dt>Model</dt><dd id="model-name">none</dd></div>
+          <div><dt>Motion</dt><dd id="motion-name">none</dd></div>
+          <div><dt>Bones</dt><dd id="bone-count">0</dd></div>
+        </dl>
+        <p>
+          <span id="model-file-name">PMX / PMD or model folder</span>
+          <span id="motion-file-name">VMD</span>
+          <span id="pose-file-name">VPD</span>
+        </p>
+      </div>
 
-        <section class="control-group">
-          <h2>Samples</h2>
-          <div class="button-row">
-            <button id="load-sample-model" type="button">Sample Model</button>
-            <button id="load-sample-motion" type="button">Sample VMD</button>
-            <button id="load-sample-scene" type="button">Scene</button>
-          </div>
-        </section>
-
-        <section class="control-group">
-          <h2>Load Files</h2>
-          <div class="file-picker">
-            <div>
-              <strong>Model</strong>
-              <span id="model-file-name">PMX / PMD or model folder</span>
-            </div>
-            <div class="stacked-buttons">
-              <button id="choose-model" type="button">Choose Model</button>
-              <button id="choose-model-folder" type="button">Choose Folder</button>
-            </div>
-            <input id="model-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
-            <input id="model-folder" type="file" webkitdirectory directory multiple />
-          </div>
-          <div class="file-picker">
-            <div>
-              <strong>VMD Motion</strong>
-              <span id="motion-file-name">VMD</span>
-            </div>
-            <button id="choose-motion" type="button">Choose VMD</button>
-            <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
-          </div>
-          <div class="file-picker">
-            <div>
-              <strong>Pose</strong>
-              <span id="pose-file-name">VPD</span>
-            </div>
-            <button id="choose-pose" type="button">Choose VPD</button>
-            <input id="pose-file" type="file" accept=".vpd,text/plain" />
-          </div>
-        </section>
-
-        <section class="control-group">
-          <h2>Playback</h2>
-          <div class="button-row">
-            <button id="play-toggle" type="button">Pause</button>
-            <button id="reset-view" type="button">Reset View</button>
-          </div>
-          <label>
-            Time
-            <input id="timeline" type="range" min="0" max="10" value="0" step="0.001" />
-          </label>
-          <label>
-            Speed
-            <input id="speed" type="range" min="0" max="2" value="1" step="0.05" />
-          </label>
-        </section>
-
-        <section class="control-group toggles">
-          <label><input id="show-grid" type="checkbox" checked /> Grid</label>
-          <label><input id="show-skeleton" type="checkbox" checked /> Skeleton</label>
-          <label><input id="wireframe" type="checkbox" /> Wireframe</label>
-        </section>
-
-        <section class="control-group">
-          <h2>Status</h2>
-          <dl class="stats">
-            <div><dt>Model</dt><dd id="model-name">none</dd></div>
-            <div><dt>Motion</dt><dd id="motion-name">none</dd></div>
-            <div><dt>Frame</dt><dd id="frame-value">0</dd></div>
-            <div><dt>Bones</dt><dd id="bone-count">0</dd></div>
-          </dl>
-          <p class="status" id="status">Ready</p>
-        </section>
-      </aside>
+      <footer class="transport" aria-label="Playback controls">
+        <button id="play-toggle" type="button">Pause</button>
+        <button id="reset-view" type="button">Reset View</button>
+        <label>
+          <span id="frame-value">0</span>
+          <input id="timeline" type="range" min="0" max="10" value="0" step="0.001" />
+        </label>
+        <label>
+          Speed
+          <input id="speed" type="range" min="0" max="2" value="1" step="0.05" />
+        </label>
+      </footer>
     </main>
     <script type="module" src="./viewer.js"></script>
   </body>
