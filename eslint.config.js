@@ -22,5 +22,27 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }
       ]
     }
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        URL: "readonly",
+        console: "readonly",
+        process: "readonly"
+      }
+    }
+  },
+  {
+    files: ["examples/**/*.js"],
+    languageOptions: {
+      globals: {
+        HTMLCanvasElement: "readonly",
+        HTMLInputElement: "readonly",
+        document: "readonly",
+        fetch: "readonly",
+        window: "readonly"
+      }
+    }
   }
 );

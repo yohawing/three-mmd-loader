@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>three-mmd-loader viewer</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.176.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.176.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main class="viewer-shell">
+      <section class="stage" aria-label="MMD model viewport">
+        <canvas id="viewer-canvas"></canvas>
+        <div class="drop-target" id="drop-target">
+          <strong>Drop PMX / PMD / VMD / VPD files</strong>
+          <span>Model, motion, and pose files can be loaded independently.</span>
+        </div>
+      </section>
+
+      <aside class="panel" aria-label="Viewer controls">
+        <header class="panel-header">
+          <h1>MMD Viewer</h1>
+          <p>@yohawing/three-mmd-loader example</p>
+        </header>
+
+        <section class="control-group">
+          <h2>Samples</h2>
+          <div class="button-row">
+            <button id="load-sample-model" type="button">Model</button>
+            <button id="load-sample-motion" type="button">Motion</button>
+            <button id="load-sample-scene" type="button">Scene</button>
+          </div>
+        </section>
+
+        <section class="control-group">
+          <h2>Files</h2>
+          <label>
+            Model
+            <input id="model-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
+          </label>
+          <label>
+            Motion
+            <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
+          </label>
+          <label>
+            Pose
+            <input id="pose-file" type="file" accept=".vpd,text/plain" />
+          </label>
+        </section>
+
+        <section class="control-group">
+          <h2>Playback</h2>
+          <div class="button-row">
+            <button id="play-toggle" type="button">Pause</button>
+            <button id="reset-view" type="button">Reset View</button>
+          </div>
+          <label>
+            Time
+            <input id="timeline" type="range" min="0" max="10" value="0" step="0.001" />
+          </label>
+          <label>
+            Speed
+            <input id="speed" type="range" min="0" max="2" value="1" step="0.05" />
+          </label>
+        </section>
+
+        <section class="control-group toggles">
+          <label><input id="show-grid" type="checkbox" checked /> Grid</label>
+          <label><input id="show-skeleton" type="checkbox" checked /> Skeleton</label>
+          <label><input id="wireframe" type="checkbox" /> Wireframe</label>
+        </section>
+
+        <section class="control-group">
+          <h2>Status</h2>
+          <dl class="stats">
+            <div><dt>Model</dt><dd id="model-name">none</dd></div>
+            <div><dt>Motion</dt><dd id="motion-name">none</dd></div>
+            <div><dt>Frame</dt><dd id="frame-value">0</dd></div>
+            <div><dt>Bones</dt><dd id="bone-count">0</dd></div>
+          </dl>
+          <p class="status" id="status">Ready</p>
+        </section>
+      </aside>
+    </main>
+    <script type="module" src="./viewer.js"></script>
+  </body>
+</html>
