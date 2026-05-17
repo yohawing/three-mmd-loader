@@ -5,6 +5,7 @@ node_modules/
 dist/
 coverage/
 .cache/
+tmp/
 *.tsbuildinfo
 *.log
 *.tmp

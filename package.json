@@ -49,6 +49,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs",
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",
+    "check:fixtures": "node scripts/check-fixtures.mjs",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "test": "vitest run",
     "lint": "eslint ."
