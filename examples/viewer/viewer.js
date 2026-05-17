@@ -1037,14 +1037,25 @@ function createPhysicsBackend() {
 
 async function initAmmoNamespace() {
   let ammoCandidate;
-  try {
-    ammoCandidate = typeof window !== "undefined" ? window.Ammo : undefined;
-  } catch (error) {
-    reportAmmoInitializationFailure("window.Ammo", error);
-    return undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      ammoCandidate = getAmmoCandidate();
+    } catch (error) {
+      reportAmmoInitializationFailure("Ammo global", error);
+      return undefined;
+    }
+    if (ammoCandidate) {
+      break;
+    }
+    if (attempt < 2) {
+      await waitForAmmoGlobalRetry(attempt);
+    }
   }
   if (!ammoCandidate) {
-    reportAmmoInitializationFailure("window.Ammo", new Error("window.Ammo is not available."));
+    reportAmmoInitializationFailure(
+      "Ammo global",
+      new Error("Ammo is not available on globalThis, window, or self.")
+    );
     return undefined;
   }
   try {
@@ -1057,6 +1068,26 @@ async function initAmmoNamespace() {
     reportAmmoInitializationFailure("Ammo()", error);
     return undefined;
   }
+}
+
+function getAmmoCandidate() {
+  const globalScopes = [
+    typeof globalThis !== "undefined" ? globalThis : undefined,
+    typeof window !== "undefined" ? window : undefined,
+    typeof globalThis !== "undefined" ? globalThis.self : undefined
+  ];
+  for (const scope of globalScopes) {
+    if (scope?.Ammo) {
+      return scope.Ammo;
+    }
+  }
+  return undefined;
+}
+
+function waitForAmmoGlobalRetry(attempt) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, attempt === 0 ? 0 : 16);
+  });
 }
 
 async function initAmmoNamespaceSafely() {
