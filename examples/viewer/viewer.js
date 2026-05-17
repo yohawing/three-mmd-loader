@@ -8,6 +8,9 @@ const sampleMotionUrl = "../../test/fixtures/test_1bone_cube_motion.vmd";
 
 const canvas = document.querySelector("#viewer-canvas");
 const stage = document.querySelector(".stage");
+const topBar = document.querySelector(".top-bar");
+const transportBar = document.querySelector(".transport");
+const viewerShell = document.querySelector(".viewer-shell");
 const statusText = document.querySelector("#status");
 const modelNameText = document.querySelector("#model-name");
 const motionNameText = document.querySelector("#motion-name");
@@ -15,10 +18,12 @@ const frameValueText = document.querySelector("#frame-value");
 const boneCountText = document.querySelector("#bone-count");
 const timeline = document.querySelector("#timeline");
 const speedInput = document.querySelector("#speed");
+const speedValueText = document.querySelector("#speed-value");
 const playToggle = document.querySelector("#play-toggle");
 const showGridInput = document.querySelector("#show-grid");
 const showSkeletonInput = document.querySelector("#show-skeleton");
 const wireframeInput = document.querySelector("#wireframe");
+const loadMenu = document.querySelector("#load-menu");
 const modelFileInput = document.querySelector("#model-file");
 const modelFolderInput = document.querySelector("#model-folder");
 const motionFileInput = document.querySelector("#motion-file");
@@ -84,10 +89,27 @@ window.mmdViewer = {
 bindControls();
 resize();
 await loadSampleScene();
+clock.getDelta();
 renderer.setAnimationLoop(render);
 
 function bindControls() {
   window.addEventListener("resize", resize);
+  document.addEventListener("click", (event) => {
+    if (loadMenu && !loadMenu.contains(event.target)) {
+      closeLoadMenu();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && loadMenu) {
+      closeLoadMenu();
+      loadMenu.querySelector("summary")?.focus();
+    }
+  });
+  loadMenu?.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => {
+      closeLoadMenu();
+    });
+  });
   document.querySelector("#load-sample-model")?.addEventListener("click", () => {
     void loadModelFromUrl(sampleModelUrl);
   });
@@ -161,26 +183,44 @@ function bindControls() {
   wireframeInput?.addEventListener("change", () => {
     setWireframe(wireframeInput.checked);
   });
+  speedInput?.addEventListener("input", updateSpeedDisplay);
   bindDropTarget();
+  updateSpeedDisplay();
+  updatePlaybackDisplay();
+  updateStageState();
 }
 
 async function loadSampleScene() {
   await loadModelFromUrl(sampleModelUrl);
   await loadMotionFromUrl(sampleMotionUrl);
+  if (currentModel) {
+    elapsedSeconds = 0;
+    timeline.value = "0";
+    updatePlaybackDisplay();
+    setStatus(`Loaded model: ${sampleModelUrl.split("/").at(-1)}`, "ready");
+  }
 }
 
 async function loadModelFromUrl(url) {
-  setStatus(`Loading ${url}`);
-  const bytes = await fetchBytes(url);
-  modelFileName.textContent = url.split("/").at(-1) ?? url;
-  await loadModel(bytes, url.split("/").at(-1) ?? url, createUrlTextureLoader(url));
+  try {
+    setStatus(`Loading ${url}`, "loading");
+    const bytes = await fetchBytes(url);
+    modelFileName.textContent = url.split("/").at(-1) ?? url;
+    await loadModel(bytes, url.split("/").at(-1) ?? url, createUrlTextureLoader(url));
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+  }
 }
 
 async function loadMotionFromUrl(url) {
-  setStatus(`Loading ${url}`);
-  const bytes = await fetchBytes(url);
-  motionFileName.textContent = url.split("/").at(-1) ?? url;
-  await loadMotion(bytes, url.split("/").at(-1) ?? url);
+  try {
+    setStatus(`Loading ${url}`, "loading");
+    const bytes = await fetchBytes(url);
+    motionFileName.textContent = url.split("/").at(-1) ?? url;
+    await loadMotion(bytes, url.split("/").at(-1) ?? url);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+  }
 }
 
 async function fetchBytes(url) {
@@ -193,6 +233,7 @@ async function fetchBytes(url) {
 
 async function loadModel(source, label = source.name ?? "model", modelLoader = loader) {
   try {
+    setStatus(`Loading model: ${label}`, "loading");
     clearModel();
     currentModel = await modelLoader.loadModel(source);
     currentModel.mesh.frustumCulled = false;
@@ -205,6 +246,9 @@ async function loadModel(source, label = source.name ?? "model", modelLoader = l
     modelNameText.textContent = currentModel.mesh.name || label;
     boneCountText.textContent = String(currentModel.mesh.skeleton.bones.length);
     elapsedSeconds = 0;
+    timeline.max = "0.001";
+    timeline.value = "0";
+    updatePlaybackDisplay();
     fitCameraToObject(currentModel.mesh);
     setWireframe(wireframeInput?.checked ?? false);
     if (pendingMotionSource) {
@@ -212,17 +256,19 @@ async function loadModel(source, label = source.name ?? "model", modelLoader = l
     } else if (currentMotion?.clip) {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
     }
-    setStatus(`Loaded model: ${label}`);
+    setStatus(`Loaded model: ${label}`, "ready");
+    updateStageState();
     renderStillFrame();
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+    updateStageState();
   }
 }
 
 async function loadModelFolder(files) {
   const modelFile = findModelFile(files);
   if (!modelFile) {
-    setStatus("No PMX or PMD model found in the selected folder.");
+    setStatus("No PMX or PMD model found in the selected folder.", "error");
     return;
   }
 
@@ -235,6 +281,7 @@ async function loadModelFolder(files) {
   modelFileName.textContent = `${folderName}/${modelFile.name}`;
 
   try {
+    setStatus(`Loading model folder: ${folderName}`, "loading");
     clearModel();
     currentModel = await folderLoader.loadModel(modelFile);
     currentModel.mesh.frustumCulled = false;
@@ -247,17 +294,23 @@ async function loadModelFolder(files) {
     modelNameText.textContent = currentModel.mesh.name || modelFile.name;
     boneCountText.textContent = String(currentModel.mesh.skeleton.bones.length);
     elapsedSeconds = 0;
+    timeline.max = "0.001";
+    timeline.value = "0";
+    updatePlaybackDisplay();
     fitCameraToObject(currentModel.mesh);
     setWireframe(wireframeInput?.checked ?? false);
     if (pendingMotionSource) {
       await loadMotion(pendingMotionSource, pendingMotionLabel);
     }
     setStatus(
-      `Loaded model folder: ${folderName} (${Object.keys(textureMap).length} texture paths indexed)`
+      `Loaded model folder: ${folderName} (${Object.keys(textureMap).length} texture paths indexed)`,
+      "ready"
     );
+    updateStageState();
     renderStillFrame();
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+    updateStageState();
   }
 }
 
@@ -267,9 +320,10 @@ async function loadMotion(source, label = source.name ?? "motion") {
       pendingMotionSource = source;
       pendingMotionLabel = label;
       motionNameText.textContent = label;
-      setStatus(`Queued VMD motion: ${label}. Load a model to apply it.`);
+      setStatus(`Queued VMD motion: ${label}. Load a model to apply it.`, "ready");
       return;
     }
+    setStatus(`Loading motion: ${label}`, "loading");
     pendingMotionSource = source;
     pendingMotionLabel = label;
     currentMotion = await loader.loadAnimation(source, currentModel);
@@ -277,33 +331,38 @@ async function loadMotion(source, label = source.name ?? "motion") {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
       timeline.max = String(Math.max(currentMotion.clip.duration, 0.001));
       elapsedSeconds = 0;
+      timeline.value = "0";
     }
     motionNameText.textContent = currentMotion.name || label;
-    setStatus(`Loaded motion: ${label}`);
+    updatePlaybackDisplay();
+    setStatus(`Loaded motion: ${label}`, "ready");
     renderStillFrame();
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    setStatus(error instanceof Error ? error.message : String(error), "error");
   }
 }
 
 async function loadPose(source, label = source.name ?? "pose") {
   try {
     if (!currentModel) {
-      setStatus("Load a model before loading a pose.");
+      setStatus("Load a model before loading a pose.", "error");
       return;
     }
+    setStatus(`Loading pose: ${label}`, "loading");
     const poseAnimation = await loader.loadPoseAnimation(source, label, currentModel);
     if (poseAnimation.clip) {
       currentMotion = poseAnimation;
       currentModel.runtime?.setAnimation(poseAnimation.clip, currentModel.mesh);
       elapsedSeconds = 0;
       timeline.max = "1";
+      timeline.value = "0";
       motionNameText.textContent = poseAnimation.name ?? label;
     }
-    setStatus(`Loaded pose: ${label}`);
+    updatePlaybackDisplay();
+    setStatus(`Loaded pose: ${label}`, "ready");
     renderStillFrame();
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    setStatus(error instanceof Error ? error.message : String(error), "error");
   }
 }
 
@@ -331,12 +390,12 @@ function evaluateRuntime() {
   if (elapsedSeconds > maxTime && maxTime > 0) {
     elapsedSeconds %= maxTime;
   }
-  const frameState = currentModel.runtime.evaluate(elapsedSeconds);
+  currentModel.runtime.evaluate(elapsedSeconds);
   if (skeletonHelper) {
     skeletonHelper.updateMatrixWorld(true);
   }
   timeline.value = String(elapsedSeconds);
-  frameValueText.textContent = String(frameState.frame);
+  updatePlaybackDisplay();
 }
 
 function clearModel() {
@@ -357,7 +416,13 @@ function clearModel() {
   modelNameText.textContent = "none";
   motionNameText.textContent = "none";
   boneCountText.textContent = "0";
-  frameValueText.textContent = "0";
+  elapsedSeconds = 0;
+  if (timeline) {
+    timeline.max = "0.001";
+    timeline.value = "0";
+  }
+  updatePlaybackDisplay();
+  updateStageState();
 }
 
 function fitCameraToObject(object) {
@@ -404,6 +469,7 @@ function resize() {
   renderer.setSize(width, height, false);
   camera.aspect = width / Math.max(height, 1);
   camera.updateProjectionMatrix();
+  updateChromeHeights();
 }
 
 function bindDropTarget() {
@@ -433,8 +499,46 @@ function bindDropTarget() {
   });
 }
 
-function setStatus(message) {
+function setStatus(message, state = "ready") {
   statusText.textContent = message;
+  statusText.classList.toggle("is-loading", state === "loading");
+  topBar?.classList.toggle("is-error", state === "error");
+}
+
+function closeLoadMenu() {
+  loadMenu?.removeAttribute("open");
+}
+
+function updatePlaybackDisplay() {
+  const duration = currentMotion?.clip?.duration ?? 0;
+  const currentTime = Number.isFinite(elapsedSeconds) ? elapsedSeconds : 0;
+  frameValueText.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
+}
+
+function updateSpeedDisplay() {
+  const speed = Number.parseFloat(speedInput?.value ?? "1");
+  speedValueText.textContent = `${(Number.isFinite(speed) ? speed : 1).toFixed(1)}x`;
+}
+
+function updateStageState() {
+  stage?.classList.toggle("is-empty", !currentModel);
+}
+
+function updateChromeHeights() {
+  if (!viewerShell || !topBar) {
+    return;
+  }
+  viewerShell.style.setProperty("--top-bar-height", `${topBar.offsetHeight}px`);
+  if (transportBar) {
+    viewerShell.style.setProperty("--transport-height", `${transportBar.offsetHeight}px`);
+  }
+}
+
+function formatTime(seconds) {
+  const safeSeconds = Math.max(Number.isFinite(seconds) ? seconds : 0, 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds - minutes * 60;
+  return `${String(minutes).padStart(2, "0")}:${remainingSeconds.toFixed(2).padStart(5, "0")}`;
 }
 
 function findModelFile(files) {
