@@ -259,6 +259,96 @@ describe("CcdIkSolver", () => {
     expect(Math.abs(rotations[1][2])).toBeGreaterThan(0);
   });
 
+  it("preserves a two-bone analytic middle bone base rotation", () => {
+    const baseRotation = eulerXyzToQuaternionForTest([0.2, 0, 0]);
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: -1, translation: [1, 1, 0] }
+    ];
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...baseRotation],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [
+            {
+              boneIndex: 1,
+              angleLimit: {
+                minimumAngle: [0, 0, -Math.PI],
+                maximumAngle: [0, 0, Math.PI]
+              }
+            },
+            { boneIndex: 0 }
+          ],
+          iterationCount: 200,
+          maxAnglePerIteration: Math.PI
+        }
+      ]
+    });
+
+    expect(result.iterationCount).toBe(1);
+    expect(Math.abs(rotations[1][0])).toBeGreaterThan(0.05);
+  });
+
+  it("falls back to constrained CCD when a two-bone root link has an angle limit", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: -1, translation: [0, 2, 0] }
+    ];
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [
+            {
+              boneIndex: 1,
+              angleLimit: {
+                minimumAngle: [0, 0, -Math.PI],
+                maximumAngle: [0, 0, Math.PI]
+              }
+            },
+            {
+              boneIndex: 0,
+              angleLimit: {
+                minimumAngle: [0, 0, 0],
+                maximumAngle: [0, 0, 0]
+              }
+            }
+          ],
+          iterationCount: 8,
+          maxAnglePerIteration: Math.PI
+        }
+      ]
+    });
+
+    expect(result.iterationCount).toBeGreaterThan(1);
+    expect(result.finalDistances[0]).toBeGreaterThan(0.5);
+    expect(rotations[0][2]).toBeCloseTo(0, 5);
+  });
+
   it("solves an exact 180-degree link rotation with a stable fallback axis", () => {
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },

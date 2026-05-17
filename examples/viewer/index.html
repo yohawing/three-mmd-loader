@@ -9,12 +9,12 @@
     <script type="importmap">
       {
         "imports": {
-          "three": "https://unpkg.com/three@0.176.0/build/three.module.js",
-          "three/addons/": "https://unpkg.com/three@0.176.0/examples/jsm/"
+          "three": "/node_modules/three/build/three.module.js",
+          "three/addons/": "/node_modules/three/examples/jsm/"
         }
       }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/ammo.js@0.0.10/ammo.js"></script>
+    <script src="/node_modules/ammo.js/ammo.js"></script>
   </head>
   <body>
     <main class="viewer-shell">
@@ -25,10 +25,20 @@
               <span class="material-symbols-rounded" aria-hidden="true">menu</span>
             </summary>
             <div class="load-menu-panel" role="menu" aria-label="Load options">
-              <button id="choose-model-file" type="button" role="menuitem">Load Model File</button>
-              <button id="choose-model-folder" type="button" role="menuitem">Load Model Folder</button>
-              <button id="choose-motion" type="button" role="menuitem">Motion (VMD)...</button>
-              <button id="choose-pose" type="button" role="menuitem">Pose (VPD)...</button>
+              <section class="load-section" aria-labelledby="model-section-title">
+                <h2 id="model-section-title">Model</h2>
+                <button id="choose-model-file" type="button" role="menuitem">Load Model File</button>
+                <button id="choose-model-folder" type="button" role="menuitem">Load Model Folder</button>
+              </section>
+              <section class="load-section" aria-labelledby="motion-section-title">
+                <h2 id="motion-section-title">Motion</h2>
+                <button id="choose-motion" type="button" role="menuitem">Motion (VMD)...</button>
+                <button id="choose-pose" type="button" role="menuitem">Pose (VPD)...</button>
+              </section>
+              <section class="load-section" aria-labelledby="audio-section-title">
+                <h2 id="audio-section-title">Audio</h2>
+                <button id="choose-audio" type="button" role="menuitem">Load Audio</button>
+              </section>
             </div>
           </details>
         </nav>
@@ -36,6 +46,7 @@
         <div class="loaded-files" aria-label="Loaded files">
           <span id="model-name" hidden></span>
           <span id="motion-name" hidden></span>
+          <span id="audio-name" hidden></span>
         </div>
 
         <span class="status" id="status"></span>
@@ -44,6 +55,8 @@
         <input id="model-folder" type="file" webkitdirectory directory multiple />
         <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
         <input id="pose-file" type="file" accept=".vpd,text/plain" />
+        <input id="audio-file" type="file" accept=".wav,.mp3,.ogg,audio/wav,audio/mpeg,audio/ogg" />
+        <audio id="bgm-audio" hidden></audio>
       </header>
 
       <section class="stage" aria-label="MMD model viewport">
@@ -52,7 +65,7 @@
           Drop a PMX/PMD file or model folder, or click Menu -> Load Model
         </div>
         <div class="drop-target" id="drop-target">
-          <strong>Drop model folders, PMX / PMD, VMD, or VPD files</strong>
+          <strong>Drop model folders, PMX / PMD, VMD, VPD, or audio files</strong>
           <span>Model textures are resolved when a folder is selected.</span>
         </div>
       </section>

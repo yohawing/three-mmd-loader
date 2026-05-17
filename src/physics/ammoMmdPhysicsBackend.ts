@@ -317,13 +317,13 @@ export interface AmmoPhysicsBackendOptions {
   dynamicWithBoneRotationFeedbackMinMass?: number;
 }
 
-const DEFAULT_GRAVITY: [number, number, number] = [0, -98, 0];
+const DEFAULT_GRAVITY: [number, number, number] = [0, -49, 0];
 const DEFAULT_FIXED_TIME_STEP = 1 / 60;
 const DEFAULT_MAX_SUB_STEPS = 4;
 const DEFAULT_SPLIT_IMPULSE = true;
 const DEFAULT_SPLIT_IMPULSE_PENETRATION_THRESHOLD = -0.04;
 const DEFAULT_RESET_CATCH_UP_STEPS = 8;
-const DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_SCALE = 11;
+const DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_SCALE = 1;
 const DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_MIN_MASS = 0.5;
 const MAX_FRAME_STEP_SECONDS = 1 / 15;
 const MIN_DYNAMIC_BODY_MASS = 0.001;
@@ -411,7 +411,6 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     if (this.pendingResetPoseSync) {
       this.syncAllBodiesToCurrentPose(ammoContext);
       this.applyBodyPhysicsToggles(ammoContext);
-      this.syncDynamicBodies(ammoContext, { dynamicWithBoneRotationFeedbackScale: 1 });
       this.restoreTemporalKinematicBodies();
       const fixedTimeStep = this.options.fixedTimeStep ?? DEFAULT_FIXED_TIME_STEP;
       const resetCatchUpSteps = Math.max(
@@ -482,19 +481,23 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
   debugRigidBodyWorldTransformsColumnMajor(): MmdPhysicsMatrix4ColumnMajorTuple[] {
     const Ammo = this.ammo;
     const transform = new Ammo.btTransform();
-    return this.bindings.map(({ rigidBody }) => {
-      const motionState = rigidBody.getMotionState();
-      motionState.getWorldTransform(transform);
-      const origin = transform.getOrigin();
-      const physicsWorld = {
-        position: [origin.x(), origin.y(), origin.z()] as [number, number, number],
-        rotation: transform.getRotation
-          ? (ammoQuaternionToTuple(transform.getRotation()) ?? [0, 0, 0, 1])
-          : ([0, 0, 0, 1] as [number, number, number, number])
-      };
-      const mmdWorld = physicsTransformToMmd(physicsWorld);
-      return transformToColumnMajorMatrix(mmdWorld.position, mmdWorld.rotation);
-    });
+    try {
+      return this.bindings.map(({ rigidBody }) => {
+        const motionState = rigidBody.getMotionState();
+        motionState.getWorldTransform(transform);
+        const origin = transform.getOrigin();
+        const physicsWorld = {
+          position: [origin.x(), origin.y(), origin.z()] as [number, number, number],
+          rotation: transform.getRotation
+            ? (ammoQuaternionToTuple(transform.getRotation()) ?? [0, 0, 0, 1])
+            : ([0, 0, 0, 1] as [number, number, number, number])
+        };
+        const mmdWorld = physicsTransformToMmd(physicsWorld);
+        return transformToColumnMajorMatrix(mmdWorld.position, mmdWorld.rotation);
+      });
+    } finally {
+      this.destroy(transform);
+    }
   }
 
   debugPhysicsContacts(): AmmoMmdPhysicsContactDebug[] {
@@ -1070,12 +1073,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
 
   private syncAllBodiesToCurrentPose(context: AmmoStepContext): void {
     for (const binding of this.bindings) {
-      this.setRigidBodyWorldTransform(
-        binding.rigidBody,
-        binding.body.mode === "static"
-          ? this.bodyWorldTransform(binding.body, context)
-          : this.bodyRestTransform(binding.body)
-      );
+      this.setRigidBodyWorldTransform(binding.rigidBody, this.bodyWorldTransform(binding.body, context));
       this.resetBodyVelocity(binding.rigidBody);
       binding.disabledSyncMode = undefined;
       binding.temporalKinematic = this.makeTemporalKinematic(binding);

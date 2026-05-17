@@ -334,6 +334,7 @@ describe("DefaultMmdRuntime", () => {
 
     runtime.setAnimation(createEmptyMmdClip("external-skip"), mesh);
     runtime.evaluate(0, { physics: false });
+    runtime.evaluate(0, { physics: false });
 
     expect(backend.stepCount).toBe(0);
     expect(backend.resetCount).toBe(2);

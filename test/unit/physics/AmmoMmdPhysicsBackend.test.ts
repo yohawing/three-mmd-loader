@@ -105,6 +105,33 @@ describe("AmmoMmdPhysicsBackend", () => {
     expect(context.output.updatedBoneIndices).toEqual([0, 1]);
     backend.dispose?.();
   });
+
+  it("resets dynamic rigid bodies to the current bone pose instead of the rest pose", async () => {
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+    const backend = createAmmoMmdPhysicsBackend(Ammo, {
+      gravity: [0, 0, 0],
+      fixedTimeStep: 1 / 60,
+      maxSubSteps: 0,
+      resetCatchUpSteps: 0
+    });
+    const context = createStepContext();
+
+    backend.step(context);
+    writeBoneTranslation(context, 0, [0, 5, 0]);
+    context.output.translations.fill(0);
+    context.output.rotations.fill(0);
+    context.output.worldMatricesColumnMajor.fill(0);
+    context.output.updatedBoneIndices.length = 0;
+    backend.reset?.({ seconds: context.seconds, frame: context.frame, frameRate: context.frameRate });
+
+    const resetStep = backend.step(context);
+
+    expect(resetStep.simulated).toBe(false);
+    expect(Array.from(context.output.translations ?? [])).toEqual([0, 0, 0]);
+    expect(context.output.updatedBoneIndices).toEqual([]);
+    backend.dispose?.();
+  });
 });
 
 function createStepContext(): MmdPhysicsStepContext {
@@ -234,4 +261,23 @@ function createRigidBody(
     collisionGroup: 0,
     collisionMask: 0xffff
   };
+}
+
+function writeBoneTranslation(
+  context: MmdPhysicsStepContext,
+  boneIndex: number,
+  translation: [number, number, number]
+): void {
+  const translationOffset = boneIndex * 3;
+  context.inputTranslations[translationOffset] = translation[0];
+  context.inputTranslations[translationOffset + 1] = translation[1];
+  context.inputTranslations[translationOffset + 2] = translation[2];
+  const matrixOffset = boneIndex * 16;
+  context.inputWorldMatricesColumnMajor[matrixOffset] = 1;
+  context.inputWorldMatricesColumnMajor[matrixOffset + 5] = 1;
+  context.inputWorldMatricesColumnMajor[matrixOffset + 10] = 1;
+  context.inputWorldMatricesColumnMajor[matrixOffset + 12] = translation[0];
+  context.inputWorldMatricesColumnMajor[matrixOffset + 13] = translation[1];
+  context.inputWorldMatricesColumnMajor[matrixOffset + 14] = translation[2];
+  context.inputWorldMatricesColumnMajor[matrixOffset + 15] = 1;
 }

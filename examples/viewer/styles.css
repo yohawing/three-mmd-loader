@@ -194,12 +194,34 @@ input:focus-visible {
   top: calc(100% + 6px);
   left: 0;
   display: grid;
-  width: min(214px, calc(100vw - 20px));
-  padding: 5px;
+  gap: 6px;
+  width: min(292px, calc(100vw - 20px));
+  padding: 7px;
   border: 1px solid var(--surface-border);
   border-radius: var(--radius);
   background: rgb(255 255 255 / 98%);
   box-shadow: 0 16px 34px rgb(30 44 58 / 16%);
+}
+
+.load-section {
+  display: grid;
+  gap: 4px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid rgb(202 211 219 / 48%);
+}
+
+.load-section:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.load-section h2 {
+  margin: 0;
+  padding: 0 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
 }
 
 .load-menu-panel button {
@@ -228,7 +250,7 @@ input:focus-visible {
 
 .loaded-files > span {
   display: block;
-  max-width: min(28vw, 300px);
+  max-width: min(19vw, 220px);
   min-width: 0;
   color: var(--text);
   font-size: 12px;
