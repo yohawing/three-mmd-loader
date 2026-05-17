@@ -8,6 +8,7 @@ import {
 import { ThreeMmdLoader, syncMmdSpecularDirection } from "../../dist/three/index.js";
 
 const debugEnabled = new window.URLSearchParams(location.search).has("debug");
+const ammoScriptUrl = "/node_modules/ammo.js/ammo.js";
 
 const canvas = document.querySelector("#viewer-canvas");
 const stage = document.querySelector(".stage");
@@ -35,8 +36,6 @@ if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error("Viewer canvas is missing");
 }
 
-const ammoNamespace = await initAmmoNamespaceSafely();
-
 const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor(0xffffff, 1);
@@ -61,7 +60,9 @@ scene.add(keyLight);
 scene.add(new THREE.AmbientLight(0xffffff, 0.15));
 
 let activePhysicsBackend;
-const loader = new ThreeMmdLoader({ runtime: { frameRate: 30 } });
+let ammoNamespace;
+let ammoScriptLoadPromise;
+const animationLoader = new ThreeMmdLoader({ runtime: { frameRate: 30 } });
 const clock = new THREE.Clock();
 let currentModel;
 let currentMotion;
@@ -284,7 +285,8 @@ async function loadModel(
   try {
     setStatus(`Loading model: ${label}`, "loading");
     clearModel();
-    currentModel = await modelLoader.loadModel(source);
+    const resolvedModelLoader = await modelLoader;
+    currentModel = await resolvedModelLoader.loadModel(source);
     currentModel.mesh.frustumCulled = false;
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
@@ -316,12 +318,12 @@ async function loadModelFolder(files) {
   }
 
   const textureMap = createFolderTextureMap(files, modelFile);
-  const folderLoader = createModelLoader({ textureMap });
   const folderName = modelFile.webkitRelativePath.split("/")[0] || "folder";
 
   try {
     setStatus(`Loading model folder: ${folderName}`, "loading");
     clearModel();
+    const folderLoader = await createModelLoader({ textureMap });
     currentModel = await folderLoader.loadModel(modelFile);
     currentModel.mesh.frustumCulled = false;
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
@@ -356,7 +358,7 @@ async function loadMotion(source, label = source.name ?? "motion") {
     setStatus(`Loading motion: ${label}`, "loading");
     pendingMotionSource = source;
     pendingMotionLabel = label;
-    currentMotion = await loader.loadAnimation(source, currentModel);
+    currentMotion = await animationLoader.loadAnimation(source, currentModel);
     if (currentMotion.clip) {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
       timeline.max = String(Math.max(currentMotion.clip.duration, 0.001));
@@ -382,7 +384,7 @@ async function loadPose(source, label = source.name ?? "pose") {
       return;
     }
     setStatus(`Loading pose: ${label}`, "loading");
-    const poseAnimation = await loader.loadPoseAnimation(source, label, currentModel);
+    const poseAnimation = await animationLoader.loadPoseAnimation(source, label, currentModel);
     if (poseAnimation.clip) {
       currentMotion = poseAnimation;
       currentModel.runtime?.setAnimation(poseAnimation.clip, currentModel.mesh);
@@ -988,8 +990,8 @@ function stripPrefix(path, prefix) {
   return path.startsWith(prefix) ? path.slice(prefix.length) : path;
 }
 
-function createUrlTextureLoader(modelUrl) {
-  return createModelLoader({
+async function createUrlTextureLoader(modelUrl) {
+  return await createModelLoader({
     textureResolver: {
       async resolve(path) {
         return new URL(
@@ -1001,23 +1003,28 @@ function createUrlTextureLoader(modelUrl) {
   });
 }
 
-function createModelLoader(extraOptions = {}) {
+async function createModelLoader(extraOptions = {}) {
   const runtimeOptions = extraOptions.runtime ?? {};
+  const physicsBackend = await createPhysicsBackend();
   return new ThreeMmdLoader({
     ...extraOptions,
     runtime: {
       ...runtimeOptions,
       frameRate: 30,
       physics: "external",
-      physicsBackend: createPhysicsBackend()
+      physicsBackend
     }
   });
 }
 
-function createPhysicsBackend() {
+async function createPhysicsBackend() {
   if (activePhysicsBackend && !activePhysicsBackend.disposed) {
     activePhysicsBackend.dispose?.();
   }
+  if (!ammoNamespace) {
+    setStatus("Loading physics engine...", "loading");
+  }
+  ammoNamespace ??= await initAmmoNamespaceSafely();
   if (ammoNamespace) {
     try {
       activePhysicsBackend = createAmmoMmdPhysicsBackend(ammoNamespace);
@@ -1036,6 +1043,10 @@ function createPhysicsBackend() {
 }
 
 async function initAmmoNamespace() {
+  const scriptLoaded = await loadAmmoScript();
+  if (!scriptLoaded) {
+    return undefined;
+  }
   let ammoCandidate;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -1068,6 +1079,67 @@ async function initAmmoNamespace() {
     reportAmmoInitializationFailure("Ammo()", error);
     return undefined;
   }
+}
+
+function loadAmmoScript() {
+  try {
+    if (getAmmoCandidate()) {
+      return Promise.resolve(true);
+    }
+  } catch (error) {
+    reportAmmoInitializationFailure("Ammo global", error);
+    return Promise.resolve(false);
+  }
+
+  ammoScriptLoadPromise ??= new Promise((resolve) => {
+    const script = document.createElement("script");
+    let settled = false;
+
+    const settle = (loaded, phase, error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.removeEventListener("error", handleWindowError);
+      script.removeEventListener("load", handleLoad);
+      script.removeEventListener("error", handleScriptError);
+      if (!loaded && error) {
+        reportAmmoInitializationFailure(phase, error);
+      }
+      resolve(loaded);
+    };
+
+    const handleWindowError = (event) => {
+      if (!isAmmoScriptErrorEvent(event)) {
+        return;
+      }
+      settle(false, "ammo.js script eval", event.error ?? new Error(event.message));
+    };
+
+    const handleLoad = () => {
+      settle(true);
+    };
+
+    const handleScriptError = () => {
+      settle(false, "ammo.js script load", new Error(`Failed to load ${ammoScriptUrl}`));
+    };
+
+    window.addEventListener("error", handleWindowError);
+    script.addEventListener("load", handleLoad);
+    script.addEventListener("error", handleScriptError);
+    script.async = true;
+    script.src = ammoScriptUrl;
+    document.head.appendChild(script);
+  });
+
+  return ammoScriptLoadPromise;
+}
+
+function isAmmoScriptErrorEvent(event) {
+  if (!event.filename) {
+    return false;
+  }
+  return event.filename === new URL(ammoScriptUrl, location.href).href;
 }
 
 function getAmmoCandidate() {
