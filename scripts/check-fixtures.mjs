@@ -10,11 +10,14 @@
 //   node scripts/check-fixtures.mjs --limit 20      # limit per category
 //   node scripts/check-fixtures.mjs --bail          # stop at first failure
 //   node scripts/check-fixtures.mjs --no-three      # parse only, skip PMX/PMD Three.js assembly
+//   node scripts/check-fixtures.mjs --physics       # also smoke-test Ammo world init + one physics step
+//   node scripts/check-fixtures.mjs --no-physics    # explicitly disable the physics stage
 //   node scripts/check-fixtures.mjs ../data/fixtures.json
 //   node scripts/check-fixtures.mjs --limit 20 ../data/fixtures.json
 //   FIXTURES_JSON=path/to/fixtures.json node ...    # override fixture index
 
 import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
 import { resolve, dirname, relative, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,7 +27,9 @@ import { parsePmd } from "../dist/parser/model/PmdModelParser.js";
 import { parsePmx } from "../dist/parser/model/PmxModelParser.js";
 import { parseVmd } from "../dist/parser/vmd/VmdParser.js";
 import { parseVpdPose } from "../dist/parser/vpd/VpdMetadataParser.js";
+import { createAmmoMmdPhysicsBackend, validateConcreteMmdPhysicsStepContext } from "../dist/physics/index.js";
 import { ThreeMmdLoader } from "../dist/three/index.js";
+import { parseLoaderMmdModelData } from "../dist/three/modelAssembly.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "..");
@@ -48,7 +53,8 @@ function parseArgs(argv) {
     limit: Infinity,
     bail: false,
     fixturesPath: undefined,
-    three: true
+    three: true,
+    physics: false
   };
   for (let i = 0; i < argv.length; i += 1) {
     const value = argv[i];
@@ -56,6 +62,10 @@ function parseArgs(argv) {
       args.bail = true;
     } else if (value === "--no-three") {
       args.three = false;
+    } else if (value === "--physics") {
+      args.physics = true;
+    } else if (value === "--no-physics") {
+      args.physics = false;
     } else if (value === "--limit") {
       args.limit = Number.parseInt(argv[++i] ?? "", 10);
       if (!Number.isFinite(args.limit) || args.limit <= 0) {
@@ -91,6 +101,7 @@ async function main() {
   const results = { startedAt: new Date().toISOString(), categories: {} };
   let totalChecked = 0;
   let totalFailed = 0;
+  const physicsRuntime = createPhysicsRuntime();
 
   outer: for (const category of args.categories) {
     const entries = Object.entries(byExtension[category] ?? {}).slice(0, args.limit);
@@ -107,6 +118,9 @@ async function main() {
         elapsedMs: 0,
         bytes: 0
       };
+      if (args.physics) {
+        record.physics = createSkippedPhysicsSummary("not applicable");
+      }
       let start;
       totalChecked += 1;
       try {
@@ -126,6 +140,7 @@ async function main() {
           }
         }
         record.summary = summarizeParsed(category, parsed);
+        let modelData;
         if (args.three && THREE_MODEL_CATEGORIES.has(category)) {
           const textureReferences = collectMaterialTextureReferences(parsed);
           const textureWarnings = [];
@@ -152,9 +167,21 @@ async function main() {
               record.status = "warn";
             }
           }
+          if (args.physics) {
+            modelData = parseLoaderMmdModelData(buffer);
+          }
+        }
+        if (args.physics) {
+          record.physics = await runPhysicsStage({
+            category,
+            buffer,
+            modelData,
+            threeEnabled: args.three,
+            physicsRuntime,
+            record
+          });
         }
         record.elapsedMs = +(performance.now() - start).toFixed(2);
-        summary.passed += 1;
       } catch (error) {
         if (typeof start === "number") {
           record.elapsedMs = +(performance.now() - start).toFixed(2);
@@ -165,8 +192,12 @@ async function main() {
           message: error?.message ?? String(error),
           stack: error?.stack?.split("\n").slice(0, 4).join("\n")
         };
+      }
+      if (record.status === "fail") {
         summary.failed += 1;
         totalFailed += 1;
+      } else {
+        summary.passed += 1;
       }
       summary.files.push(record);
 
@@ -183,6 +214,11 @@ async function main() {
       console.log(`${icon} ${key} ${size} ${ms}  ${relativePath}`);
       if (record.status === "fail") {
         console.log(`     -> ${record.error.message}`);
+        if (Array.isArray(record.diagnostics)) {
+          for (const diagnostic of record.diagnostics) {
+            console.log(`     ~ ${diagnostic.level}/${diagnostic.code}: ${diagnostic.message}`);
+          }
+        }
       } else {
         if (Array.isArray(record.diagnostics)) {
           for (const diagnostic of record.diagnostics) {
@@ -195,6 +231,13 @@ async function main() {
               `     ~ texture/${warning.textureKind}: missing ${warning.path}`
             );
           }
+        }
+        if (record.physics?.attempted === true) {
+          console.log(
+            `     ~ physics: ${record.physics.rigidBodies} bodies, ${record.physics.joints} joints, ${record.physics.durationMs.toFixed(1)}ms`
+          );
+        } else if (args.physics && record.physics?.skipReason) {
+          console.log(`     ~ physics: skipped (${record.physics.skipReason})`);
         }
       }
 
@@ -219,6 +262,286 @@ async function main() {
   if (totalFailed > 0) {
     process.exitCode = 1;
   }
+}
+
+function createPhysicsRuntime() {
+  return {
+    state: "pending",
+    Ammo: undefined,
+    failure: undefined
+  };
+}
+
+async function initializePhysicsRuntime(runtime) {
+  if (runtime.state === "ready") {
+    return runtime.Ammo;
+  }
+  if (runtime.state === "failed") {
+    throw runtime.failure.error;
+  }
+
+  try {
+    const ammoModule = await import("ammo.js");
+    const ammoExport = ammoModule.default ?? ammoModule;
+    const Ammo =
+      typeof ammoExport === "function" && typeof ammoExport.btVector3 !== "function"
+        ? await ammoExport()
+        : ammoExport;
+    runtime.state = "ready";
+    runtime.Ammo = Ammo;
+    return Ammo;
+  } catch (error) {
+    runtime.state = "failed";
+    runtime.failure = {
+      code: isAmmoHeapAllocationError(error)
+        ? "PHYSICS_AMMO_HEAP_ALLOCATION_FAILED"
+        : "PHYSICS_AMMO_INIT_FAILED",
+      error
+    };
+    throw error;
+  }
+}
+
+async function runPhysicsStage({
+  category,
+  buffer,
+  modelData,
+  threeEnabled,
+  physicsRuntime,
+  record
+}) {
+  if (!THREE_MODEL_CATEGORIES.has(category)) {
+    return createSkippedPhysicsSummary("non-model fixture");
+  }
+  if (!threeEnabled) {
+    return createSkippedPhysicsSummary("three disabled");
+  }
+  if (physicsRuntime.state === "failed") {
+    addPhysicsDiagnostic(record, physicsRuntime.failure.code, physicsRuntime.failure.error);
+    return createSkippedPhysicsSummary("ammo init failed", modelData);
+  }
+
+  const start = performance.now();
+  let Ammo;
+  try {
+    Ammo = await initializePhysicsRuntime(physicsRuntime);
+  } catch (error) {
+    addPhysicsDiagnostic(record, physicsRuntime.failure.code, error);
+    return {
+      ...createSkippedPhysicsSummary("ammo init failed", modelData),
+      durationMs: +(performance.now() - start).toFixed(2)
+    };
+  }
+
+  const resolvedModelData = modelData ?? parseLoaderMmdModelData(buffer);
+  const context = createMinimalPhysicsStepContext(resolvedModelData);
+  const validation = validateConcreteMmdPhysicsStepContext(context);
+  if (!validation.valid) {
+    const error = new Error(
+      `Invalid fixture physics step context: ${validation.diagnostics
+        .map((diagnostic) => diagnostic.message)
+        .join("; ")}`
+    );
+    addPhysicsDiagnostic(record, "PHYSICS_WORLD_INIT_FAILED", error);
+    return createAttemptedPhysicsSummary(start, resolvedModelData, Ammo);
+  }
+
+  const backend = createAmmoMmdPhysicsBackend(Ammo);
+  try {
+    context.seconds = 0;
+    context.deltaSeconds = 0;
+    context.frame = 0;
+    backend.step(context);
+  } catch (error) {
+    addPhysicsDiagnostic(record, "PHYSICS_WORLD_INIT_FAILED", error);
+    backend.dispose?.();
+    return createAttemptedPhysicsSummary(start, resolvedModelData, Ammo);
+  }
+
+  try {
+    context.seconds = 1 / 60;
+    context.deltaSeconds = 1 / 60;
+    context.frame = 1;
+    backend.step(context);
+  } catch (error) {
+    addPhysicsDiagnostic(record, "PHYSICS_STEP_FAILED", error);
+  } finally {
+    backend.dispose?.();
+  }
+
+  return createAttemptedPhysicsSummary(start, resolvedModelData, Ammo);
+}
+
+function createSkippedPhysicsSummary(skipReason, modelData) {
+  return {
+    attempted: false,
+    durationMs: 0,
+    rigidBodies: modelData?.rigidBodies?.length ?? 0,
+    joints: modelData?.joints?.length ?? 0,
+    ammoHeapBytes: null,
+    skipReason
+  };
+}
+
+function createAttemptedPhysicsSummary(start, modelData, Ammo) {
+  return {
+    attempted: true,
+    durationMs: +(performance.now() - start).toFixed(2),
+    rigidBodies: modelData?.rigidBodies?.length ?? 0,
+    joints: modelData?.joints?.length ?? 0,
+    ammoHeapBytes: getAmmoHeapBytes(Ammo)
+  };
+}
+
+function addPhysicsDiagnostic(record, code, error) {
+  record.status = "fail";
+  record.diagnostics = [
+    ...(Array.isArray(record.diagnostics) ? record.diagnostics : []),
+    {
+      level: "error",
+      code,
+      message: error?.message ?? String(error)
+    }
+  ];
+  record.error = {
+    name: error?.name ?? "Error",
+    message: `${code}: ${error?.message ?? String(error)}`,
+    stack: error?.stack?.split("\n").slice(0, 4).join("\n")
+  };
+}
+
+function isAmmoHeapAllocationError(error) {
+  return error?.name === "RangeError" && /allocation/i.test(error?.message ?? "");
+}
+
+function getAmmoHeapBytes(Ammo) {
+  return Ammo?.HEAPU8?.buffer?.byteLength ?? Ammo?.HEAP8?.buffer?.byteLength ?? null;
+}
+
+function createMinimalPhysicsStepContext(modelData) {
+  const boneCount = modelData.skeleton.bones.length;
+  const inputTranslations = new Float32Array(boneCount * 3);
+  const inputRotations = new Float32Array(boneCount * 4);
+  const inputWorldMatricesColumnMajor = new Float32Array(boneCount * 16);
+
+  modelData.skeleton.bones.forEach((bone, index) => {
+    const translationOffset = index * 3;
+    inputTranslations[translationOffset] = bone.position[0];
+    inputTranslations[translationOffset + 1] = bone.position[1];
+    inputTranslations[translationOffset + 2] = bone.position[2];
+
+    const rotationOffset = index * 4;
+    inputRotations[rotationOffset] = 0;
+    inputRotations[rotationOffset + 1] = 0;
+    inputRotations[rotationOffset + 2] = 0;
+    inputRotations[rotationOffset + 3] = 1;
+
+    writeIdentityMatrix(inputWorldMatricesColumnMajor, index, bone.position);
+  });
+
+  const context = {
+    seconds: 1 / 60,
+    deltaSeconds: 1 / 60,
+    frame: 1,
+    frameRate: 60,
+    skeleton: {
+      bones: modelData.skeleton.bones.map((bone, index) => ({
+        index,
+        name: bone.englishName || bone.name,
+        parentIndex: bone.parentIndex,
+        restTranslation: [bone.position[0], bone.position[1], bone.position[2]],
+        restRotation: [0, 0, 0, 1]
+      }))
+    },
+    rigidBodies: modelData.rigidBodies
+      .filter((rigidBody) => rigidBody.shape !== "unknown" && rigidBody.mode !== "unknown")
+      .map((rigidBody, index) => ({
+        index,
+        name: rigidBody.englishName || rigidBody.name,
+        boneIndex: rigidBody.boneIndex,
+        motionType: rigidBody.mode === "dynamicBone" ? "dynamicWithBone" : rigidBody.mode,
+        shape: {
+          type: rigidBody.shape,
+          size: rigidBody.size
+        },
+        localTranslation: rigidBody.position,
+        localRotation: eulerXyzToQuaternion(rigidBody.rotation),
+        mass: rigidBody.mass,
+        linearDamping: rigidBody.linearDamping,
+        angularDamping: rigidBody.angularDamping,
+        restitution: rigidBody.restitution,
+        friction: rigidBody.friction,
+        collisionGroup: rigidBody.group,
+        collisionMask: rigidBody.mask
+      })),
+    joints: modelData.joints.map((joint, index) => ({
+      index,
+      name: joint.englishName || joint.name,
+      rigidBodyIndexA: joint.rigidBodyIndexA,
+      rigidBodyIndexB: joint.rigidBodyIndexB,
+      translation: joint.position,
+      rotation: eulerXyzToQuaternion(joint.rotation),
+      linearLimit: {
+        lower: joint.translationLowerLimit,
+        upper: joint.translationUpperLimit
+      },
+      angularLimit: {
+        lower: joint.rotationLowerLimit,
+        upper: joint.rotationUpperLimit
+      },
+      spring: {
+        linear: joint.springTranslationFactor,
+        angular: joint.springRotationFactor
+      }
+    })),
+    inputTranslations,
+    inputRotations,
+    inputWorldMatricesColumnMajor,
+    output: {
+      translations: new Float32Array(inputTranslations),
+      rotations: new Float32Array(inputRotations),
+      worldMatricesColumnMajor: new Float32Array(inputWorldMatricesColumnMajor),
+      updatedBoneIndices: []
+    }
+  };
+
+  return context;
+}
+
+function writeIdentityMatrix(buffer, index, translation) {
+  const offset = index * 16;
+  buffer[offset] = 1;
+  buffer[offset + 5] = 1;
+  buffer[offset + 10] = 1;
+  buffer[offset + 12] = translation[0];
+  buffer[offset + 13] = translation[1];
+  buffer[offset + 14] = translation[2];
+  buffer[offset + 15] = 1;
+}
+
+function eulerXyzToQuaternion(euler) {
+  const halfX = euler[0] * 0.5;
+  const halfY = euler[1] * 0.5;
+  const halfZ = euler[2] * 0.5;
+  const sx = Math.sin(halfX);
+  const cx = Math.cos(halfX);
+  const sy = Math.sin(halfY);
+  const cy = Math.cos(halfY);
+  const sz = Math.sin(halfZ);
+  const cz = Math.cos(halfZ);
+  const rotation = [
+    sx * cy * cz + cx * sy * sz,
+    cx * sy * cz - sx * cy * sz,
+    cx * cy * sz + sx * sy * cz,
+    cx * cy * cz - sx * sy * sz
+  ];
+  const length = Math.hypot(...rotation) || 1;
+  return [
+    rotation[0] / length,
+    rotation[1] / length,
+    rotation[2] / length,
+    rotation[3] / length
+  ];
 }
 
 function summarizeParsed(category, parsed) {

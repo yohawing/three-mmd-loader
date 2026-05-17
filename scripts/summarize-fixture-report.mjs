@@ -24,7 +24,12 @@ for (const [category, summary] of Object.entries(report.categories)) {
     console.log(`-- Hard failures (${fails.length}) --`);
     for (const file of fails) {
       console.log(`  ${file.key} ${file.path}`);
-      console.log(`    ${file.error.message}`);
+      console.log(`    ${file.error?.message ?? "No top-level error message"}`);
+      for (const diagnostic of file.diagnostics ?? []) {
+        if (diagnostic.level === "error") {
+          console.log(`    error/${diagnostic.code}: ${diagnostic.message}`);
+        }
+      }
     }
   }
   if (warnErrors.length > 0) {
