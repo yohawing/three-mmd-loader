@@ -119,4 +119,21 @@ describe("internal loader model data contract", () => {
       "LOADER_MMD_MODEL_POSITIONS_NON_FINITE:1"
     );
   });
+
+  it("sanitizes non-finite normals at the loader model boundary", () => {
+    const modelData = createMinimalModelData();
+    modelData.geometry.normals[0] = Number.NaN;
+    modelData.geometry.normals[1] = Number.NaN;
+    modelData.geometry.normals[2] = Number.NaN;
+
+    validateLoaderMmdModelData(modelData);
+
+    expect(Array.from(modelData.geometry.normals.slice(0, 3))).toEqual([0, 0, 1]);
+    expect(modelData.metadata.diagnostics).toContainEqual({
+      level: "warning",
+      code: "MODEL_NORMALS_SANITIZED",
+      message:
+        "1 vertex normals contained non-finite values and were recomputed from neighbouring face normals."
+    });
+  });
 });
