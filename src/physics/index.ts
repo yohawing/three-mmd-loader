@@ -15,12 +15,7 @@ export interface MmdPhysicsDiagnostic {
 
 export type MmdPhysicsVector3Tuple = readonly [x: number, y: number, z: number];
 
-export type MmdPhysicsQuaternionTuple = readonly [
-  x: number,
-  y: number,
-  z: number,
-  w: number
-];
+export type MmdPhysicsQuaternionTuple = readonly [x: number, y: number, z: number, w: number];
 
 export type MmdPhysicsEulerTuple = readonly [x: number, y: number, z: number];
 
@@ -53,6 +48,7 @@ export interface MmdPhysicsSkeletonBone {
   readonly parentIndex?: number;
   readonly restTranslation?: MmdPhysicsVector3Tuple;
   readonly restRotation?: MmdPhysicsQuaternionTuple;
+  readonly transformAfterPhysics?: boolean;
 }
 
 export interface MmdPhysicsSkeleton {
@@ -224,6 +220,7 @@ export interface MmdPhysicsBackend {
   reset?(context?: MmdPhysicsResetContext): void;
   dispose?(): void;
   diagnostics?(): readonly MmdPhysicsDiagnostic[];
+  debugRigidBodyWorldTransformsColumnMajor?(): readonly MmdPhysicsMatrix4ColumnMajorTuple[];
 }
 
 export interface DisabledMmdPhysicsBackendOptions {
@@ -254,9 +251,7 @@ export class DisabledMmdPhysicsBackend implements MmdPhysicsBackend {
 
   step(_context: MmdPhysicsStepContext): MmdPhysicsStepResult {
     const diagnostics = this.diagnostics();
-    return diagnostics.length > 0
-      ? { simulated: false, diagnostics }
-      : { simulated: false };
+    return diagnostics.length > 0 ? { simulated: false, diagnostics } : { simulated: false };
   }
 
   reset(_context?: MmdPhysicsResetContext): void {
@@ -435,10 +430,7 @@ function pushStepContextDiagnostic(
   });
 }
 
-function pushMissingStepContextDiagnostic(
-  diagnostics: MmdPhysicsDiagnostic[],
-  path: string
-): void {
+function pushMissingStepContextDiagnostic(diagnostics: MmdPhysicsDiagnostic[], path: string): void {
   pushStepContextDiagnostic(
     diagnostics,
     "PHYSICS_STEP_CONTEXT_MISSING_REQUIRED",
@@ -606,10 +598,7 @@ function validateIndexBuffer(
   }
 }
 
-function validateSkeleton(
-  skeleton: MmdPhysicsSkeleton,
-  diagnostics: MmdPhysicsDiagnostic[]
-): void {
+function validateSkeleton(skeleton: MmdPhysicsSkeleton, diagnostics: MmdPhysicsDiagnostic[]): void {
   const seen = new Set<number>();
   for (let i = 0; i < skeleton.bones.length; i += 1) {
     const bone = skeleton.bones[i];
@@ -617,7 +606,13 @@ function validateSkeleton(
       pushInvalidValueDiagnostic(diagnostics, `skeleton.bones[${i}]`, bone);
       continue;
     }
-    validateUniqueIndex(bone.index, skeleton.bones.length, seen, diagnostics, `skeleton.bones[${i}].index`);
+    validateUniqueIndex(
+      bone.index,
+      skeleton.bones.length,
+      seen,
+      diagnostics,
+      `skeleton.bones[${i}].index`
+    );
     validateIntegerIndex(
       bone.parentIndex,
       skeleton.bones.length,
@@ -649,14 +644,26 @@ function validateRigidBodies(
       pushInvalidValueDiagnostic(diagnostics, `rigidBodies[${i}]`, rigidBody);
       continue;
     }
-    validateUniqueIndex(rigidBody.index, rigidBodies.length, seen, diagnostics, `rigidBodies[${i}].index`);
+    validateUniqueIndex(
+      rigidBody.index,
+      rigidBodies.length,
+      seen,
+      diagnostics,
+      `rigidBodies[${i}].index`
+    );
     validateEnumValue(
       rigidBody.motionType,
       ["static", "dynamic", "dynamicWithBone"],
       diagnostics,
       `rigidBodies[${i}].motionType`
     );
-    validateIntegerIndex(rigidBody.boneIndex, boneCount, diagnostics, `rigidBodies[${i}].boneIndex`, true);
+    validateIntegerIndex(
+      rigidBody.boneIndex,
+      boneCount,
+      diagnostics,
+      `rigidBodies[${i}].boneIndex`,
+      true
+    );
     if (!rigidBody.shape) {
       pushInvalidValueDiagnostic(diagnostics, `rigidBodies[${i}].shape`, rigidBody.shape);
     } else {
@@ -672,10 +679,18 @@ function validateRigidBodies(
     validateTuple(rigidBody.localRotation, 4, diagnostics, `rigidBodies[${i}].localRotation`);
     validateOptionalFinite(rigidBody.mass, diagnostics, `rigidBodies[${i}].mass`);
     validateOptionalFinite(rigidBody.linearDamping, diagnostics, `rigidBodies[${i}].linearDamping`);
-    validateOptionalFinite(rigidBody.angularDamping, diagnostics, `rigidBodies[${i}].angularDamping`);
+    validateOptionalFinite(
+      rigidBody.angularDamping,
+      diagnostics,
+      `rigidBodies[${i}].angularDamping`
+    );
     validateOptionalFinite(rigidBody.restitution, diagnostics, `rigidBodies[${i}].restitution`);
     validateOptionalFinite(rigidBody.friction, diagnostics, `rigidBodies[${i}].friction`);
-    validateOptionalFinite(rigidBody.collisionGroup, diagnostics, `rigidBodies[${i}].collisionGroup`);
+    validateOptionalFinite(
+      rigidBody.collisionGroup,
+      diagnostics,
+      `rigidBodies[${i}].collisionGroup`
+    );
     validateOptionalFinite(rigidBody.collisionMask, diagnostics, `rigidBodies[${i}].collisionMask`);
   }
 }
@@ -693,8 +708,18 @@ function validateJoints(
       continue;
     }
     validateUniqueIndex(joint.index, joints.length, seen, diagnostics, `joints[${i}].index`);
-    validateIntegerIndex(joint.rigidBodyIndexA, rigidBodyCount, diagnostics, `joints[${i}].rigidBodyIndexA`);
-    validateIntegerIndex(joint.rigidBodyIndexB, rigidBodyCount, diagnostics, `joints[${i}].rigidBodyIndexB`);
+    validateIntegerIndex(
+      joint.rigidBodyIndexA,
+      rigidBodyCount,
+      diagnostics,
+      `joints[${i}].rigidBodyIndexA`
+    );
+    validateIntegerIndex(
+      joint.rigidBodyIndexB,
+      rigidBodyCount,
+      diagnostics,
+      `joints[${i}].rigidBodyIndexB`
+    );
     validateTuple(joint.translation, 3, diagnostics, `joints[${i}].translation`);
     validateTuple(joint.rotation, 4, diagnostics, `joints[${i}].rotation`);
     validateJointLimit(joint.linearLimit, diagnostics, `joints[${i}].linearLimit`);
@@ -973,7 +998,12 @@ function cloneContact(
 
   if (
     (contact.distance !== undefined &&
-      !validateFiniteNumber(contact.distance, diagnostics, `contacts[${index}].distance`, nonFinite)) ||
+      !validateFiniteNumber(
+        contact.distance,
+        diagnostics,
+        `contacts[${index}].distance`,
+        nonFinite
+      )) ||
     (contact.impulse !== undefined &&
       !validateFiniteNumber(contact.impulse, diagnostics, `contacts[${index}].impulse`, nonFinite))
   ) {

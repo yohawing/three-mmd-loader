@@ -63,6 +63,26 @@ describe("DefaultMmdRuntime parity evidence", () => {
     }
   });
 
+  it("exposes stage debug matrices for external runtime numeric evidence", async () => {
+    const { model, runtime, clip } = await loadRuntimeFixture("test_1bone_cube.pmx", "test_1bone_cube_motion.vmd");
+
+    runtime.reset(0);
+    runtime.setAnimation(clip, model.mesh);
+    runtime.evaluate(0.15);
+
+    const debugState = runtime.debugState();
+    const finalMatrices = extractMmdWorldMatrices(model.mesh);
+
+    expect(debugState.stages.vmdInterpolation.worldMatricesColumnMajor).toHaveLength(finalMatrices.length);
+    expect(debugState.stages.appendTransform.worldMatricesColumnMajor).toHaveLength(finalMatrices.length);
+    expect(debugState.stages.ik.worldMatricesColumnMajor).toHaveLength(finalMatrices.length);
+    expect(debugState.stages.physics.worldMatricesColumnMajor).toEqual(finalMatrices);
+
+    const mutableStage = debugState.stages.physics.worldMatricesColumnMajor as number[];
+    mutableStage[0] = 999;
+    expect(runtime.debugState().stages.physics.worldMatricesColumnMajor[0]).toBe(finalMatrices[0]);
+  });
+
   it("evaluates the joint orient fixture without non-finite world matrices", async () => {
     const { model, runtime, clip } = await loadRuntimeFixture("joint_orient_test.pmx", "joint_orient_test.vmd");
 

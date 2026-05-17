@@ -35,7 +35,9 @@ interface AmmoStepContext {
   readonly joints: readonly AmmoJointData[];
   readonly inputTranslations: NonNullable<MmdPhysicsStepContext["inputTranslations"]>;
   readonly inputRotations: NonNullable<MmdPhysicsStepContext["inputRotations"]>;
-  readonly inputWorldMatricesColumnMajor: NonNullable<MmdPhysicsStepContext["inputWorldMatricesColumnMajor"]>;
+  readonly inputWorldMatricesColumnMajor: NonNullable<
+    MmdPhysicsStepContext["inputWorldMatricesColumnMajor"]
+  >;
   readonly output: NonNullable<MmdPhysicsStepContext["output"]>;
   readonly bonePhysicsToggles: MmdPhysicsStepContext["bonePhysicsToggles"];
   readonly morphImpulses: MmdPhysicsStepContext["morphImpulses"];
@@ -317,6 +319,9 @@ const DEFAULT_FIXED_TIME_STEP = 1 / 60;
 const DEFAULT_MAX_SUB_STEPS = 4;
 const DEFAULT_SPLIT_IMPULSE = true;
 const DEFAULT_SPLIT_IMPULSE_PENETRATION_THRESHOLD = -0.04;
+const DEFAULT_RESET_CATCH_UP_STEPS = 8;
+const DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_SCALE = 11;
+const DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_MIN_MASS = 0.5;
 const MAX_FRAME_STEP_SECONDS = 1 / 15;
 const MIN_DYNAMIC_BODY_MASS = 0.001;
 const MIN_SHAPE_SIZE = 0.001;
@@ -403,9 +408,13 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     if (this.pendingResetPoseSync) {
       this.syncAllBodiesToCurrentPose(ammoContext);
       this.applyBodyPhysicsToggles(ammoContext);
-      if (dt > 0) {
-        this.pendingResetPoseSync = false;
+      this.syncDynamicBodies(ammoContext, { dynamicWithBoneRotationFeedbackScale: 1 });
+      this.restoreTemporalKinematicBodies();
+      const fixedTimeStep = this.options.fixedTimeStep ?? DEFAULT_FIXED_TIME_STEP;
+      for (let step = 0; step < DEFAULT_RESET_CATCH_UP_STEPS; step += 1) {
+        world.stepSimulation(fixedTimeStep, 0, fixedTimeStep);
       }
+      this.pendingResetPoseSync = false;
       const debug = this.captureStepDebug(context);
       return debug ? { simulated: false, debug } : { simulated: false };
     }
@@ -657,50 +666,44 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
   ): AmmoRigidBodyBinding {
     const Ammo = this.ammo;
     const shape = this.createShape(body);
-    const transform = new Ammo.btTransform();
+    const transform = this.registerWorldResource(new Ammo.btTransform());
+    transform.setIdentity();
+    const bodyWorld = this.bodyWorldTransform(body, context);
+    const physicsBodyWorld = mmdTransformToPhysics(bodyWorld);
+    this.setTransformOrigin(transform, physicsBodyWorld.position);
+    this.setTransformQuaternion(transform, physicsBodyWorld.rotation);
+    const motionState = new Ammo.btDefaultMotionState(transform);
+    const mass = body.mode === "static" ? 0 : Math.max(body.mass, MIN_DYNAMIC_BODY_MASS);
+    const inertia = new Ammo.btVector3(0, 0, 0);
     try {
-      transform.setIdentity();
-      const bodyWorld = this.bodyWorldTransform(body, context);
-      const physicsBodyWorld = mmdTransformToPhysics(bodyWorld);
-      this.setTransformOrigin(transform, physicsBodyWorld.position);
-      this.setTransformQuaternion(transform, physicsBodyWorld.rotation);
-      const motionState = new Ammo.btDefaultMotionState(transform);
-      const mass = body.mode === "static" ? 0 : Math.max(body.mass, MIN_DYNAMIC_BODY_MASS);
-      const inertia = new Ammo.btVector3(0, 0, 0);
-      try {
-        if (mass > 0) {
-          shape.calculateLocalInertia(mass, inertia);
-        }
-        const info = new Ammo.btRigidBodyConstructionInfo(mass, motionState, shape, inertia);
-        try {
-          info.set_m_additionalDamping?.(this.options.additionalDamping ?? false);
-          const rigidBody = new Ammo.btRigidBody(info);
-          rigidBody.setDamping(body.linearDamping, body.angularDamping);
-          rigidBody.setRestitution(body.restitution);
-          rigidBody.setFriction(body.friction);
-          rigidBody.setSleepingThresholds?.(0, 0);
-          this.configureCollisionFlags(rigidBody, body);
-          this.configureAdditionalDamping(rigidBody);
-          return {
-            rigidBody,
-            shape,
-            motionState,
-            rigidBodyPointer: Ammo.getPointer?.(rigidBody),
-            body,
-            effectiveMode: body.mode,
-            baseCollisionFlags: rigidBody.getCollisionFlags?.(),
-            temporalKinematic: false,
-            physicsEnabled: undefined,
-            disabledSyncMode: undefined
-          };
-        } finally {
-          this.destroy(info);
-        }
-      } finally {
-        this.destroy(inertia);
+      if (mass > 0) {
+        shape.calculateLocalInertia(mass, inertia);
       }
+      const info = this.registerWorldResource(
+        new Ammo.btRigidBodyConstructionInfo(mass, motionState, shape, inertia)
+      );
+      info.set_m_additionalDamping?.(this.options.additionalDamping ?? false);
+      const rigidBody = new Ammo.btRigidBody(info);
+      rigidBody.setDamping(body.linearDamping, body.angularDamping);
+      rigidBody.setRestitution(body.restitution);
+      rigidBody.setFriction(body.friction);
+      rigidBody.setSleepingThresholds?.(0, 0);
+      this.configureCollisionFlags(rigidBody, body);
+      this.configureAdditionalDamping(rigidBody);
+      return {
+        rigidBody,
+        shape,
+        motionState,
+        rigidBodyPointer: Ammo.getPointer?.(rigidBody),
+        body,
+        effectiveMode: body.mode,
+        baseCollisionFlags: rigidBody.getCollisionFlags?.(),
+        temporalKinematic: false,
+        physicsEnabled: undefined,
+        disabledSyncMode: undefined
+      };
     } finally {
-      this.destroy(transform);
+      this.destroy(inertia);
     }
   }
 
@@ -798,6 +801,16 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     };
   }
 
+  private bodyRestTransform(body: AmmoRigidBodyData): {
+    position: [number, number, number];
+    rotation: [number, number, number, number];
+  } {
+    return {
+      position: [...body.position],
+      rotation: body.rotation
+    };
+  }
+
   private createConstraints(context: AmmoStepContext): void {
     const world = this.world;
     if (!world?.addConstraint) {
@@ -848,21 +861,18 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     }
     const constraint = new Constraint(bindingA.rigidBody, bindingB.rigidBody, frameA, frameB, true);
     const limits = mmdJointLimitsToPhysics(joint);
-    const linearLowerLimit = this.vector(limits.translationLowerLimit);
-    const linearUpperLimit = this.vector(limits.translationUpperLimit);
-    const angularLowerLimit = this.vector(limits.rotationLowerLimit);
-    const angularUpperLimit = this.vector(limits.rotationUpperLimit);
-    try {
-      constraint.setLinearLowerLimit(linearLowerLimit);
-      constraint.setLinearUpperLimit(linearUpperLimit);
-      constraint.setAngularLowerLimit(angularLowerLimit);
-      constraint.setAngularUpperLimit(angularUpperLimit);
-    } finally {
-      this.destroy(angularUpperLimit);
-      this.destroy(angularLowerLimit);
-      this.destroy(linearUpperLimit);
-      this.destroy(linearLowerLimit);
-    }
+    constraint.setLinearLowerLimit(
+      this.registerWorldResource(this.vector(limits.translationLowerLimit))
+    );
+    constraint.setLinearUpperLimit(
+      this.registerWorldResource(this.vector(limits.translationUpperLimit))
+    );
+    constraint.setAngularLowerLimit(
+      this.registerWorldResource(this.vector(limits.rotationLowerLimit))
+    );
+    constraint.setAngularUpperLimit(
+      this.registerWorldResource(this.vector(limits.rotationUpperLimit))
+    );
     this.configureConstraintStopErp(constraint);
     this.configureSpring(constraint, joint);
     return constraint;
@@ -1055,7 +1065,9 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     for (const binding of this.bindings) {
       this.setRigidBodyWorldTransform(
         binding.rigidBody,
-        this.bodyWorldTransform(binding.body, context)
+        binding.body.mode === "static"
+          ? this.bodyWorldTransform(binding.body, context)
+          : this.bodyRestTransform(binding.body)
       );
       this.resetBodyVelocity(binding.rigidBody);
       binding.disabledSyncMode = undefined;
@@ -1271,7 +1283,10 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     }
   }
 
-  private syncDynamicBodies(context: AmmoStepContext): void {
+  private syncDynamicBodies(
+    context: AmmoStepContext,
+    options: { readonly dynamicWithBoneRotationFeedbackScale?: number } = {}
+  ): void {
     const Ammo = this.ammo;
     const transform = new Ammo.btTransform();
     const worldCache = new PhysicsWorldTransformCache(context);
@@ -1302,15 +1317,29 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       const boneWorldRotation = normalizeQuaternion(
         multiplyQuaternions(bodyWorld.rotation, invertQuaternion(offset.rotation))
       );
+      const rotationFeedbackScale =
+        binding.effectiveMode === "dynamicWithBone" &&
+        body.mass >= DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_MIN_MASS
+          ? (options.dynamicWithBoneRotationFeedbackScale ??
+            DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_SCALE)
+          : 1;
+      const outputBoneWorldRotation =
+        binding.effectiveMode === "dynamicWithBone"
+          ? scaleQuaternionDelta(
+              currentBoneWorld.rotation,
+              boneWorldRotation,
+              rotationFeedbackScale
+            )
+          : boneWorldRotation;
       const boneWorld = {
         position:
           binding.effectiveMode === "dynamicWithBone"
             ? currentBoneWorld.position
             : subtractVectors(
                 bodyWorld.position,
-                rotateVectorByQuaternion(offset.position, boneWorldRotation)
+                rotateVectorByQuaternion(offset.position, outputBoneWorldRotation)
               ),
-        rotation: boneWorldRotation
+        rotation: outputBoneWorldRotation
       };
       const local = worldCache.toLocal(boneWorld, body.boneIndex);
       writeVector3ToBuffer(context.output.translations, body.boneIndex, local.position);
@@ -1377,7 +1406,9 @@ function createAmmoStepContext(context: MmdPhysicsStepContext): AmmoStepContext 
         index: bone.index,
         name: bone.name,
         parentIndex: bone.parentIndex ?? -1,
-        position: tuple3(bone.restTranslation ?? readVector3(required.inputTranslations, bone.index))
+        position: tuple3(
+          bone.restTranslation ?? readVector3(required.inputTranslations, bone.index)
+        )
       }))
     },
     rigidBodies: required.rigidBodies.map((body) => ({
@@ -1471,7 +1502,10 @@ function tuple4(values: readonly number[]): AmmoQuaternionTuple {
   return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 1];
 }
 
-function readVector3(buffer: NonNullable<MmdPhysicsStepContext["inputTranslations"]>, index: number): AmmoVector3Tuple {
+function readVector3(
+  buffer: NonNullable<MmdPhysicsStepContext["inputTranslations"]>,
+  index: number
+): AmmoVector3Tuple {
   const offset = index * 3;
   return [buffer[offset] ?? 0, buffer[offset + 1] ?? 0, buffer[offset + 2] ?? 0];
 }
@@ -1659,9 +1693,7 @@ function physicsTransformToMmd(transform: {
   };
 }
 
-function mmdJointLimitsToPhysics(
-  joint: AmmoJointData
-): {
+function mmdJointLimitsToPhysics(joint: AmmoJointData): {
   translationLowerLimit: AmmoVector3Tuple;
   translationUpperLimit: AmmoVector3Tuple;
   rotationLowerLimit: AmmoVector3Tuple;
@@ -1779,7 +1811,10 @@ class PhysicsWorldTransformCache {
   }
 }
 
-function matrixRotation(matrices: readonly number[] | Float32Array | Float64Array, base: number): [number, number, number, number] {
+function matrixRotation(
+  matrices: readonly number[] | Float32Array | Float64Array,
+  base: number
+): [number, number, number, number] {
   const m00 = matrices[base];
   const m01 = matrices[base + 4];
   const m02 = matrices[base + 8];
@@ -1928,6 +1963,35 @@ function multiplyQuaternions(
     a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
     a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
   ];
+}
+
+function scaleQuaternionDelta(
+  from: readonly [number, number, number, number],
+  to: readonly [number, number, number, number],
+  scale: number
+): [number, number, number, number] {
+  if (scale === 1) {
+    return normalizeQuaternion(to);
+  }
+  const delta = normalizeQuaternion(multiplyQuaternions(to, invertQuaternion(from)));
+  const sign = delta[3] < 0 ? -1 : 1;
+  const x = delta[0] * sign;
+  const y = delta[1] * sign;
+  const z = delta[2] * sign;
+  const w = delta[3] * sign;
+  const sinHalfAngle = Math.hypot(x, y, z);
+  if (sinHalfAngle < 1e-6) {
+    return normalizeQuaternion(to);
+  }
+  const angle = 2 * Math.atan2(sinHalfAngle, w) * scale;
+  const scaledSin = Math.sin(angle * 0.5);
+  const scaledDelta: [number, number, number, number] = [
+    (x / sinHalfAngle) * scaledSin,
+    (y / sinHalfAngle) * scaledSin,
+    (z / sinHalfAngle) * scaledSin,
+    Math.cos(angle * 0.5)
+  ];
+  return normalizeQuaternion(multiplyQuaternions(scaledDelta, from));
 }
 
 function quaternionToAngularVelocity(

@@ -196,22 +196,35 @@ function readVec4(reader: BinaryReader): [number, number, number, number] {
 
 function readBoneInterpolation(bytes: Uint8Array): VmdBoneInterpolation {
   return {
-    translationX: [bytes[0] ?? 0, bytes[4] ?? 0, bytes[8] ?? 0, bytes[12] ?? 0],
-    translationY: [bytes[1] ?? 0, bytes[5] ?? 0, bytes[9] ?? 0, bytes[13] ?? 0],
-    translationZ: [bytes[2] ?? 0, bytes[6] ?? 0, bytes[10] ?? 0, bytes[14] ?? 0],
-    rotation: [bytes[3] ?? 0, bytes[7] ?? 0, bytes[11] ?? 0, bytes[15] ?? 0]
+    translationX: normalizeInterpolationCurve([bytes[0] ?? 0, bytes[4] ?? 0, bytes[8] ?? 0, bytes[12] ?? 0]),
+    translationY: normalizeInterpolationCurve([bytes[1] ?? 0, bytes[5] ?? 0, bytes[9] ?? 0, bytes[13] ?? 0]),
+    translationZ: normalizeInterpolationCurve([bytes[2] ?? 0, bytes[6] ?? 0, bytes[10] ?? 0, bytes[14] ?? 0]),
+    rotation: normalizeInterpolationCurve([bytes[3] ?? 0, bytes[7] ?? 0, bytes[11] ?? 0, bytes[15] ?? 0])
   };
 }
 
 function readCameraInterpolation(bytes: Uint8Array): VmdCameraInterpolation {
   return {
-    distance: [bytes[0] ?? 0, bytes[1] ?? 0, bytes[2] ?? 0, bytes[3] ?? 0],
-    positionX: [bytes[4] ?? 0, bytes[5] ?? 0, bytes[6] ?? 0, bytes[7] ?? 0],
-    positionY: [bytes[8] ?? 0, bytes[9] ?? 0, bytes[10] ?? 0, bytes[11] ?? 0],
-    positionZ: [bytes[12] ?? 0, bytes[13] ?? 0, bytes[14] ?? 0, bytes[15] ?? 0],
-    rotation: [bytes[16] ?? 0, bytes[17] ?? 0, bytes[18] ?? 0, bytes[19] ?? 0],
-    fov: [bytes[20] ?? 0, bytes[21] ?? 0, bytes[22] ?? 0, bytes[23] ?? 0]
+    positionX: readCameraInterpolationCurve(bytes, 0),
+    positionY: readCameraInterpolationCurve(bytes, 1),
+    positionZ: readCameraInterpolationCurve(bytes, 2),
+    rotation: readCameraInterpolationCurve(bytes, 3),
+    distance: readCameraInterpolationCurve(bytes, 4),
+    fov: readCameraInterpolationCurve(bytes, 5)
   };
+}
+
+function readCameraInterpolationCurve(bytes: Uint8Array, channel: number): [number, number, number, number] {
+  return normalizeInterpolationCurve([
+    bytes[channel] ?? 0,
+    bytes[channel + 6] ?? 0,
+    bytes[channel + 12] ?? 0,
+    bytes[channel + 18] ?? 0
+  ]);
+}
+
+function normalizeInterpolationCurve(values: [number, number, number, number]): [number, number, number, number] {
+  return values.map((value) => Math.min(Math.max(value / 127, 0), 1)) as [number, number, number, number];
 }
 
 function pushTrackFrame<T extends { readonly frame: number }>(

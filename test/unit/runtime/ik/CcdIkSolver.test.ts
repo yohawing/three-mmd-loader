@@ -87,6 +87,133 @@ describe("CcdIkSolver", () => {
     expect(rotations[1][3]).toBeCloseTo(Math.SQRT1_2, 5);
   });
 
+  it("treats an omitted maxAnglePerIteration as unlimited", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1, 1, 0] }
+    ];
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [{ boneIndex: 1 }],
+          iterationCount: 4
+        }
+      ]
+    });
+
+    expect(result.finalDistances[0]).toBeLessThan(1e-5);
+    expect(rotations[1][2]).toBeCloseTo(Math.SQRT1_2, 5);
+    expect(rotations[1][3]).toBeCloseTo(Math.SQRT1_2, 5);
+  });
+
+  it("stops solving when the effector is already within tolerance", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] }
+    ];
+    const rotations: MutableQuatTuple[] = [[...IDENTITY], [...IDENTITY], [...IDENTITY]];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 2,
+          effectorBoneIndex: 1,
+          links: [{ boneIndex: 0 }],
+          iterationCount: 8,
+          tolerance: 1e-5
+        }
+      ]
+    });
+
+    expect(result.iterationCount).toBe(0);
+    expect(result.finalDistances[0]).toBe(0);
+    expect(rotations).toEqual([[...IDENTITY], [...IDENTITY], [...IDENTITY]]);
+  });
+
+  it("does not treat multi-axis limits with zero endpoints as single-axis limits", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: -1, translation: [0, 0, -1] }
+    ];
+    const rotations: MutableQuatTuple[] = [[...IDENTITY], [...IDENTITY], [...IDENTITY]];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 2,
+          effectorBoneIndex: 1,
+          links: [
+            {
+              boneIndex: 0,
+              angleLimit: {
+                minimumAngle: [-0.1, 0, 0],
+                maximumAngle: [0.1, Math.PI / 2, 0]
+              }
+            }
+          ],
+          iterationCount: 8,
+          maxAnglePerIteration: Math.PI
+        }
+      ]
+    });
+
+    expect(result.finalDistances[0]).toBeLessThan(1e-5);
+    expect(rotations[0][1]).toBeCloseTo(Math.SQRT1_2, 5);
+  });
+
+  it("preserves the base pose rotation when solving a single-axis limited link", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [0, 1, 0] },
+      { parentIndex: -1, translation: [0, 0, 1] }
+    ];
+    const baseRotation = eulerXyzToQuaternionForTest([0, 0, Math.PI / 4]);
+    const rotations: MutableQuatTuple[] = [[...baseRotation], [...IDENTITY], [...IDENTITY]];
+
+    new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 2,
+          effectorBoneIndex: 1,
+          links: [
+            {
+              boneIndex: 0,
+              angleLimit: {
+                minimumAngle: [-Math.PI, 0, 0],
+                maximumAngle: [Math.PI, 0, 0]
+              }
+            }
+          ],
+          iterationCount: 4,
+          maxAnglePerIteration: Math.PI
+        }
+      ]
+    });
+
+    expect(Math.abs(rotations[0][2])).toBeGreaterThan(0.1);
+  });
+
   it("solves an exact 180-degree link rotation with a stable fallback axis", () => {
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },
@@ -144,7 +271,8 @@ describe("CcdIkSolver", () => {
       ]
     });
 
-    expect(result.iterationCount).toBe(3);
+    expect(result.iterationCount).toBeGreaterThan(0);
+    expect(result.iterationCount).toBeLessThanOrEqual(3);
     expect(result.finalDistances[0]).toBeCloseTo(Math.SQRT2, 5);
     expect(rotations).toEqual([[...IDENTITY], [...IDENTITY], [...IDENTITY], [...IDENTITY]]);
   });
@@ -227,6 +355,39 @@ describe("CcdIkSolver", () => {
     expect(Math.abs(childThenParent.rotations[2][2])).toBeGreaterThan(0);
     expect(Math.abs(parentThenChild.rotations[1][2])).toBeGreaterThan(0);
     expect(parentThenChild.rotations[2]).toEqual([...IDENTITY]);
+  });
+
+  it("solves when a parent bone appears after its child in the source order", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 1, 0] }
+    ];
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [{ boneIndex: 0 }],
+          iterationCount: 4,
+          maxAnglePerIteration: Math.PI
+        }
+      ]
+    });
+
+    expect(result.finalDistances[0]).toBeLessThan(1e-5);
+    expect(rotations[0][2]).toBeCloseTo(Math.SQRT1_2, 5);
+    expect(rotations[0][3]).toBeCloseTo(Math.SQRT1_2, 5);
   });
 
   it("respects maxAnglePerIteration as a per-link rotation clamp", () => {
@@ -466,13 +627,13 @@ describe("CcdIkSolver", () => {
       solver.solve({
         bones: [
           { parentIndex: -1, translation: [0, 0, 0] },
-          { parentIndex: 2, translation: [1, 0, 0] },
+          { parentIndex: 1, translation: [1, 0, 0] },
           { parentIndex: 0, translation: [2, 0, 0] }
         ],
         pose: { rotations: [[...IDENTITY], [...IDENTITY], [...IDENTITY]] },
         chains: []
       })
-    ).toThrow("CCD IK bones must be ordered parents before children");
+    ).toThrow("CCD IK bone cannot parent itself");
 
     expect(() =>
       solver.solve({

@@ -43,10 +43,7 @@ export type {
 export type { ModelSource } from "./modelSource.js";
 export type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
-export type {
-  MmdWorldMatrixBuffer,
-  MmdWorldMatrixColumnMajorTuple
-} from "./runtime-sync.js";
+export type { MmdWorldMatrixBuffer, MmdWorldMatrixColumnMajorTuple } from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
 export type {
   MmdToonTextureMaterial,
@@ -190,6 +187,48 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     rigidBodyCount: modelData.rigidBodies.length,
     jointCount: modelData.joints.length
   };
+  mesh.userData.mmdPhysics = {
+    rigidBodies: modelData.rigidBodies.map((body) => ({
+      name: body.name,
+      englishName: body.englishName,
+      boneIndex: body.boneIndex,
+      group: body.group,
+      mask: body.mask,
+      shape: body.shape,
+      mode: body.mode,
+      size: [...body.size],
+      position: [...body.position],
+      rotation: [...body.rotation],
+      mass: body.mass,
+      linearDamping: body.linearDamping,
+      angularDamping: body.angularDamping,
+      restitution: body.restitution,
+      friction: body.friction
+    })),
+    joints: modelData.joints.map((joint) => ({
+      name: joint.name,
+      englishName: joint.englishName,
+      rigidBodyIndexA: joint.rigidBodyIndexA,
+      rigidBodyIndexB: joint.rigidBodyIndexB,
+      position: [...joint.position],
+      rotation: [...joint.rotation],
+      translationLowerLimit: [...joint.translationLowerLimit],
+      translationUpperLimit: [...joint.translationUpperLimit],
+      rotationLowerLimit: [...joint.rotationLowerLimit],
+      rotationUpperLimit: [...joint.rotationUpperLimit],
+      springTranslationFactor: [...joint.springTranslationFactor],
+      springRotationFactor: [...joint.springRotationFactor]
+    }))
+  };
+  mesh.userData.mmdMorphs = modelData.morphs.map((morph) => ({
+    name: morph.name,
+    englishName: morph.englishName,
+    type: morph.type,
+    boneOffsets: morph.boneOffsets.map((offset) => ({ ...offset })),
+    groupOffsets: morph.groupOffsets.map((offset) => ({ ...offset })),
+    flipOffsets: morph.flipOffsets?.map((offset) => ({ ...offset })),
+    impulseOffsets: morph.impulseOffsets?.map((offset) => ({ ...offset }))
+  }));
   mesh.userData.mmdIkChains = createRuntimeIkChains(modelData);
 
   const skeleton = createThreeSkeleton(modelData.skeleton);
@@ -198,6 +237,7 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     if (boneData) {
       bone.userData.mmdBoneName = boneData.name;
       bone.userData.mmdEnglishBoneName = boneData.englishName;
+      bone.userData.mmdRestPosition = [...boneData.position];
     }
     if (boneData?.appendTransform) {
       bone.userData.mmdAppendTransform = boneData.appendTransform;
@@ -336,12 +376,18 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
   }
 
   if (options.textureMap !== undefined) {
-    if (typeof options.textureMap !== "object" || options.textureMap === null || Array.isArray(options.textureMap)) {
+    if (
+      typeof options.textureMap !== "object" ||
+      options.textureMap === null ||
+      Array.isArray(options.textureMap)
+    ) {
       throw new TypeError("ThreeMmdLoader textureMap must be an object");
     }
     for (const [path, value] of Object.entries(options.textureMap)) {
       if (!isTextureMapValue(value)) {
-        throw new TypeError(`ThreeMmdLoader textureMap entry "${path}" must be a string, URL, or Blob`);
+        throw new TypeError(
+          `ThreeMmdLoader textureMap entry "${path}" must be a string, URL, or Blob`
+        );
       }
     }
   }
@@ -355,14 +401,19 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
     }
   }
 
-  if (options.runtime !== undefined && (typeof options.runtime !== "object" || options.runtime === null)) {
+  if (
+    options.runtime !== undefined &&
+    (typeof options.runtime !== "object" || options.runtime === null)
+  ) {
     throw new TypeError("ThreeMmdLoader runtime options must be an object");
   }
 }
 
 function validateModelSource(source: ModelSource, method: string): void {
   if (!isModelSource(source)) {
-    throw new TypeError(`ThreeMmdLoader.${method} source must be a string, File, ArrayBuffer, or Uint8Array`);
+    throw new TypeError(
+      `ThreeMmdLoader.${method} source must be a string, File, ArrayBuffer, or Uint8Array`
+    );
   }
 }
 

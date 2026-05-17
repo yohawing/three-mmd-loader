@@ -101,10 +101,7 @@ describe("AmmoMmdPhysicsBackend", () => {
 
     backend.step(context);
 
-    expect(Array.from(context.output.translations ?? [])).toEqual([
-      0, 0, -0,
-      1, 0, 0
-    ]);
+    expect(Array.from(context.output.translations ?? [])).toEqual([0, 0, -0, 1, 0, 0]);
     expect(context.output.updatedBoneIndices).toEqual([0, 1]);
     backend.dispose?.();
   });
@@ -114,10 +111,7 @@ function createStepContext(): MmdPhysicsStepContext {
   const inputTranslations = new Float32Array([0, 0, 0]);
   const inputRotations = new Float32Array([0, 0, 0, 1]);
   const inputWorldMatricesColumnMajor = new Float32Array([
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1
+    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
   ]);
   return {
     seconds: 0,
@@ -170,23 +164,10 @@ function createStepContext(): MmdPhysicsStepContext {
 }
 
 function createHierarchyStepContext(): MmdPhysicsStepContext {
-  const inputTranslations = new Float32Array([
-    0, 0, 0,
-    1, 0, 0
-  ]);
-  const inputRotations = new Float32Array([
-    0, 0, 0, 1,
-    0, 0, 0, 1
-  ]);
+  const inputTranslations = new Float32Array([0, 0, 0, 1, 0, 0]);
+  const inputRotations = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1]);
   const inputWorldMatricesColumnMajor = new Float32Array([
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    1, 0, 0, 1
+    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1
   ]);
   return {
     seconds: 0,

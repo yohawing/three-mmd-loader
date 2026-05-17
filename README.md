@@ -1,17 +1,75 @@
 # @yohawing/three-mmd-loader
 
-Japanese: [README.ja.md](./README.ja.md)
+A TypeScript library for loading and playing back MMD models and motions on Three.js.
 
-Roadmap: [ROADMAP.md](./ROADMAP.md)
+Japanese: [README.ja.md](./README.ja.md) / Roadmap: [ROADMAP.md](./ROADMAP.md)
 
-Three.js MMD model/animation loader and runtime in one TypeScript package.
-It loads standard MMD model, motion, and pose assets into Three.js-facing data
-while keeping parser, runtime, adapter, and physics backend boundaries explicit.
+## Demo
 
-## Planned Install
+<!-- TODO: replace with YouTube link -->
+[![Demo video](demo-thumbnail.png)](https://www.youtube.com/)
+
+## Compatibility Matrix
+
+### Formats
+
+| Format | Parse | Runtime apply |
+| --- | --- | --- |
+| PMX (model) | ✅ | ✅ |
+| PMD (model) | ✅ | ✅ |
+| VMD (motion) | ✅ | ✅ (linear interpolation) |
+| VPD (pose) | ✅ | ✅ |
+| PMM (project) | ❌ | ❌ |
+| .x / .vac (accessory) | ❌ | ❌ |
+
+### Features
+
+| Feature | Status |
+| --- | --- |
+| SkinnedMesh / materials / textures | ✅ |
+| Toon / sphere textures | ✅ |
+| Bone / morph animation | ✅ |
+| VMD Bezier interpolation | ⚠️ Parsed / applied as linear |
+| CCD IK (model-defined chains) | ✅ |
+| IK link-local / parent-local clamp | ⚠️ Foundational only |
+| Append transform | ⚠️ Metadata wired / evaluation order in progress |
+| Physics (Ammo backend) | ✅ Isolated behind boundary |
+| Physics (disabled fallback) | ✅ |
+| Camera motion application | ❌ |
+| Three.js visual regression gates | ❌ Not built yet |
+
+## Verified Assets
+
+Loading and playback verified on the following assets:
+
+- PMD models: 5
+- PMX models: 5
+- VMD motions: 15
+- Unit-test fixtures: 7 PMX / 3 VMD
+
+## Out Of Scope (Initial Release)
+
+- Non-Three.js renderer adapters
+- Cross-renderer visual equivalence claims
+- Optimized custom model / motion formats
+- WebGPU renderer path
+- A separately published physics package
+- PMM project loading
+- Native-equivalent MMD physics behavior
+
+## Acknowledgements
+
+This project was developed with reference to:
+
+- [Babylon-MMD](https://github.com/noname0310/babylon-mmd)
+- [nanoem](https://github.com/hkrn/nanoem)
+
+---
+
+## Install
 
 ```powershell
-pnpm add @yohawing/three-mmd-loader three
+npm install @yohawing/three-mmd-loader three
 ```
 
 `three` is a peer dependency.
@@ -86,38 +144,3 @@ const disabledPhysicsBackend = createDisabledMmdPhysicsBackend();
 const Ammo = await import("ammo.js").then((m) => m.default ?? m);
 const physicsBackend = createAmmoMmdPhysicsBackend(Ammo);
 ```
-
-## Current Status
-
-- Parser: PMX, PMD, VMD, and VPD parsing is implemented, including full VMD
-  keyframe data.
-- Runtime: VMD animation playback through `AnimationMixer`, CCD IK with model
-  IK chains wired from `mesh.userData.mmdIkChains`, and append transform metadata
-  wired on `bone.userData.mmdAppendTransform`.
-- Three.js: `ThreeMmdLoader.loadModel`, `loadAnimation`, `loadPose`, and
-  `loadPoseAnimation` are implemented.
-- Physics: disabled fallback and Ammo backends are isolated behind the
-  `MmdPhysicsBackend` boundary.
-
-## Limitations
-
-- VMD Bezier interpolation parameters are parsed and stored, but clip generation
-  still uses linear interpolation.
-- Full append transform evaluation order, including layer and
-  `transformAfterPhysics` behavior, is still in progress.
-- PMX IK link-local and parent-local clamp behavior currently has only the
-  foundational implementation.
-- Three.js visual regression gates with baseline screenshots are not built yet.
-- Native-equivalent physics behavior is not claimed.
-
-Out of scope for the initial release:
-
-- Non-Three.js renderer adapters.
-- Cross-renderer visual equivalence claims.
-- Optimized custom model or motion formats.
-- WebGPU renderer path.
-- A separate published physics package.
-
-## Acknowledgements
-
-This project was developed with reference to Babylon-MMD, nanoem, and Saba.

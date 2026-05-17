@@ -1,18 +1,75 @@
 # @yohawing/three-mmd-loader
 
-English: [README.md](./README.md)
+Three.js で MMD モデルとモーションをロード・再生するための TypeScript ライブラリです。
 
-Roadmap: [ROADMAP.md](./ROADMAP.md)
+English: [README.md](./README.md) / Roadmap: [ROADMAP.md](./ROADMAP.md)
 
-Three.js 向け MMD モデル / アニメーションローダーとランタイムを 1 つに
-まとめた TypeScript パッケージです。標準的な MMD モデル、モーション、
-ポーズアセットを Three.js 向けのデータへ読み込みつつ、パーサー、
-ランタイム、アダプター、物理バックエンドの境界を明確に保ちます。
+## Demo
 
-## インストール予定
+<!-- TODO: YouTube リンク差し替え -->
+[![Demo video](demo-thumbnail.png)](https://www.youtube.com/)
+
+## Compatibility Matrix
+
+### フォーマット
+
+| フォーマット | 解析 | ランタイム適用 |
+| --- | --- | --- |
+| PMX (モデル) | ✅ | ✅ |
+| PMD (モデル) | ✅ | ✅ |
+| VMD (モーション) | ✅ | ✅ (線形補間) |
+| VPD (ポーズ) | ✅ | ✅ |
+| PMM (プロジェクト) | ❌ | ❌ |
+| .x / .vac (アクセサリ) | ❌ | ❌ |
+
+### 機能
+
+| 機能 | 状態 |
+| --- | --- |
+| SkinnedMesh / マテリアル / テクスチャ | ✅ |
+| トゥーン / スフィアテクスチャ | ✅ |
+| ボーン / モーフアニメーション | ✅ |
+| VMD Bezier 補間 | ⚠️ パース済 / 適用は線形 |
+| CCD IK (モデル定義 chain) | ✅ |
+| IK link-local / parent-local clamp | ⚠️ 基礎実装のみ |
+| 付与変形 (append transform) | ⚠️ メタデータ配線済 / 評価順序は進行中 |
+| 物理 (Ammo backend) | ✅ 境界の裏で隔離 |
+| 物理 (disabled fallback) | ✅ |
+| カメラモーション適用 | ❌ |
+| Three.js 視覚回帰ゲート | ❌ 未構築 |
+
+## 動作確認
+
+以下のアセットで読み込みと再生を確認しています:
+
+- PMD モデル: 5 種類
+- PMX モデル: 5 種類
+- VMD モーション: 15 種類
+- ユニットテスト fixture: PMX 7 / VMD 3
+
+## 対象外（初期リリース）
+
+- Three.js 以外の renderer adapter
+- cross-renderer visual equivalence の主張
+- 最適化された独自 model / motion フォーマット
+- WebGPU renderer path
+- 別個に公開される physics パッケージ
+- PMM プロジェクトの読み込み
+- ネイティブ MMD と完全に同等な物理挙動
+
+## Acknowledgements
+
+以下のプロジェクトを参考に開発しました:
+
+- [Babylon-MMD](https://github.com/noname0310/babylon-mmd)
+- [nanoem](https://github.com/hkrn/nanoem)
+
+---
+
+## インストール
 
 ```powershell
-pnpm add @yohawing/three-mmd-loader three
+npm install @yohawing/three-mmd-loader three
 ```
 
 `three` は peer dependency です。
@@ -88,36 +145,3 @@ const disabledPhysicsBackend = createDisabledMmdPhysicsBackend();
 const Ammo = await import("ammo.js").then((m) => m.default ?? m);
 const physicsBackend = createAmmoMmdPhysicsBackend(Ammo);
 ```
-
-## 現在の状態
-
-- Parser: PMX、PMD、VMD、VPD の解析が実装済みです。VMD の全キーフレーム
-  データも含みます。
-- Runtime: `AnimationMixer` による VMD アニメーション再生、
-  `mesh.userData.mmdIkChains` から配線されたモデル IK chain を使う CCD IK、
-  `bone.userData.mmdAppendTransform` 上の付与変形メタデータ配線が実装済みです。
-- Three.js: `ThreeMmdLoader.loadModel`、`loadAnimation`、`loadPose`、
-  `loadPoseAnimation` は実装済みです。
-- Physics: disabled fallback と Ammo backend は `MmdPhysicsBackend` 境界の背後に
-  隔離されています。
-
-## 制限事項
-
-- VMD Bezier 補間パラメータは parse して保持していますが、clip 生成ではまだ
-  線形補間を使っています。
-- layer と `transformAfterPhysics` を含む付与変形の完全な評価順序は進行中です。
-- PMX IK link-local / parent-local clamp は基礎実装のみです。
-- baseline screenshot を使う Three.js visual regression gate は未構築です。
-- native-equivalent physics behavior は主張していません。
-
-初期リリースの対象外:
-
-- Three.js 以外の renderer adapter。
-- cross-renderer visual equivalence の主張。
-- 最適化された独自の model / motion format。
-- WebGPU renderer path。
-- 別個に公開される physics package。
-
-## Acknowledgements
-
-このプロジェクトは Babylon-MMD、nanoem、Saba を参考にして開発されています。

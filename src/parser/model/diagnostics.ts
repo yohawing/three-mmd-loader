@@ -91,7 +91,7 @@ export function createModelDiagnostics(
       level: "warning",
       code: "IK_PMX_LINK_LIMITS_APPROXIMATE",
       message:
-        "PMX IK link limits are applied with a Saba-style axis limit approximation; native parity still depends on local-axis and solver convergence details."
+        "PMX IK link limits are applied with an MMD axis-limit approximation; native parity still depends on local-axis and solver convergence details."
     });
   }
   if (skeleton?.bones.some((bone) => bone.flags.fixedAxis)) {
