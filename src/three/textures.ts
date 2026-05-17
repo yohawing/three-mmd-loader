@@ -28,6 +28,21 @@ export interface MmdTextureAlphaEvaluationOptions {
   readonly alphaBlendThreshold?: number;
 }
 
+const bundledSharedToonTextureUrls: TextureMap = {
+  "toon01.bmp": new URL("./assets/mmd/toon01.bmp", import.meta.url),
+  "toon02.bmp": new URL("./assets/mmd/toon02.bmp", import.meta.url),
+  "toon03.bmp": new URL("./assets/mmd/toon03.bmp", import.meta.url),
+  "toon04.bmp": new URL("./assets/mmd/toon04.bmp", import.meta.url),
+  "toon05.bmp": new URL("./assets/mmd/toon05.bmp", import.meta.url),
+  "toon06.bmp": new URL("./assets/mmd/toon06.bmp", import.meta.url),
+  "toon07.bmp": new URL("./assets/mmd/toon07.bmp", import.meta.url),
+  "toon08.bmp": new URL("./assets/mmd/toon08.bmp", import.meta.url),
+  "toon09.bmp": new URL("./assets/mmd/toon09.bmp", import.meta.url),
+  "toon10.bmp": new URL("./assets/mmd/toon10.bmp", import.meta.url)
+};
+
+let defaultToonGradientMap: THREE.DataTexture | undefined;
+
 export function evaluateMmdTextureAlphaSamples(
   alphaSamples: ArrayLike<number>,
   options: MmdTextureAlphaEvaluationOptions = {}
@@ -305,25 +320,26 @@ export async function loadToonTexture(
   textureDiagnostics: TextureLoadDiagnostic[],
   textureLoader?: ThreeMmdTextureLoader
 ): Promise<THREE.Texture | undefined> {
+  if (!material.toonTexturePath && material.sharedToonIndex === undefined) {
+    return getDefaultToonGradientMap();
+  }
   const toonTexture = resolveMmdToonTextureReference(material);
   if (!toonTexture.path) {
     return undefined;
   }
-  const isBuiltInToon =
-    isBuiltInToonTexturePath(toonTexture.path) &&
-    (toonTexture.shared || toonTexture.textureInfo === undefined);
-  const texture =
-    (isBuiltInToon
-      ? await loadBuiltInToonBmpTexture(toonTexture.path, modelUrl, textureResolver)
-      : undefined) ??
-    (await loadMaterialTexture(
-      toonTexture.path,
-      toonTexture.textureInfo,
-      modelUrl,
-      textureResolver,
-      textureLoader
-    ));
-  if (!texture && material.toonTexturePath && !isBuiltInToonTexturePath(material.toonTexturePath)) {
+  const bundledSharedToonTexture = toonTexture.shared
+    ? resolveBundledSharedToonTexture(toonTexture.path)
+    : undefined;
+  const texture = bundledSharedToonTexture
+    ? await loadResolvedTexture(bundledSharedToonTexture, toonTexture.path, undefined, textureLoader)
+    : await loadMaterialTexture(
+        toonTexture.path,
+        toonTexture.textureInfo,
+        modelUrl,
+        textureResolver,
+        textureLoader
+      );
+  if (!texture && material.toonTexturePath) {
     textureDiagnostics.push({
       level: "warning",
       code: "TEXTURE_RESOLVE_FAILED",
@@ -332,7 +348,14 @@ export async function loadToonTexture(
       path: material.toonTexturePath
     });
   }
-  if (!texture && !material.toonTexturePath && toonTexture.shared && !textureResolver && !modelUrl) {
+  if (
+    !texture &&
+    !material.toonTexturePath &&
+    material.sharedToonIndex !== undefined &&
+    toonTexture.shared &&
+    !textureResolver &&
+    !modelUrl
+  ) {
     textureDiagnostics.push({
       level: "warning",
       code: "TEXTURE_RESOLVE_FAILED",
@@ -354,9 +377,6 @@ export async function loadToonTexture(
   texture.flipY = true;
   texture.userData.mmdToonTexturePath = toonTexture.path;
   texture.userData.mmdToonTextureShared = toonTexture.shared;
-  if (isBuiltInToon) {
-    texture.userData.mmdBuiltInToonTexture = true;
-  }
   return texture;
 }
 
@@ -580,8 +600,8 @@ export function createMmdBuiltInToonTextureMap(baseUrl: string | URL): TextureMa
   const base = typeof baseUrl === "string" ? baseUrl : baseUrl.toString();
   const normalizedBase = base.endsWith("/") ? base : `${base}/`;
 
-  for (let index = 0; index < 10; index += 1) {
-    const texturePath = defaultSharedToonTexturePath(index);
+  for (let index = 1; index <= 10; index += 1) {
+    const texturePath = `toon${String(index).padStart(2, "0")}.bmp`;
     map[texturePath] = isAbsoluteUrl(normalizedBase)
       ? new URL(texturePath, normalizedBase).toString()
       : `${normalizedBase}${texturePath}`;
@@ -639,10 +659,6 @@ export function resolveMmdToonTextureReference(
   };
 }
 
-export function isBuiltInToonTexturePath(texturePath: string): boolean {
-  return /^toon0[1-9]\.bmp$|^toon10\.bmp$/i.test(normalizeMmdTexturePath(texturePath));
-}
-
 export function normalizeMmdTexturePath(texturePath: string): string {
   return texturePath.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
@@ -660,6 +676,22 @@ export function createFallbackMmdMaterial(): THREE.MeshToonMaterial {
     englishName: "fallback"
   };
   return material;
+}
+
+export function getDefaultToonGradientMap(): THREE.DataTexture {
+  if (defaultToonGradientMap) {
+    return defaultToonGradientMap;
+  }
+  const data = new Uint8Array([255, 255, 255, 255]);
+  const texture = new THREE.DataTexture(data, 1, 1, THREE.RGBAFormat);
+  texture.needsUpdate = true;
+  texture.name = "mmd-default-toon";
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  defaultToonGradientMap = texture;
+  return defaultToonGradientMap;
 }
 
 async function loadMaterialTexture(
@@ -684,6 +716,15 @@ async function loadMaterialTexture(
       return tgaTexture;
     }
   }
+  return loadResolvedTexture(resolved, texturePath, textureInfo, textureLoader);
+}
+
+async function loadResolvedTexture(
+  resolved: string | URL | Blob,
+  texturePath: string,
+  textureInfo: MaterialInfo["textureInfo"],
+  textureLoader?: ThreeMmdTextureLoader
+): Promise<THREE.Texture | undefined> {
   const request = await createTextureLoadRequest(resolved, texturePath);
   const loader = textureLoader ?? new THREE.TextureLoader();
   return new Promise((resolve) => {
@@ -704,34 +745,6 @@ async function loadMaterialTexture(
       resolve(undefined);
     }
   });
-}
-
-async function loadBuiltInToonBmpTexture(
-  texturePath: string,
-  modelUrl: string | undefined,
-  textureResolver: TextureResolver | undefined
-): Promise<THREE.Texture | undefined> {
-  try {
-    const resolved = textureResolver
-      ? await textureResolver.resolve(texturePath, modelUrl)
-      : resolveAdjacentTexture(texturePath, modelUrl);
-    if (!resolved) {
-      return undefined;
-    }
-    const buffer =
-      typeof Blob !== "undefined" && resolved instanceof Blob
-        ? await resolved.arrayBuffer()
-        : await fetch(String(resolved)).then((response) =>
-            response.ok ? response.arrayBuffer() : undefined
-          );
-    if (!buffer) {
-      return undefined;
-    }
-    const texture = decodeMmdBmpTexture(buffer);
-    return texture ? configureMmdTexture(texture) : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 async function loadMmdTgaTexture(
@@ -761,6 +774,10 @@ async function loadMmdTgaTexture(
   } catch {
     return undefined;
   }
+}
+
+function resolveBundledSharedToonTexture(texturePath: string): string | URL | Blob | undefined {
+  return resolveMappedTexture(texturePath, bundledSharedToonTextureUrls);
 }
 
 async function createTextureLoadRequest(
@@ -844,58 +861,6 @@ const bmpV4HeaderExtension = new Uint8Array([
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00
 ]);
-
-function decodeMmdBmpTexture(
-  bytes: ArrayBuffer | ArrayLike<number>
-): THREE.DataTexture | undefined {
-  const data = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : Uint8Array.from(bytes);
-  if (data.length < 54 || data[0] !== 0x42 || data[1] !== 0x4d) {
-    return undefined;
-  }
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const pixelOffset = view.getUint32(10, true);
-  const dibHeaderSize = view.getUint32(14, true);
-  const width = view.getInt32(18, true);
-  const height = view.getInt32(22, true);
-  const planes = view.getUint16(26, true);
-  const bitsPerPixel = view.getUint16(28, true);
-  const compression = view.getUint32(30, true);
-  const absoluteHeight = Math.abs(height);
-  if (
-    dibHeaderSize < 40 ||
-    width <= 0 ||
-    absoluteHeight <= 0 ||
-    planes !== 1 ||
-    compression !== 0 ||
-    (bitsPerPixel !== 24 && bitsPerPixel !== 32)
-  ) {
-    return undefined;
-  }
-  const bytesPerPixel = bitsPerPixel / 8;
-  const rowSize = Math.floor((bitsPerPixel * width + 31) / 32) * 4;
-  if (pixelOffset + rowSize * absoluteHeight > data.length) {
-    return undefined;
-  }
-  const rgba = new Uint8Array(width * absoluteHeight * 4);
-  for (let y = 0; y < absoluteHeight; y += 1) {
-    const sourceY = height > 0 ? absoluteHeight - 1 - y : y;
-    const rowOffset = pixelOffset + sourceY * rowSize;
-    for (let x = 0; x < width; x += 1) {
-      const source = rowOffset + x * bytesPerPixel;
-      const target = (y * width + x) * 4;
-      rgba[target] = data[source + 2] ?? 0;
-      rgba[target + 1] = data[source + 1] ?? 0;
-      rgba[target + 2] = data[source] ?? 0;
-      rgba[target + 3] = bitsPerPixel === 32 ? (data[source + 3] ?? 255) : 255;
-    }
-  }
-  const texture = new THREE.DataTexture(rgba, width, absoluteHeight, THREE.RGBAFormat);
-  texture.type = THREE.UnsignedByteType;
-  texture.userData.mmdTextureAlphaMode =
-    bitsPerPixel === 32 ? evaluateMmdTextureAlphaRgba(rgba) : "opaque";
-  texture.needsUpdate = true;
-  return texture;
-}
 
 function readBmpBitfieldAlphaMask(
   view: DataView,

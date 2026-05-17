@@ -1,10 +1,11 @@
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import {
   createMmdBuiltInToonTextureMap,
   createTextureResolver,
   defaultSharedToonTexturePath,
-  isBuiltInToonTexturePath,
+  getDefaultToonGradientMap,
   normalizeMmdTexturePath,
   resolveMappedTexture,
   resolveMmdToonTextureReference
@@ -62,18 +63,14 @@ describe("MMD texture path utilities", () => {
       "toon01.bmp": "textures/toon/toon01.bmp",
       "toon10.bmp": "textures/toon/toon10.bmp"
     });
+    expect(createMmdBuiltInToonTextureMap("textures/toon")).not.toHaveProperty("toon00.bmp");
     expect(createMmdBuiltInToonTextureMap(new URL("https://example.test/mmd/toon/"))).toMatchObject({
       "toon01.bmp": "https://example.test/mmd/toon/toon01.bmp",
       "toon10.bmp": "https://example.test/mmd/toon/toon10.bmp"
     });
-  });
-
-  it("detects built-in toon paths after separator normalization", () => {
-    expect(isBuiltInToonTexturePath("toon01.bmp")).toBe(true);
-    expect(isBuiltInToonTexturePath(".\\TOON10.BMP")).toBe(true);
-    expect(isBuiltInToonTexturePath("toon00.bmp")).toBe(false);
-    expect(isBuiltInToonTexturePath("toon11.bmp")).toBe(false);
-    expect(isBuiltInToonTexturePath("textures/toon01.bmp")).toBe(false);
+    expect(createMmdBuiltInToonTextureMap(new URL("https://example.test/mmd/toon/"))).not.toHaveProperty(
+      "toon00.bmp"
+    );
   });
 
   it("resolves explicit and shared toon references without renderer dependencies", () => {
@@ -100,5 +97,19 @@ describe("MMD texture path utilities", () => {
       textureInfo: undefined,
       shared: false
     });
+  });
+
+  it("creates the default toon gradient map as a singleton white data texture", () => {
+    const texture = getDefaultToonGradientMap();
+    const secondTexture = getDefaultToonGradientMap();
+    const image = texture.image as { data: Uint8Array; width: number; height: number };
+
+    expect(texture).toBe(secondTexture);
+    expect(texture).toBeInstanceOf(THREE.DataTexture);
+    expect(image.width).toBe(1);
+    expect(image.height).toBe(1);
+    expect(texture.format).toBe(THREE.RGBAFormat);
+    expect(Array.from(image.data)).toEqual([255, 255, 255, 255]);
+    expect(texture.name).toBe("mmd-default-toon");
   });
 });

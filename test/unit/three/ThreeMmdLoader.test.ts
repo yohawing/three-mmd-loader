@@ -59,6 +59,21 @@ describe("ThreeMmdLoader", () => {
     expect(model.textureDiagnostics).toEqual([]);
   });
 
+  it("keeps imported PMX vertex normals on the loaded Three.js geometry", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        normal: [0.25, 0.5, -0.82915619758885]
+      })
+    );
+
+    const normal = model.mesh.geometry.getAttribute("normal");
+    expect(Array.from(normal.array)).toEqual([0.25, 0.5, 0.829156219959259]);
+  });
+
+
   it("exposes PMX IK chains on mesh userData when the fixture contains IK", async () => {
     const loader = new ThreeMmdLoader();
     const source: ModelSource = await readFile(resolve("test/fixtures/test_basic_bone.pmx"));
@@ -188,7 +203,10 @@ describe("ThreeMmdLoader", () => {
   });
 });
 
-function createMinimalPmxModelBytes(options: { readonly materialCount: 0 | 1 }): Uint8Array {
+function createMinimalPmxModelBytes(options: {
+  readonly materialCount: 0 | 1;
+  readonly normal?: readonly [number, number, number];
+}): Uint8Array {
   const bytes: number[] = [];
   const encoder = new TextEncoder();
   const u8 = (value: number) => bytes.push(value & 0xff);
@@ -241,12 +259,13 @@ function createMinimalPmxModelBytes(options: { readonly materialCount: 0 | 1 }):
   return new Uint8Array(bytes);
 
   function writeVertex() {
+    const normal = options.normal ?? [0, 1, 0];
     f32(0);
     f32(0);
     f32(0);
-    f32(0);
-    f32(1);
-    f32(0);
+    f32(normal[0]);
+    f32(normal[1]);
+    f32(normal[2]);
     f32(0);
     f32(0);
     u8(0);

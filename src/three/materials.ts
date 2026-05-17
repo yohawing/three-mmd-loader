@@ -141,17 +141,6 @@ export async function applyThreeMmdMaterialTextures(
         attachMmdSphereTexture(material, mmdMaterial.sphereMode, sphereTexture);
       }
 
-      if (mmdMaterial.sphereTexturePath) {
-        diagnostics.push({
-          level: "warning",
-          code: "SPHERE_MAP_NOT_SUPPORTED",
-          materialIndex,
-          textureKind: "sphere",
-          path: mmdMaterial.sphereTexturePath,
-          sphereMode: mmdMaterial.sphereMode
-        });
-      }
-
       attachMmdMaterialFactors(material);
       if (texture || gradientMap || sphereTexture) {
         material.needsUpdate = true;

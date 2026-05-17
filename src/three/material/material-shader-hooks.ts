@@ -248,7 +248,10 @@ export function attachMmdSphereTexture(
       "#include <opaque_fragment>",
       [
         "#include <opaque_fragment>",
-        "vec2 mmdSphereUv = vec2( normal.x, -normal.y ) * 0.5 + 0.5;",
+        "vec3 mmdSphereViewDir = normalize( vViewPosition );",
+        "vec3 mmdSphereX = normalize( vec3( mmdSphereViewDir.z, 0.0, -mmdSphereViewDir.x ) );",
+        "vec3 mmdSphereY = cross( mmdSphereViewDir, mmdSphereX );",
+        "vec2 mmdSphereUv = vec2( dot( mmdSphereX, normal ), dot( mmdSphereY, normal ) ) * 0.495 + 0.5;",
         "vec4 mmdSphereColor = texture2D( mmdSphereMap, mmdSphereUv ) * mmdSphereFactor;",
         "if ( mmdSphereMode == 1 ) {",
         "  gl_FragColor.rgb *= mmdSphereColor.rgb * diffuseColor.rgb;",
