@@ -230,33 +230,51 @@ export interface AmmoWorld {
 }
 
 export interface AmmoNamespace {
+  // optional: memory/resource cleanup helper; modern Ammo builds may expose a renamed disposer.
   destroy?: (value: object) => void;
+  // optional: pointer lookup used for debug contact mapping and the legacy damping memory patch.
   getPointer?: (value: object) => number;
+  // optional: legacy Emscripten heap view used only by the additional damping memory patch.
   HEAP32?: Int32Array | Uint32Array;
+  // required: Bullet world construction entry point.
   btDefaultCollisionConfiguration: new () => object;
+  // required: Bullet world construction entry point.
   btCollisionDispatcher: new (configuration: object) => object;
+  // required: Bullet world construction entry point.
   btDbvtBroadphase: new () => object;
+  // required: Bullet world construction entry point.
   btSequentialImpulseConstraintSolver: new () => object;
+  // required: Bullet world construction entry point.
   btDiscreteDynamicsWorld: new (
     dispatcher: object,
     broadphase: object,
     solver: object,
     configuration: object
   ) => AmmoWorld;
+  // required: vector factory used throughout shape, transform, and solver setup.
   btVector3: new (x: number, y: number, z: number) => AmmoVector3;
+  // optional: quaternion factory; modern builds can rename or omit direct rotation setters.
   btQuaternion?: new (x?: number, y?: number, z?: number, w?: number) => AmmoQuaternion;
+  // required: transform factory used for rigid bodies and constraints.
   btTransform: new () => AmmoTransform;
+  // required: motion state factory for rigid body construction.
   btDefaultMotionState: new (transform: AmmoTransform) => AmmoMotionState;
+  // required: rigid body construction info factory.
   btRigidBodyConstructionInfo: new (
     mass: number,
     motionState: AmmoMotionState,
     shape: AmmoShape,
     inertia: AmmoVector3
   ) => AmmoRigidBodyConstructionInfo;
+  // required: rigid body factory.
   btRigidBody: new (info: AmmoRigidBodyConstructionInfo) => AmmoRigidBody;
+  // required: MMD rigid body box shape.
   btBoxShape: new (halfExtents: AmmoVector3) => AmmoShape;
+  // required: MMD rigid body capsule shape.
   btCapsuleShape: new (radius: number, height: number) => AmmoShape;
+  // required: MMD rigid body sphere shape.
   btSphereShape: new (radius: number) => AmmoShape;
+  // optional: preferred spring-capable 6DoF joint; modern builds may expose a different name.
   btGeneric6DofSpringConstraint?: new (
     bodyA: AmmoRigidBody,
     bodyB: AmmoRigidBody,
@@ -264,6 +282,7 @@ export interface AmmoNamespace {
     frameB: AmmoTransform,
     useLinearReferenceFrameA: boolean
   ) => AmmoGeneric6DofConstraint;
+  // optional: fallback 6DoF joint when the spring variant is not exported by the Ammo build.
   btGeneric6DofConstraint?: new (
     bodyA: AmmoRigidBody,
     bodyB: AmmoRigidBody,
@@ -271,18 +290,21 @@ export interface AmmoNamespace {
     frameB: AmmoTransform,
     useLinearReferenceFrameA: boolean
   ) => AmmoGeneric6DofConstraint;
+  // optional: specialized joint constructors; fallback to Generic6Dof keeps API drift isolated.
   btPoint2PointConstraint?: new (
     bodyA: AmmoRigidBody,
     bodyB: AmmoRigidBody,
     pivotA: AmmoVector3,
     pivotB: AmmoVector3
   ) => AmmoPoint2PointConstraint;
+  // optional: specialized joint constructor; modern build name changes should be handled here.
   btConeTwistConstraint?: new (
     bodyA: AmmoRigidBody,
     bodyB: AmmoRigidBody,
     frameA: AmmoTransform,
     frameB: AmmoTransform
   ) => AmmoConeTwistConstraint;
+  // optional: specialized joint constructor; modern build name changes should be handled here.
   btSliderConstraint?: new (
     bodyA: AmmoRigidBody,
     bodyB: AmmoRigidBody,
@@ -290,6 +312,7 @@ export interface AmmoNamespace {
     frameB: AmmoTransform,
     useLinearReferenceFrameA: boolean
   ) => AmmoSliderConstraint;
+  // optional: specialized joint constructor; modern build name changes should be handled here.
   btHingeConstraint?: new (
     bodyA: AmmoRigidBody,
     bodyB: AmmoRigidBody,
@@ -299,11 +322,17 @@ export interface AmmoNamespace {
   ) => AmmoHingeConstraint;
 }
 
-export interface AmmoPhysicsBackendOptions {
+export interface AmmoPhysicsBackendTuningOptions {
   gravity?: [number, number, number];
   fixedTimeStep?: number;
   maxSubSteps?: number;
   resetTimeJumpThresholdSeconds?: number;
+  /**
+   * Skips the legacy HEAP32 additional damping patch. Set this to true when validating a modern
+   * Ammo build because the historical +113 rigid-body offset may no longer match that build.
+   */
+  disableAdditionalDampingPatch?: boolean;
+  /** @deprecated Use disableAdditionalDampingPatch. Kept for callers that already gate the patch. */
   additionalDampingPatch?: boolean;
   additionalDamping?: boolean;
   collisionMargin?: number;
@@ -315,6 +344,14 @@ export interface AmmoPhysicsBackendOptions {
   resetCatchUpSteps?: number;
   dynamicWithBoneRotationFeedbackScale?: number;
   dynamicWithBoneRotationFeedbackMinMass?: number;
+}
+
+export interface AmmoPhysicsBackendOptions extends AmmoPhysicsBackendTuningOptions {
+  /**
+   * Reserved boundary for future Ammo implementation selection. Phase 0 keeps the current ammo.js
+   * runtime and only makes option routing explicit.
+   */
+  build?: "legacy";
 }
 
 const DEFAULT_GRAVITY: [number, number, number] = [0, -49, 0];
@@ -733,7 +770,9 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
   }
 
   private configureAdditionalDamping(rigidBody: AmmoRigidBody): void {
-    if (!this.options.additionalDampingPatch) {
+    const patchEnabled =
+      this.options.additionalDampingPatch === true && !this.options.disableAdditionalDampingPatch;
+    if (!patchEnabled) {
       return;
     }
     const pointer = this.ammo.getPointer?.(rigidBody);
@@ -741,6 +780,8 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     if (pointer === undefined || !heap32) {
       return;
     }
+    // Legacy ammo.js needs this direct write, but modern Ammo builds may not keep the +113 offset.
+    // Use disableAdditionalDampingPatch while validating a new build to bypass this memory patch.
     heap32[pointer / 4 + 113] = -1;
   }
 

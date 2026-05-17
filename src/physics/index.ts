@@ -2,7 +2,8 @@ export {
   AmmoMmdPhysicsBackend,
   createAmmoMmdPhysicsBackend,
   type AmmoNamespace,
-  type AmmoPhysicsBackendOptions
+  type AmmoPhysicsBackendOptions,
+  type AmmoPhysicsBackendTuningOptions
 } from "./ammoMmdPhysicsBackend.js";
 
 export type MmdPhysicsDiagnosticLevel = "warning" | "error";
