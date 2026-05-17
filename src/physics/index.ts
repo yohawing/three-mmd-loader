@@ -107,6 +107,7 @@ export interface MmdPhysicsMorphImpulse {
   readonly morphIndex: number;
   readonly weight: number;
   readonly rigidBodyIndex?: number;
+  readonly local?: boolean;
   readonly force?: MmdPhysicsVector3Tuple;
   readonly torque?: MmdPhysicsVector3Tuple;
 }

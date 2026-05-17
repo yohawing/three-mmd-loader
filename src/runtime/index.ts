@@ -866,6 +866,7 @@ function readRuntimeExternalPhysics(mesh: THREE.SkinnedMesh): RuntimeExternalPhy
                           morphIndex,
                           rigidBodyIndex,
                           weight: 0,
+                          local: offset.local,
                           force: [...offset.velocity] as [number, number, number],
                           torque: [...offset.torque] as [number, number, number]
                         }

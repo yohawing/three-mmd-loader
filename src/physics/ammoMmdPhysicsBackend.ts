@@ -312,6 +312,9 @@ export interface AmmoPhysicsBackendOptions {
   splitImpulsePenetrationThreshold?: number;
   warmupSteps?: number;
   warmupTimeStep?: number;
+  resetCatchUpSteps?: number;
+  dynamicWithBoneRotationFeedbackScale?: number;
+  dynamicWithBoneRotationFeedbackMinMass?: number;
 }
 
 const DEFAULT_GRAVITY: [number, number, number] = [0, -98, 0];
@@ -411,7 +414,11 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       this.syncDynamicBodies(ammoContext, { dynamicWithBoneRotationFeedbackScale: 1 });
       this.restoreTemporalKinematicBodies();
       const fixedTimeStep = this.options.fixedTimeStep ?? DEFAULT_FIXED_TIME_STEP;
-      for (let step = 0; step < DEFAULT_RESET_CATCH_UP_STEPS; step += 1) {
+      const resetCatchUpSteps = Math.max(
+        Math.trunc(this.options.resetCatchUpSteps ?? DEFAULT_RESET_CATCH_UP_STEPS),
+        0
+      );
+      for (let step = 0; step < resetCatchUpSteps; step += 1) {
         world.stepSimulation(fixedTimeStep, 0, fixedTimeStep);
       }
       this.pendingResetPoseSync = false;
@@ -1261,6 +1268,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
   }
 
   private applyMorphImpulses(context: AmmoStepContext): void {
+    const transform = new this.ammo.btTransform();
     for (const impulse of context.morphImpulses ?? []) {
       const binding = this.bindings[impulse.rigidBodyIndex ?? -1];
       if (!binding) {
@@ -1272,8 +1280,15 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
         this.resetBodyVelocity(binding.rigidBody);
         continue;
       }
-      const appliedVelocityMmd = velocity;
-      const appliedTorqueMmd = torque;
+      const currentBodyRotation = impulse.local
+        ? this.currentRigidBodyMmdRotation(binding.rigidBody, transform, binding.body.rotation)
+        : undefined;
+      const appliedVelocityMmd = impulse.local
+        ? rotateVectorByQuaternion(velocity, currentBodyRotation ?? binding.body.rotation)
+        : velocity;
+      const appliedTorqueMmd = impulse.local
+        ? rotateVectorByQuaternion(torque, currentBodyRotation ?? binding.body.rotation)
+        : torque;
       const appliedVelocity = this.vector(mmdVectorToPhysics(appliedVelocityMmd));
       binding.rigidBody.applyCentralForce?.(appliedVelocity);
       this.destroy(appliedVelocity);
@@ -1281,6 +1296,19 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       binding.rigidBody.applyTorqueImpulse?.(appliedTorque);
       this.destroy(appliedTorque);
     }
+    this.destroy(transform);
+  }
+
+  private currentRigidBodyMmdRotation(
+    rigidBody: AmmoRigidBody,
+    transform: AmmoTransform,
+    fallback: AmmoQuaternionTuple
+  ): AmmoQuaternionTuple {
+    rigidBody.getMotionState().getWorldTransform(transform);
+    const physicsRotation = transform.getRotation
+      ? ammoQuaternionToTuple(transform.getRotation())
+      : undefined;
+    return physicsRotation ? mmdQuaternionToPhysics(physicsRotation) : fallback;
   }
 
   private syncDynamicBodies(
@@ -1319,8 +1347,11 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       );
       const rotationFeedbackScale =
         binding.effectiveMode === "dynamicWithBone" &&
-        body.mass >= DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_MIN_MASS
+        body.mass >=
+          (this.options.dynamicWithBoneRotationFeedbackMinMass ??
+            DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_MIN_MASS)
           ? (options.dynamicWithBoneRotationFeedbackScale ??
+            this.options.dynamicWithBoneRotationFeedbackScale ??
             DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_SCALE)
           : 1;
       const outputBoneWorldRotation =
