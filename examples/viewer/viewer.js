@@ -28,7 +28,6 @@ const timeline = document.querySelector("#timeline");
 const speedInput = document.querySelector("#speed");
 const speedValueText = document.querySelector("#speed-value");
 const playToggle = document.querySelector("#play-toggle");
-const wireframeInput = document.querySelector("#wireframe");
 const loadMenu = document.querySelector("#load-menu");
 const modelFileInput = document.querySelector("#model-file");
 const modelFolderInput = document.querySelector("#model-folder");
@@ -174,7 +173,6 @@ function bindControls() {
     isPlaying = !isPlaying;
     playToggle.textContent = isPlaying ? "Pause" : "Play";
   });
-  document.querySelector("#reset-view")?.addEventListener("click", resetView);
   timeline?.addEventListener("input", () => {
     isSeeking = true;
     elapsedSeconds = Number.parseFloat(timeline.value);
@@ -182,9 +180,6 @@ function bindControls() {
   });
   timeline?.addEventListener("change", () => {
     isSeeking = false;
-  });
-  wireframeInput?.addEventListener("change", () => {
-    setWireframe(wireframeInput.checked);
   });
   speedInput?.addEventListener("input", updateSpeedDisplay);
   bindDropTarget();
@@ -252,7 +247,6 @@ async function loadModel(
     timeline.value = "0";
     updatePlaybackDisplay();
     fitCameraToObject(currentModel.mesh);
-    setWireframe(wireframeInput?.checked ?? false);
     if (pendingMotionSource) {
       await loadMotion(pendingMotionSource, pendingMotionLabel);
     } else if (currentMotion?.clip) {
@@ -292,7 +286,6 @@ async function loadModelFolder(files) {
     timeline.value = "0";
     updatePlaybackDisplay();
     fitCameraToObject(currentModel.mesh);
-    setWireframe(wireframeInput?.checked ?? false);
     if (pendingMotionSource) {
       await loadMotion(pendingMotionSource, pendingMotionLabel);
     }
@@ -415,7 +408,7 @@ function clearModel() {
 function fitCameraToObject(object) {
   const bounds = new THREE.Box3().setFromObject(object);
   if (bounds.isEmpty()) {
-    resetView();
+    setDefaultCameraView();
     return;
   }
   const sphere = bounds.getBoundingSphere(new THREE.Sphere());
@@ -428,26 +421,13 @@ function fitCameraToObject(object) {
   controls.update();
 }
 
-function resetView() {
-  if (currentModel) {
-    fitCameraToObject(currentModel.mesh);
-    return;
-  }
+function setDefaultCameraView() {
   controls.target.set(0, 0.9, 0);
   camera.position.set(0, 1.1, 9);
   camera.near = 0.01;
   camera.far = 1000;
   camera.updateProjectionMatrix();
   controls.update();
-}
-
-function setWireframe(enabled) {
-  if (!currentModel) {
-    return;
-  }
-  for (const material of normalizeMaterials(currentModel.mesh.material)) {
-    material.wireframe = enabled;
-  }
 }
 
 function normalizeMaterials(material) {
