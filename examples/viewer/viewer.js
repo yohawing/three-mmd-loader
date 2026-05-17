@@ -71,6 +71,8 @@ window.mmdViewer = {
   controls,
   renderer,
   scene,
+  loadModelUrl: loadModelFromUrl,
+  loadMotionUrl: loadMotionFromUrl,
   get currentModel() {
     return currentModel;
   },
@@ -171,7 +173,7 @@ async function loadModelFromUrl(url) {
   setStatus(`Loading ${url}`);
   const bytes = await fetchBytes(url);
   modelFileName.textContent = url.split("/").at(-1) ?? url;
-  await loadModel(bytes, url.split("/").at(-1) ?? url);
+  await loadModel(bytes, url.split("/").at(-1) ?? url, createUrlTextureLoader(url));
 }
 
 async function loadMotionFromUrl(url) {
@@ -189,10 +191,10 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-async function loadModel(source, label = source.name ?? "model") {
+async function loadModel(source, label = source.name ?? "model", modelLoader = loader) {
   try {
     clearModel();
-    currentModel = await loader.loadModel(source);
+    currentModel = await modelLoader.loadModel(source);
     currentModel.mesh.frustumCulled = false;
     scene.add(currentModel.mesh);
     skeletonHelper = new THREE.SkeletonHelper(currentModel.mesh);
@@ -479,4 +481,15 @@ function directoryName(path) {
 
 function stripPrefix(path, prefix) {
   return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+}
+
+function createUrlTextureLoader(modelUrl) {
+  return new ThreeMmdLoader({
+    runtime: { frameRate: 30 },
+    textureResolver: {
+      async resolve(path) {
+        return new URL(path.replaceAll("\\", "/"), new URL(".", new URL(modelUrl, location.href))).toString();
+      }
+    }
+  });
 }
