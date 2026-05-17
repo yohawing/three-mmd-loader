@@ -19,6 +19,12 @@ const playToggle = document.querySelector("#play-toggle");
 const showGridInput = document.querySelector("#show-grid");
 const showSkeletonInput = document.querySelector("#show-skeleton");
 const wireframeInput = document.querySelector("#wireframe");
+const modelFileInput = document.querySelector("#model-file");
+const motionFileInput = document.querySelector("#motion-file");
+const poseFileInput = document.querySelector("#pose-file");
+const modelFileName = document.querySelector("#model-file-name");
+const motionFileName = document.querySelector("#motion-file-name");
+const poseFileName = document.querySelector("#pose-file-name");
 
 if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error("Viewer canvas is missing");
@@ -52,6 +58,8 @@ const loader = new ThreeMmdLoader({ runtime: { frameRate: 30 } });
 const clock = new THREE.Clock();
 let currentModel;
 let currentMotion;
+let pendingMotionSource;
+let pendingMotionLabel;
 let skeletonHelper;
 let elapsedSeconds = 0;
 let isPlaying = true;
@@ -86,21 +94,33 @@ function bindControls() {
   document.querySelector("#load-sample-scene")?.addEventListener("click", () => {
     void loadSampleScene();
   });
-  document.querySelector("#model-file")?.addEventListener("change", (event) => {
+  document.querySelector("#choose-model")?.addEventListener("click", () => {
+    modelFileInput?.click();
+  });
+  document.querySelector("#choose-motion")?.addEventListener("click", () => {
+    motionFileInput?.click();
+  });
+  document.querySelector("#choose-pose")?.addEventListener("click", () => {
+    poseFileInput?.click();
+  });
+  modelFileInput?.addEventListener("change", (event) => {
     const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
     if (file) {
+      modelFileName.textContent = file.name;
       void loadModel(file);
     }
   });
-  document.querySelector("#motion-file")?.addEventListener("change", (event) => {
+  motionFileInput?.addEventListener("change", (event) => {
     const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
     if (file) {
+      motionFileName.textContent = file.name;
       void loadMotion(file);
     }
   });
-  document.querySelector("#pose-file")?.addEventListener("change", (event) => {
+  poseFileInput?.addEventListener("change", (event) => {
     const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
     if (file) {
+      poseFileName.textContent = file.name;
       void loadPose(file);
     }
   });
@@ -140,12 +160,14 @@ async function loadSampleScene() {
 async function loadModelFromUrl(url) {
   setStatus(`Loading ${url}`);
   const bytes = await fetchBytes(url);
+  modelFileName.textContent = url.split("/").at(-1) ?? url;
   await loadModel(bytes, url.split("/").at(-1) ?? url);
 }
 
 async function loadMotionFromUrl(url) {
   setStatus(`Loading ${url}`);
   const bytes = await fetchBytes(url);
+  motionFileName.textContent = url.split("/").at(-1) ?? url;
   await loadMotion(bytes, url.split("/").at(-1) ?? url);
 }
 
@@ -173,7 +195,9 @@ async function loadModel(source, label = source.name ?? "model") {
     elapsedSeconds = 0;
     fitCameraToObject(currentModel.mesh);
     setWireframe(wireframeInput?.checked ?? false);
-    if (currentMotion?.clip) {
+    if (pendingMotionSource) {
+      await loadMotion(pendingMotionSource, pendingMotionLabel);
+    } else if (currentMotion?.clip) {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
     }
     setStatus(`Loaded model: ${label}`);
@@ -185,9 +209,14 @@ async function loadModel(source, label = source.name ?? "model") {
 async function loadMotion(source, label = source.name ?? "motion") {
   try {
     if (!currentModel) {
-      setStatus("Load a model before loading motion.");
+      pendingMotionSource = source;
+      pendingMotionLabel = label;
+      motionNameText.textContent = label;
+      setStatus(`Queued VMD motion: ${label}. Load a model to apply it.`);
       return;
     }
+    pendingMotionSource = source;
+    pendingMotionLabel = label;
     currentMotion = await loader.loadAnimation(source, currentModel);
     if (currentMotion.clip) {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
@@ -328,10 +357,13 @@ function bindDropTarget() {
     for (const file of event.dataTransfer?.files ?? []) {
       const lowerName = file.name.toLowerCase();
       if (lowerName.endsWith(".pmx") || lowerName.endsWith(".pmd")) {
+        modelFileName.textContent = file.name;
         void loadModel(file);
       } else if (lowerName.endsWith(".vmd")) {
+        motionFileName.textContent = file.name;
         void loadMotion(file);
       } else if (lowerName.endsWith(".vpd")) {
+        poseFileName.textContent = file.name;
         void loadPose(file);
       }
     }

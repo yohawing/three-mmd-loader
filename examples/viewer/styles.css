@@ -133,9 +133,39 @@ label {
   font-size: 13px;
 }
 
-input[type="file"] {
-  width: 100%;
-  color: #dce5eb;
+.file-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 126px;
+  gap: 10px;
+  align-items: center;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid #37424a;
+  border-radius: 6px;
+  background: #171b1f;
+}
+
+.file-picker div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.file-picker strong {
+  color: #eef3f6;
+  font-size: 13px;
+}
+
+.file-picker span {
+  overflow: hidden;
+  color: #9ba7af;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-picker input[type="file"] {
+  display: none;
 }
 
 input[type="range"] {

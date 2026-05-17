@@ -33,26 +33,38 @@
         <section class="control-group">
           <h2>Samples</h2>
           <div class="button-row">
-            <button id="load-sample-model" type="button">Model</button>
-            <button id="load-sample-motion" type="button">Motion</button>
+            <button id="load-sample-model" type="button">Sample Model</button>
+            <button id="load-sample-motion" type="button">Sample VMD</button>
             <button id="load-sample-scene" type="button">Scene</button>
           </div>
         </section>
 
         <section class="control-group">
-          <h2>Files</h2>
-          <label>
-            Model
+          <h2>Load Files</h2>
+          <div class="file-picker">
+            <div>
+              <strong>Model</strong>
+              <span id="model-file-name">PMX / PMD</span>
+            </div>
+            <button id="choose-model" type="button">Choose Model</button>
             <input id="model-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
-          </label>
-          <label>
-            Motion
+          </div>
+          <div class="file-picker">
+            <div>
+              <strong>VMD Motion</strong>
+              <span id="motion-file-name">VMD</span>
+            </div>
+            <button id="choose-motion" type="button">Choose VMD</button>
             <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
-          </label>
-          <label>
-            Pose
+          </div>
+          <div class="file-picker">
+            <div>
+              <strong>Pose</strong>
+              <span id="pose-file-name">VPD</span>
+            </div>
+            <button id="choose-pose" type="button">Choose VPD</button>
             <input id="pose-file" type="file" accept=".vpd,text/plain" />
-          </label>
+          </div>
         </section>
 
         <section class="control-group">
