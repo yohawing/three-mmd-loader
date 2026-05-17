@@ -105,6 +105,7 @@ export async function applyThreeMmdMaterialTextures(
         diagnostics
       );
       if (diffuse) {
+        diffuse.colorSpace = THREE.SRGBColorSpace;
         material.map = diffuse;
       }
 

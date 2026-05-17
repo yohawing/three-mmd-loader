@@ -41,24 +41,25 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor(0x171a1d, 1);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x171a1d, 24, 64);
 
-const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 1000);
-camera.position.set(2.8, 2.2, 4.5);
+const camera = new THREE.PerspectiveCamera(22, 1, 0.01, 1000);
+camera.position.set(0, 1.1, 9);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.target.set(0, 0.9, 0);
 
-const grid = new THREE.GridHelper(12, 24, 0x5d6a72, 0x30383d);
+const grid = new THREE.GridHelper(40, 40, 0x5d6a72, 0x30383d);
 scene.add(grid);
-const axes = new THREE.AxesHelper(1.2);
+const axes = new THREE.AxesHelper(4);
 scene.add(axes);
 
-const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
 keyLight.position.set(3, 4, 5);
 scene.add(keyLight);
-scene.add(new THREE.AmbientLight(0x9eb4c8, 1.2));
+const fillLight = new THREE.HemisphereLight(0xeaf0f6, 0x2a2f33, 0.55);
+scene.add(fillLight);
+scene.add(new THREE.AmbientLight(0xffffff, 0.15));
 
 const loader = new ThreeMmdLoader({ runtime: { frameRate: 30 } });
 const clock = new THREE.Clock();
@@ -68,7 +69,7 @@ let pendingMotionSource;
 let pendingMotionLabel;
 let skeletonHelper;
 let elapsedSeconds = 0;
-let isPlaying = true;
+let isPlaying = false;
 let isSeeking = false;
 
 window.mmdViewer = {
@@ -434,7 +435,7 @@ function fitCameraToObject(object) {
   const sphere = bounds.getBoundingSphere(new THREE.Sphere());
   const radius = Math.max(sphere.radius, 0.75);
   controls.target.copy(sphere.center);
-  camera.position.copy(sphere.center).add(new THREE.Vector3(radius * 1.8, radius * 1.4, radius * 2.7));
+  camera.position.copy(sphere.center).add(new THREE.Vector3(0, radius * 0.15, radius * 5.2));
   camera.near = Math.max(radius / 100, 0.01);
   camera.far = Math.max(radius * 40, 100);
   camera.updateProjectionMatrix();
@@ -442,8 +443,12 @@ function fitCameraToObject(object) {
 }
 
 function resetView() {
+  if (currentModel) {
+    fitCameraToObject(currentModel.mesh);
+    return;
+  }
   controls.target.set(0, 0.9, 0);
-  camera.position.set(2.8, 2.2, 4.5);
+  camera.position.set(0, 1.1, 9);
   camera.near = 0.01;
   camera.far = 1000;
   camera.updateProjectionMatrix();
@@ -592,7 +597,10 @@ function createUrlTextureLoader(modelUrl) {
     runtime: { frameRate: 30 },
     textureResolver: {
       async resolve(path) {
-        return new URL(path.replaceAll("\\", "/"), new URL(".", new URL(modelUrl, location.href))).toString();
+        return new URL(
+          path.replaceAll("\\", "/"),
+          new URL(".", new URL(modelUrl, location.href))
+        ).toString();
       }
     }
   });
