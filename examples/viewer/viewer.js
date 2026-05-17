@@ -211,6 +211,7 @@ async function loadModel(source, label = source.name ?? "model") {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
     }
     setStatus(`Loaded model: ${label}`);
+    renderStillFrame();
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   }
@@ -252,6 +253,7 @@ async function loadModelFolder(files) {
     setStatus(
       `Loaded model folder: ${folderName} (${Object.keys(textureMap).length} texture paths indexed)`
     );
+    renderStillFrame();
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   }
@@ -276,6 +278,7 @@ async function loadMotion(source, label = source.name ?? "motion") {
     }
     motionNameText.textContent = currentMotion.name || label;
     setStatus(`Loaded motion: ${label}`);
+    renderStillFrame();
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   }
@@ -296,6 +299,7 @@ async function loadPose(source, label = source.name ?? "pose") {
       motionNameText.textContent = poseAnimation.name ?? label;
     }
     setStatus(`Loaded pose: ${label}`);
+    renderStillFrame();
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   }
@@ -311,6 +315,12 @@ function render() {
   renderer.render(scene, camera);
 }
 
+function renderStillFrame() {
+  evaluateRuntime();
+  controls.update();
+  renderer.render(scene, camera);
+}
+
 function evaluateRuntime() {
   if (!currentModel?.runtime) {
     return;
@@ -321,7 +331,7 @@ function evaluateRuntime() {
   }
   const frameState = currentModel.runtime.evaluate(elapsedSeconds);
   if (skeletonHelper) {
-    skeletonHelper.update();
+    skeletonHelper.updateMatrixWorld(true);
   }
   timeline.value = String(elapsedSeconds);
   frameValueText.textContent = String(frameState.frame);
