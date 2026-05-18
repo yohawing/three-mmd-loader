@@ -105,12 +105,28 @@ export interface ThreeMmdLoaderOptions {
   readonly runtime?: DefaultMmdRuntimeOptions;
 }
 
+export type ThreeMmdModelSourceDescriptor =
+  | {
+      readonly kind: "bytes";
+      readonly byteLength: number;
+    }
+  | {
+      readonly kind: "url";
+      readonly byteLength: number;
+      readonly name?: string;
+    }
+  | {
+      readonly kind: "file";
+      readonly byteLength: number;
+      readonly name?: string;
+    };
+
 export interface ThreeMmdModel {
   readonly mesh: THREE.SkinnedMesh;
   readonly outlineMeshes: readonly THREE.SkinnedMesh[];
   readonly renderOrderMeshes: readonly THREE.SkinnedMesh[];
   readonly runtime?: MmdRuntime;
-  readonly source: ModelSource;
+  readonly source: ThreeMmdModelSourceDescriptor;
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
 }
 
@@ -156,7 +172,7 @@ export class ThreeMmdLoader {
     return createThreeMmdModel({
       mesh,
       runtime: new DefaultMmdRuntime(this.options.runtime),
-      source,
+      source: createModelSourceDescriptor(source, bytes.byteLength),
       textureDiagnostics,
       materials: modelData.materials
     });
@@ -223,7 +239,7 @@ export class ThreeMmdLoader {
 function createThreeMmdModel(options: {
   readonly mesh: THREE.SkinnedMesh;
   readonly runtime?: MmdRuntime;
-  readonly source: ModelSource;
+  readonly source: ThreeMmdModelSourceDescriptor;
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
 }): ThreeMmdModel {
@@ -267,6 +283,30 @@ function createThreeMmdModel(options: {
       }
     }
   }) as ThreeMmdModel;
+}
+
+function createModelSourceDescriptor(
+  source: ModelSource,
+  byteLength: number
+): ThreeMmdModelSourceDescriptor {
+  if (typeof source === "string") {
+    return {
+      kind: "url",
+      byteLength,
+      name: source.split(/[\\/]/).at(-1)
+    };
+  }
+  if (typeof File !== "undefined" && source instanceof File) {
+    return {
+      kind: "file",
+      byteLength,
+      name: source.name || undefined
+    };
+  }
+  return {
+    kind: "bytes",
+    byteLength
+  };
 }
 
 function createEmptySourceError(method: string): Error {

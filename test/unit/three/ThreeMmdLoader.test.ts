@@ -56,6 +56,7 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.skeleton.bones).toHaveLength(1);
     expect(model.mesh.geometry.getAttribute("position").count).toBe(14);
     expect(model.mesh.geometry.index?.count).toBe(36);
+    expect(model.source).toEqual({ kind: "bytes", byteLength: source.byteLength });
     expect(model.textureDiagnostics).toEqual([]);
   });
 
