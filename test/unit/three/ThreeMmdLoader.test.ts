@@ -5,7 +5,12 @@ import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThreeMmdLoader } from "../../../src/index.js";
-import type { MmdAnimation, ModelSource, ThreeMmdLoaderOptions } from "../../../src/index.js";
+import type {
+  MmdAnimation,
+  ModelSource,
+  ThreeMmdLoaderOptions,
+  ThreeMmdTextureLoader
+} from "../../../src/index.js";
 
 describe("ThreeMmdLoader", () => {
   afterEach(() => {
@@ -119,6 +124,33 @@ describe("ThreeMmdLoader", () => {
 
     const normal = model.mesh.geometry.getAttribute("normal");
     expect(Array.from(normal.array)).toEqual([0.25, 0.5, 0.829156219959259]);
+  });
+
+  it("keeps diffuse texture repeat wrapping when loaded through loadModel", async () => {
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        const texture = new THREE.Texture();
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const loader = new ThreeMmdLoader({
+      textureMap: { "tex.png": "resolved/tex.png" },
+      textureLoader
+    });
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        texturePath: "tex.png"
+      })
+    );
+    const material = Array.isArray(model.mesh.material) ? model.mesh.material[0] : model.mesh.material;
+
+    expect(material.map).toBeInstanceOf(THREE.Texture);
+    expect(material.map?.wrapS).toBe(THREE.RepeatWrapping);
+    expect(material.map?.wrapT).toBe(THREE.RepeatWrapping);
   });
 
 
@@ -254,6 +286,7 @@ describe("ThreeMmdLoader", () => {
 function createMinimalPmxModelBytes(options: {
   readonly materialCount: 0 | 1;
   readonly normal?: readonly [number, number, number];
+  readonly texturePath?: string;
   readonly triangle?: boolean;
   readonly edge?: boolean;
 }): Uint8Array {
@@ -304,7 +337,9 @@ function createMinimalPmxModelBytes(options: {
     u8(1);
     u8(2);
   }
-  count(0);
+  const texturePaths = options.texturePath ? [options.texturePath] : [];
+  count(texturePaths.length);
+  texturePaths.forEach(text);
   count(options.materialCount);
   if (options.materialCount === 1) {
     writeMaterial();
@@ -352,7 +387,7 @@ function createMinimalPmxModelBytes(options: {
     f32(0);
     f32(1);
     f32(1);
-    u8(0xff);
+    u8(options.texturePath ? 0 : 0xff);
     u8(0xff);
     u8(0);
     u8(1);
