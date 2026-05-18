@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import { ThreeMmdLoader } from "../../../src/index.js";
-import type { ModelSource, ThreeMmdLoaderOptions } from "../../../src/index.js";
+import type { MmdAnimation, ModelSource, ThreeMmdLoaderOptions } from "../../../src/index.js";
 
 describe("ThreeMmdLoader", () => {
   it("preserves construction options as a public facade shell", () => {
@@ -120,14 +120,14 @@ describe("ThreeMmdLoader", () => {
     const source: ModelSource = await readFile(resolve("test/fixtures/test_basic_bone.pmx"));
 
     const model = await loader.loadModel(source);
-    const clip = new THREE.AnimationClip("ik-smoke", -1, []);
+    const animation = createEmptyMmdAnimation();
 
     expect(model.mesh.userData.mmdIkChains.length).toBeGreaterThan(0);
     if (!model.runtime) {
       throw new Error("Expected a runtime");
     }
     expect(() => {
-      model.runtime?.setAnimation(clip, model.mesh);
+      model.runtime?.setAnimation(animation, model.mesh);
       model.runtime?.evaluate(1 / 30);
     }).not.toThrow();
   });
@@ -337,4 +337,29 @@ function createMinimalPmxModelBytes(options: {
     text("");
     i32(options.triangle ? 3 : 0);
   }
+}
+
+function createEmptyMmdAnimation(): MmdAnimation {
+  return {
+    kind: "vmd",
+    bytes: new Uint8Array(),
+    metadata: {
+      modelName: "",
+      counts: {
+        bones: 0,
+        morphs: 0,
+        cameras: 0,
+        lights: 0,
+        selfShadows: 0,
+        properties: 0
+      },
+      maxFrame: 0
+    },
+    boneTracks: {},
+    morphTracks: {},
+    cameraFrames: [],
+    lightFrames: [],
+    selfShadowFrames: [],
+    propertyFrames: []
+  };
 }

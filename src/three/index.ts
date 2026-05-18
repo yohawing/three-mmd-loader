@@ -2,7 +2,6 @@ import * as THREE from "three";
 
 import { parseVmd, parseVpd } from "../parser/index.js";
 import { DefaultMmdRuntime } from "../runtime/index.js";
-import { createThreeAnimationClip, createThreePoseAnimationClip } from "./animation.js";
 import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
 import type { MmdAnimation, MmdPose, VmdBoneFrame } from "../parser/model/modelTypes.js";
 import { createThreeBufferGeometry } from "./geometry.js";
@@ -22,7 +21,6 @@ import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry } from "./geometry.js";
-export { createThreePoseAnimationClip } from "./animation.js";
 export { isModelSource } from "./modelSource.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 export { mmdWorldMatrixToThree, syncThreeMmdRuntimeToMesh } from "./runtime-sync.js";
@@ -134,7 +132,6 @@ export interface ThreeMmdAnimation {
   readonly source: ModelSource;
   readonly name?: string;
   readonly animation: MmdAnimation;
-  readonly clip?: THREE.AnimationClip;
 }
 
 export interface ThreeMmdPose {
@@ -181,7 +178,7 @@ export class ThreeMmdLoader {
     });
   }
 
-  async loadAnimation(source: ModelSource, model?: ThreeMmdModel): Promise<ThreeMmdAnimation> {
+  async loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation> {
     validateModelSource(source, "loadAnimation");
     const bytes = await readModelSourceBytes(source);
     if (bytes.byteLength === 0) {
@@ -191,8 +188,7 @@ export class ThreeMmdLoader {
     return {
       source,
       name: animation.metadata.modelName,
-      animation,
-      clip: model ? this.createAnimationClip(animation, model) : undefined
+      animation
     };
   }
 
@@ -210,8 +206,7 @@ export class ThreeMmdLoader {
 
   async loadPoseAnimation(
     source: ModelSource,
-    name = "pose",
-    model?: ThreeMmdModel
+    name = "pose"
   ): Promise<ThreeMmdAnimation> {
     validateModelSource(source, "loadPoseAnimation");
     const bytes = await readModelSourceBytes(source);
@@ -223,19 +218,8 @@ export class ThreeMmdLoader {
     return {
       source,
       name,
-      animation,
-      clip: model
-        ? createThreePoseAnimationClip(pose, model.mesh.skeleton.bones, name)
-        : createThreeAnimationClip(animation, createPoseBones(pose), {
-            morphTargetDictionary: {}
-          })
+      animation
     };
-  }
-
-  createAnimationClip(animation: MmdAnimation, model: ThreeMmdModel): THREE.AnimationClip {
-    return createThreeAnimationClip(animation, model.mesh.skeleton.bones, {
-      morphTargetDictionary: model.mesh.morphTargetDictionary ?? undefined
-    });
   }
 }
 
@@ -501,15 +485,6 @@ function createMmdAnimationFromPose(pose: MmdPose, name: string): MmdAnimation {
     selfShadowFrames: [],
     propertyFrames: []
   };
-}
-
-function createPoseBones(pose: MmdPose): THREE.Bone[] {
-  return Object.keys(pose.bones).map((boneName) => {
-    const bone = new THREE.Bone();
-    bone.name = boneName;
-    bone.userData.mmdBoneName = boneName;
-    return bone;
-  });
 }
 
 function normalizeMeshMaterials(

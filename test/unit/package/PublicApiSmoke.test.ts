@@ -87,6 +87,7 @@ center
 
   it("does not expose Three.js AnimationClip creation from the public barrel", () => {
     expect("createThreeAnimationClip" in publicApi).toBe(false);
+    expect("createThreePoseAnimationClip" in publicApi).toBe(false);
   });
 
   it("exports Three.js adapter skeleton helpers from the public barrel", () => {

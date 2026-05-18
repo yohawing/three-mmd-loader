@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import { ThreeMmdLoader } from "../../../src/index.js";
+import type { MmdAnimation } from "../../../src/index.js";
 
 const execFileAsync = promisify(execFile);
 const generatorPath = resolve("scripts/fixtures/generate-minimal-pmx.mjs");
@@ -50,7 +51,7 @@ describe("generated PMX rest pose identity regression", () => {
     const runtime = model.runtime;
     expect(runtime).toBeDefined();
 
-    runtime?.setAnimation(createIkTargetMotionClip(), model.mesh);
+    runtime?.setAnimation(createIkTargetMotionAnimation(), model.mesh);
     runtime?.evaluate(1 / 30, { physics: false });
     model.mesh.updateWorldMatrix(false, true);
 
@@ -70,7 +71,7 @@ describe("generated PMX rest pose identity regression", () => {
     const runtime = model.runtime;
     expect(runtime).toBeDefined();
 
-    runtime?.setAnimation(createIkTargetMotionClip(), model.mesh);
+    runtime?.setAnimation(createIkTargetMotionAnimation(), model.mesh);
     runtime?.tick(1 / 30, model.mesh, { physics: false });
 
     const targetPosition = renderedBoneWorldPosition(model.mesh, "左足IK");
@@ -98,7 +99,7 @@ async function loadGeneratedRestPoseModel(caseId: string) {
 function evaluateRestPose(model: Awaited<ReturnType<ThreeMmdLoader["loadModel"]>>): void {
   const runtime = model.runtime;
   expect(runtime).toBeDefined();
-  runtime?.setAnimation(createEmptyMmdClip("rest-pose"), model.mesh);
+  runtime?.setAnimation(createEmptyMmdAnimation(), model.mesh);
   runtime?.evaluate(0, { physics: false, ik: false });
 }
 
@@ -129,32 +130,37 @@ function renderedBoneWorldPosition(mesh: THREE.SkinnedMesh, mmdName: string): TH
   return new THREE.Vector3().setFromMatrixPosition(boneMatrix.multiply(bindMatrix));
 }
 
-function createEmptyMmdClip(name: string): THREE.AnimationClip {
-  const clip = new THREE.AnimationClip(name, 0, []);
-  clip.userData = {
-    mmdAnimation: {
-      kind: "vmd",
-      metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-      boneTracks: {},
-      morphTracks: {},
-      cameraFrames: [],
-      lightFrames: [],
-      selfShadowFrames: [],
-      propertyFrames: []
-    }
+function createEmptyMmdAnimation(): MmdAnimation {
+  return {
+    kind: "vmd",
+    bytes: new Uint8Array(),
+    metadata: { modelName: "", counts: createEmptyVmdCounts(), maxFrame: 0 },
+    boneTracks: {},
+    morphTracks: {},
+    cameraFrames: [],
+    lightFrames: [],
+    selfShadowFrames: [],
+    propertyFrames: []
   };
-  return clip;
 }
 
-function createIkTargetMotionClip(): THREE.AnimationClip {
-  const clip = createEmptyMmdClip("ik-target-motion");
-  clip.duration = 1 / 30;
-  clip.userData.mmdAnimation.metadata.maxFrame = 1;
-  clip.userData.mmdAnimation.boneTracks = {
-    左足IK: [
-      { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
-      { frame: 1, translation: [-0.10358984, 0, 0.2], rotation: [0, 0, 0, 1] }
-    ]
+function createIkTargetMotionAnimation(): MmdAnimation {
+  const animation = createEmptyMmdAnimation();
+  animation.metadata.maxFrame = 1;
+  animation.boneTracks.左足IK = [
+    { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
+    { frame: 1, translation: [-0.10358984, 0, 0.2], rotation: [0, 0, 0, 1] }
+  ];
+  return animation;
+}
+
+function createEmptyVmdCounts(): MmdAnimation["metadata"]["counts"] {
+  return {
+    bones: 0,
+    morphs: 0,
+    cameras: 0,
+    lights: 0,
+    selfShadows: 0,
+    properties: 0
   };
-  return clip;
 }

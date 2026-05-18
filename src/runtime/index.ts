@@ -44,10 +44,6 @@ export interface MmdRuntimeDebugState {
 
 export interface MmdRuntime {
   setAnimation(animation: MmdAnimation, mesh: THREE.SkinnedMesh): void;
-  /**
-   * @deprecated Pass the parsed MmdAnimation directly so the MMD runtime path is explicit.
-   */
-  setAnimation(clip: THREE.AnimationClip, mesh: THREE.SkinnedMesh): void;
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
   tick(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
   tick(
@@ -76,7 +72,6 @@ export interface DefaultMmdRuntimeOptions {
 export class DefaultMmdRuntime implements MmdRuntime {
   private readonly frameRate: number;
   private readonly ikSolver = new CcdIkSolver();
-  private mixer: THREE.AnimationMixer | undefined;
   private mesh: THREE.SkinnedMesh | undefined;
   private mmdAnimation: MmdAnimation | undefined;
   private restTransforms: RuntimeRestTransform[] = [];
@@ -103,14 +98,6 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.state = createFrameState(seconds, this.frameRate);
     if (this.mmdAnimation && this.mesh) {
       this.applyMmdAnimation(this.state.frame);
-      this.captureDebugStage("vmdInterpolation");
-    } else if (this.mixer) {
-      const delta = seconds - previousSeconds;
-      if (delta >= 0) {
-        this.mixer.update(delta);
-      } else {
-        this.mixer.setTime(seconds);
-      }
       this.captureDebugStage("vmdInterpolation");
     }
     this.applyAppendTransforms();
@@ -157,14 +144,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
 
   reset(seconds = 0): MmdFrameState {
     this.restoreRestTransforms();
-    if (this.mixer) {
-      this.mixer.stopAllAction();
-      if (this.mesh) {
-        this.mixer.uncacheRoot(this.mesh);
-      }
-      this.mixer = undefined;
-      this.mesh = undefined;
-    }
+    this.mesh = undefined;
     this.mmdAnimation = undefined;
     this.restTransforms = [];
     this.preAppendTransforms = [];
@@ -181,43 +161,19 @@ export class DefaultMmdRuntime implements MmdRuntime {
     return this.frameState();
   }
 
-  setAnimation(animation: MmdAnimation, mesh: THREE.SkinnedMesh): void;
-  /**
-   * @deprecated Pass the parsed MmdAnimation directly so the MMD runtime path is explicit.
-   */
-  setAnimation(clip: THREE.AnimationClip, mesh: THREE.SkinnedMesh): void;
-  setAnimation(animationOrClip: MmdAnimation | THREE.AnimationClip, mesh: THREE.SkinnedMesh): void {
+  setAnimation(animation: MmdAnimation, mesh: THREE.SkinnedMesh): void {
     if (!mesh.isSkinnedMesh) {
       throw new TypeError("MMD runtime mesh must be a THREE.SkinnedMesh");
     }
-    if (isMmdAnimation(animationOrClip)) {
-      this.prepareAnimationTarget(mesh);
-      this.mmdAnimation = animationOrClip;
-      this.mixer = undefined;
-      this.applyMmdAnimation(this.state.frame);
-      return;
-    }
-    if (!(animationOrClip instanceof THREE.AnimationClip)) {
-      throw new TypeError("MMD runtime animation must be an MmdAnimation or THREE.AnimationClip");
+    if (!isMmdAnimation(animation)) {
+      throw new TypeError("MMD runtime animation must be an MmdAnimation");
     }
     this.prepareAnimationTarget(mesh);
-    this.mmdAnimation = readMmdAnimation(animationOrClip);
-    if (this.mmdAnimation) {
-      this.mixer = undefined;
-      this.applyMmdAnimation(this.state.frame);
-      return;
-    }
-    this.mixer = new THREE.AnimationMixer(mesh);
-    this.mixer.clipAction(animationOrClip).play();
+    this.mmdAnimation = animation;
+    this.applyMmdAnimation(this.state.frame);
   }
 
   private prepareAnimationTarget(mesh: THREE.SkinnedMesh): void {
-    if (this.mixer) {
-      this.mixer.stopAllAction();
-      if (this.mesh) {
-        this.mixer.uncacheRoot(this.mesh);
-      }
-    }
     this.mesh = mesh;
     this.restTransforms = mesh.skeleton.bones.map((bone) => ({
       position: bone.position.clone(),
@@ -1147,13 +1103,6 @@ function cloneDebugStage(stage: MmdRuntimeDebugStageState): MmdRuntimeDebugStage
     worldMatricesColumnMajor: Array.from(stage.worldMatricesColumnMajor),
     morphWeights: Array.from(stage.morphWeights)
   };
-}
-
-function readMmdAnimation(clip: THREE.AnimationClip): MmdAnimation | undefined {
-  const animation = (
-    clip as THREE.AnimationClip & { readonly userData?: { readonly mmdAnimation?: unknown } }
-  ).userData?.mmdAnimation;
-  return isMmdAnimation(animation) ? animation : undefined;
 }
 
 function isMmdAnimation(value: unknown): value is MmdAnimation {

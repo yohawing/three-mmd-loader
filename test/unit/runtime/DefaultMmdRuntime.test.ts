@@ -45,18 +45,15 @@ describe("DefaultMmdRuntime", () => {
     mesh.skeleton.update();
     const initialBoneMatrix = Array.from(mesh.skeleton.boneMatrices.slice(0, 16));
 
-    const clip = createEmptyMmdClip("tick-sync");
-    clip.duration = 1 / 30;
-    clip.userData.mmdAnimation.metadata.maxFrame = 1;
-    clip.userData.mmdAnimation.boneTracks = {
-      moving: [
-        { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
-        { frame: 1, translation: [1, 2, 3], rotation: [0, 0, 0, 1] }
-      ]
-    };
+    const animation = createEmptyMmdAnimation();
+    animation.metadata.maxFrame = 1;
+    animation.boneTracks.moving = [
+      { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 1, translation: [1, 2, 3], rotation: [0, 0, 0, 1] }
+    ];
 
     const runtime = new DefaultMmdRuntime();
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.tick(1 / 30, mesh, { physics: false });
 
     expect(Array.from(mesh.skeleton.boneMatrices.slice(0, 16))).not.toEqual(initialBoneMatrix);
@@ -70,18 +67,15 @@ describe("DefaultMmdRuntime", () => {
     mesh.add(bone);
     mesh.bind(new THREE.Skeleton([bone]));
 
-    const clip = createEmptyMmdClip("tick-without-mesh");
-    clip.duration = 1 / 30;
-    clip.userData.mmdAnimation.metadata.maxFrame = 1;
-    clip.userData.mmdAnimation.boneTracks = {
-      moving: [
-        { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
-        { frame: 1, translation: [1, 0, 0], rotation: [0, 0, 0, 1] }
-      ]
-    };
+    const animation = createEmptyMmdAnimation();
+    animation.metadata.maxFrame = 1;
+    animation.boneTracks.moving = [
+      { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 1, translation: [1, 0, 0], rotation: [0, 0, 0, 1] }
+    ];
 
     const runtime = new DefaultMmdRuntime();
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
 
     expect(runtime.tick(1 / 30, { physics: false })).toEqual({
       seconds: 1 / 30,
@@ -172,22 +166,11 @@ describe("DefaultMmdRuntime", () => {
         groupOffsets: []
       }
     ];
-    const clip = new THREE.AnimationClip("group", 0, []);
-    clip.userData = {
-      mmdAnimation: {
-        kind: "vmd",
-        metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-        boneTracks: {},
-        morphTracks: { group: [{ frame: 0, weight: 0.5 }] },
-        cameraFrames: [],
-        lightFrames: [],
-        selfShadowFrames: [],
-        propertyFrames: []
-      }
-    };
+    const animation = createEmptyMmdAnimation();
+    animation.morphTracks.group = [{ frame: 0, weight: 0.5 }];
 
     const runtime = new DefaultMmdRuntime();
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(0);
 
     expect(mesh.morphTargetInfluences).toEqual([0.5, 1]);
@@ -212,22 +195,10 @@ describe("DefaultMmdRuntime", () => {
       ],
       joints: []
     };
-    const clip = new THREE.AnimationClip("spring", 0, []);
-    clip.userData = {
-      mmdAnimation: {
-        kind: "vmd",
-        metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-        boneTracks: {},
-        morphTracks: {},
-        cameraFrames: [],
-        lightFrames: [],
-        selfShadowFrames: [],
-        propertyFrames: []
-      }
-    };
+    const animation = createEmptyMmdAnimation();
 
     const runtime = new DefaultMmdRuntime({ physics: "stateful-spring" });
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(0);
     runtime.evaluate(1 / 30);
 
@@ -255,22 +226,11 @@ describe("DefaultMmdRuntime", () => {
         ]
       }
     ];
-    const clip = new THREE.AnimationClip("boneMorph", 0, []);
-    clip.userData = {
-      mmdAnimation: {
-        kind: "vmd",
-        metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-        boneTracks: {},
-        morphTracks: { boneMorph: [{ frame: 0, weight: 0.5 }] },
-        cameraFrames: [],
-        lightFrames: [],
-        selfShadowFrames: [],
-        propertyFrames: []
-      }
-    };
+    const animation = createEmptyMmdAnimation();
+    animation.morphTracks.boneMorph = [{ frame: 0, weight: 0.5 }];
 
     const runtime = new DefaultMmdRuntime();
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(0);
 
     expect(bone.position.y).toBe(0.5);
@@ -308,7 +268,7 @@ describe("DefaultMmdRuntime", () => {
     ];
 
     const runtime = new DefaultMmdRuntime();
-    runtime.setAnimation(createEmptyMmdClip("append-chain"), mesh);
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
     runtime.evaluate(0);
 
     expect(Math.abs(appendA.quaternion.z)).toBeGreaterThan(0.5);
@@ -340,7 +300,7 @@ describe("DefaultMmdRuntime", () => {
     ];
 
     const runtime = new DefaultMmdRuntime();
-    runtime.setAnimation(createEmptyMmdClip("skip-ik"), mesh);
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
     runtime.evaluate(0, { ik: false });
 
     expect(ikSource.quaternion.equals(new THREE.Quaternion())).toBe(true);
@@ -378,26 +338,14 @@ describe("DefaultMmdRuntime", () => {
       ],
       joints: []
     };
-    const clip = new THREE.AnimationClip("external", 0, []);
-    clip.userData = {
-      mmdAnimation: {
-        kind: "vmd",
-        metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-        boneTracks: {},
-        morphTracks: {},
-        cameraFrames: [],
-        lightFrames: [],
-        selfShadowFrames: [],
-        propertyFrames: []
-      }
-    };
+    const animation = createEmptyMmdAnimation();
     const backend = new TranslatingPhysicsBackend([1, 2, 3]);
     const runtime = new DefaultMmdRuntime({
       physics: "external",
       physicsBackend: backend
     });
 
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(1 / 30);
 
     expect(backend.stepCount).toBe(1);
@@ -442,7 +390,7 @@ describe("DefaultMmdRuntime", () => {
       physicsBackend: backend
     });
 
-    runtime.setAnimation(createEmptyMmdClip("external-skip"), mesh);
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
     runtime.evaluate(0, { physics: false });
     runtime.evaluate(0, { physics: false });
 
@@ -487,14 +435,14 @@ describe("DefaultMmdRuntime", () => {
       ],
       joints: []
     };
-    const clip = createEmptyMmdClip("absolute-rest");
+    const animation = createEmptyMmdAnimation();
     const backend = new InspectingPhysicsBackend();
     const runtime = new DefaultMmdRuntime({
       physics: "external",
       physicsBackend: backend
     });
 
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(1 / 30);
 
     expect(backend.lastContext?.skeleton?.bones[0]?.restTranslation).toEqual([0, 10, 2]);
@@ -596,7 +544,7 @@ describe("DefaultMmdRuntime", () => {
       physicsBackend: backend
     });
 
-    runtime.setAnimation(createEmptyMmdClip("remap-physics"), mesh);
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
     runtime.evaluate(1 / 30);
 
     expect(backend.lastContext?.rigidBodies).toHaveLength(2);
@@ -645,14 +593,6 @@ class InspectingPhysicsBackend implements MmdPhysicsBackend {
     this.lastContext = context;
     return { simulated: true };
   }
-}
-
-function createEmptyMmdClip(name: string): THREE.AnimationClip {
-  const clip = new THREE.AnimationClip(name, 0, []);
-  clip.userData = {
-    mmdAnimation: createEmptyMmdAnimation()
-  };
-  return clip;
 }
 
 function createEmptyMmdAnimation(): MmdAnimation {
