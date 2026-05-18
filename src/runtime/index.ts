@@ -85,6 +85,17 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private readonly physicsBackend: MmdPhysicsBackend | undefined;
   private previousEvaluateSeconds: number | undefined;
   private physicsDisabled = false;
+  private readonly scratchAppendTranslations: THREE.Vector3[] = [];
+  private readonly scratchAppendRotations: THREE.Quaternion[] = [];
+  private readonly scratchReapplyAppendTranslations: THREE.Vector3[] = [];
+  private readonly scratchReapplyAppendRotations: THREE.Quaternion[] = [];
+  private readonly scratchVector3A = new THREE.Vector3();
+  private readonly scratchQuaternionA = new THREE.Quaternion();
+  private readonly scratchExternalPhysicsInput = {
+    translations: new Float32Array(0),
+    rotations: new Float32Array(0),
+    worldMatricesColumnMajor: new Float32Array(0)
+  };
 
   constructor(options: DefaultMmdRuntimeOptions = {}) {
     this.frameRate = normalizeFrameRate(options.frameRate ?? 30);
@@ -316,8 +327,8 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
 
     const bones = mesh.skeleton.bones;
-    const appendTranslations = bones.map(() => new THREE.Vector3());
-    const appendRotations = bones.map(() => new THREE.Quaternion());
+    const appendTranslations = prepareVector3ScratchArray(this.scratchAppendTranslations, bones.length);
+    const appendRotations = prepareQuaternionScratchArray(this.scratchAppendRotations, bones.length);
     for (const index of appendTransformOrder(bones)) {
       const bone = bones[index];
       if (!bone) {
@@ -346,16 +357,18 @@ export class DefaultMmdRuntime implements MmdRuntime {
 
       if (flags.appendRotate) {
         const sourceRotation = sourceBone.quaternion;
-        const slerpQ = weightedThreeQuaternion(sourceRotation, weight);
-        appendRotations[index] = slerpQ.clone();
+        const slerpQ = weightedThreeQuaternion(sourceRotation, weight, this.scratchQuaternionA);
+        appendRotations[index].copy(slerpQ);
         bone.quaternion.multiply(slerpQ);
       }
       if (flags.appendTranslate) {
-        const weightedTranslation =
+        const weightedTranslation = this.scratchVector3A.copy(
           !flags.appendLocal && parentHasAppend
-            ? appendTranslations[appendTransform.parentIndex].clone().multiplyScalar(weight)
-            : sourceBone.position.clone().multiplyScalar(weight);
-        appendTranslations[index] = weightedTranslation.clone();
+            ? appendTranslations[appendTransform.parentIndex]
+            : sourceBone.position
+        );
+        weightedTranslation.multiplyScalar(weight);
+        appendTranslations[index].copy(weightedTranslation);
         bone.position.add(weightedTranslation);
       }
     }
@@ -367,8 +380,14 @@ export class DefaultMmdRuntime implements MmdRuntime {
       return;
     }
     const bones = mesh.skeleton.bones;
-    const appendTranslations = bones.map(() => new THREE.Vector3());
-    const appendRotations = bones.map(() => new THREE.Quaternion());
+    const appendTranslations = prepareVector3ScratchArray(
+      this.scratchReapplyAppendTranslations,
+      bones.length
+    );
+    const appendRotations = prepareQuaternionScratchArray(
+      this.scratchReapplyAppendRotations,
+      bones.length
+    );
     const changedBoneIndices = new Set(sourceBoneIndices);
     const reappliedBoneIndices = new Set<number>();
     const order = appendTransformOrder(bones);
@@ -412,24 +431,27 @@ export class DefaultMmdRuntime implements MmdRuntime {
             !flags.appendLocal && parentHasAppend
               ? appendRotations[appendTransform.parentIndex]
               : sourceBone.quaternion;
-          const weightedRotation = weightedThreeQuaternion(sourceRotation, appendTransform.weight);
-          appendRotations[index] = weightedRotation.clone();
+          const weightedRotation = weightedThreeQuaternion(
+            sourceRotation,
+            appendTransform.weight,
+            this.scratchQuaternionA
+          );
+          appendRotations[index].copy(weightedRotation);
           bone.quaternion.multiply(weightedRotation);
         }
         if (flags.appendTranslate) {
-          const sourceTranslation =
+          const sourceTranslation = this.scratchVector3A.copy(
             !flags.appendLocal && parentHasAppend
               ? appendTranslations[appendTransform.parentIndex]
               : sourceBone.position
-                  .clone()
-                  .sub(
-                    this.preAppendTransforms[appendTransform.parentIndex]?.position ??
-                      new THREE.Vector3()
-                  );
-          const weightedTranslation = sourceTranslation
-            .clone()
-            .multiplyScalar(appendTransform.weight);
-          appendTranslations[index] = weightedTranslation.clone();
+          );
+          if (flags.appendLocal || !parentHasAppend) {
+            sourceTranslation.sub(
+              this.preAppendTransforms[appendTransform.parentIndex]?.position ?? zeroVector3
+            );
+          }
+          const weightedTranslation = sourceTranslation.multiplyScalar(appendTransform.weight);
+          appendTranslations[index].copy(weightedTranslation);
           bone.position.add(weightedTranslation);
         }
         reappliedBoneIndices.add(index);
@@ -466,8 +488,18 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
 
     mesh.updateWorldMatrix(false, true);
-    const inputTranslations = new Float32Array(mesh.skeleton.bones.length * 3);
-    const inputRotations = new Float32Array(mesh.skeleton.bones.length * 4);
+    const inputTranslations = ensureFloat32ArrayLength(
+      this.scratchExternalPhysicsInput.translations,
+      mesh.skeleton.bones.length * 3
+    );
+    this.scratchExternalPhysicsInput.translations = inputTranslations;
+    inputTranslations.fill(0, 0, mesh.skeleton.bones.length * 3);
+    const inputRotations = ensureFloat32ArrayLength(
+      this.scratchExternalPhysicsInput.rotations,
+      mesh.skeleton.bones.length * 4
+    );
+    this.scratchExternalPhysicsInput.rotations = inputRotations;
+    inputRotations.fill(0, 0, mesh.skeleton.bones.length * 4);
     for (let index = 0; index < mesh.skeleton.bones.length; index += 1) {
       const bone = mesh.skeleton.bones[index];
       if (!bone) {
@@ -480,7 +512,11 @@ export class DefaultMmdRuntime implements MmdRuntime {
       ]);
       writeQuaternionToBuffer(inputRotations, index, threeQuaternionToMmd(bone.quaternion));
     }
-    const inputWorldMatricesColumnMajor = new Float32Array(extractMmdWorldMatrices(mesh));
+    const inputWorldMatricesColumnMajor = copyNumbersToFloat32Scratch(
+      extractMmdWorldMatrices(mesh),
+      this.scratchExternalPhysicsInput.worldMatricesColumnMajor
+    );
+    this.scratchExternalPhysicsInput.worldMatricesColumnMajor = inputWorldMatricesColumnMajor;
     const prePhysics = createPrePhysicsInputBuffersIfNeeded(
       data.skeleton,
       inputTranslations,
@@ -1368,16 +1404,101 @@ function threeQuaternionToMmd(quaternion: THREE.Quaternion): [number, number, nu
   return [-quaternion.x, -quaternion.y, quaternion.z, quaternion.w];
 }
 
-function weightedThreeQuaternion(source: THREE.Quaternion, weight: number): THREE.Quaternion {
+const zeroVector3 = new THREE.Vector3();
+
+function weightedThreeQuaternion(
+  source: THREE.Quaternion,
+  weight: number,
+  target = new THREE.Quaternion()
+): THREE.Quaternion {
   if (weight === 0) {
-    return new THREE.Quaternion();
+    return target.identity();
   }
-  const normalized = source.clone().normalize();
+  target.copy(source).normalize();
+  let x = target.x;
+  let y = target.y;
+  let z = target.z;
+  const w = target.w;
   if (weight < 0) {
-    normalized.set(-normalized.x, -normalized.y, -normalized.z, normalized.w);
-    return new THREE.Quaternion().slerp(normalized, -weight);
+    x = -x;
+    y = -y;
+    z = -z;
+    return slerpIdentityQuaternionInto(x, y, z, w, -weight, target);
   }
-  return new THREE.Quaternion().slerp(normalized, weight);
+  return slerpIdentityQuaternionInto(x, y, z, w, weight, target);
+}
+
+function slerpIdentityQuaternionInto(
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  weight: number,
+  target: THREE.Quaternion
+): THREE.Quaternion {
+  let bx = x;
+  let by = y;
+  let bz = z;
+  let bw = w;
+  let cos = bw;
+  if (cos < 0) {
+    cos = -cos;
+    bx = -bx;
+    by = -by;
+    bz = -bz;
+    bw = -bw;
+  }
+  if (cos > 0.9995) {
+    return target.set(bx * weight, by * weight, bz * weight, 1 + (bw - 1) * weight).normalize();
+  }
+  const theta0 = Math.acos(cos);
+  const theta = theta0 * weight;
+  const sinTheta = Math.sin(theta);
+  const sinTheta0 = Math.sin(theta0);
+  const s0 = Math.cos(theta) - (cos * sinTheta) / sinTheta0;
+  const s1 = sinTheta / sinTheta0;
+  return target.set(bx * s1, by * s1, bz * s1, s0 + bw * s1);
+}
+
+function prepareVector3ScratchArray(target: THREE.Vector3[], length: number): THREE.Vector3[] {
+  for (let index = target.length; index < length; index += 1) {
+    target.push(new THREE.Vector3());
+  }
+  target.length = length;
+  for (const vector of target) {
+    vector.set(0, 0, 0);
+  }
+  return target;
+}
+
+function prepareQuaternionScratchArray(
+  target: THREE.Quaternion[],
+  length: number
+): THREE.Quaternion[] {
+  for (let index = target.length; index < length; index += 1) {
+    target.push(new THREE.Quaternion());
+  }
+  target.length = length;
+  for (const quaternion of target) {
+    quaternion.identity();
+  }
+  return target;
+}
+
+function ensureFloat32ArrayLength(
+  buffer: Float32Array,
+  length: number
+): Float32Array<ArrayBuffer> {
+  return buffer.length === length ? (buffer as Float32Array<ArrayBuffer>) : new Float32Array(length);
+}
+
+function copyNumbersToFloat32Scratch(
+  values: readonly number[],
+  buffer: Float32Array
+): Float32Array<ArrayBuffer> {
+  const target = ensureFloat32ArrayLength(buffer, values.length);
+  target.set(values);
+  return target;
 }
 
 function appendTransformOrder(bones: readonly THREE.Bone[]): number[] {

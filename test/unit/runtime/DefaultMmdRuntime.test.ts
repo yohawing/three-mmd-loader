@@ -375,6 +375,32 @@ describe("DefaultMmdRuntime", () => {
     expect(appendB.quaternion.w).toBeCloseTo(appendA.quaternion.w, 5);
   });
 
+  it("reuses append transform scratch state without carrying translations between frames", () => {
+    const source = new THREE.Bone();
+    source.name = "source";
+    const append = new THREE.Bone();
+    append.name = "append";
+    append.userData.mmdAppendTransform = { parentIndex: 0, weight: 0.5 };
+    append.userData.mmdFlags = { appendTranslate: true };
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(source, append);
+    mesh.bind(new THREE.Skeleton([source, append]));
+    const animation = createEmptyMmdAnimation();
+    animation.boneTracks.source = [
+      { frame: 0, translation: [2, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 1, translation: [0, 0, 0], rotation: [0, 0, 0, 1] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0, { ik: false, physics: false });
+    expect(append.position.x).toBeCloseTo(1);
+
+    runtime.evaluate(1 / 30, { ik: false, physics: false });
+
+    expect(append.position.x).toBeCloseTo(0);
+  });
+
   it("can skip IK evaluation without changing default IK behavior", () => {
     const ikSource = new THREE.Bone();
     ikSource.name = "ikSource";
