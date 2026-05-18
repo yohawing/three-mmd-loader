@@ -155,6 +155,52 @@ describe("Three.js MMD materials", () => {
     expect(firstMaterials[0]?.map).not.toBe(secondMaterials[0]?.map);
   });
 
+  it("evicts failed texture loads from the shared cache so retries can succeed", async () => {
+    const textureCache = new Map<string, Promise<THREE.Texture | undefined>>();
+    let attempt = 0;
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad, _onProgress, onError) {
+        attempt += 1;
+        const texture = new THREE.Texture();
+        texture.name = url;
+        if (attempt === 1) {
+          queueMicrotask(() => onError?.(new Error("temporary failure")));
+        } else {
+          queueMicrotask(() => onLoad?.(texture));
+        }
+        return texture;
+      }
+    };
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.png" })];
+    const firstMaterials = createThreeMmdMaterials(mmdMaterials);
+    const secondMaterials = createThreeMmdMaterials(mmdMaterials);
+
+    const firstDiagnostics = await applyThreeMmdMaterialTextures(firstMaterials, mmdMaterials, {
+      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureLoader,
+      textureCache
+    });
+    const secondDiagnostics = await applyThreeMmdMaterialTextures(secondMaterials, mmdMaterials, {
+      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureLoader,
+      textureCache
+    });
+
+    expect(attempt).toBe(2);
+    expect(firstMaterials[0]?.map).toBeNull();
+    expect(secondMaterials[0]?.map?.name).toBe("resolved/body.png");
+    expect(firstDiagnostics).toEqual([
+      {
+        level: "warning",
+        code: "TEXTURE_RESOLVE_FAILED",
+        materialIndex: 0,
+        textureKind: "diffuse",
+        path: "textures/body.png"
+      }
+    ]);
+    expect(secondDiagnostics).toEqual([]);
+  });
+
   it("revokes generated texture object URLs after successful loads and errors", async () => {
     const loadedUrls: string[] = [];
     const revokeSpy = vi.spyOn(URL, "revokeObjectURL");

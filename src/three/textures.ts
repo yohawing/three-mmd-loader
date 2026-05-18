@@ -765,7 +765,26 @@ async function loadResolvedTexture(
   if (cached) {
     return cached;
   }
-  const promise = loadResolvedTextureUncached(resolved, texturePath, textureInfo, textureLoader);
+  let promise: Promise<THREE.Texture | undefined>;
+  promise = loadResolvedTextureUncached(
+    resolved,
+    texturePath,
+    textureInfo,
+    textureLoader
+  ).then(
+    (texture) => {
+      if (!texture && textureCache?.get(cacheKey) === promise) {
+        textureCache.delete(cacheKey);
+      }
+      return texture;
+    },
+    (error: unknown) => {
+      if (textureCache?.get(cacheKey) === promise) {
+        textureCache.delete(cacheKey);
+      }
+      throw error;
+    }
+  );
   textureCache?.set(cacheKey, promise);
   return promise;
 }
