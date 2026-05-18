@@ -5,6 +5,10 @@ node_modules/
 dist/
 coverage/
 test-results/
+!test-results/visual/
+test-results/visual/current/
+test-results/visual/baseline/
+test-results/visual/diff/
 .cache/
 tmp/
 *.tsbuildinfo

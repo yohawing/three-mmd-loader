@@ -98,7 +98,12 @@ version and final `private: true` removal remain release decisions.
 ## Visual Regression Renderer
 
 `npm run render:visual` writes deterministic material case PNGs to
-`test-results/visual/cases/`. The renderer uses a 512x512 canvas with
+`test-results/visual/current/`; `npm run render:visual:baseline` writes the
+same manifest cases to `test-results/visual/baseline/`. Cases are listed in
+`scripts/visual-regression/cases.manifest.json` and can be rendered one at a
+time with `node scripts/visual-regression/render-cases.mjs --case <id>`. The
+initial baselines are for regression detection only and are not proof of
+MMD/MMM/nanoem visual equivalence. The renderer uses a 512x512 canvas with
 `pixelRatio=1`, an orthographic camera, fixed ambient and directional lights,
 fixed background, `NoToneMapping`, and `SRGBColorSpace`. It does not load
 external assets or `MMD_VIEWER_DATA_ROOT`.

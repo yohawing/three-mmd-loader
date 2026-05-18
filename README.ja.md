@@ -99,8 +99,13 @@ npm install @yohawing/three-mmd-loader three
 ## Visual Regression Renderer
 
 `npm run render:visual` は deterministic な material case PNG を
-`test-results/visual/cases/` に出力します。renderer は 512x512 canvas、
-`pixelRatio=1`、orthographic camera、固定 ambient / directional light、固定背景、
+`test-results/visual/current/` に出力し、`npm run render:visual:baseline` は
+同じ manifest case を `test-results/visual/baseline/` に出力します。case は
+`scripts/visual-regression/cases.manifest.json` に列挙され、単体では
+`node scripts/visual-regression/render-cases.mjs --case <id>` で描画できます。
+初期 baseline は regression detection 用であり、MMD/MMM/nanoem との視覚一致の
+証明ではありません。renderer は 512x512 canvas、`pixelRatio=1`、
+orthographic camera、固定 ambient / directional light、固定背景、
 `NoToneMapping`、`SRGBColorSpace` を使います。外部 asset や
 `MMD_VIEWER_DATA_ROOT` は読み込みません。
 

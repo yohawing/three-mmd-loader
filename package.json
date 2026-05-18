@@ -53,6 +53,7 @@
     "check:fixtures:physics": "node scripts/check-fixtures.mjs --physics",
     "generate:fixtures:minimal-pmx": "node scripts/fixtures/generate-minimal-pmx.mjs",
     "render:visual": "node scripts/visual-regression/render-cases.mjs",
+    "render:visual:baseline": "node scripts/visual-regression/render-cases.mjs --mode baseline",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "test": "vitest run",
     "lint": "eslint ."
