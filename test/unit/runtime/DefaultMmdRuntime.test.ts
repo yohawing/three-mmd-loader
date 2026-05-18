@@ -176,6 +176,72 @@ describe("DefaultMmdRuntime", () => {
     expect(mesh.morphTargetInfluences).toEqual([0.5, 1]);
   });
 
+  it("recursively expands nested group morph weights", () => {
+    const bone = new THREE.Bone();
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.morphTargetDictionary = { outer: 0, inner: 1, target: 2 };
+    mesh.morphTargetInfluences = [0, 0, 0];
+    mesh.userData.mmdMorphs = [
+      {
+        type: "group",
+        groupOffsets: [{ morphIndex: 1, weight: 0.5 }]
+      },
+      {
+        type: "group",
+        groupOffsets: [{ morphIndex: 2, weight: 2 }]
+      },
+      {
+        type: "vertex",
+        groupOffsets: []
+      }
+    ];
+    const animation = createEmptyMmdAnimation();
+    animation.morphTracks.outer = [{ frame: 0, weight: 1 }];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0);
+
+    expect(mesh.morphTargetInfluences).toEqual([1, 0.5, 1]);
+  });
+
+  it("recursively expands flip morph weights through referenced groups without cycling", () => {
+    const bone = new THREE.Bone();
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.morphTargetDictionary = { flip: 0, group: 1, target: 2 };
+    mesh.morphTargetInfluences = [0, 0, 0];
+    mesh.userData.mmdMorphs = [
+      {
+        type: "flip",
+        groupOffsets: [],
+        flipOffsets: [{ morphIndex: 1, weight: 0.25 }]
+      },
+      {
+        type: "group",
+        groupOffsets: [
+          { morphIndex: 2, weight: 4 },
+          { morphIndex: 0, weight: 1 }
+        ]
+      },
+      {
+        type: "vertex",
+        groupOffsets: []
+      }
+    ];
+    const animation = createEmptyMmdAnimation();
+    animation.morphTracks.flip = [{ frame: 0, weight: 1 }];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0);
+
+    expect(mesh.morphTargetInfluences).toEqual([1.25, 0.25, 1]);
+  });
+
   it("applies the old package stateful spring physics pass when enabled", () => {
     const bone = new THREE.Bone();
     bone.name = "spring";

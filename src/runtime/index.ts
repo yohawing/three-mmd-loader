@@ -1462,17 +1462,39 @@ function expandGroupMorphWeights(morphs: readonly RuntimeMorph[], weights: numbe
   }
   const directWeights = weights.slice();
   for (let index = 0; index < morphs.length; index += 1) {
-    const morph = morphs[index];
     const weight = directWeights[index] ?? 0;
-    if ((morph?.type !== "group" && morph?.type !== "flip") || weight === 0) {
+    if (weight === 0) {
       continue;
     }
-    const offsets = morph.type === "flip" ? (morph.flipOffsets ?? []) : morph.groupOffsets;
-    for (const offset of offsets) {
-      if (offset.morphIndex >= 0 && offset.morphIndex < weights.length) {
-        weights[offset.morphIndex] += weight * offset.weight;
-      }
+    expandMorphWeight(morphs, weights, index, weight, new Set([index]));
+  }
+}
+
+function expandMorphWeight(
+  morphs: readonly RuntimeMorph[],
+  weights: number[],
+  morphIndex: number,
+  weight: number,
+  path: Set<number>
+): void {
+  const morph = morphs[morphIndex];
+  if ((morph?.type !== "group" && morph?.type !== "flip") || weight === 0) {
+    return;
+  }
+  const offsets = morph.type === "flip" ? (morph.flipOffsets ?? []) : morph.groupOffsets;
+  for (const offset of offsets) {
+    const targetIndex = offset.morphIndex;
+    if (targetIndex < 0 || targetIndex >= weights.length) {
+      continue;
     }
+    const contribution = weight * offset.weight;
+    weights[targetIndex] += contribution;
+    if (contribution === 0 || path.has(targetIndex)) {
+      continue;
+    }
+    path.add(targetIndex);
+    expandMorphWeight(morphs, weights, targetIndex, contribution, path);
+    path.delete(targetIndex);
   }
 }
 
