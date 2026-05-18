@@ -317,7 +317,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     const bones = mesh.skeleton.bones;
     const appendTranslations = bones.map(() => new THREE.Vector3());
     const appendRotations = bones.map(() => new THREE.Quaternion());
-    for (let index = 0; index < bones.length; index += 1) {
+    for (const index of appendTransformOrder(bones)) {
       const bone = bones[index];
       if (!bone) {
         continue;
@@ -370,10 +370,11 @@ export class DefaultMmdRuntime implements MmdRuntime {
     const appendRotations = bones.map(() => new THREE.Quaternion());
     const changedBoneIndices = new Set(sourceBoneIndices);
     const reappliedBoneIndices = new Set<number>();
+    const order = appendTransformOrder(bones);
     let changed = true;
     while (changed) {
       changed = false;
-      for (let index = 0; index < bones.length; index += 1) {
+      for (const index of order) {
         if (reappliedBoneIndices.has(index)) {
           continue;
         }
@@ -1376,6 +1377,21 @@ function weightedThreeQuaternion(source: THREE.Quaternion, weight: number): THRE
     return new THREE.Quaternion().slerp(normalized, -weight);
   }
   return new THREE.Quaternion().slerp(normalized, weight);
+}
+
+function appendTransformOrder(bones: readonly THREE.Bone[]): number[] {
+  return bones
+    .map((bone, index) => ({
+      index,
+      layer: readBoneLayer(bone)
+    }))
+    .sort((left, right) => left.layer - right.layer || left.index - right.index)
+    .map((entry) => entry.index);
+}
+
+function readBoneLayer(bone: THREE.Bone): number {
+  const layer = bone.userData.mmdLayer;
+  return Number.isFinite(layer) ? Number(layer) : 0;
 }
 
 function readIkChains(mesh: THREE.SkinnedMesh): RuntimeIkChain[] {

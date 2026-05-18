@@ -276,6 +276,39 @@ describe("DefaultMmdRuntime", () => {
     expect(appendB.quaternion.w).toBeCloseTo(appendA.quaternion.w, 5);
   });
 
+  it("evaluates append transforms by PMX layer before bone array order", () => {
+    const source = new THREE.Bone();
+    source.name = "source";
+    source.userData.mmdLayer = 0;
+    const appendB = new THREE.Bone();
+    appendB.name = "appendB";
+    appendB.userData.mmdLayer = 2;
+    appendB.userData.mmdAppendTransform = { parentIndex: 2, weight: 1 };
+    appendB.userData.mmdFlags = { appendRotate: true };
+    const appendA = new THREE.Bone();
+    appendA.name = "appendA";
+    appendA.userData.mmdLayer = 1;
+    appendA.userData.mmdAppendTransform = { parentIndex: 0, weight: 1 };
+    appendA.userData.mmdFlags = { appendRotate: true };
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(source, appendB, appendA);
+    mesh.bind(new THREE.Skeleton([source, appendB, appendA]));
+    const animation = createEmptyMmdAnimation();
+    const halfTurnZ = Math.sin(Math.PI / 4);
+    animation.boneTracks.source = [
+      { frame: 0, translation: [0, 0, 0], rotation: [0, 0, halfTurnZ, halfTurnZ] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0, { ik: false, physics: false });
+
+    expect(appendA.quaternion.z).toBeCloseTo(halfTurnZ, 5);
+    expect(appendA.quaternion.w).toBeCloseTo(halfTurnZ, 5);
+    expect(appendB.quaternion.z).toBeCloseTo(appendA.quaternion.z, 5);
+    expect(appendB.quaternion.w).toBeCloseTo(appendA.quaternion.w, 5);
+  });
+
   it("can skip IK evaluation without changing default IK behavior", () => {
     const ikSource = new THREE.Bone();
     ikSource.name = "ikSource";
