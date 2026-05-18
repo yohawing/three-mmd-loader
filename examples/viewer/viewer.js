@@ -572,7 +572,8 @@ function evaluateRuntime(options = {}) {
     elapsedSeconds %= maxTime;
     syncAudioToMotionTime();
   }
-  currentModel.runtime.tick(elapsedSeconds, currentModel.mesh, {
+  currentModel.runtime.tick(elapsedSeconds, {
+    mesh: currentModel.mesh,
     ik: options.ik ?? hasCurrentMotion(),
     physics: options.physics ?? (!isSeeking && elapsedSeconds > 0)
   });

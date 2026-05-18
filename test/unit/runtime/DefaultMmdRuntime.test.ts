@@ -60,6 +60,30 @@ describe("DefaultMmdRuntime", () => {
     expect(renderedBoneWorldPosition(mesh, 0).toArray()).toEqual([1, 2, -3]);
   });
 
+  it("accepts the consolidated tick options object with a render-sync mesh", () => {
+    const bone = new THREE.Bone();
+    bone.name = "moving";
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.updateMatrixWorld(true);
+    mesh.skeleton.update();
+    const initialBoneMatrix = Array.from(mesh.skeleton.boneMatrices.slice(0, 16));
+    const animation = createEmptyMmdAnimation();
+    animation.metadata.maxFrame = 1;
+    animation.boneTracks.moving = [
+      { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 1, translation: [1, 0, 0], rotation: [0, 0, 0, 1] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.tick(1 / 30, { mesh, physics: false });
+
+    expect(Array.from(mesh.skeleton.boneMatrices.slice(0, 16))).not.toEqual(initialBoneMatrix);
+    expect(renderedBoneWorldPosition(mesh, 0).x).toBeCloseTo(1);
+  });
+
   it("ticks evaluation without render sync when mesh is omitted", () => {
     const bone = new THREE.Bone();
     bone.name = "moving";

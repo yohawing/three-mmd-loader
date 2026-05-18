@@ -46,7 +46,10 @@ export interface MmdRuntimeDebugState {
 export interface MmdRuntime {
   setAnimation(animation: MmdAnimation, mesh: THREE.SkinnedMesh): void;
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
-  tick(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
+  tick(seconds: number, options?: MmdRuntimeTickOptions): MmdFrameState;
+  /**
+   * @deprecated Use tick(seconds, { mesh, ...options }) instead.
+   */
   tick(
     seconds: number,
     mesh: THREE.Object3D | null | undefined,
@@ -61,6 +64,10 @@ export interface MmdRuntime {
 export interface MmdRuntimeEvaluateOptions {
   readonly physics?: boolean;
   readonly ik?: boolean;
+}
+
+export interface MmdRuntimeTickOptions extends MmdRuntimeEvaluateOptions {
+  readonly mesh?: THREE.Object3D | null | undefined;
 }
 
 export interface DefaultMmdRuntimeOptions {
@@ -136,7 +143,10 @@ export class DefaultMmdRuntime implements MmdRuntime {
     return this.frameState();
   }
 
-  tick(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
+  tick(seconds: number, options?: MmdRuntimeTickOptions): MmdFrameState;
+  /**
+   * @deprecated Use tick(seconds, { mesh, ...options }) instead.
+   */
   tick(
     seconds: number,
     mesh: THREE.Object3D | null | undefined,
@@ -144,14 +154,13 @@ export class DefaultMmdRuntime implements MmdRuntime {
   ): MmdFrameState;
   tick(
     seconds: number,
-    meshOrOptions?: THREE.Object3D | MmdRuntimeEvaluateOptions | null,
+    meshOrOptions?: THREE.Object3D | MmdRuntimeTickOptions | null,
     options?: MmdRuntimeEvaluateOptions
   ): MmdFrameState {
-    const mesh = isObject3D(meshOrOptions) ? meshOrOptions : undefined;
-    const evaluateOptions =
-      isObject3D(meshOrOptions) || meshOrOptions == null ? options : meshOrOptions;
+    const tickOptions = normalizeTickOptions(meshOrOptions, options);
+    const { mesh, ...evaluateOptions } = tickOptions;
     const state = this.evaluate(seconds, evaluateOptions);
-    syncRuntimeMeshForRender(mesh);
+    syncRuntimeMeshForRender(mesh ?? undefined);
     return state;
   }
 
@@ -1862,6 +1871,19 @@ function syncRuntimeMeshForRender(mesh: THREE.Object3D | undefined): void {
       object.skeleton.update();
     }
   });
+}
+
+function normalizeTickOptions(
+  meshOrOptions: THREE.Object3D | MmdRuntimeTickOptions | null | undefined,
+  options: MmdRuntimeEvaluateOptions | undefined
+): MmdRuntimeTickOptions {
+  if (isObject3D(meshOrOptions)) {
+    return { ...(options ?? {}), mesh: meshOrOptions };
+  }
+  if (meshOrOptions == null) {
+    return options ?? {};
+  }
+  return meshOrOptions;
 }
 
 function isObject3D(value: unknown): value is THREE.Object3D {
