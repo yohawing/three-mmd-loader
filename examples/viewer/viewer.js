@@ -1101,7 +1101,6 @@ function loadAmmoScript() {
   ammoScriptLoadPromise ??= new Promise((resolve) => {
     const script = document.createElement("script");
     let settled = false;
-    let loadFrame = 0;
     const timeoutId = window.setTimeout(() => {
       settle(false, "ammo.js script load", new Error(`Timed out loading ${ammoScriptUrl}`));
     }, 10000);
@@ -1112,9 +1111,6 @@ function loadAmmoScript() {
       }
       settled = true;
       window.clearTimeout(timeoutId);
-      if (loadFrame) {
-        window.cancelAnimationFrame(loadFrame);
-      }
       window.removeEventListener("error", handleWindowError, { capture: true });
       script.removeEventListener("load", handleLoad);
       script.removeEventListener("error", handleScriptError);
@@ -1133,10 +1129,11 @@ function loadAmmoScript() {
     };
 
     const handleLoad = () => {
-      loadFrame = window.requestAnimationFrame(() => {
-        loadFrame = 0;
-        settle(true);
-      });
+      const queueLoadSettlement =
+        typeof window.queueMicrotask === "function"
+          ? window.queueMicrotask.bind(window)
+          : (callback) => window.setTimeout(callback, 0);
+      queueLoadSettlement(() => settle(true));
     };
 
     const handleScriptError = () => {
@@ -1156,12 +1153,12 @@ function loadAmmoScript() {
 
 function isAmmoScriptErrorEvent(event) {
   const filename = event.filename ?? "";
-  if (filename === new URL(ammoScriptUrl, location.href).href || filename.endsWith(ammoScriptUrl)) {
+  const absoluteAmmoScriptUrl = new URL(ammoScriptUrl, location.href).href;
+  if (filename === absoluteAmmoScriptUrl || filename.endsWith(ammoScriptUrl)) {
     return true;
   }
-  const errorName = typeof event.error?.name === "string" ? event.error.name : "";
-  const errorMessage = typeof event.error?.message === "string" ? event.error.message : event.message;
-  return errorName === "RangeError" || /allocation/i.test(errorMessage);
+  const stack = typeof event.error?.stack === "string" ? event.error.stack : "";
+  return stack.includes(absoluteAmmoScriptUrl) || stack.includes(ammoScriptUrl);
 }
 
 function getAmmoCandidate() {
