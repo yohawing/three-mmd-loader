@@ -280,9 +280,10 @@ select:focus-visible {
 .loaded-files > select {
   max-width: min(26vw, 260px);
   height: 30px;
-  padding: 0 26px 0 8px;
+  padding: 0 24px 0 8px;
   background: rgb(255 255 255 / 92%);
   color: var(--text);
+  font-size: 12px;
 }
 
 .transport {
@@ -429,7 +430,8 @@ select:focus-visible {
     max-width: min(62vw, 280px);
   }
 
-  .loaded-files > span {
+  .loaded-files > span,
+  .loaded-files > select {
     max-width: min(30vw, 132px);
   }
 

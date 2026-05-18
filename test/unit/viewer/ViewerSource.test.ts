@@ -33,16 +33,21 @@ describe("example viewer source", () => {
     const styles = await readFile("examples/viewer/styles.css", "utf8");
 
     expect(html).toContain('id="model-switcher"');
+    expect(html).not.toContain('id="model-name"');
+    expect(html).toContain('aria-label="Selected model"');
     expect(source).toContain("const modelSwitcher = document.querySelector(\"#model-switcher\")");
+    expect(source).not.toContain("const modelNameText = document.querySelector(\"#model-name\")");
     expect(source).toContain("let currentFolderTextureMap");
     expect(source).toContain("let currentFolderPmxFiles = []");
+    expect(source).toContain("currentFolderPmxFiles = [createModelSwitcherEntry(source, label)]");
     expect(source).toContain("currentFolderTextureMap = textureMap");
     expect(source).toContain("currentFolderPmxFiles = modelFiles");
     expect(source).toContain("updateModelSwitcher(modelFile)");
     expect(source).toContain("async function switchFolderModel(modelFile)");
     expect(source).toContain('setStatus(`Switching to ${modelFile.name}`, "loading")');
     expect(source).toContain("createModelLoader({ textureMap: currentFolderTextureMap })");
-    expect(source).toContain("modelSwitcher.hidden = currentFolderPmxFiles.length < 2");
+    expect(source).toContain("modelSwitcher.hidden = currentFolderPmxFiles.length === 0");
+    expect(source).toContain("preserveModelSwitcher: true");
     expect(styles).toContain(".loaded-files > select");
 
     const dropHandler = source.slice(

@@ -18,7 +18,6 @@ const transportBar = document.querySelector(".transport");
 const viewerShell = document.querySelector(".viewer-shell");
 const statusText = document.querySelector("#status");
 const physicsErrorBanner = document.querySelector("#physics-error");
-const modelNameText = document.querySelector("#model-name");
 const modelSwitcher = document.querySelector("#model-switcher");
 const motionNameText = document.querySelector("#motion-name");
 const audioNameText = document.querySelector("#audio-name");
@@ -339,13 +338,17 @@ async function loadModel(
     setStatus(`Loading model: ${label}`, "loading");
     resetFolderModelState();
     const preservedMotion = currentMotion;
-    clearModel({ preserveMotion: Boolean(preservedMotion) });
+    clearModel({
+      preserveMotion: Boolean(preservedMotion),
+      preserveModelSwitcher: true
+    });
     const resolvedModelLoader = await modelLoader;
     currentModel = await resolvedModelLoader.loadModel(source);
     currentModel.mesh.frustumCulled = false;
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
-    setDisplayedText(modelNameText, label);
+    currentFolderPmxFiles = [createModelSwitcherEntry(source, label)];
+    updateModelSwitcher(currentFolderPmxFiles[0]);
     elapsedSeconds = 0;
     timeline.max = "0.001";
     timeline.value = "0";
@@ -367,6 +370,7 @@ async function loadModel(
     updateStageState();
     renderStillFrame();
   } catch (error) {
+    resetFolderModelState();
     setStatus(error instanceof Error ? error.message : String(error), "error");
     updateStageState();
   }
@@ -391,13 +395,15 @@ async function loadModelFolder(files) {
   try {
     setStatus(`Loading model folder: ${folderName}`, "loading");
     const preservedMotion = currentMotion;
-    clearModel({ preserveMotion: Boolean(preservedMotion) });
+    clearModel({
+      preserveMotion: Boolean(preservedMotion),
+      preserveModelSwitcher: true
+    });
     const folderLoader = await createModelLoader({ textureMap });
     currentModel = await folderLoader.loadModel(modelFile);
     currentModel.mesh.frustumCulled = false;
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
-    setDisplayedText(modelNameText, modelFile.name);
     elapsedSeconds = 0;
     timeline.max = "0.001";
     timeline.value = "0";
@@ -433,13 +439,15 @@ async function switchFolderModel(modelFile) {
   try {
     setStatus(`Switching to ${modelFile.name}`, "loading");
     const preservedMotion = currentMotion;
-    clearModel({ preserveMotion: Boolean(preservedMotion) });
+    clearModel({
+      preserveMotion: Boolean(preservedMotion),
+      preserveModelSwitcher: true
+    });
     const folderLoader = await createModelLoader({ textureMap: currentFolderTextureMap });
     currentModel = await folderLoader.loadModel(modelFile);
     currentModel.mesh.frustumCulled = false;
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     scene.add(currentModel.mesh);
-    setDisplayedText(modelNameText, modelFile.name);
     updateModelSwitcher(modelFile);
     elapsedSeconds = 0;
     timeline.max = "0.001";
@@ -572,7 +580,9 @@ function clearModel(options = {}) {
   if (!options.preserveMotion) {
     currentMotion = undefined;
   }
-  setDisplayedText(modelNameText, "");
+  if (!options.preserveModelSwitcher) {
+    resetFolderModelState();
+  }
   if (!options.preserveMotion) {
     setDisplayedText(motionNameText, "");
   }
@@ -1164,6 +1174,13 @@ function modelFileKey(file) {
   return normalizeRelativePath(file.webkitRelativePath || file.name);
 }
 
+function createModelSwitcherEntry(source, label) {
+  if (source instanceof window.File) {
+    return source;
+  }
+  return { name: label };
+}
+
 function updateModelSwitcher(selectedFile) {
   if (!(modelSwitcher instanceof window.HTMLSelectElement)) {
     return;
@@ -1178,7 +1195,7 @@ function updateModelSwitcher(selectedFile) {
     })
   );
   modelSwitcher.value = modelFileKey(selectedFile);
-  modelSwitcher.hidden = currentFolderPmxFiles.length < 2;
+  modelSwitcher.hidden = currentFolderPmxFiles.length === 0;
   updateChromeHeights();
 }
 
