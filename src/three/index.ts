@@ -100,6 +100,7 @@ export interface ThreeMmdLoaderOptions {
   readonly textureResolver?: TextureResolver;
   readonly textureMap?: TextureMap;
   readonly textureLoader?: ThreeMmdTextureLoader;
+  readonly geometryAwareAlpha?: boolean;
   readonly runtime?: DefaultMmdRuntimeOptions;
 }
 
@@ -159,6 +160,7 @@ export class ThreeMmdLoader {
       modelUrl: typeof source === "string" ? source : undefined,
       geometry: mesh.geometry,
       morphs: modelData.morphs,
+      geometryAwareAlpha: this.options.geometryAwareAlpha,
       textureCache: this.textureCache
     });
     const renderOrder = computeMmdMaterialRenderOrder(

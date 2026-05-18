@@ -20,6 +20,10 @@ export interface MmdDefaultMaterialTextureSet {
   readonly sphereTexture: THREE.Texture | undefined;
 }
 
+export interface MmdDefaultMaterialTransparencyOptions {
+  readonly geometryAwareAlpha?: boolean;
+}
+
 export async function loadMmdDefaultMaterialTextureSet(
   material: MaterialInfo,
   materialIndex: number,
@@ -73,15 +77,18 @@ export function evaluateMmdDefaultMaterialTransparency(
   morphs: readonly MorphData[],
   geometry: THREE.BufferGeometry,
   materialIndex: number,
-  texture: THREE.Texture | undefined
+  texture: THREE.Texture | undefined,
+  options: MmdDefaultMaterialTransparencyOptions = {}
 ): {
   readonly transparencyMode: MmdMaterialTransparencyMode;
   readonly textureTransparencyMode: MmdMaterialTransparencyMode | undefined;
   readonly morphAlphaTransparent: boolean;
 } {
   const textureTransparencyMode = texture
-    ? (evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
-      evaluateMmdTextureAlphaTexture(texture))
+    ? (options.geometryAwareAlpha
+      ? (evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
+        evaluateMmdTextureAlphaTexture(texture))
+      : evaluateMmdTextureAlphaTexture(texture))
     : undefined;
   const baseTransparencyMode = mmdMaterialTransparencyMode(
     material,
