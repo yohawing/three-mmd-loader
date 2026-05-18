@@ -95,6 +95,14 @@ version and final `private: true` removal remain release decisions.
 - `physics`: `MmdPhysicsBackend`, disabled fallback backend, validation/debug
   helpers, and optional Ammo backend implementation.
 
+## Visual Regression Renderer
+
+`npm run render:visual` writes deterministic material case PNGs to
+`test-results/visual/cases/`. The renderer uses a 512x512 canvas with
+`pixelRatio=1`, an orthographic camera, fixed ambient and directional lights,
+fixed background, `NoToneMapping`, and `SRGBColorSpace`. It does not load
+external assets or `MMD_VIEWER_DATA_ROOT`.
+
 ## Usage - Model Loading
 
 ```ts

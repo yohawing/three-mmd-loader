@@ -4,6 +4,7 @@ node_modules/
 # Build outputs and caches
 dist/
 coverage/
+test-results/
 .cache/
 tmp/
 *.tsbuildinfo

@@ -96,6 +96,14 @@ npm install @yohawing/three-mmd-loader three
 - `physics`: `MmdPhysicsBackend`、disabled fallback backend、validation /
   debug ヘルパー、任意の Ammo backend 実装。
 
+## Visual Regression Renderer
+
+`npm run render:visual` は deterministic な material case PNG を
+`test-results/visual/cases/` に出力します。renderer は 512x512 canvas、
+`pixelRatio=1`、orthographic camera、固定 ambient / directional light、固定背景、
+`NoToneMapping`、`SRGBColorSpace` を使います。外部 asset や
+`MMD_VIEWER_DATA_ROOT` は読み込みません。
+
 ## 使い方 - モデル読み込み
 
 ```ts
