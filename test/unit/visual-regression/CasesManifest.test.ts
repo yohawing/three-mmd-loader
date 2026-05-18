@@ -7,6 +7,7 @@ const manifestPath = path.resolve("scripts/visual-regression/cases.manifest.json
 interface VisualCase {
   id: string;
   features: string[];
+  thresholds: { mean: number; p95: number };
   geometry: { kind: string };
   material: Record<string, unknown> & { kind: string };
   note: string;
@@ -78,6 +79,8 @@ describe("visual regression cases manifest", () => {
       ids.add(visualCase.id);
 
       expect(visualCase.features.length).toBeGreaterThan(0);
+      expect(visualCase.thresholds.mean).toBeGreaterThan(0);
+      expect(visualCase.thresholds.p95).toBeGreaterThan(visualCase.thresholds.mean);
       expect(visualCase.geometry.kind).toMatch(/^(sphere|plane|overlap-planes|outline-sphere|shaderball)$/);
       expect(typeof visualCase.material.kind).toBe("string");
       expect(visualCase.note).toContain("regression detection only");

@@ -108,6 +108,12 @@ MMD/MMM/nanoem visual equivalence. The renderer uses a 512x512 canvas with
 fixed background, `NoToneMapping`, and `SRGBColorSpace`. It does not load
 external assets or `MMD_VIEWER_DATA_ROOT`.
 
+`npm run visual:report` compares `baseline` and `current`, writes heatmap PNGs
+to `test-results/visual/diff/`, and writes a machine-readable
+`test-results/visual/report.json` with per-case `mean`, `p95`, `max`,
+thresholds, and pass/fail status. Thresholds live in the case manifest and are
+intentionally loose for early CI reporting.
+
 ## Usage - Model Loading
 
 ```ts

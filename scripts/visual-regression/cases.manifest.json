@@ -27,6 +27,7 @@
     {
       "id": "diffuse-sphere",
       "features": ["diffuse", "lighting"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "sphere", "radius": 0.9, "widthSegments": 64, "heightSegments": 32 },
       "material": { "kind": "standard", "color": "#4f8fd9", "roughness": 0.65, "metalness": 0 },
       "note": "Baseline captures the current diffuse color and fixed-light response for regression detection only."
@@ -34,6 +35,7 @@
     {
       "id": "textured-sphere",
       "features": ["texture", "uv"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "sphere", "radius": 0.9, "widthSegments": 64, "heightSegments": 32 },
       "material": { "kind": "standard", "texturePattern": "checker", "roughness": 0.7, "metalness": 0 },
       "note": "Baseline captures current spherical UV texture sampling for regression detection only."
@@ -41,6 +43,7 @@
     {
       "id": "uv-orientation-plane",
       "features": ["texture", "uv", "orientation"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "plane", "width": 1.9, "height": 1.9 },
       "material": { "kind": "standard", "texturePattern": "uv-orientation", "side": "double", "roughness": 0.8 },
       "note": "Baseline captures current plane UV orientation and V-axis behavior for regression detection only."
@@ -48,6 +51,7 @@
     {
       "id": "toon-sphere",
       "features": ["toon", "toon-ramp", "lighting"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "sphere", "radius": 0.9, "widthSegments": 64, "heightSegments": 32 },
       "material": { "kind": "toon", "color": "#f0a23a", "toonRamp": "three-step-warm" },
       "note": "Baseline captures current synthetic toon ramp behavior for regression detection only."
@@ -55,6 +59,7 @@
     {
       "id": "sphere-multiply",
       "features": ["sphere-texture", "multiply", "lighting"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "sphere", "radius": 0.9, "widthSegments": 64, "heightSegments": 32 },
       "material": { "kind": "sphere-texture", "color": "#78a7dd", "sphereMode": "multiply", "texturePattern": "radial-sphere" },
       "note": "Baseline captures current synthetic sphere texture multiply behavior for regression detection only."
@@ -62,6 +67,7 @@
     {
       "id": "sphere-add",
       "features": ["sphere-texture", "add", "lighting"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "sphere", "radius": 0.9, "widthSegments": 64, "heightSegments": 32 },
       "material": { "kind": "sphere-texture", "color": "#7eb36a", "sphereMode": "add", "texturePattern": "radial-sphere" },
       "note": "Baseline captures current synthetic sphere texture add behavior for regression detection only."
@@ -69,6 +75,7 @@
     {
       "id": "alpha-cutout-plane",
       "features": ["alpha", "alpha-test", "texture"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "plane", "width": 1.9, "height": 1.9 },
       "material": { "kind": "standard", "texturePattern": "cutout", "alphaMode": "cutout", "alphaTest": 0.5, "side": "double", "roughness": 0.8 },
       "note": "Baseline captures current alphaTest cutout behavior for regression detection only."
@@ -76,6 +83,7 @@
     {
       "id": "alpha-blend-overlap",
       "features": ["alpha", "blend", "transparent-ordering"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "overlap-planes", "width": 1.55, "height": 1.55 },
       "material": { "kind": "overlap-blend", "alphaMode": "blend", "opacity": 0.58 },
       "note": "Baseline captures current transparent overlap behavior for regression detection only."
@@ -83,6 +91,7 @@
     {
       "id": "render-order-overlap",
       "features": ["render-order", "alpha", "transparent-ordering"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "overlap-planes", "width": 1.55, "height": 1.55 },
       "material": { "kind": "overlap-render-order", "alphaMode": "blend", "opacity": 0.62, "renderOrder": [20, 10] },
       "note": "Baseline captures current explicit material render order behavior for regression detection only."
@@ -90,6 +99,7 @@
     {
       "id": "outline-sphere",
       "features": ["outline", "expansion", "material-state"],
+      "thresholds": { "mean": 0.015, "p95": 0.06 },
       "geometry": { "kind": "outline-sphere", "radius": 0.9, "widthSegments": 64, "heightSegments": 32 },
       "material": { "kind": "outline", "color": "#f3c247", "outlineColor": "#141820", "outlineWidth": 0.08, "roughness": 0.55, "metalness": 0 },
       "note": "Baseline captures current outline expansion and back-side outline material state for regression detection only."

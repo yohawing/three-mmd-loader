@@ -9,6 +9,7 @@ test-results/
 test-results/visual/current/
 test-results/visual/baseline/
 test-results/visual/diff/
+test-results/visual/report.json
 .cache/
 tmp/
 *.tsbuildinfo

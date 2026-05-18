@@ -109,6 +109,12 @@ orthographic camera、固定 ambient / directional light、固定背景、
 `NoToneMapping`、`SRGBColorSpace` を使います。外部 asset や
 `MMD_VIEWER_DATA_ROOT` は読み込みません。
 
+`npm run visual:report` は `baseline` と `current` を比較し、
+`test-results/visual/diff/` に heatmap PNG、`test-results/visual/report.json`
+に case ごとの `mean`、`p95`、`max`、threshold、pass/fail を含む
+machine-readable report を出力します。threshold は manifest に置き、初期 CI
+reporting 用に意図的に緩めています。
+
 ## 使い方 - モデル読み込み
 
 ```ts
