@@ -37,11 +37,13 @@ body {
 
 button,
 input,
+select,
 summary {
   font: inherit;
 }
 
 button,
+.loaded-files select,
 .load-menu summary {
   min-height: 30px;
   border: 1px solid var(--surface-border);
@@ -71,7 +73,8 @@ button:hover,
 
 button:focus-visible,
 summary:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -247,13 +250,15 @@ input:focus-visible {
 
 .loaded-files {
   display: flex;
-  gap: 0;
+  gap: 7px;
+  align-items: center;
   width: auto;
   max-width: min(56vw, 620px);
   min-width: 0;
 }
 
-.loaded-files > span {
+.loaded-files > span,
+.loaded-files > select {
   display: block;
   max-width: min(19vw, 220px);
   min-width: 0;
@@ -261,14 +266,23 @@ input:focus-visible {
   font-size: 12px;
 }
 
-.loaded-files > span[hidden] {
+.loaded-files > span[hidden],
+.loaded-files > select[hidden] {
   display: none;
 }
 
-.loaded-files > span + span:not([hidden])::before {
-  margin: 0 7px;
+.loaded-files > span + span:not([hidden])::before,
+.loaded-files > select + span:not([hidden])::before {
   color: var(--text-muted);
   content: "/";
+}
+
+.loaded-files > select {
+  max-width: min(26vw, 260px);
+  height: 30px;
+  padding: 0 26px 0 8px;
+  background: rgb(255 255 255 / 92%);
+  color: var(--text);
 }
 
 .transport {
