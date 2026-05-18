@@ -39,6 +39,7 @@ const textDecoders = {
   "utf-8": new TextDecoder("utf-8"),
   "utf-16-le": new TextDecoder("utf-16le")
 };
+const maxPmxSectionCount = 10_000_000;
 
 export function parsePmx(bytes: Uint8Array): ParsedPmx {
   const reader = new BinaryReader(bytes);
@@ -86,7 +87,9 @@ export function parsePmx(bytes: Uint8Array): ParsedPmx {
   const comment = readText();
   const englishComment = readText();
 
-  const vertexCount = reader.i32();
+  const vertexCount = readCount(reader, "vertex", {
+    remainingBytesPerEntry: minimumPmxVertexByteLength(additionalUvCount, indexSizes.bone)
+  });
   const {
     positions,
     normals,
@@ -99,49 +102,51 @@ export function parsePmx(bytes: Uint8Array): ParsedPmx {
     sdefVertexCount
   } = readVerticesWithBoneIndexSizeFallback(reader, vertexCount, additionalUvCount, indexSizes);
 
-  const indexCount = reader.i32();
+  const indexCount = readCount(reader, "vertex index", {
+    remainingBytesPerEntry: indexSizes.vertex
+  });
   const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
   for (let i = 0; i < indexCount; i++) {
     indices[i] = readVertexIndex(reader, indexSizes.vertex);
   }
 
-  const textureCount = reader.i32();
+  const textureCount = readCount(reader, "texture", { remainingBytesPerEntry: 4 });
   const textures: string[] = [];
   for (let i = 0; i < textureCount; i++) {
     textures.push(readText());
   }
 
-  const materialCount = reader.i32();
+  const materialCount = readCount(reader, "material");
   const materials: MaterialInfo[] = [];
   for (let i = 0; i < materialCount; i++) {
     materials.push(readMaterial(reader, readText, indexSizes, textures));
   }
 
-  const boneCount = reader.i32();
+  const boneCount = readCount(reader, "bone");
   const skeleton: SkeletonData = { bones: [] };
   for (let i = 0; i < boneCount; i++) {
     skeleton.bones.push(readBone(reader, readText, indexSizes));
   }
 
-  const morphCount = reader.i32();
+  const morphCount = readCount(reader, "morph");
   const morphs: MorphData[] = [];
   for (let i = 0; i < morphCount; i++) {
     morphs.push(readMorph(reader, readText, indexSizes));
   }
 
-  const displayFrameCount = reader.i32();
+  const displayFrameCount = readCount(reader, "display frame");
   const displayFrames: DisplayFrameData[] = [];
   for (let i = 0; i < displayFrameCount; i++) {
     displayFrames.push(readDisplayFrame(reader, readText, indexSizes));
   }
 
-  const rigidBodyCount = reader.remaining >= 4 ? reader.i32() : 0;
+  const rigidBodyCount = reader.remaining >= 4 ? readCount(reader, "rigid body") : 0;
   const rigidBodies: RigidBodyData[] = [];
   for (let i = 0; i < rigidBodyCount; i++) {
     rigidBodies.push(readRigidBody(reader, readText, indexSizes));
   }
 
-  const jointCount = reader.remaining >= 4 ? reader.i32() : 0;
+  const jointCount = reader.remaining >= 4 ? readCount(reader, "joint") : 0;
   const joints: JointData[] = [];
   for (let i = 0; i < jointCount; i++) {
     joints.push(readJoint(reader, readText, indexSizes));
@@ -280,6 +285,9 @@ function readVerticesWithBoneIndexSizeFallback(
         return buffers;
       }
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Invalid PMX ")) {
+        throw error;
+      }
       lastError = error;
     }
   }
@@ -289,6 +297,38 @@ function readVerticesWithBoneIndexSizeFallback(
     throw lastError;
   }
   throw new Error("Unable to read PMX vertex payload");
+}
+
+function readCount(
+  reader: BinaryReader,
+  label: string,
+  options: { readonly remainingBytesPerEntry?: number } = {}
+): number {
+  const count = reader.i32();
+  validateCount(count, `PMX ${label}`, reader.remaining, options.remainingBytesPerEntry);
+  return count;
+}
+
+function validateCount(
+  count: number,
+  label: string,
+  remaining: number,
+  remainingBytesPerEntry: number | undefined
+): void {
+  if (count < 0 || count > maxPmxSectionCount) {
+    throw new Error(`Invalid ${label} count: ${count}`);
+  }
+  if (remainingBytesPerEntry === undefined) {
+    return;
+  }
+  const minimumByteLength = count * remainingBytesPerEntry;
+  if (!Number.isSafeInteger(minimumByteLength) || minimumByteLength > remaining) {
+    throw new Error(`Invalid ${label} count: ${count}`);
+  }
+}
+
+function minimumPmxVertexByteLength(additionalUvCount: number, boneIndexSize: number): number {
+  return 3 * 4 + 3 * 4 + 2 * 4 + additionalUvCount * 4 * 4 + 1 + boneIndexSize + 4;
 }
 
 function createPmxVertexBuffers(
@@ -390,6 +430,9 @@ function isPostVertexSectionPlausible(reader: BinaryReader, indexSizes: PmxIndex
   if (vertexIndexCount === undefined || vertexIndexCount < 0) {
     return false;
   }
+  if (vertexIndexCount > maxPmxSectionCount) {
+    throw new Error(`Invalid PMX vertex index count: ${vertexIndexCount}`);
+  }
 
   const vertexIndexBytes = vertexIndexCount * indexSizes.vertex;
   if (!Number.isSafeInteger(vertexIndexBytes)) {
@@ -400,6 +443,9 @@ function isPostVertexSectionPlausible(reader: BinaryReader, indexSizes: PmxIndex
   const textureCount = peekI32(reader, textureCountOffset);
   if (textureCount === undefined || textureCount < 0) {
     return false;
+  }
+  if (textureCount > maxPmxSectionCount) {
+    throw new Error(`Invalid PMX texture count: ${textureCount}`);
   }
 
   const remainingAfterTextureCount = reader.view.byteLength - (textureCountOffset + 4);
@@ -631,7 +677,7 @@ function readVec4(reader: BinaryReader): [number, number, number, number] {
 }
 
 function readIkLinks(reader: BinaryReader, sizes: PmxIndexSizes) {
-  const linkCount = reader.i32();
+  const linkCount = readCount(reader, "IK link");
   const links = [];
   for (let i = 0; i < linkCount; i++) {
     const boneIndex = reader.index(sizes.bone);
@@ -655,7 +701,7 @@ function readMorph(reader: BinaryReader, readText: () => string, sizes: PmxIndex
   const englishName = readText();
   reader.skip(1);
   const type = reader.u8();
-  const count = reader.i32();
+  const count = readCount(reader, "morph offset");
   const morph: MorphData = {
     name,
     englishName,
@@ -778,7 +824,7 @@ function readDisplayFrame(
   const name = readText();
   const englishName = readText();
   const special = reader.u8() === 1;
-  const count = reader.i32();
+  const count = readCount(reader, "display frame entry");
   const frames: DisplayFrameData["frames"] = [];
   for (let i = 0; i < count; i++) {
     const type = reader.u8();
@@ -837,7 +883,7 @@ function readSoftBodies(
   readText: () => string,
   sizes: PmxIndexSizes
 ): SoftBodyData[] {
-  const count = reader.i32();
+  const count = readCount(reader, "soft body");
   const softBodies: SoftBodyData[] = [];
   for (let i = 0; i < count; i++) {
     softBodies.push({
@@ -894,7 +940,7 @@ function readSoftBodies(
 }
 
 function readSoftBodyAnchors(reader: BinaryReader, sizes: PmxIndexSizes): SoftBodyData["anchors"] {
-  const count = reader.i32();
+  const count = readCount(reader, "soft body anchor");
   const anchors: SoftBodyData["anchors"] = [];
   for (let i = 0; i < count; i++) {
     anchors.push({
@@ -907,7 +953,7 @@ function readSoftBodyAnchors(reader: BinaryReader, sizes: PmxIndexSizes): SoftBo
 }
 
 function readSoftBodyPinnedVertexIndices(reader: BinaryReader, sizes: PmxIndexSizes): number[] {
-  const count = reader.i32();
+  const count = readCount(reader, "soft body pinned vertex");
   const vertexIndices: number[] = [];
   for (let i = 0; i < count; i++) {
     vertexIndices.push(readVertexIndex(reader, sizes.vertex));
