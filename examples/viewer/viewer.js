@@ -1094,13 +1094,21 @@ function loadAmmoScript() {
   ammoScriptLoadPromise ??= new Promise((resolve) => {
     const script = document.createElement("script");
     let settled = false;
+    let loadFrame = 0;
+    const timeoutId = window.setTimeout(() => {
+      settle(false, "ammo.js script load", new Error(`Timed out loading ${ammoScriptUrl}`));
+    }, 10000);
 
     const settle = (loaded, phase, error) => {
       if (settled) {
         return;
       }
       settled = true;
-      window.removeEventListener("error", handleWindowError);
+      window.clearTimeout(timeoutId);
+      if (loadFrame) {
+        window.cancelAnimationFrame(loadFrame);
+      }
+      window.removeEventListener("error", handleWindowError, { capture: true });
       script.removeEventListener("load", handleLoad);
       script.removeEventListener("error", handleScriptError);
       if (!loaded && error) {
@@ -1113,18 +1121,22 @@ function loadAmmoScript() {
       if (!isAmmoScriptErrorEvent(event)) {
         return;
       }
+      event.preventDefault();
       settle(false, "ammo.js script eval", event.error ?? new Error(event.message));
     };
 
     const handleLoad = () => {
-      settle(true);
+      loadFrame = window.requestAnimationFrame(() => {
+        loadFrame = 0;
+        settle(true);
+      });
     };
 
     const handleScriptError = () => {
       settle(false, "ammo.js script load", new Error(`Failed to load ${ammoScriptUrl}`));
     };
 
-    window.addEventListener("error", handleWindowError);
+    window.addEventListener("error", handleWindowError, { capture: true });
     script.addEventListener("load", handleLoad);
     script.addEventListener("error", handleScriptError);
     script.async = true;
@@ -1136,10 +1148,13 @@ function loadAmmoScript() {
 }
 
 function isAmmoScriptErrorEvent(event) {
-  if (!event.filename) {
-    return false;
+  const filename = event.filename ?? "";
+  if (filename === new URL(ammoScriptUrl, location.href).href || filename.endsWith(ammoScriptUrl)) {
+    return true;
   }
-  return event.filename === new URL(ammoScriptUrl, location.href).href;
+  const errorName = typeof event.error?.name === "string" ? event.error.name : "";
+  const errorMessage = typeof event.error?.message === "string" ? event.error.message : event.message;
+  return errorName === "RangeError" || /allocation/i.test(errorMessage);
 }
 
 function getAmmoCandidate() {
