@@ -114,6 +114,15 @@ to `test-results/visual/diff/`, and writes a machine-readable
 thresholds, and pass/fail status. Thresholds live in the case manifest and are
 intentionally loose for early CI reporting.
 
+For local manual checks against user-owned PMX/VMD assets, set
+`MMD_VIEWER_DATA_ROOT` to a directory outside the repository and edit a local
+copy of `scripts/visual-regression/real-models.manifest.json` with paths
+relative to that root. `npm run render:visual:real-models` writes current PNGs
+to `test-results/visual/real-models/current/`; the baseline script writes
+`test-results/visual/real-models/baseline/`. If `MMD_VIEWER_DATA_ROOT` is not
+set, the profile exits successfully with a skip message. Real-model outputs and
+assets are local-only and are not required for normal CI.
+
 ## Usage - Model Loading
 
 ```ts

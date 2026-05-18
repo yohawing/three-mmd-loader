@@ -1,11 +1,10 @@
 import { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
-import { createReadStream, existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
+import { browserLaunchOptions, sha256File } from "./render-shared.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -568,41 +567,6 @@ function rendererHtml() {
     </script>
   </body>
 </html>`;
-}
-
-function browserLaunchOptions() {
-  const executablePath = findBrowserExecutable();
-  return executablePath === undefined ? {} : { executablePath };
-}
-
-function findBrowserExecutable() {
-  const explicitPath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
-  if (explicitPath !== undefined && existsSync(explicitPath)) {
-    return explicitPath;
-  }
-
-  const programFiles = process.env.ProgramFiles;
-  const programFilesX86 = process.env["ProgramFiles(x86)"];
-  const localAppData = process.env.LOCALAPPDATA;
-  const candidates = [
-    programFiles === undefined ? undefined : path.join(programFiles, "Google", "Chrome", "Application", "chrome.exe"),
-    programFilesX86 === undefined ? undefined : path.join(programFilesX86, "Google", "Chrome", "Application", "chrome.exe"),
-    programFiles === undefined ? undefined : path.join(programFiles, "Microsoft", "Edge", "Application", "msedge.exe"),
-    programFilesX86 === undefined ? undefined : path.join(programFilesX86, "Microsoft", "Edge", "Application", "msedge.exe"),
-    localAppData === undefined ? undefined : path.join(localAppData, "Google", "Chrome", "Application", "chrome.exe")
-  ];
-
-  return candidates.find(candidate => candidate !== undefined && existsSync(candidate));
-}
-
-function sha256File(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = createHash("sha256");
-    const stream = createReadStream(filePath);
-    stream.on("error", reject);
-    stream.on("data", chunk => hash.update(chunk));
-    stream.on("end", () => resolve(hash.digest("hex")));
-  });
 }
 
 await main();

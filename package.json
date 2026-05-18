@@ -54,7 +54,10 @@
     "generate:fixtures:minimal-pmx": "node scripts/fixtures/generate-minimal-pmx.mjs",
     "render:visual": "node scripts/visual-regression/render-cases.mjs",
     "render:visual:baseline": "node scripts/visual-regression/render-cases.mjs --mode baseline",
+    "render:visual:real-models": "npm run build && node scripts/visual-regression/render-real-models.mjs",
+    "render:visual:real-models:baseline": "npm run build && node scripts/visual-regression/render-real-models.mjs --mode baseline",
     "visual:report": "node scripts/visual-regression/compute-metrics.mjs",
+    "visual:report:real-models": "node scripts/visual-regression/compute-metrics.mjs --profile real-models",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "test": "vitest run",
     "lint": "eslint ."

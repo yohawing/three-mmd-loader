@@ -8,30 +8,46 @@ import { PNG } from "pngjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
-const manifestPath = path.join(__dirname, "cases.manifest.json");
 const visualRoot = path.join(repoRoot, "test-results", "visual");
+const profiles = {
+  shaderball: {
+    manifestPath: path.join(__dirname, "cases.manifest.json"),
+    root: visualRoot,
+    caseKey: "id"
+  },
+  "real-models": {
+    manifestPath: path.join(__dirname, "real-models.manifest.json"),
+    root: path.join(visualRoot, "real-models"),
+    caseKey: "name"
+  }
+};
 const defaultThresholds = { mean: 0.03, p95: 0.12 };
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const manifest = await loadManifest();
+  const profile = profiles[options.profile];
+  if (profile === undefined) {
+    throw new Error(`Unknown visual regression profile: ${options.profile}`);
+  }
+  const manifest = await loadManifest(profile.manifestPath);
   const selectedCases = selectCases(manifest.cases, options.caseId);
-  const baselineDir = options.baselineDir ?? path.join(visualRoot, "baseline");
-  const currentDir = options.currentDir ?? path.join(visualRoot, "current");
-  const diffDir = options.diffDir ?? path.join(visualRoot, "diff");
-  const reportPath = options.reportPath ?? path.join(visualRoot, "report.json");
+  const baselineDir = options.baselineDir ?? path.join(profile.root, "baseline");
+  const currentDir = options.currentDir ?? path.join(profile.root, "current");
+  const diffDir = options.diffDir ?? path.join(profile.root, "diff");
+  const reportPath = options.reportPath ?? path.join(profile.root, "report.json");
 
   await mkdir(diffDir, { recursive: true });
   await mkdir(path.dirname(reportPath), { recursive: true });
 
   const results = [];
   for (const visualCase of selectedCases) {
-    const baselinePath = path.join(baselineDir, `${visualCase.id}.png`);
-    const currentPath = path.join(currentDir, `${visualCase.id}.png`);
-    const diffPath = path.join(diffDir, `${visualCase.id}.png`);
+    const caseId = visualCase[profile.caseKey];
+    const baselinePath = path.join(baselineDir, `${caseId}.png`);
+    const currentPath = path.join(currentDir, `${caseId}.png`);
+    const diffPath = path.join(diffDir, `${caseId}.png`);
     const thresholds = normalizeThresholds(visualCase.thresholds);
     const result = await compareCase({
-      id: visualCase.id,
+      id: caseId,
       baselinePath,
       currentPath,
       diffPath,
@@ -55,7 +71,7 @@ async function main() {
 
   await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 
-  console.log(`Compared ${results.length} visual case(s)`);
+  console.log(`Compared ${results.length} visual case(s) for profile ${options.profile}`);
   for (const result of results) {
     const status = result.pass ? "PASS" : "FAIL";
     console.log(
@@ -173,8 +189,8 @@ async function writePng(png, filePath) {
   });
 }
 
-async function loadManifest() {
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+async function loadManifest(filePath) {
+  const manifest = JSON.parse(await readFile(filePath, "utf8"));
   if (!Array.isArray(manifest.cases)) {
     throw new Error("Manifest must include a cases array");
   }
@@ -186,7 +202,7 @@ function selectCases(cases, caseId) {
     return cases;
   }
 
-  const selected = cases.filter(visualCase => visualCase.id === caseId);
+  const selected = cases.filter(visualCase => visualCase.id === caseId || visualCase.name === caseId);
   if (selected.length === 0) {
     throw new Error(`Unknown visual regression case: ${caseId}`);
   }
@@ -216,7 +232,8 @@ function parseArgs(args) {
     currentDir: undefined,
     diffDir: undefined,
     reportPath: undefined,
-    caseId: undefined
+    caseId: undefined,
+    profile: "shaderball"
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -231,6 +248,8 @@ function parseArgs(args) {
       options.reportPath = requireValue(args, (index += 1), arg);
     } else if (arg === "--case") {
       options.caseId = requireRawValue(args, (index += 1), arg);
+    } else if (arg === "--profile") {
+      options.profile = requireRawValue(args, (index += 1), arg);
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
