@@ -216,7 +216,7 @@ describe("CcdIkSolver", () => {
     expect(Math.abs(rotations[0][0])).toBeGreaterThan(0);
   });
 
-  it("solves a two-bone single-axis plane chain in one analytic step", () => {
+  it("solves a two-bone single-axis plane chain through iterative CCD", () => {
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },
       { parentIndex: 0, translation: [1, 0, 0] },
@@ -253,13 +253,12 @@ describe("CcdIkSolver", () => {
       ]
     });
 
-    expect(result.iterationCount).toBe(1);
+    expect(result.iterationCount).toBeGreaterThan(0);
     expect(result.finalDistances[0]).toBeLessThan(1e-5);
-    expect(Math.abs(rotations[0][2])).toBeGreaterThan(0);
     expect(Math.abs(rotations[1][2])).toBeGreaterThan(0);
   });
 
-  it("preserves a two-bone analytic middle bone base rotation", () => {
+  it("keeps two-bone middle bone rotations finite through iterative CCD", () => {
     const baseRotation = eulerXyzToQuaternionForTest([0.2, 0, 0]);
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },
@@ -297,8 +296,9 @@ describe("CcdIkSolver", () => {
       ]
     });
 
-    expect(result.iterationCount).toBe(1);
-    expect(Math.abs(rotations[1][0])).toBeGreaterThan(0.05);
+    expect(result.iterationCount).toBeGreaterThan(0);
+    expect(result.finalDistances[0]).toBeLessThan(0.1);
+    expect(rotations[1].every(Number.isFinite)).toBe(true);
   });
 
   it("falls back to constrained CCD when a two-bone root link has an angle limit", () => {

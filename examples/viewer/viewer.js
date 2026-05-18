@@ -31,6 +31,7 @@ const motionFileInput = document.querySelector("#motion-file");
 const poseFileInput = document.querySelector("#pose-file");
 const audioFileInput = document.querySelector("#audio-file");
 const bgmAudio = document.querySelector("#bgm-audio");
+const restPoseClip = new THREE.AnimationClip("__rest_pose__", -1, []);
 
 if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error("Viewer canvas is missing");
@@ -300,6 +301,8 @@ async function loadModel(
       await loadMotion(pendingMotionSource, pendingMotionLabel);
     } else if (currentMotion?.clip) {
       currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
+    } else {
+      currentModel.runtime?.setAnimation(restPoseClip, currentModel.mesh);
     }
     setStatus("", "ready");
     updateStageState();
@@ -336,6 +339,10 @@ async function loadModelFolder(files) {
     fitCameraToObject(currentModel.mesh);
     if (pendingMotionSource) {
       await loadMotion(pendingMotionSource, pendingMotionLabel);
+    } else if (currentMotion?.clip) {
+      currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
+    } else {
+      currentModel.runtime?.setAnimation(restPoseClip, currentModel.mesh);
     }
     setStatus("", "ready");
     updateStageState();

@@ -75,21 +75,13 @@ export class CcdIkSolver {
         maxIkLoopCount
       );
       totalIterations +=
-        solveTwoBonePlaneChain(
+        solveChain(
           input.bones,
           translations,
           input.pose.rotations,
           matrices,
           chain,
           iterationCount
-        ) ??
-        solveChain(
-        input.bones,
-        translations,
-        input.pose.rotations,
-        matrices,
-        chain,
-        iterationCount
         );
       finalDistances.push(
         vectorLength(
@@ -269,110 +261,6 @@ function maxAnglePerIteration(chain: CcdIkChain): number {
     return Number.POSITIVE_INFINITY;
   }
   return Math.max(chain.maxAnglePerIteration, 0);
-}
-
-function solveTwoBonePlaneChain(
-  bones: readonly CcdIkBone[],
-  translations: readonly [number, number, number][],
-  rotations: MutableQuatTuple[],
-  matrices: Float32Array,
-  chain: CcdIkChain,
-  iterationCount: number
-): number | undefined {
-  if (iterationCount <= 0 || chain.links.length !== 2) {
-    return undefined;
-  }
-  const midLink = chain.links[0];
-  const rootLink = chain.links[1];
-  if (!midLink || !rootLink || midLink.enabled === false || rootLink.enabled === false) {
-    return undefined;
-  }
-  const midLimits = toLinkLimits(midLink.angleLimit);
-  const axisIndex = getSingleAxisLimit(midLimits);
-  if (!midLimits || axisIndex === null) {
-    return undefined;
-  }
-  if (rootLink.angleLimit) {
-    return undefined;
-  }
-  const rootIndex = rootLink.boneIndex;
-  const midIndex = midLink.boneIndex;
-  const effectorIndex = chain.effectorBoneIndex;
-  if (
-    rootIndex === effectorIndex ||
-    midIndex === effectorIndex ||
-    bones[midIndex]?.parentIndex !== rootIndex ||
-    bones[effectorIndex]?.parentIndex !== midIndex
-  ) {
-    return undefined;
-  }
-
-  const upper = translations[midIndex] ?? [0, 0, 0];
-  const lower = translations[effectorIndex] ?? [0, 0, 0];
-  const upperLength = vectorLength(upper);
-  const lowerLength = vectorLength(lower);
-  if (upperLength < 1e-8 || lowerLength < 1e-8) {
-    return undefined;
-  }
-
-  const rootPosition = matrixTranslation(matrices, rootIndex);
-  const goalPosition = matrixTranslation(matrices, chain.goalBoneIndex);
-  const targetVector = transformDirectionByInverseMatrix(
-    subtractVectors(goalPosition, rootPosition),
-    matrices,
-    rootIndex
-  );
-  const targetLength = vectorLength(targetVector);
-  if (targetLength < 1e-8) {
-    return undefined;
-  }
-
-  const reachableLength = clamp(
-    targetLength,
-    Math.abs(upperLength - lowerLength),
-    upperLength + lowerLength
-  );
-  const rawBendAngle = Math.acos(
-    clamp(
-      (reachableLength * reachableLength - upperLength * upperLength - lowerLength * lowerLength) /
-        (2 * upperLength * lowerLength),
-      -1,
-      1
-    )
-  );
-  const bendAngle = chooseLimitedBendAngle(rawBendAngle, midLimits, axisIndex);
-  const axis = axisTuple(axisIndex);
-  rotations[midIndex] = multiplyQuaternions(
-    axisAngleQuaternion(axis, bendAngle),
-    rotations[midIndex] ?? [0, 0, 0, 1]
-  );
-  composeWorldMatrices(bones, translations, rotations, matrices);
-
-  const currentVector = transformDirectionByInverseMatrix(
-    subtractVectors(matrixTranslation(matrices, effectorIndex), rootPosition),
-    matrices,
-    rootIndex
-  );
-  const rootDelta = quaternionFromUnitVectors(
-    normalizeVector(currentVector),
-    normalizeVector(targetVector)
-  );
-  rotations[rootIndex] = multiplyQuaternions(rotations[rootIndex] ?? [0, 0, 0, 1], rootDelta);
-  composeWorldMatrices(bones, translations, rotations, matrices);
-  return 1;
-}
-
-function chooseLimitedBendAngle(
-  rawAngle: number,
-  limits: LinkLimits,
-  axisIndex: number
-): number {
-  const lower = limits.lower[axisIndex];
-  const upper = limits.upper[axisIndex];
-  const candidates = [rawAngle, -rawAngle].map((angle) => clamp(angle, lower, upper));
-  return Math.abs(candidates[0] - rawAngle) < Math.abs(candidates[1] + rawAngle)
-    ? candidates[0]
-    : candidates[1];
 }
 
 function axisTuple(axisIndex: number): [number, number, number] {
@@ -872,21 +760,6 @@ function axisAngleQuaternion(
   const half = angle / 2;
   const scale = Math.sin(half);
   return normalizeQuaternion([axis[0] * scale, axis[1] * scale, axis[2] * scale, Math.cos(half)]);
-}
-
-function quaternionFromUnitVectors(
-  from: [number, number, number],
-  to: [number, number, number]
-): [number, number, number, number] {
-  const dot = clamp(dotVectors(from, to), -1, 1);
-  if (dot > 1 - 1e-8) {
-    return [0, 0, 0, 1];
-  }
-  if (dot < -1 + 1e-8) {
-    return axisAngleQuaternion(stablePerpendicularAxis(from), Math.PI);
-  }
-  const axis = crossVectors(from, to);
-  return normalizeQuaternion([axis[0], axis[1], axis[2], 1 + dot]);
 }
 
 function multiplyQuaternions(left: QuatTuple, right: QuatTuple): [number, number, number, number] {
