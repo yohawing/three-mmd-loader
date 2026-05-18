@@ -7,6 +7,7 @@
   --text-muted: #5e6974;
   --accent: #256f9f;
   --danger: #b42323;
+  --warning: #9a5b00;
   --radius: 8px;
   --chrome-gap: 10px;
   --transport-height: 54px;
@@ -127,6 +128,10 @@ input:focus-visible {
 
 .top-bar.is-error .status {
   color: var(--danger);
+}
+
+.top-bar.is-warning .status {
+  color: var(--warning);
 }
 
 .status,

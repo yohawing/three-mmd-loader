@@ -343,6 +343,7 @@ async function loadModel(
       currentModel.runtime?.setAnimation(restPoseAnimation, currentModel.mesh);
     }
     setStatus("", "ready");
+    reportTextureDiagnostics(currentModel);
     updateStageState();
     renderStillFrame();
   } catch (error) {
@@ -383,6 +384,7 @@ async function loadModelFolder(files) {
       currentModel.runtime?.setAnimation(restPoseAnimation, currentModel.mesh);
     }
     setStatus("", "ready");
+    reportTextureDiagnostics(currentModel);
     updateStageState();
     renderStillFrame();
   } catch (error) {
@@ -903,6 +905,33 @@ function setStatus(message, state = "ready") {
   statusText.textContent = message;
   statusText.classList.toggle("is-loading", state === "loading");
   topBar?.classList.toggle("is-error", state === "error");
+  topBar?.classList.toggle("is-warning", state === "warning");
+}
+
+function reportTextureDiagnostics(model) {
+  const diagnostics = model.textureDiagnostics ?? [];
+  if (diagnostics.length === 0) {
+    return;
+  }
+
+  const summaryRows = diagnostics.map((diagnostic) => ({
+    level: diagnostic.level,
+    code: diagnostic.code,
+    materialIndex: diagnostic.materialIndex,
+    textureKind: diagnostic.textureKind,
+    path: diagnostic.path
+  }));
+
+  const readableRows = summaryRows.map(
+    (diagnostic) =>
+      `${diagnostic.level} ${diagnostic.code} material=${diagnostic.materialIndex} kind=${diagnostic.textureKind} path=${diagnostic.path}`
+  );
+
+  globalThis.console.warn("[mmd-viewer] texture diagnostics:", summaryRows, readableRows);
+  setStatus(
+    `Loaded with ${diagnostics.length} texture ${diagnostics.length === 1 ? "warning" : "warnings"} (see console)`,
+    "warning"
+  );
 }
 
 function setDisplayedText(element, text) {
