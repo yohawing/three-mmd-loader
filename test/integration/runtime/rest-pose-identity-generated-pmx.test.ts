@@ -32,17 +32,14 @@ describe("generated PMX rest pose identity regression", () => {
     }
   );
 
-  it("documents that rest pose IK currently runs while non-chain torso bones stay identity", async () => {
+  it("keeps IK chain link bones identity when rest pose evaluation skips IK", async () => {
     const model = await loadGeneratedRestPoseModel("ik-chain");
 
     evaluateRestPose(model);
 
-    for (const boneName of ["センター", "腰", "上半身"]) {
+    for (const boneName of ["センター", "腰", "上半身", "左足"]) {
       expectQuaternionIdentity(findBone(model.mesh, boneName).quaternion);
     }
-
-    const ikLinkRotation = findBone(model.mesh, "左足").quaternion;
-    expect(quaternionAngleDegrees(ikLinkRotation, new THREE.Quaternion())).toBeGreaterThan(0.1);
   });
 });
 
@@ -65,7 +62,7 @@ function evaluateRestPose(model: Awaited<ReturnType<ThreeMmdLoader["loadModel"]>
   const runtime = model.runtime;
   expect(runtime).toBeDefined();
   runtime?.setAnimation(createEmptyMmdClip("rest-pose"), model.mesh);
-  runtime?.evaluate(0, { physics: false });
+  runtime?.evaluate(0, { physics: false, ik: false });
 }
 
 function findBone(mesh: THREE.SkinnedMesh, mmdName: string): THREE.Bone {
@@ -82,11 +79,6 @@ function expectQuaternionIdentity(quaternion: THREE.Quaternion): void {
   expect(Math.abs(quaternion.y)).toBeLessThanOrEqual(epsilon);
   expect(Math.abs(quaternion.z)).toBeLessThanOrEqual(epsilon);
   expect(Math.abs(Math.abs(quaternion.w) - identity.w)).toBeLessThanOrEqual(epsilon);
-}
-
-function quaternionAngleDegrees(a: THREE.Quaternion, b: THREE.Quaternion): number {
-  const dot = Math.min(1, Math.abs(a.dot(b)));
-  return (2 * Math.acos(dot) * 180) / Math.PI;
 }
 
 function createEmptyMmdClip(name: string): THREE.AnimationClip {

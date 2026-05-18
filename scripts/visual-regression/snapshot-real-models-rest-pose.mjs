@@ -11,7 +11,7 @@ const manifestPath = path.join(__dirname, "real-models.manifest.json");
 const outputRoot = path.join(repoRoot, "test-results", "visual", "real-models-rest-pose");
 const supportedModes = new Set(["current", "baseline"]);
 const dataRootEnvName = "MMD_VIEWER_DATA_ROOT";
-const defaultWatchBones = ["センター", "腰", "下半身", "上半身"];
+const defaultWatchBones = ["センター", "腰", "下半身", "上半身", "左ひざ", "右ひざ", "左足", "右足"];
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -156,7 +156,7 @@ async function snapshotCase(visualCase, ThreeMmdLoader) {
   });
   const model = await loader.loadModel(bytes);
   model.runtime?.setAnimation(createEmptyMmdClip("rest-pose"), model.mesh);
-  model.runtime?.evaluate(0, { physics: false });
+  model.runtime?.evaluate(0, { physics: false, ik: false });
   model.mesh.updateMatrixWorld(true);
 
   const bones = {};
