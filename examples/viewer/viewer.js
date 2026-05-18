@@ -492,10 +492,7 @@ function clearModel() {
   restoreDebugMaterials();
   if (currentModel) {
     scene.remove(currentModel.mesh);
-    currentModel.mesh.geometry.dispose();
-    for (const material of normalizeMaterials(currentModel.mesh.material)) {
-      material.dispose();
-    }
+    disposeModelResources(currentModel);
   }
   currentModel = undefined;
   currentMotion = undefined;
@@ -509,6 +506,46 @@ function clearModel() {
   updatePlaybackDisplay();
   updateStageState();
   updateTransportState();
+}
+
+function disposeModelResources(model) {
+  const disposedGeometries = new Set();
+  const disposedMaterials = new Set();
+  const disposedTextures = new Set();
+  const meshes = [
+    model.mesh,
+    ...(model.outlineMeshes ?? []),
+    ...(model.renderOrderMeshes ?? [])
+  ];
+  for (const mesh of meshes) {
+    mesh.parent?.remove(mesh);
+    if (mesh.geometry && !disposedGeometries.has(mesh.geometry)) {
+      mesh.geometry.dispose();
+      disposedGeometries.add(mesh.geometry);
+    }
+    for (const material of normalizeMaterials(mesh.material)) {
+      disposeMaterialResources(material, disposedMaterials, disposedTextures);
+    }
+  }
+}
+
+function disposeMaterialResources(material, disposedMaterials, disposedTextures) {
+  disposeTexture(material.map, disposedTextures);
+  disposeTexture(material.gradientMap, disposedTextures);
+  disposeTexture(material.alphaMap, disposedTextures);
+  disposeTexture(material.userData?.mmdSphereTexture, disposedTextures);
+  if (!disposedMaterials.has(material)) {
+    material.dispose();
+    disposedMaterials.add(material);
+  }
+}
+
+function disposeTexture(texture, disposedTextures) {
+  if (!texture || disposedTextures.has(texture)) {
+    return;
+  }
+  texture.dispose();
+  disposedTextures.add(texture);
 }
 
 function fitCameraToObject(object) {
