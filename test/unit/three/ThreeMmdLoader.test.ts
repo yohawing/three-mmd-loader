@@ -2,12 +2,16 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThreeMmdLoader } from "../../../src/index.js";
 import type { MmdAnimation, ModelSource, ThreeMmdLoaderOptions } from "../../../src/index.js";
 
 describe("ThreeMmdLoader", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("preserves construction options as a public facade shell", () => {
     const options: ThreeMmdLoaderOptions = {
       runtime: { frameRate: 60 },
@@ -58,6 +62,25 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.geometry.index?.count).toBe(36);
     expect(model.source).toEqual({ kind: "bytes", byteLength: source.byteLength });
     expect(model.textureDiagnostics).toEqual([]);
+  });
+
+  it("loads a PMX model from a string URL source", async () => {
+    const bytes = createMinimalPmxModelBytes({ materialCount: 0 });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(bytes))
+    );
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel("https://example.test/models/minimal.pmx");
+
+    expect(fetch).toHaveBeenCalledWith("https://example.test/models/minimal.pmx");
+    expect(model.source).toEqual({
+      kind: "url",
+      byteLength: bytes.byteLength,
+      name: "minimal.pmx"
+    });
+    expect(model.mesh.isSkinnedMesh).toBe(true);
   });
 
   it("lazy-creates outline and render-order proxy meshes behind compatible properties", async () => {
