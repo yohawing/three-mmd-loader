@@ -148,6 +148,41 @@ describe("DefaultMmdRuntime", () => {
     });
   });
 
+  it("splits seek, resetPose, and clearAnimation responsibilities", () => {
+    const bone = new THREE.Bone();
+    bone.name = "moving";
+    bone.position.set(0.25, 0, 0);
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    const animation = createEmptyMmdAnimation();
+    animation.metadata.maxFrame = 30;
+    animation.boneTracks.moving = [
+      { frame: 0, translation: [1, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 30, translation: [2, 0, 0], rotation: [0, 0, 0, 1] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0, { ik: false, physics: false });
+    expect(bone.position.x).toBeCloseTo(1.25);
+
+    expect(runtime.seek(1)).toEqual({ seconds: 1, frame: 30, frameRate: 30 });
+    expect(bone.position.x).toBeCloseTo(1.25);
+
+    runtime.resetPose();
+    expect(bone.position.x).toBeCloseTo(0.25);
+
+    runtime.evaluate(1, { ik: false, physics: false });
+    expect(bone.position.x).toBeCloseTo(2.25);
+
+    runtime.clearAnimation();
+    runtime.seek(0);
+    runtime.evaluate(0, { ik: false, physics: false });
+
+    expect(bone.position.x).toBeCloseTo(2.25);
+  });
+
   it("rejects non-finite frame state inputs", () => {
     const runtime = new DefaultMmdRuntime();
 

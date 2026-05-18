@@ -55,6 +55,12 @@ export interface MmdRuntime {
     mesh: THREE.Object3D | null | undefined,
     options?: MmdRuntimeEvaluateOptions
   ): MmdFrameState;
+  seek(seconds: number): MmdFrameState;
+  resetPose(): void;
+  clearAnimation(): void;
+  /**
+   * @deprecated Prefer seek / resetPose / clearAnimation for finer control.
+   */
   reset(seconds?: number): MmdFrameState;
   frameState(): MmdFrameState;
   debugState(): MmdRuntimeDebugState;
@@ -164,12 +170,30 @@ export class DefaultMmdRuntime implements MmdRuntime {
     return state;
   }
 
-  reset(seconds = 0): MmdFrameState {
+  seek(seconds: number): MmdFrameState {
+    this.state = createFrameState(seconds, this.frameRate);
+    return this.frameState();
+  }
+
+  resetPose(): void {
     this.restoreRestTransforms();
-    this.mesh = undefined;
-    this.mmdAnimation = undefined;
-    this.restTransforms = [];
     this.preAppendTransforms = [];
+  }
+
+  clearAnimation(): void {
+    this.mmdAnimation = undefined;
+    this.bonePhysicsToggles = {};
+  }
+
+  /**
+   * @deprecated Prefer seek / resetPose / clearAnimation for finer control.
+   */
+  reset(seconds = 0): MmdFrameState {
+    this.seek(seconds);
+    this.resetPose();
+    this.clearAnimation();
+    this.mesh = undefined;
+    this.restTransforms = [];
     this.physicsSimulation?.reset(seconds);
     this.physicsBackend?.reset?.(
       createPhysicsResetContext(createFrameState(seconds, this.frameRate))
@@ -180,7 +204,6 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.debugStages = createEmptyDebugStages();
     this.previousEvaluateSeconds = undefined;
     this.physicsDisabled = false;
-    this.state = createFrameState(seconds, this.frameRate);
     return this.frameState();
   }
 
