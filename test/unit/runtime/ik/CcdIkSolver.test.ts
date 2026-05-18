@@ -877,4 +877,68 @@ describe("CcdIkSolver", () => {
       })
     ).toThrow("CCD IK link angle limit minimum must not exceed maximum");
   });
+
+  it("prepares static chain validation once and solves prepared chains with dynamic poses", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1, 1, 0] }
+    ];
+    const solver = new CcdIkSolver();
+    const chains = solver.prepareChains(
+      [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [{ boneIndex: 1 }],
+          iterationCount: 4,
+          maxAnglePerIteration: Math.PI
+        }
+      ],
+      bones
+    );
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = solver.solvePrepared({
+      bones,
+      pose: { rotations },
+      chains
+    });
+
+    expect(result.finalDistances[0]).toBeLessThan(1e-5);
+    expect(rotations[1][2]).toBeCloseTo(Math.SQRT1_2, 5);
+    expect(() =>
+      solver.prepareChains(
+        [{ goalBoneIndex: 4, effectorBoneIndex: 2, links: [], iterationCount: 1 }],
+        bones
+      )
+    ).toThrow("CCD IK goalBoneIndex is out of range");
+    expect(() =>
+      solver.solvePrepared({
+        bones,
+        pose: { rotations: [] },
+        chains
+      })
+    ).toThrow("CCD IK pose rotation count must match bone count");
+    expect(() =>
+      solver.solvePrepared({
+        bones,
+        pose: { rotations },
+        chains: [
+          {
+            goalBoneIndex: 3,
+            effectorBoneIndex: 2,
+            links: [{ boneIndex: 1 }],
+            iterationCount: 4
+          }
+        ] as never
+      })
+    ).toThrow("CCD IK chain must be prepared");
+  });
 });

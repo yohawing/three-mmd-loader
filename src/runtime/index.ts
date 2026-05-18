@@ -19,6 +19,7 @@ import {
 } from "../physics/legacyPhysicsBridge.js";
 import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
 import { CcdIkSolver } from "./ik/index.js";
+import type { CcdIkBone, CcdIkPreparedChain } from "./ik/index.js";
 
 export * from "./ik/index.js";
 
@@ -85,6 +86,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private readonly physicsBackend: MmdPhysicsBackend | undefined;
   private previousEvaluateSeconds: number | undefined;
   private physicsDisabled = false;
+  private preparedIkChains: CcdIkPreparedChain[] = [];
   private readonly scratchAppendTranslations: THREE.Vector3[] = [];
   private readonly scratchAppendRotations: THREE.Quaternion[] = [];
   private readonly scratchReapplyAppendTranslations: THREE.Vector3[] = [];
@@ -165,6 +167,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     );
     this.externalPhysicsData = undefined;
     this.bonePhysicsToggles = {};
+    this.preparedIkChains = [];
     this.debugStages = createEmptyDebugStages();
     this.previousEvaluateSeconds = undefined;
     this.physicsDisabled = false;
@@ -181,6 +184,10 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
     this.prepareAnimationTarget(mesh);
     this.mmdAnimation = animation;
+    this.preparedIkChains = this.ikSolver.prepareChains(
+      readIkChains(mesh),
+      createCcdIkStaticBones(mesh)
+    );
     this.applyMmdAnimation(this.state.frame);
   }
 
@@ -244,7 +251,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     if (!mesh) {
       return new Set();
     }
-    const chains = readIkChains(mesh);
+    const chains = this.preparedIkChains;
     if (chains.length === 0) {
       return new Set();
     }
@@ -255,7 +262,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
       translation: [bone.position.x, bone.position.y, -bone.position.z] as [number, number, number]
     }));
     const rotations = mesh.skeleton.bones.map((bone) => threeQuaternionToMmd(bone.quaternion));
-    this.ikSolver.solve({
+    this.ikSolver.solvePrepared({
       bones,
       pose: { rotations },
       chains
@@ -1519,6 +1526,14 @@ function readBoneLayer(bone: THREE.Bone): number {
 function readIkChains(mesh: THREE.SkinnedMesh): RuntimeIkChain[] {
   const chains = mesh.userData.mmdIkChains;
   return Array.isArray(chains) ? chains.filter(isRuntimeIkChain) : [];
+}
+
+function createCcdIkStaticBones(mesh: THREE.SkinnedMesh): CcdIkBone[] {
+  return mesh.skeleton.bones.map((bone) => ({
+    parentIndex:
+      bone.parent instanceof THREE.Bone ? mesh.skeleton.bones.indexOf(bone.parent) : -1,
+    translation: [0, 0, 0] as const
+  }));
 }
 
 function collectIkSourceBoneIndices(chains: readonly RuntimeIkChain[]): Set<number> {

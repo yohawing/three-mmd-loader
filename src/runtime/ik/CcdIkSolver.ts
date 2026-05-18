@@ -38,6 +38,18 @@ export interface CcdIkSolveInput {
   readonly chains: readonly CcdIkChain[];
 }
 
+const PREPARED_CHAIN_BRAND: unique symbol = Symbol("PreparedCcdIkChain");
+
+export type CcdIkPreparedChain = CcdIkChain & {
+  readonly [PREPARED_CHAIN_BRAND]: true;
+};
+
+export interface CcdIkPreparedSolveInput {
+  readonly bones: readonly CcdIkBone[];
+  readonly pose: CcdIkPose;
+  readonly chains: readonly CcdIkPreparedChain[];
+}
+
 export interface CcdIkSolveResult {
   readonly chainCount: number;
   readonly iterationCount: number;
@@ -58,9 +70,37 @@ const maxIkLoopCount = 256;
 const matrixElementCount = 16;
 
 export class CcdIkSolver {
-  solve(input: CcdIkSolveInput): CcdIkSolveResult {
-    validateInput(input);
+  prepareChain(chain: CcdIkChain, bones: readonly CcdIkBone[]): CcdIkPreparedChain {
+    validateSkeleton(bones);
+    validateChain(chain, bones);
+    return brandPreparedChain(chain);
+  }
 
+  prepareChains(
+    chains: readonly CcdIkChain[],
+    bones: readonly CcdIkBone[]
+  ): CcdIkPreparedChain[] {
+    validateSkeleton(bones);
+    return chains.map((chain) => {
+      validateChain(chain, bones);
+      return brandPreparedChain(chain);
+    });
+  }
+
+  solve(input: CcdIkSolveInput): CcdIkSolveResult {
+    return this.solvePrepared({
+      bones: input.bones,
+      pose: input.pose,
+      chains: this.prepareChains(input.chains, input.bones)
+    });
+  }
+
+  solvePrepared(input: CcdIkPreparedSolveInput): CcdIkSolveResult {
+    for (const chain of input.chains) {
+      assertPreparedChain(chain);
+    }
+    validatePose(input.pose, input.bones.length);
+    assertFiniteBoneTranslations(input.bones);
     const translations = input.bones.map(
       (bone) => [...bone.translation] as [number, number, number]
     );
@@ -98,6 +138,21 @@ export class CcdIkSolver {
       iterationCount: totalIterations,
       finalDistances
     };
+  }
+}
+
+function brandPreparedChain(chain: CcdIkChain): CcdIkPreparedChain {
+  Object.defineProperty(chain, PREPARED_CHAIN_BRAND, {
+    value: true,
+    enumerable: false,
+    configurable: false
+  });
+  return chain as CcdIkPreparedChain;
+}
+
+function assertPreparedChain(chain: CcdIkPreparedChain): void {
+  if (chain[PREPARED_CHAIN_BRAND] !== true) {
+    throw new TypeError("CCD IK chain must be prepared with prepareChain or prepareChains");
   }
 }
 
@@ -359,61 +414,70 @@ function solvePlaneLink({
   composeWorldMatrices(bones, translations, rotations, matrices);
 }
 
-function validateInput(input: CcdIkSolveInput): void {
-  for (const [index, bone] of input.bones.entries()) {
+function validateSkeleton(bones: readonly CcdIkBone[]): void {
+  for (const [index, bone] of bones.entries()) {
     if (!Number.isInteger(bone.parentIndex) || bone.parentIndex < -1) {
       throw new RangeError("CCD IK bone parentIndex must be -1 or a valid bone index");
     }
     if (bone.parentIndex === index) {
       throw new RangeError("CCD IK bone cannot parent itself");
     }
-    if (bone.parentIndex >= input.bones.length) {
+    if (bone.parentIndex >= bones.length) {
       throw new RangeError("CCD IK bone parentIndex is out of range");
     }
-    assertFiniteVector(bone.translation, "bone translation");
   }
-  for (let index = 0; index < input.bones.length; index += 1) {
-    assertAcyclicParentChain(input.bones, index);
+  for (let index = 0; index < bones.length; index += 1) {
+    assertAcyclicParentChain(bones, index);
   }
-  if (input.pose.rotations.length !== input.bones.length) {
+}
+
+function validatePose(pose: CcdIkPose, boneCount: number): void {
+  if (pose.rotations.length !== boneCount) {
     throw new RangeError("CCD IK pose rotation count must match bone count");
   }
-  for (const rotation of input.pose.rotations) {
+  for (const rotation of pose.rotations) {
     assertFiniteQuaternion(rotation, "pose rotation");
   }
-  for (const chain of input.chains) {
-    assertBoneIndex(input.bones, chain.goalBoneIndex, "goalBoneIndex");
-    assertBoneIndex(input.bones, chain.effectorBoneIndex, "effectorBoneIndex");
-    if (!Number.isFinite(chain.iterationCount) || chain.iterationCount < 0) {
-      throw new RangeError("CCD IK iterationCount must be a finite non-negative number");
-    }
-    if (chain.maxAnglePerIteration !== undefined && !Number.isFinite(chain.maxAnglePerIteration)) {
-      throw new RangeError("CCD IK maxAnglePerIteration must be finite when provided");
-    }
-    if (
-      chain.tolerance !== undefined &&
-      (!Number.isFinite(chain.tolerance) || chain.tolerance < 0)
-    ) {
-      throw new RangeError("CCD IK tolerance must be a finite non-negative number");
-    }
-    for (const link of chain.links) {
-      assertBoneIndex(input.bones, link.boneIndex, "link boneIndex");
-      if (link.angleLimit !== undefined) {
-        assertFiniteVector(link.angleLimit.minimumAngle, "link minimumAngle");
-        assertFiniteVector(link.angleLimit.maximumAngle, "link maximumAngle");
-        for (let axis = 0; axis < 3; axis += 1) {
-          if (link.angleLimit.minimumAngle[axis] > link.angleLimit.maximumAngle[axis]) {
-            throw new RangeError("CCD IK link angle limit minimum must not exceed maximum");
-          }
+}
+
+function assertFiniteBoneTranslations(bones: readonly CcdIkBone[]): void {
+  for (const bone of bones) {
+    assertFiniteVector(bone.translation, "bone translation");
+  }
+}
+
+function validateChain(chain: CcdIkChain, bones: readonly CcdIkBone[]): void {
+  assertBoneIndex(bones, chain.goalBoneIndex, "goalBoneIndex");
+  assertBoneIndex(bones, chain.effectorBoneIndex, "effectorBoneIndex");
+  if (!Number.isFinite(chain.iterationCount) || chain.iterationCount < 0) {
+    throw new RangeError("CCD IK iterationCount must be a finite non-negative number");
+  }
+  if (chain.maxAnglePerIteration !== undefined && !Number.isFinite(chain.maxAnglePerIteration)) {
+    throw new RangeError("CCD IK maxAnglePerIteration must be finite when provided");
+  }
+  if (
+    chain.tolerance !== undefined &&
+    (!Number.isFinite(chain.tolerance) || chain.tolerance < 0)
+  ) {
+    throw new RangeError("CCD IK tolerance must be a finite non-negative number");
+  }
+  for (const link of chain.links) {
+    assertBoneIndex(bones, link.boneIndex, "link boneIndex");
+    if (link.angleLimit !== undefined) {
+      assertFiniteVector(link.angleLimit.minimumAngle, "link minimumAngle");
+      assertFiniteVector(link.angleLimit.maximumAngle, "link maximumAngle");
+      for (let axis = 0; axis < 3; axis += 1) {
+        if (link.angleLimit.minimumAngle[axis] > link.angleLimit.maximumAngle[axis]) {
+          throw new RangeError("CCD IK link angle limit minimum must not exceed maximum");
         }
       }
-      if (
-        link.limitsKind !== undefined &&
-        link.limitsKind !== "pmdKnee" &&
-        link.limitsKind !== "pmxLinkLimit"
-      ) {
-        throw new RangeError("CCD IK link limitsKind must be pmdKnee or pmxLinkLimit");
-      }
+    }
+    if (
+      link.limitsKind !== undefined &&
+      link.limitsKind !== "pmdKnee" &&
+      link.limitsKind !== "pmxLinkLimit"
+    ) {
+      throw new RangeError("CCD IK link limitsKind must be pmdKnee or pmxLinkLimit");
     }
   }
 }
