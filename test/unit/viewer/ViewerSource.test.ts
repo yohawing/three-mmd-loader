@@ -57,4 +57,32 @@ describe("example viewer source", () => {
     expect(dropHandler).toContain("await loadModelFolder(files)");
     expect(dropHandler).toContain("if (!shouldLoadModelFolder)");
   });
+
+  it("keeps same-folder VMD variants in a motion switcher instead of sequentially loading them", async () => {
+    const source = await readFile("examples/viewer/viewer.js", "utf8");
+    const html = await readFile("examples/viewer/index.html", "utf8");
+
+    expect(html).toContain('id="motion-switcher"');
+    expect(html).toContain('aria-label="Selected motion"');
+    expect(html).not.toContain('id="motion-name"');
+    expect(source).toContain("const motionSwitcher = document.querySelector(\"#motion-switcher\")");
+    expect(source).not.toContain("const motionNameText = document.querySelector(\"#motion-name\")");
+    expect(source).toContain("let currentMotionVmdFiles = []");
+    expect(source).toContain("currentMotionVmdFiles = [file]");
+    expect(source).toContain("currentMotionVmdFiles = vmdFiles");
+    expect(source).toContain("function findVmdFiles(files)");
+    expect(source).toContain("async function switchMotion(file)");
+    expect(source).toContain('setStatus(`Switching motion to ${file.name}`, "loading")');
+    expect(source).toContain("motionSwitcher.hidden = currentMotionVmdFiles.length === 0");
+
+    const dropHandler = source.slice(
+      source.indexOf("async function handleDroppedFiles"),
+      source.indexOf("async function collectDroppedFiles")
+    );
+    expect(dropHandler).toContain("const vmdFiles = findVmdFiles(files)");
+    expect(dropHandler).toContain("await loadMotion(vmdFiles[0])");
+    expect(dropHandler).toContain("vmdFiles.includes(file)");
+    expect(dropHandler).not.toContain('lowerName.endsWith(".vmd")');
+    expect(dropHandler).not.toContain("await loadMotion(file)");
+  });
 });

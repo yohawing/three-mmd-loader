@@ -19,7 +19,7 @@ const viewerShell = document.querySelector(".viewer-shell");
 const statusText = document.querySelector("#status");
 const physicsErrorBanner = document.querySelector("#physics-error");
 const modelSwitcher = document.querySelector("#model-switcher");
-const motionNameText = document.querySelector("#motion-name");
+const motionSwitcher = document.querySelector("#motion-switcher");
 const audioNameText = document.querySelector("#audio-name");
 const frameValueText = document.querySelector("#frame-value");
 const timeline = document.querySelector("#timeline");
@@ -91,6 +91,7 @@ let currentModel;
 let currentMotion;
 let currentFolderTextureMap;
 let currentFolderPmxFiles = [];
+let currentMotionVmdFiles = [];
 let pendingMotionSource;
 let pendingMotionLabel;
 let elapsedSeconds = 0;
@@ -180,9 +181,20 @@ function bindControls() {
       void switchFolderModel(selectedFile);
     }
   });
+  motionSwitcher?.addEventListener("change", () => {
+    if (!(motionSwitcher instanceof window.HTMLSelectElement)) {
+      return;
+    }
+    const selectedFile = currentMotionVmdFiles.find((file) => file.name === motionSwitcher.value);
+    if (selectedFile) {
+      void switchMotion(selectedFile);
+    }
+  });
   motionFileInput?.addEventListener("change", (event) => {
     const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
     if (file) {
+      currentMotionVmdFiles = [file];
+      updateMotionSwitcher(file);
       void loadMotion(file);
     }
   });
@@ -378,6 +390,7 @@ async function loadModel(
 
 async function loadModelFolder(files) {
   resetFolderModelState();
+  resetMotionSwitcherState();
   const modelFiles = findModelFiles(files);
   const modelFile = modelFiles[0];
   if (!modelFile) {
@@ -478,7 +491,7 @@ async function loadMotion(source, label = source.name ?? "motion") {
     if (!currentModel) {
       pendingMotionSource = source;
       pendingMotionLabel = label;
-      setDisplayedText(motionNameText, label);
+      updateMotionSwitcherSelection(source);
       setStatus("Motion queued", "ready");
       return;
     }
@@ -498,7 +511,7 @@ async function loadMotion(source, label = source.name ?? "motion") {
     elapsedSeconds = 0;
     timeline.value = "0";
     syncAudioToMotionTime();
-    setDisplayedText(motionNameText, label);
+    updateMotionSwitcherSelection(source);
     updatePlaybackDisplay();
     updateTransportState();
     syncPlaybackToCurrentAudioState();
@@ -525,7 +538,7 @@ async function loadPose(source, label = source.name ?? "pose") {
     elapsedSeconds = 0;
     timeline.max = "1";
     timeline.value = "0";
-    setDisplayedText(motionNameText, label);
+    resetMotionSwitcherState();
     updatePlaybackDisplay();
     updateTransportState();
     setStatus("", "ready");
@@ -584,7 +597,7 @@ function clearModel(options = {}) {
     resetFolderModelState();
   }
   if (!options.preserveMotion) {
-    setDisplayedText(motionNameText, "");
+    resetMotionSwitcherState();
   }
   elapsedSeconds = 0;
   if (timeline) {
@@ -909,15 +922,29 @@ function bindDropTarget() {
 async function handleDroppedFiles(dataTransfer) {
   const files = await collectDroppedFiles(dataTransfer);
   const modelFile = findModelFile(files);
+  const vmdFiles = findVmdFiles(files);
   const shouldLoadModelFolder =
     modelFile && files.some((file) => file.webkitRelativePath?.includes("/"));
+  if (vmdFiles.length > 0) {
+    currentMotionVmdFiles = vmdFiles;
+    updateMotionSwitcher(vmdFiles[0]);
+    pendingMotionSource = undefined;
+    pendingMotionLabel = undefined;
+  } else {
+    resetMotionSwitcherState();
+  }
   if (shouldLoadModelFolder) {
     await loadModelFolder(files);
   } else if (modelFile) {
     await loadModel(modelFile);
   }
+  if (vmdFiles.length > 0) {
+    currentMotionVmdFiles = vmdFiles;
+    updateMotionSwitcher(vmdFiles[0]);
+    await loadMotion(vmdFiles[0]);
+  }
   for (const file of files) {
-    if (file === modelFile) {
+    if (file === modelFile || vmdFiles.includes(file)) {
       continue;
     }
     const lowerName = file.name.toLowerCase();
@@ -925,8 +952,6 @@ async function handleDroppedFiles(dataTransfer) {
       if (!shouldLoadModelFolder) {
         await loadModel(file);
       }
-    } else if (lowerName.endsWith(".vmd")) {
-      await loadMotion(file);
     } else if (lowerName.endsWith(".vpd")) {
       await loadPose(file);
     } else if (isAudioFile(file)) {
@@ -1170,7 +1195,17 @@ function findModelFiles(files) {
     .sort((a, b) => modelFileKey(a).localeCompare(modelFileKey(b), undefined, { numeric: true }));
 }
 
+function findVmdFiles(files) {
+  return files
+    .filter((file) => file.name.toLowerCase().endsWith(".vmd"))
+    .sort((a, b) => motionFileKey(a).localeCompare(motionFileKey(b), undefined, { numeric: true }));
+}
+
 function modelFileKey(file) {
+  return normalizeRelativePath(file.webkitRelativePath || file.name);
+}
+
+function motionFileKey(file) {
   return normalizeRelativePath(file.webkitRelativePath || file.name);
 }
 
@@ -1179,6 +1214,11 @@ function createModelSwitcherEntry(source, label) {
     return source;
   }
   return { name: label };
+}
+
+async function switchMotion(file) {
+  setStatus(`Switching motion to ${file.name}`, "loading");
+  await loadMotion(file);
 }
 
 function updateModelSwitcher(selectedFile) {
@@ -1199,12 +1239,51 @@ function updateModelSwitcher(selectedFile) {
   updateChromeHeights();
 }
 
+function updateMotionSwitcher(selectedFile) {
+  if (!(motionSwitcher instanceof window.HTMLSelectElement)) {
+    return;
+  }
+
+  motionSwitcher.replaceChildren(
+    ...currentMotionVmdFiles.map((file) => {
+      const option = document.createElement("option");
+      option.value = file.name;
+      option.textContent = file.name;
+      return option;
+    })
+  );
+  motionSwitcher.value = selectedFile?.name ?? "";
+  motionSwitcher.hidden = currentMotionVmdFiles.length === 0;
+  updateChromeHeights();
+}
+
+function updateMotionSwitcherSelection(source) {
+  if (!(source instanceof window.File)) {
+    return;
+  }
+  const selectedFile = currentMotionVmdFiles.find(
+    (file) => file === source || file.name === source.name
+  );
+  if (selectedFile) {
+    updateMotionSwitcher(selectedFile);
+  }
+}
+
 function resetFolderModelState() {
   currentFolderTextureMap = undefined;
   currentFolderPmxFiles = [];
   if (modelSwitcher instanceof window.HTMLSelectElement) {
     modelSwitcher.replaceChildren();
     modelSwitcher.hidden = true;
+  }
+  updateChromeHeights();
+}
+
+function resetMotionSwitcherState() {
+  currentMotionVmdFiles = [];
+  if (motionSwitcher instanceof window.HTMLSelectElement) {
+    motionSwitcher.replaceChildren();
+    motionSwitcher.hidden = true;
   }
   updateChromeHeights();
 }
