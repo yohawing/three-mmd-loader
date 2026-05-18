@@ -42,6 +42,8 @@ const bundledSharedToonTextureUrls: TextureMap = {
 };
 
 let defaultToonGradientMap: THREE.DataTexture | undefined;
+const blobTextureCacheKeys = new WeakMap<Blob, number>();
+let nextBlobTextureCacheKey = 1;
 
 export function evaluateMmdTextureAlphaSamples(
   alphaSamples: ArrayLike<number>,
@@ -889,18 +891,29 @@ function createTextureCacheKey(
   resolved: string | URL | Blob,
   modelUrl: string | undefined
 ): string {
+  const normalizedPath = normalizeMmdTexturePath(texturePath).toLowerCase();
   const resolvedKey =
     typeof Blob !== "undefined" && resolved instanceof Blob
-      ? `blob:${normalizeMmdTexturePath(texturePath).toLowerCase()}`
+      ? `blob:${getBlobTextureCacheKey(resolved)}`
       : String(resolved);
   return [
     namespace,
     modelUrl ?? "",
-    normalizeMmdTexturePath(texturePath).toLowerCase(),
+    normalizedPath,
     resolvedKey,
     textureInfo?.invertY ? "invertY" : "",
     textureInfo?.noMipmap ? "noMipmap" : ""
   ].join("\0");
+}
+
+function getBlobTextureCacheKey(blob: Blob): number {
+  let key = blobTextureCacheKeys.get(blob);
+  if (key === undefined) {
+    key = nextBlobTextureCacheKey;
+    nextBlobTextureCacheKey += 1;
+    blobTextureCacheKeys.set(blob, key);
+  }
+  return key;
 }
 
 function evaluateBmp16BitfieldAlpha(

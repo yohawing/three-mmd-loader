@@ -111,6 +111,50 @@ describe("Three.js MMD materials", () => {
     expect(materials[1]?.map).toBe(texture);
   });
 
+  it("keeps distinct Blob textures separate when resolved from the same path", async () => {
+    const textureCache = new Map<string, Promise<THREE.Texture | undefined>>();
+    const loadedUrls: string[] = [];
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        loadedUrls.push(url);
+        const texture = new THREE.Texture();
+        texture.name = url;
+        queueMicrotask(() => onLoad?.(texture));
+        return texture;
+      }
+    };
+    const loadSpy = vi.spyOn(textureLoader, "load");
+    const firstMaterials = createThreeMmdMaterials([
+      createMaterialInfo({ texturePath: "textures/body.png" })
+    ]);
+    const secondMaterials = createThreeMmdMaterials([
+      createMaterialInfo({ texturePath: "textures/body.png" })
+    ]);
+
+    await applyThreeMmdMaterialTextures(
+      firstMaterials,
+      [createMaterialInfo({ texturePath: "textures/body.png" })],
+      {
+        textureMap: { "textures/body.png": new Blob([new Uint8Array([1, 2, 3])]) },
+        textureLoader,
+        textureCache
+      }
+    );
+    await applyThreeMmdMaterialTextures(
+      secondMaterials,
+      [createMaterialInfo({ texturePath: "textures/body.png" })],
+      {
+        textureMap: { "textures/body.png": new Blob([new Uint8Array([4, 5, 6])]) },
+        textureLoader,
+        textureCache
+      }
+    );
+
+    expect(loadSpy).toHaveBeenCalledTimes(2);
+    expect(loadedUrls[0]).not.toBe(loadedUrls[1]);
+    expect(firstMaterials[0]?.map).not.toBe(secondMaterials[0]?.map);
+  });
+
   it("revokes generated texture object URLs after successful loads and errors", async () => {
     const loadedUrls: string[] = [];
     const revokeSpy = vi.spyOn(URL, "revokeObjectURL");
