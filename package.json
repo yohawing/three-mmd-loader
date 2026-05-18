@@ -51,6 +51,7 @@
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",
     "check:fixtures": "node scripts/check-fixtures.mjs",
     "check:fixtures:physics": "node scripts/check-fixtures.mjs --physics",
+    "generate:fixtures:minimal-pmx": "node scripts/fixtures/generate-minimal-pmx.mjs",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "test": "vitest run",
     "lint": "eslint ."
