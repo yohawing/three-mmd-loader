@@ -123,6 +123,12 @@ to `test-results/visual/real-models/current/`; the baseline script writes
 set, the profile exits successfully with a skip message. Real-model outputs and
 assets are local-only and are not required for normal CI.
 
+The same real-model manifest can also drive rest-pose quaternion snapshots:
+`npm run snapshot:real-models:rest-pose:baseline`,
+`npm run snapshot:real-models:rest-pose`, then
+`npm run compare:real-models:rest-pose`. Cases may define `watchBones`; when
+omitted, the default torso list is `センター`, `腰`, `下半身`, and `上半身`.
+
 ## Usage - Model Loading
 
 ```ts

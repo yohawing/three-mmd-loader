@@ -124,6 +124,12 @@ baseline 用 script は `test-results/visual/real-models/baseline/` に出力し
 `MMD_VIEWER_DATA_ROOT` 未設定時は skip message を表示して正常終了します。
 real-model の出力と asset は local-only で、通常 CI の必須条件ではありません。
 
+同じ real-model manifest から rest-pose の quaternion snapshot も取得できます:
+`npm run snapshot:real-models:rest-pose:baseline`、
+`npm run snapshot:real-models:rest-pose`、続いて
+`npm run compare:real-models:rest-pose` を実行します。case には `watchBones`
+を指定でき、未指定時は `センター`、`腰`、`下半身`、`上半身` を監視します。
+
 ## 使い方 - モデル読み込み
 
 ```ts

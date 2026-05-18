@@ -36,6 +36,8 @@ interface RealModelVisualCase {
     far?: number;
   };
   thresholds?: { mean?: number; p95?: number };
+  watchBones?: string[];
+  restPoseThresholdDegrees?: number;
 }
 
 interface RealModelVisualManifest {
@@ -154,6 +156,13 @@ describe("local real-model visual regression manifest", () => {
       }
       expect(visualCase.timeSeconds ?? 0).toBeGreaterThanOrEqual(0);
       expect(visualCase.camera).toBe("front-fit");
+      if (visualCase.watchBones !== undefined) {
+        expect(visualCase.watchBones.length).toBeGreaterThan(0);
+        expect(visualCase.watchBones).toContain("腰");
+      }
+      if (visualCase.restPoseThresholdDegrees !== undefined) {
+        expect(visualCase.restPoseThresholdDegrees).toBeGreaterThan(0);
+      }
     }
   });
 });
