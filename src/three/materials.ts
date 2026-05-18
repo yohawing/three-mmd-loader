@@ -38,6 +38,7 @@ export interface ThreeMmdMaterialTextureOptions {
   readonly textureResolver?: TextureResolver;
   readonly textureMap?: TextureMap;
   readonly textureLoader?: ThreeMmdTextureLoader;
+  readonly textureCache?: Map<string, Promise<THREE.Texture | undefined>>;
   readonly modelUrl?: string;
   readonly geometry?: THREE.BufferGeometry;
   readonly morphs?: readonly MorphData[];
@@ -102,7 +103,8 @@ export async function applyThreeMmdMaterialTextures(
         options.modelUrl,
         resolver,
         diagnostics,
-        textureLoader
+        textureLoader,
+        options.textureCache
       );
       if (texture) {
         material.map = texture;

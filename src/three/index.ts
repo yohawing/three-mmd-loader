@@ -143,6 +143,8 @@ export interface ThreeMmdPose {
 }
 
 export class ThreeMmdLoader {
+  private readonly textureCache = new Map<string, Promise<THREE.Texture | undefined>>();
+
   constructor(readonly options: ThreeMmdLoaderOptions = {}) {
     validateLoaderOptions(options);
   }
@@ -159,7 +161,8 @@ export class ThreeMmdLoader {
       textureLoader: this.options.textureLoader,
       modelUrl: typeof source === "string" ? source : undefined,
       geometry: mesh.geometry,
-      morphs: modelData.morphs
+      morphs: modelData.morphs,
+      textureCache: this.textureCache
     });
     const renderOrder = computeMmdMaterialRenderOrder(
       materials.map((material, materialIndex) => ({

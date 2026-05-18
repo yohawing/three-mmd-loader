@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   attachMmdSphereTexture,
@@ -52,6 +52,10 @@ function createTextureLoaderMock(): ThreeMmdTextureLoader {
 }
 
 describe("Three.js MMD materials", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("loads diffuse, toon, and sphere textures for MMD material shading", async () => {
     const mmdMaterials = [
       createMaterialInfo({
@@ -78,6 +82,75 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.gradientMap?.minFilter).toBe(THREE.NearestFilter);
     expect(materials[0]?.userData.mmdSphereTexture?.name).toBe("resolved/body-sphere.png");
     expect(materials[0]?.envMap).toBeUndefined();
+  });
+
+  it("shares material textures with the same resolved path within a loader cache", async () => {
+    const mmdMaterials = [
+      createMaterialInfo({ texturePath: "textures/body.png" }),
+      createMaterialInfo({ texturePath: "textures/body.png" })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const texture = new THREE.Texture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        queueMicrotask(() => onLoad?.(texture));
+        return texture;
+      }
+    };
+    const loadSpy = vi.spyOn(textureLoader, "load");
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureLoader,
+      textureCache: new Map()
+    });
+
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+    expect(materials[0]?.map).toBe(texture);
+    expect(materials[1]?.map).toBe(texture);
+  });
+
+  it("revokes generated texture object URLs after successful loads and errors", async () => {
+    const loadedUrls: string[] = [];
+    const revokeSpy = vi.spyOn(URL, "revokeObjectURL");
+    const successLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        loadedUrls.push(url);
+        const texture = new THREE.Texture();
+        queueMicrotask(() => onLoad?.(texture));
+        return texture;
+      }
+    };
+    const errorLoader: ThreeMmdTextureLoader = {
+      load(url, _onLoad, _onProgress, onError) {
+        loadedUrls.push(url);
+        queueMicrotask(() => onError?.(new Error("failed")));
+        return new THREE.Texture();
+      }
+    };
+
+    await applyThreeMmdMaterialTextures(
+      createThreeMmdMaterials([createMaterialInfo({ texturePath: "textures/success.png" })]),
+      [createMaterialInfo({ texturePath: "textures/success.png" })],
+      {
+        textureMap: { "textures/success.png": new Blob([new Uint8Array([1, 2, 3])]) },
+        textureLoader: successLoader,
+        textureCache: new Map()
+      }
+    );
+    await applyThreeMmdMaterialTextures(
+      createThreeMmdMaterials([createMaterialInfo({ texturePath: "textures/error.png" })]),
+      [createMaterialInfo({ texturePath: "textures/error.png" })],
+      {
+        textureMap: { "textures/error.png": new Blob([new Uint8Array([4, 5, 6])]) },
+        textureLoader: errorLoader,
+        textureCache: new Map()
+      }
+    );
+
+    expect(revokeSpy).toHaveBeenCalledWith(loadedUrls[0]);
+    expect(revokeSpy).toHaveBeenCalledWith(loadedUrls[1]);
   });
 
   it("loads shared toon references from bundled BMP assets", async () => {

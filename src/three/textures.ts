@@ -318,7 +318,8 @@ export async function loadToonTexture(
   modelUrl: string | undefined,
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
-  textureLoader?: ThreeMmdTextureLoader
+  textureLoader?: ThreeMmdTextureLoader,
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
 ): Promise<THREE.Texture | undefined> {
   if (!material.toonTexturePath && material.sharedToonIndex === undefined) {
     return getDefaultToonGradientMap();
@@ -331,13 +332,23 @@ export async function loadToonTexture(
     ? resolveBundledSharedToonTexture(toonTexture.path)
     : undefined;
   const texture = bundledSharedToonTexture
-    ? await loadResolvedTexture(bundledSharedToonTexture, toonTexture.path, undefined, textureLoader)
+    ? await loadResolvedTexture(
+        bundledSharedToonTexture,
+        toonTexture.path,
+        undefined,
+        textureLoader,
+        textureCache,
+        "toon",
+        modelUrl
+      )
     : await loadMaterialTexture(
         toonTexture.path,
         toonTexture.textureInfo,
         modelUrl,
         textureResolver,
-        textureLoader
+        textureLoader,
+        textureCache,
+        "toon"
       );
   if (!texture && material.toonTexturePath) {
     textureDiagnostics.push({
@@ -438,14 +449,17 @@ export async function loadMaterialTextureWithDiagnostics(
   modelUrl: string | undefined,
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
-  textureLoader?: ThreeMmdTextureLoader
+  textureLoader?: ThreeMmdTextureLoader,
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
 ): Promise<THREE.Texture | undefined> {
   const texture = await loadMaterialTexture(
     texturePath,
     textureInfo,
     modelUrl,
     textureResolver,
-    textureLoader
+    textureLoader,
+    textureCache,
+    textureKind
   );
   if (!texture && texturePath) {
     textureDiagnostics.push({
@@ -699,7 +713,9 @@ async function loadMaterialTexture(
   textureInfo: MaterialInfo["textureInfo"],
   modelUrl: string | undefined,
   textureResolver: TextureResolver | undefined,
-  textureLoader?: ThreeMmdTextureLoader
+  textureLoader?: ThreeMmdTextureLoader,
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  cacheNamespace = "material"
 ): Promise<THREE.Texture | undefined> {
   if (!texturePath) {
     return undefined;
@@ -716,10 +732,43 @@ async function loadMaterialTexture(
       return tgaTexture;
     }
   }
-  return loadResolvedTexture(resolved, texturePath, textureInfo, textureLoader);
+  return loadResolvedTexture(
+    resolved,
+    texturePath,
+    textureInfo,
+    textureLoader,
+    textureCache,
+    cacheNamespace,
+    modelUrl
+  );
 }
 
 async function loadResolvedTexture(
+  resolved: string | URL | Blob,
+  texturePath: string,
+  textureInfo: MaterialInfo["textureInfo"],
+  textureLoader?: ThreeMmdTextureLoader,
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  cacheNamespace = "material",
+  modelUrl?: string
+): Promise<THREE.Texture | undefined> {
+  const cacheKey = createTextureCacheKey(
+    cacheNamespace,
+    texturePath,
+    textureInfo,
+    resolved,
+    modelUrl
+  );
+  const cached = textureCache?.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const promise = loadResolvedTextureUncached(resolved, texturePath, textureInfo, textureLoader);
+  textureCache?.set(cacheKey, promise);
+  return promise;
+}
+
+async function loadResolvedTextureUncached(
   resolved: string | URL | Blob,
   texturePath: string,
   textureInfo: MaterialInfo["textureInfo"],
@@ -728,6 +777,12 @@ async function loadResolvedTexture(
   const request = await createTextureLoadRequest(resolved, texturePath);
   const loader = textureLoader ?? new THREE.TextureLoader();
   return new Promise((resolve) => {
+    const finish = (texture: THREE.Texture | undefined) => {
+      if (request.revokeUrl) {
+        URL.revokeObjectURL(request.url);
+      }
+      resolve(texture);
+    };
     try {
       loader.load(
         request.url,
@@ -736,13 +791,13 @@ async function loadResolvedTexture(
           if (request.alphaMode) {
             texture.userData.mmdTextureAlphaMode = request.alphaMode;
           }
-          resolve(texture);
+          finish(texture);
         },
         undefined,
-        () => resolve(undefined)
+        () => finish(undefined)
       );
     } catch {
-      resolve(undefined);
+      finish(undefined);
     }
   });
 }
@@ -783,10 +838,10 @@ function resolveBundledSharedToonTexture(texturePath: string): string | URL | Bl
 async function createTextureLoadRequest(
   resolved: string | URL | Blob,
   texturePath: string
-): Promise<{ url: string; alphaMode?: MmdMaterialTransparencyMode }> {
+): Promise<{ url: string; alphaMode?: MmdMaterialTransparencyMode; revokeUrl?: boolean }> {
   if (typeof Blob !== "undefined" && resolved instanceof Blob) {
     if (!isMmdBmpLikeTexturePath(texturePath)) {
-      return { url: URL.createObjectURL(resolved) };
+      return { url: URL.createObjectURL(resolved), revokeUrl: true };
     }
     const buffer = await resolved.arrayBuffer();
     const injected = injectMmdBmp32BitAlphaHeader(buffer);
@@ -798,7 +853,8 @@ async function createTextureLoadRequest(
             })
           : resolved
       ),
-      alphaMode: evaluateMmdBmpTextureAlpha(buffer)
+      alphaMode: evaluateMmdBmpTextureAlpha(buffer),
+      revokeUrl: true
     };
   }
   const url = String(resolved);
@@ -818,11 +874,33 @@ async function createTextureLoadRequest(
           type: "image/bmp"
         })
       ),
-      alphaMode: evaluateMmdBmpTextureAlpha(buffer)
+      alphaMode: evaluateMmdBmpTextureAlpha(buffer),
+      revokeUrl: true
     };
   } catch {
     return { url };
   }
+}
+
+function createTextureCacheKey(
+  namespace: string,
+  texturePath: string,
+  textureInfo: MaterialInfo["textureInfo"],
+  resolved: string | URL | Blob,
+  modelUrl: string | undefined
+): string {
+  const resolvedKey =
+    typeof Blob !== "undefined" && resolved instanceof Blob
+      ? `blob:${normalizeMmdTexturePath(texturePath).toLowerCase()}`
+      : String(resolved);
+  return [
+    namespace,
+    modelUrl ?? "",
+    normalizeMmdTexturePath(texturePath).toLowerCase(),
+    resolvedKey,
+    textureInfo?.invertY ? "invertY" : "",
+    textureInfo?.noMipmap ? "noMipmap" : ""
+  ].join("\0");
 }
 
 function evaluateBmp16BitfieldAlpha(
