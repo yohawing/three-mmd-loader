@@ -235,6 +235,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     if (chains.length === 0) {
       return new Set();
     }
+    mesh.updateWorldMatrix(false, true);
     const bones = mesh.skeleton.bones.map((bone) => ({
       parentIndex:
         bone.parent instanceof THREE.Bone ? mesh.skeleton.bones.indexOf(bone.parent) : -1,
