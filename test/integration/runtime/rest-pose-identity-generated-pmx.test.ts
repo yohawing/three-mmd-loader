@@ -71,8 +71,7 @@ describe("generated PMX rest pose identity regression", () => {
     expect(runtime).toBeDefined();
 
     runtime?.setAnimation(createIkTargetMotionClip(), model.mesh);
-    runtime?.evaluate(1 / 30, { physics: false });
-    syncRuntimeMeshForRender(model.mesh);
+    runtime?.tick(1 / 30, model.mesh, { physics: false });
 
     const targetPosition = renderedBoneWorldPosition(model.mesh, "左足IK");
     const effectorPosition = renderedBoneWorldPosition(model.mesh, "左足先");
@@ -117,11 +116,6 @@ function expectQuaternionIdentity(quaternion: THREE.Quaternion): void {
   expect(Math.abs(quaternion.y)).toBeLessThanOrEqual(epsilon);
   expect(Math.abs(quaternion.z)).toBeLessThanOrEqual(epsilon);
   expect(Math.abs(Math.abs(quaternion.w) - identity.w)).toBeLessThanOrEqual(epsilon);
-}
-
-function syncRuntimeMeshForRender(mesh: THREE.SkinnedMesh): void {
-  mesh.updateMatrixWorld(true);
-  mesh.skeleton.update();
 }
 
 function renderedBoneWorldPosition(mesh: THREE.SkinnedMesh, mmdName: string): THREE.Vector3 {

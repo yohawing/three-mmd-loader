@@ -45,6 +45,12 @@ export interface MmdRuntimeDebugState {
 export interface MmdRuntime {
   setAnimation(clip: THREE.AnimationClip, mesh: THREE.SkinnedMesh): void;
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
+  tick(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
+  tick(
+    seconds: number,
+    mesh: THREE.Object3D | null | undefined,
+    options?: MmdRuntimeEvaluateOptions
+  ): MmdFrameState;
   reset(seconds?: number): MmdFrameState;
   frameState(): MmdFrameState;
   debugState(): MmdRuntimeDebugState;
@@ -124,6 +130,25 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.captureDebugStage("physics");
     this.previousEvaluateSeconds = options.physics === false ? undefined : seconds;
     return this.frameState();
+  }
+
+  tick(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
+  tick(
+    seconds: number,
+    mesh: THREE.Object3D | null | undefined,
+    options?: MmdRuntimeEvaluateOptions
+  ): MmdFrameState;
+  tick(
+    seconds: number,
+    meshOrOptions?: THREE.Object3D | MmdRuntimeEvaluateOptions | null,
+    options?: MmdRuntimeEvaluateOptions
+  ): MmdFrameState {
+    const mesh = isObject3D(meshOrOptions) ? meshOrOptions : undefined;
+    const evaluateOptions =
+      isObject3D(meshOrOptions) || meshOrOptions == null ? options : meshOrOptions;
+    const state = this.evaluate(seconds, evaluateOptions);
+    syncRuntimeMeshForRender(mesh);
+    return state;
   }
 
   reset(seconds = 0): MmdFrameState {
@@ -1680,6 +1705,35 @@ function applyPhysicsOutputToSkeleton(
       );
     }
   }
+}
+
+function syncRuntimeMeshForRender(mesh: THREE.Object3D | undefined): void {
+  if (!mesh) {
+    return;
+  }
+  // Keep renderer-facing world and bone matrices in sync after runtime evaluation.
+  mesh.updateMatrixWorld(true);
+  mesh.traverse((object) => {
+    if (isSkinnedMesh(object)) {
+      object.skeleton.update();
+    }
+  });
+}
+
+function isObject3D(value: unknown): value is THREE.Object3D {
+  return value instanceof THREE.Object3D || hasBooleanFlag(value, "isObject3D");
+}
+
+function isSkinnedMesh(value: THREE.Object3D): value is THREE.SkinnedMesh {
+  return value instanceof THREE.SkinnedMesh || hasBooleanFlag(value, "isSkinnedMesh");
+}
+
+function hasBooleanFlag(value: unknown, key: "isObject3D" | "isSkinnedMesh"): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as Record<typeof key, unknown>)[key] === true
+  );
 }
 
 function writeVector3ToBuffer(

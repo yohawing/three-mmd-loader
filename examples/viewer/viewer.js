@@ -436,18 +436,12 @@ function evaluateRuntime(options = {}) {
     elapsedSeconds %= maxTime;
     syncAudioToMotionTime();
   }
-  currentModel.runtime.evaluate(elapsedSeconds, {
+  currentModel.runtime.tick(elapsedSeconds, currentModel.mesh, {
     ik: options.ik ?? currentMotion?.clip !== undefined,
     physics: options.physics ?? (!isSeeking && elapsedSeconds > 0)
   });
-  syncRuntimeMeshForRender(currentModel.mesh);
   timeline.value = String(elapsedSeconds);
   updatePlaybackDisplay();
-}
-
-function syncRuntimeMeshForRender(mesh) {
-  mesh.updateMatrixWorld(true);
-  mesh.skeleton.update();
 }
 
 function clearModel() {
