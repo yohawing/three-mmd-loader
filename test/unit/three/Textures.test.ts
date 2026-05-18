@@ -10,7 +10,7 @@ import {
   resolveMappedTexture,
   resolveMmdToonTextureReference
 } from "../../../src/three/index.js";
-import { rotateMmdToonTexture } from "../../../src/three/textures.js";
+import { configureMmdTexture, rotateMmdToonTexture } from "../../../src/three/textures.js";
 
 describe("MMD texture path utilities", () => {
   it("normalizes Windows separators and leading current-directory segments", () => {
@@ -112,6 +112,22 @@ describe("MMD texture path utilities", () => {
     expect(texture.format).toBe(THREE.RGBAFormat);
     expect(Array.from(image.data)).toEqual([255, 255, 255, 255]);
     expect(texture.name).toBe("mmd-default-toon");
+    expect(texture.wrapS).toBe(THREE.ClampToEdgeWrapping);
+    expect(texture.wrapT).toBe(THREE.ClampToEdgeWrapping);
+  });
+
+  it("configures MMD material textures to repeat for wrapped UVs", () => {
+    const texture = new THREE.Texture();
+
+    configureMmdTexture(texture, { invertY: true, noMipmap: true });
+
+    expect(texture.colorSpace).toBe(THREE.SRGBColorSpace);
+    expect(texture.wrapS).toBe(THREE.RepeatWrapping);
+    expect(texture.wrapT).toBe(THREE.RepeatWrapping);
+    expect(texture.flipY).toBe(true);
+    expect(texture.generateMipmaps).toBe(false);
+    expect(texture.userData.mmdTextureInfo).toEqual({ invertY: true, noMipmap: true });
+    expect(texture.version).toBeGreaterThan(0);
   });
 
   it("rotates non-square CanvasImageSource toon textures without clipping dimensions", () => {

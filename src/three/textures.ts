@@ -480,6 +480,8 @@ export function configureMmdTexture(
   textureInfo?: MaterialInfo["textureInfo"]
 ): THREE.Texture {
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
   texture.flipY = textureInfo?.invertY ?? false;
   if (textureInfo?.noMipmap) {
     texture.generateMipmaps = false;
