@@ -5,6 +5,7 @@ import {
   createAmmoMmdPhysicsBackend,
   createDisabledMmdPhysicsBackend
 } from "../../dist/physics/index.js";
+import { parseVmd } from "../../dist/parser/index.js";
 import { ThreeMmdLoader, syncMmdSpecularDirection } from "../../dist/three/index.js";
 
 const debugEnabled = new window.URLSearchParams(location.search).has("debug");
@@ -31,7 +32,28 @@ const motionFileInput = document.querySelector("#motion-file");
 const poseFileInput = document.querySelector("#pose-file");
 const audioFileInput = document.querySelector("#audio-file");
 const bgmAudio = document.querySelector("#bgm-audio");
-const restPoseClip = new THREE.AnimationClip("__rest_pose__", -1, []);
+const restPoseAnimation = {
+  kind: "vmd",
+  metadata: {
+    format: "vmd",
+    modelName: "",
+    counts: {
+      bones: 0,
+      morphs: 0,
+      cameras: 0,
+      lights: 0,
+      selfShadows: 0,
+      properties: 0
+    },
+    maxFrame: 0
+  },
+  boneTracks: {},
+  morphTracks: {},
+  cameraFrames: [],
+  lightFrames: [],
+  selfShadowFrames: [],
+  propertyFrames: []
+};
 
 if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error("Viewer canvas is missing");
@@ -177,19 +199,19 @@ function bindControls() {
   });
   if (isAudioElement(bgmAudio)) {
     bgmAudio.addEventListener("play", () => {
-      if (!isSyncingAudioState && currentMotion?.clip) {
+      if (!isSyncingAudioState && hasCurrentMotion()) {
         setPlaybackState(true);
       }
     });
     bgmAudio.addEventListener("pause", () => {
-      if (!isSyncingAudioState && currentMotion?.clip) {
+      if (!isSyncingAudioState && hasCurrentMotion()) {
         setPlaybackState(false);
       }
     });
     bgmAudio.addEventListener("seeking", syncMotionToAudioTime);
     bgmAudio.addEventListener("seeked", syncMotionToAudioTime);
     bgmAudio.addEventListener("timeupdate", () => {
-      if (!isPlaying || !currentMotion?.clip) {
+      if (!isPlaying || !hasCurrentMotion()) {
         return;
       }
       syncMotionToAudioTime({ evaluate: false });
@@ -241,6 +263,22 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
+async function readAnimationSourceBytes(source) {
+  if (source instanceof Uint8Array) {
+    return source;
+  }
+  if (source instanceof ArrayBuffer) {
+    return new Uint8Array(source);
+  }
+  if (typeof source === "string") {
+    return fetchBytes(source);
+  }
+  if (source && typeof source.arrayBuffer === "function") {
+    return new Uint8Array(await source.arrayBuffer());
+  }
+  throw new TypeError("Animation source must be a string, File, ArrayBuffer, or Uint8Array");
+}
+
 function loadAudioFile(file) {
   if (!isAudioFile(file)) {
     setStatus("Select a WAV, MP3, or OGG audio file.", "error");
@@ -258,7 +296,7 @@ function setAudioSource(src, options = {}) {
   }
   clearAudioSource();
   bgmAudio.src = src;
-  bgmAudio.loop = currentMotion?.clip !== undefined;
+  bgmAudio.loop = hasCurrentMotion();
   bgmAudio.load();
   if (options.objectUrl) {
     audioObjectUrl = options.objectUrl;
@@ -299,10 +337,10 @@ async function loadModel(
     fitCameraToObject(currentModel.mesh);
     if (pendingMotionSource) {
       await loadMotion(pendingMotionSource, pendingMotionLabel);
-    } else if (currentMotion?.clip) {
-      currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
+    } else if (hasCurrentMotion()) {
+      currentModel.runtime?.setAnimation(currentMotion.animation, currentModel.mesh);
     } else {
-      currentModel.runtime?.setAnimation(restPoseClip, currentModel.mesh);
+      currentModel.runtime?.setAnimation(restPoseAnimation, currentModel.mesh);
     }
     setStatus("", "ready");
     updateStageState();
@@ -339,10 +377,10 @@ async function loadModelFolder(files) {
     fitCameraToObject(currentModel.mesh);
     if (pendingMotionSource) {
       await loadMotion(pendingMotionSource, pendingMotionLabel);
-    } else if (currentMotion?.clip) {
-      currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
+    } else if (hasCurrentMotion()) {
+      currentModel.runtime?.setAnimation(currentMotion.animation, currentModel.mesh);
     } else {
-      currentModel.runtime?.setAnimation(restPoseClip, currentModel.mesh);
+      currentModel.runtime?.setAnimation(restPoseAnimation, currentModel.mesh);
     }
     setStatus("", "ready");
     updateStageState();
@@ -365,14 +403,19 @@ async function loadMotion(source, label = source.name ?? "motion") {
     setStatus(`Loading motion: ${label}`, "loading");
     pendingMotionSource = source;
     pendingMotionLabel = label;
-    currentMotion = await animationLoader.loadAnimation(source, currentModel);
-    if (currentMotion.clip) {
-      currentModel.runtime?.setAnimation(currentMotion.clip, currentModel.mesh);
-      timeline.max = String(Math.max(currentMotion.clip.duration, 0.001));
-      elapsedSeconds = 0;
-      timeline.value = "0";
-      syncAudioToMotionTime();
-    }
+    const bytes = await readAnimationSourceBytes(source);
+    const animation = parseVmd(bytes);
+    currentMotion = {
+      source,
+      name: animation.metadata.modelName,
+      animation,
+      durationSeconds: animationDurationSeconds(animation)
+    };
+    currentModel.runtime?.setAnimation(animation, currentModel.mesh);
+    timeline.max = String(Math.max(animationDurationSeconds(animation), 0.001));
+    elapsedSeconds = 0;
+    timeline.value = "0";
+    syncAudioToMotionTime();
     setDisplayedText(motionNameText, label);
     updatePlaybackDisplay();
     updateTransportState();
@@ -391,15 +434,16 @@ async function loadPose(source, label = source.name ?? "pose") {
       return;
     }
     setStatus(`Loading pose: ${label}`, "loading");
-    const poseAnimation = await animationLoader.loadPoseAnimation(source, label, currentModel);
-    if (poseAnimation.clip) {
-      currentMotion = poseAnimation;
-      currentModel.runtime?.setAnimation(poseAnimation.clip, currentModel.mesh);
-      elapsedSeconds = 0;
-      timeline.max = "1";
-      timeline.value = "0";
-      setDisplayedText(motionNameText, label);
-    }
+    const poseAnimation = await animationLoader.loadPoseAnimation(source, label);
+    currentMotion = {
+      ...poseAnimation,
+      durationSeconds: 1
+    };
+    currentModel.runtime?.setAnimation(poseAnimation.animation, currentModel.mesh);
+    elapsedSeconds = 0;
+    timeline.max = "1";
+    timeline.value = "0";
+    setDisplayedText(motionNameText, label);
     updatePlaybackDisplay();
     updateTransportState();
     setStatus("", "ready");
@@ -437,7 +481,7 @@ function evaluateRuntime(options = {}) {
     syncAudioToMotionTime();
   }
   currentModel.runtime.tick(elapsedSeconds, currentModel.mesh, {
-    ik: options.ik ?? currentMotion?.clip !== undefined,
+    ik: options.ik ?? hasCurrentMotion(),
     physics: options.physics ?? (!isSeeking && elapsedSeconds > 0)
   });
   timeline.value = String(elapsedSeconds);
@@ -867,7 +911,7 @@ function setPlaybackState(playing) {
 }
 
 function syncPlaybackToCurrentAudioState() {
-  if (!isAudioElement(bgmAudio) || !currentMotion?.clip || bgmAudio.paused) {
+  if (!isAudioElement(bgmAudio) || !hasCurrentMotion() || bgmAudio.paused) {
     return;
   }
   setPlaybackState(true);
@@ -879,7 +923,7 @@ function hasActiveAudioSource() {
 }
 
 function syncMotionToAudioTime(options = {}) {
-  if (!isAudioElement(bgmAudio) || !currentMotion?.clip) {
+  if (!isAudioElement(bgmAudio) || !hasCurrentMotion()) {
     return;
   }
   const audioTime = Number.isFinite(bgmAudio.currentTime) ? bgmAudio.currentTime : 0;
@@ -907,9 +951,24 @@ function closeLoadMenu() {
 }
 
 function updatePlaybackDisplay() {
-  const duration = currentMotion?.clip?.duration ?? 0;
+  const duration = currentMotionDurationSeconds();
   const currentTime = Number.isFinite(elapsedSeconds) ? elapsedSeconds : 0;
   frameValueText.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
+}
+
+function hasCurrentMotion() {
+  return currentMotion?.animation !== undefined;
+}
+
+function currentMotionDurationSeconds() {
+  return (
+    currentMotion?.durationSeconds ??
+    (currentMotion ? animationDurationSeconds(currentMotion.animation) : 0)
+  );
+}
+
+function animationDurationSeconds(animation) {
+  return Math.max((animation.metadata?.maxFrame ?? 0) / 30, 0);
 }
 
 function updateStageState() {
@@ -917,7 +976,7 @@ function updateStageState() {
 }
 
 function updateTransportState() {
-  const hasMotion = currentMotion?.clip !== undefined;
+  const hasMotion = hasCurrentMotion();
   if (transportBar) {
     transportBar.hidden = !hasMotion;
   }

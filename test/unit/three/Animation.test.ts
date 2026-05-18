@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import { createThreeAnimationClip, createThreePoseAnimationClip } from "../../../src/three/index.js";
+import { createThreeAnimationClip, createThreePoseAnimationClip } from "../../../src/three/animation.js";
 import type { MmdAnimation, MmdPose } from "../../../src/parser/model/modelTypes.js";
 
 describe("createThreeAnimationClip", () => {

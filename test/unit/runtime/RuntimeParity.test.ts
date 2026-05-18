@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
-import type * as THREE from "three";
 
 import { ThreeMmdLoader } from "../../../src/index.js";
 import {
@@ -12,11 +11,15 @@ import {
   loadOracleDump
 } from "../../helpers/runtimeParity.js";
 import type { MmdRuntime, ThreeMmdModel } from "../../../src/index.js";
+import type { MmdAnimation } from "../../../src/index.js";
 
 describe("DefaultMmdRuntime parity evidence", () => {
   it("matches the 1-bone cube oracle at frame 0 and stays bounded across all oracle frames", async () => {
     const oracle = loadOracleDump("test_1bone_cube_dump.json");
-    const { model, runtime, clip } = await loadRuntimeFixture("test_1bone_cube.pmx", "test_1bone_cube_motion.vmd");
+    const { model, runtime, animation } = await loadRuntimeFixture(
+      "test_1bone_cube.pmx",
+      "test_1bone_cube_motion.vmd"
+    );
     const metrics = createParityMetrics();
     let frameZeroMaxAbsError = Number.POSITIVE_INFINITY;
 
@@ -27,7 +30,7 @@ describe("DefaultMmdRuntime parity evidence", () => {
       }
 
       runtime.reset(frame.seconds);
-      runtime.setAnimation(clip, model.mesh);
+      runtime.setAnimation(animation, model.mesh);
       runtime.evaluate(frame.seconds);
 
       const candidate = extractMmdWorldMatrices(model.mesh);
@@ -52,11 +55,14 @@ describe("DefaultMmdRuntime parity evidence", () => {
   });
 
   it("evaluates the append bone fixture without non-finite world matrices", async () => {
-    const { model, runtime, clip } = await loadRuntimeFixture("test_append_bone.pmx", "test_append_bone.vmd");
+    const { model, runtime, animation } = await loadRuntimeFixture(
+      "test_append_bone.pmx",
+      "test_append_bone.vmd"
+    );
 
     for (const seconds of [0, 0.5, 1.0]) {
       runtime.reset(seconds);
-      runtime.setAnimation(clip, model.mesh);
+      runtime.setAnimation(animation, model.mesh);
       runtime.evaluate(seconds);
 
       expectAllFinite(extractMmdWorldMatrices(model.mesh));
@@ -64,10 +70,13 @@ describe("DefaultMmdRuntime parity evidence", () => {
   });
 
   it("exposes stage debug matrices for external runtime numeric evidence", async () => {
-    const { model, runtime, clip } = await loadRuntimeFixture("test_1bone_cube.pmx", "test_1bone_cube_motion.vmd");
+    const { model, runtime, animation } = await loadRuntimeFixture(
+      "test_1bone_cube.pmx",
+      "test_1bone_cube_motion.vmd"
+    );
 
     runtime.reset(0);
-    runtime.setAnimation(clip, model.mesh);
+    runtime.setAnimation(animation, model.mesh);
     runtime.evaluate(0.15);
 
     const debugState = runtime.debugState();
@@ -84,11 +93,14 @@ describe("DefaultMmdRuntime parity evidence", () => {
   });
 
   it("evaluates the joint orient fixture without non-finite world matrices", async () => {
-    const { model, runtime, clip } = await loadRuntimeFixture("joint_orient_test.pmx", "joint_orient_test.vmd");
+    const { model, runtime, animation } = await loadRuntimeFixture(
+      "joint_orient_test.pmx",
+      "joint_orient_test.vmd"
+    );
 
     for (const seconds of [0, 0.5, 1.0]) {
       runtime.reset(seconds);
-      runtime.setAnimation(clip, model.mesh);
+      runtime.setAnimation(animation, model.mesh);
       runtime.evaluate(seconds);
 
       expectAllFinite(extractMmdWorldMatrices(model.mesh));
@@ -99,22 +111,18 @@ describe("DefaultMmdRuntime parity evidence", () => {
 async function loadRuntimeFixture(modelFixture: string, motionFixture: string): Promise<{
   readonly model: ThreeMmdModel;
   readonly runtime: MmdRuntime;
-  readonly clip: THREE.AnimationClip;
+  readonly animation: MmdAnimation;
 }> {
   const loader = new ThreeMmdLoader();
   const model = await loader.loadModel(await readFile(resolve("test/fixtures", modelFixture)));
-  const animation = await loader.loadAnimation(await readFile(resolve("test/fixtures", motionFixture)), model);
+  const animation = await loader.loadAnimation(await readFile(resolve("test/fixtures", motionFixture)));
   const runtime = model.runtime;
-  const clip = animation.clip;
 
   if (!runtime) {
     throw new Error("Expected DefaultMmdRuntime");
   }
-  if (!clip) {
-    throw new Error("Expected animation clip");
-  }
 
-  return { model, runtime, clip };
+  return { model, runtime, animation: animation.animation };
 }
 
 function maxAbsError(candidate: readonly number[], oracle: readonly number[]): number {

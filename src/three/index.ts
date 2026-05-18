@@ -22,7 +22,7 @@ import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry } from "./geometry.js";
-export { createThreeAnimationClip, createThreePoseAnimationClip } from "./animation.js";
+export { createThreePoseAnimationClip } from "./animation.js";
 export { isModelSource } from "./modelSource.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 export { mmdWorldMatrixToThree, syncThreeMmdRuntimeToMesh } from "./runtime-sync.js";
