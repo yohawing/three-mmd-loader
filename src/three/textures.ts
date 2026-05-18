@@ -426,18 +426,18 @@ export function rotateMmdToonTexture(texture: THREE.Texture): THREE.Texture {
     return texture;
   }
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = height;
+  canvas.height = width;
   const context = canvas.getContext("2d");
   if (!context) {
     return texture;
   }
-  context.clearRect(0, 0, width, height);
-  context.translate(width / 2, height / 2);
+  context.clearRect(0, 0, height, width);
+  context.translate(height / 2, width / 2);
   context.rotate(Math.PI / 2);
   context.translate(-width / 2, -height / 2);
   context.drawImage(texture.image as CanvasImageSource, 0, 0);
-  texture.image = context.getImageData(0, 0, width, height);
+  texture.image = context.getImageData(0, 0, height, width);
   texture.userData.mmdToonTextureRotated = true;
   texture.needsUpdate = true;
   return texture;
