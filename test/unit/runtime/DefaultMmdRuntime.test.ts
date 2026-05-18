@@ -240,6 +240,40 @@ describe("DefaultMmdRuntime", () => {
     expect(appendB.quaternion.w).toBeCloseTo(appendA.quaternion.w, 5);
   });
 
+  it("can skip IK evaluation without changing default IK behavior", () => {
+    const ikSource = new THREE.Bone();
+    ikSource.name = "ikSource";
+    const effector = new THREE.Bone();
+    effector.name = "effector";
+    effector.position.set(1, 0, 0);
+    ikSource.add(effector);
+    const goal = new THREE.Bone();
+    goal.name = "goal";
+    goal.position.set(0, 1, 0);
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(ikSource, goal);
+    mesh.bind(new THREE.Skeleton([ikSource, effector, goal]));
+    mesh.userData.mmdIkChains = [
+      {
+        goalBoneIndex: 2,
+        effectorBoneIndex: 1,
+        iterationCount: 4,
+        maxAnglePerIteration: Math.PI,
+        links: [{ boneIndex: 0 }]
+      }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(createEmptyMmdClip("skip-ik"), mesh);
+    runtime.evaluate(0, { ik: false });
+
+    expect(ikSource.quaternion.equals(new THREE.Quaternion())).toBe(true);
+
+    runtime.evaluate(0);
+
+    expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
+  });
+
   it("steps an external physics backend and applies updated local bone transforms", () => {
     const bone = new THREE.Bone();
     bone.name = "physics";

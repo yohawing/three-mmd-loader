@@ -437,6 +437,7 @@ function evaluateRuntime(options = {}) {
     syncAudioToMotionTime();
   }
   currentModel.runtime.evaluate(elapsedSeconds, {
+    ik: options.ik ?? currentMotion?.clip !== undefined,
     physics: options.physics ?? (!isSeeking && elapsedSeconds > 0)
   });
   timeline.value = String(elapsedSeconds);

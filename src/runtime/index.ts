@@ -53,6 +53,7 @@ export interface MmdRuntime {
 
 export interface MmdRuntimeEvaluateOptions {
   readonly physics?: boolean;
+  readonly ik?: boolean;
 }
 
 export interface DefaultMmdRuntimeOptions {
@@ -104,8 +105,10 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
     this.applyAppendTransforms();
     this.captureDebugStage("appendTransform");
-    const ikSourceBoneIndices = this.solveIk();
-    this.reapplyAppendTransformsForSources(ikSourceBoneIndices);
+    if (options.ik !== false) {
+      const ikSourceBoneIndices = this.solveIk();
+      this.reapplyAppendTransformsForSources(ikSourceBoneIndices);
+    }
     this.captureDebugStage("ik");
     if (options.physics === false) {
       if (!this.physicsDisabled) {
