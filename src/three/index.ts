@@ -17,7 +17,7 @@ import { attachMmdSdefSkinning } from "./material/material-sdef.js";
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
-import { createMmdMaterialRenderOrderMeshes, createMmdOutlineMeshes } from "./outline.js";
+import { createMmdMaterialRenderOrderMeshes, createMmdOutlineMesh } from "./outline.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
@@ -248,6 +248,20 @@ function createThreeMmdModel(options: {
 }): ThreeMmdModel {
   let outlineMeshes: readonly THREE.SkinnedMesh[] | undefined;
   let renderOrderMeshes: readonly THREE.SkinnedMesh[] | undefined;
+  const ensureOutlineMeshes = () => {
+    if (!outlineMeshes) {
+      const outlineMesh = createMmdOutlineMesh({
+        mesh: options.mesh,
+        materials: options.materials
+      });
+      outlineMeshes = outlineMesh ? [outlineMesh] : [];
+      outlineMeshes.forEach((outline) => {
+        syncMmdModelShadowFlags(outline, options.materials);
+        options.mesh.add(outline);
+      });
+    }
+    return outlineMeshes;
+  };
 
   const model: Omit<ThreeMmdModel, "outlineMeshes" | "renderOrderMeshes"> = {
     mesh: options.mesh,
@@ -256,22 +270,14 @@ function createThreeMmdModel(options: {
     textureDiagnostics: options.textureDiagnostics
   };
 
+  options.mesh.addEventListener("added", ensureOutlineMeshes);
+
   return Object.defineProperties(model, {
     outlineMeshes: {
       enumerable: true,
       configurable: false,
       get() {
-        if (!outlineMeshes) {
-          outlineMeshes = createMmdOutlineMeshes({
-            mesh: options.mesh,
-            materials: options.materials
-          });
-          outlineMeshes.forEach((outline) => {
-            syncMmdModelShadowFlags(outline, options.materials);
-            options.mesh.add(outline);
-          });
-        }
-        return outlineMeshes;
+        return ensureOutlineMeshes();
       }
     },
     renderOrderMeshes: {

@@ -62,11 +62,18 @@ describe("ThreeMmdLoader", () => {
 
   it("lazy-creates outline and render-order proxy meshes behind compatible properties", async () => {
     const loader = new ThreeMmdLoader();
-    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+    const source: ModelSource = createMinimalPmxModelBytes({
+      materialCount: 1,
+      triangle: true,
+      edge: true
+    });
 
     const model = await loader.loadModel(source);
+    const scene = new THREE.Scene();
 
     expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
+    scene.add(model.mesh);
+    expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(true);
     const outlineMeshes = model.outlineMeshes;
     expect(model.outlineMeshes).toBe(outlineMeshes);
     expect(model.mesh.children.filter((child) => child.userData.mmdOutlineProxy)).toHaveLength(
@@ -224,6 +231,8 @@ describe("ThreeMmdLoader", () => {
 function createMinimalPmxModelBytes(options: {
   readonly materialCount: 0 | 1;
   readonly normal?: readonly [number, number, number];
+  readonly triangle?: boolean;
+  readonly edge?: boolean;
 }): Uint8Array {
   const bytes: number[] = [];
   const encoder = new TextEncoder();
@@ -260,9 +269,18 @@ function createMinimalPmxModelBytes(options: {
   text("SyntheticEmptyMesh");
   text("");
   text("");
-  count(1);
-  writeVertex();
-  count(0);
+  count(options.triangle ? 3 : 1);
+  writeVertex([0, 0, 0]);
+  if (options.triangle) {
+    writeVertex([1, 0, 0]);
+    writeVertex([0, 1, 0]);
+  }
+  count(options.triangle ? 3 : 0);
+  if (options.triangle) {
+    u8(0);
+    u8(1);
+    u8(2);
+  }
   count(0);
   count(options.materialCount);
   if (options.materialCount === 1) {
@@ -276,11 +294,11 @@ function createMinimalPmxModelBytes(options: {
 
   return new Uint8Array(bytes);
 
-  function writeVertex() {
+  function writeVertex(position: readonly [number, number, number]) {
     const normal = options.normal ?? [0, 1, 0];
-    f32(0);
-    f32(0);
-    f32(0);
+    f32(position[0]);
+    f32(position[1]);
+    f32(position[2]);
     f32(normal[0]);
     f32(normal[1]);
     f32(normal[2]);
@@ -305,7 +323,7 @@ function createMinimalPmxModelBytes(options: {
     f32(0.2);
     f32(0.2);
     f32(0.2);
-    u8(0);
+    u8(options.edge ? 0x10 : 0);
     f32(0);
     f32(0);
     f32(0);
@@ -317,6 +335,6 @@ function createMinimalPmxModelBytes(options: {
     u8(1);
     u8(0);
     text("");
-    i32(0);
+    i32(options.triangle ? 3 : 0);
   }
 }
