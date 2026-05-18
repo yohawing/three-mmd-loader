@@ -440,8 +440,14 @@ function evaluateRuntime(options = {}) {
     ik: options.ik ?? currentMotion?.clip !== undefined,
     physics: options.physics ?? (!isSeeking && elapsedSeconds > 0)
   });
+  syncRuntimeMeshForRender(currentModel.mesh);
   timeline.value = String(elapsedSeconds);
   updatePlaybackDisplay();
+}
+
+function syncRuntimeMeshForRender(mesh) {
+  mesh.updateMatrixWorld(true);
+  mesh.skeleton.update();
 }
 
 function clearModel() {

@@ -40,6 +40,9 @@ describe("generated PMX rest pose identity regression", () => {
     for (const boneName of ["センター", "腰", "上半身", "左足"]) {
       expectQuaternionIdentity(findBone(model.mesh, boneName).quaternion);
     }
+    expect(findBone(model.mesh, "左足").quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(
+      THREE.MathUtils.degToRad(1)
+    );
   });
 
   it("moves an IK effector to the animated IK target after one motion frame", async () => {
@@ -60,6 +63,21 @@ describe("generated PMX rest pose identity regression", () => {
     expect(targetPosition.z).toBeCloseTo(-0.2, 5);
     expect(effectorPosition.distanceTo(targetPosition)).toBeLessThanOrEqual(1e-3);
     expect(Math.abs(kneeRotation.z)).toBeGreaterThan(0.1);
+  });
+
+  it("syncs viewer render skeleton matrices after IK evaluation", async () => {
+    const model = await loadGeneratedRestPoseModel("ik-chain");
+    const runtime = model.runtime;
+    expect(runtime).toBeDefined();
+
+    runtime?.setAnimation(createIkTargetMotionClip(), model.mesh);
+    runtime?.evaluate(1 / 30, { physics: false });
+    syncRuntimeMeshForRender(model.mesh);
+
+    const targetPosition = renderedBoneWorldPosition(model.mesh, "左足IK");
+    const effectorPosition = renderedBoneWorldPosition(model.mesh, "左足先");
+
+    expect(effectorPosition.distanceTo(targetPosition)).toBeLessThanOrEqual(1e-3);
   });
 });
 
@@ -99,6 +117,22 @@ function expectQuaternionIdentity(quaternion: THREE.Quaternion): void {
   expect(Math.abs(quaternion.y)).toBeLessThanOrEqual(epsilon);
   expect(Math.abs(quaternion.z)).toBeLessThanOrEqual(epsilon);
   expect(Math.abs(Math.abs(quaternion.w) - identity.w)).toBeLessThanOrEqual(epsilon);
+}
+
+function syncRuntimeMeshForRender(mesh: THREE.SkinnedMesh): void {
+  mesh.updateMatrixWorld(true);
+  mesh.skeleton.update();
+}
+
+function renderedBoneWorldPosition(mesh: THREE.SkinnedMesh, mmdName: string): THREE.Vector3 {
+  const boneIndex = mesh.skeleton.bones.findIndex(
+    (candidate) => candidate.userData.mmdBoneName === mmdName || candidate.name === mmdName
+  );
+  expect(boneIndex, `missing bone ${mmdName}`).toBeGreaterThanOrEqual(0);
+
+  const boneMatrix = new THREE.Matrix4().fromArray(mesh.skeleton.boneMatrices, boneIndex * 16);
+  const bindMatrix = mesh.skeleton.boneInverses[boneIndex].clone().invert();
+  return new THREE.Vector3().setFromMatrixPosition(boneMatrix.multiply(bindMatrix));
 }
 
 function createEmptyMmdClip(name: string): THREE.AnimationClip {
