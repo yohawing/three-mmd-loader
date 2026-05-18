@@ -106,9 +106,12 @@ export function parseVmd(input: Uint8Array | ArrayBuffer): MmdAnimation {
   }
 
   const propertyCount = readOptionalCount(reader, "property");
+  const propertyLayout = selectPropertyFrameLayout(reader, propertyCount);
   for (let index = 0; index < propertyCount; index += 1) {
     const frame = reader.u32();
     const visible = reader.u8() !== 0;
+    const physicsSimulation =
+      propertyLayout === "extendedPhysics" ? reader.u8() !== 0 : true;
     const ikCount = readCount(reader, "property IK state");
     const ikStates: VmdIkState[] = [];
     for (let ikIndex = 0; ikIndex < ikCount; ikIndex += 1) {
@@ -120,7 +123,7 @@ export function parseVmd(input: Uint8Array | ArrayBuffer): MmdAnimation {
     propertyFrames.push({
       frame,
       visible,
-      physicsSimulation: true,
+      physicsSimulation,
       ikStates
     });
     maxFrame = Math.max(maxFrame, frame);
@@ -170,6 +173,50 @@ function readOptionalCount(reader: BinaryReader, label: string): number {
     return 0;
   }
   return readCount(reader, label);
+}
+
+type VmdPropertyFrameLayout = "classic" | "extendedPhysics";
+
+function selectPropertyFrameLayout(
+  reader: BinaryReader,
+  count: number
+): VmdPropertyFrameLayout {
+  if (count === 0) {
+    return "classic";
+  }
+  const classicEnd = scanPropertyFrameLayout(reader, count, "classic");
+  const extendedEnd = scanPropertyFrameLayout(reader, count, "extendedPhysics");
+  if (extendedEnd === undefined) {
+    return "classic";
+  }
+  if (classicEnd === undefined) {
+    return "extendedPhysics";
+  }
+  const byteLength = reader.view.byteLength;
+  return byteLength - extendedEnd < byteLength - classicEnd ? "extendedPhysics" : "classic";
+}
+
+function scanPropertyFrameLayout(
+  reader: BinaryReader,
+  count: number,
+  layout: VmdPropertyFrameLayout
+): number | undefined {
+  const startOffset = reader.offset;
+  try {
+    for (let index = 0; index < count; index += 1) {
+      reader.skip(5);
+      if (layout === "extendedPhysics") {
+        reader.skip(1);
+      }
+      const ikCount = readCount(reader, "property IK state");
+      reader.skip(ikCount * 21);
+    }
+    return reader.offset;
+  } catch {
+    return undefined;
+  } finally {
+    reader.offset = startOffset;
+  }
 }
 
 function readCount(reader: BinaryReader, label: string): number {

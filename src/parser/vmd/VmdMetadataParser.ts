@@ -147,8 +147,12 @@ function readPropertySection(
   countOffset: number
 ): void {
   const dataOffset = reader.offset;
+  const layout = selectPropertyFrameLayout(reader, count);
   for (let i = 0; i < count; i++) {
     reader.skip(5);
+    if (layout === "extendedPhysics") {
+      reader.skip(1);
+    }
     const ikStates = readCount(reader, "property IK state");
     reader.skip(checkedSectionBytes(ikStates, 21, "property IK state"));
   }
@@ -159,6 +163,50 @@ function readPropertySection(
     dataOffset,
     byteLength: reader.offset - dataOffset
   });
+}
+
+type VmdPropertyFrameLayout = "classic" | "extendedPhysics";
+
+function selectPropertyFrameLayout(
+  reader: BinaryReader,
+  count: number
+): VmdPropertyFrameLayout {
+  if (count === 0) {
+    return "classic";
+  }
+  const classicEnd = scanPropertyFrameLayout(reader, count, "classic");
+  const extendedEnd = scanPropertyFrameLayout(reader, count, "extendedPhysics");
+  if (extendedEnd === undefined) {
+    return "classic";
+  }
+  if (classicEnd === undefined) {
+    return "extendedPhysics";
+  }
+  const byteLength = reader.view.byteLength;
+  return byteLength - extendedEnd < byteLength - classicEnd ? "extendedPhysics" : "classic";
+}
+
+function scanPropertyFrameLayout(
+  reader: BinaryReader,
+  count: number,
+  layout: VmdPropertyFrameLayout
+): number | undefined {
+  const startOffset = reader.offset;
+  try {
+    for (let index = 0; index < count; index += 1) {
+      reader.skip(5);
+      if (layout === "extendedPhysics") {
+        reader.skip(1);
+      }
+      const ikStates = readCount(reader, "property IK state");
+      reader.skip(checkedSectionBytes(ikStates, 21, "property IK state"));
+    }
+    return reader.offset;
+  } catch {
+    return undefined;
+  } finally {
+    reader.offset = startOffset;
+  }
 }
 
 function readOptionalCount(reader: BinaryReader, label: string): number {
