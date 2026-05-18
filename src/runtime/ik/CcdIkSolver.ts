@@ -665,7 +665,7 @@ function getSingleAxisLimit(limits: LinkLimits | undefined): number | null {
 }
 
 function hasZeroEndpointAxisLimit(limits: LinkLimits, axis: number): boolean {
-  return limits.lower[axis] === 0 || limits.upper[axis] === 0;
+  return limits.lower[axis] === 0 && limits.upper[axis] === 0;
 }
 
 function clampLimitedRotation(

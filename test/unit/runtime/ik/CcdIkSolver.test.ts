@@ -146,7 +146,7 @@ describe("CcdIkSolver", () => {
     expect(rotations).toEqual([[...IDENTITY], [...IDENTITY], [...IDENTITY]]);
   });
 
-  it("uses Saba-compatible zero-endpoint detection for single-axis limits", () => {
+  it("does not classify a one-sided zero endpoint as a fixed single-axis limit", () => {
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },
       { parentIndex: 0, translation: [1, 0, 0] },
@@ -176,9 +176,8 @@ describe("CcdIkSolver", () => {
       ]
     });
 
-    expect(result.finalDistances[0]).toBeCloseTo(Math.SQRT2, 5);
-    expect(Math.abs(rotations[0][0])).toBeGreaterThan(0);
-    expect(rotations[0][1]).toBeCloseTo(0, 5);
+    expect(result.finalDistances[0]).toBeLessThan(1e-5);
+    expect(Math.abs(rotations[0][1])).toBeGreaterThan(0.5);
   });
 
   it("matches Saba plane-link behavior for base pose rotations", () => {
