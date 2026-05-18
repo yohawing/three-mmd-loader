@@ -174,6 +174,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 
   private prepareAnimationTarget(mesh: THREE.SkinnedMesh): void {
+    this.restoreRestTransforms();
     this.mesh = mesh;
     this.restTransforms = mesh.skeleton.bones.map((bone) => ({
       position: bone.position.clone(),
