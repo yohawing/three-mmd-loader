@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
 import { DefaultMmdRuntime } from "../../../src/index.js";
+import type { MmdAnimation } from "../../../src/index.js";
 import type {
   MmdPhysicsBackend,
   MmdPhysicsStepContext,
@@ -88,6 +89,23 @@ describe("DefaultMmdRuntime", () => {
       frameRate: 30
     });
     expect(bone.position.x).toBeCloseTo(1);
+    expect(bone.position.y).toBeCloseTo(0);
+    expect(bone.position.z).toBeCloseTo(0);
+  });
+
+  it("samples direct MMD animation bone translation with VMD Bezier interpolation", () => {
+    const bone = new THREE.Bone();
+    bone.name = "center";
+    bone.userData.mmdBoneName = "センター";
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(createBezierTranslationAnimation(), mesh);
+    runtime.tick(0.5, mesh, { ik: false, physics: false });
+
+    expect(bone.position.x).toBeCloseTo(1.25, 3);
     expect(bone.position.y).toBeCloseTo(0);
     expect(bone.position.z).toBeCloseTo(0);
   });
@@ -632,16 +650,60 @@ class InspectingPhysicsBackend implements MmdPhysicsBackend {
 function createEmptyMmdClip(name: string): THREE.AnimationClip {
   const clip = new THREE.AnimationClip(name, 0, []);
   clip.userData = {
-    mmdAnimation: {
-      kind: "vmd",
-      metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-      boneTracks: {},
-      morphTracks: {},
-      cameraFrames: [],
-      lightFrames: [],
-      selfShadowFrames: [],
-      propertyFrames: []
-    }
+    mmdAnimation: createEmptyMmdAnimation()
   };
   return clip;
+}
+
+function createEmptyMmdAnimation(): MmdAnimation {
+  return {
+    kind: "vmd",
+    bytes: new Uint8Array(),
+    metadata: { format: "vmd", modelName: "", counts: createEmptyVmdCounts(), maxFrame: 0 },
+    boneTracks: {},
+    morphTracks: {},
+    cameraFrames: [],
+    lightFrames: [],
+    selfShadowFrames: [],
+    propertyFrames: []
+  };
+}
+
+function createBezierTranslationAnimation(): MmdAnimation {
+  const easeIn = [20 / 127, 0, 107 / 127, 0] as [number, number, number, number];
+  return {
+    ...createEmptyMmdAnimation(),
+    metadata: { format: "vmd", modelName: "", counts: createEmptyVmdCounts(), maxFrame: 30 },
+    boneTracks: {
+      センター: [
+        {
+          frame: 0,
+          translation: [0, 0, 0],
+          rotation: [0, 0, 0, 1]
+        },
+        {
+          frame: 30,
+          translation: [10, 0, 0],
+          rotation: [0, 0, 0, 1],
+          interpolation: {
+            translationX: easeIn,
+            translationY: [0, 0, 1, 1],
+            translationZ: [0, 0, 1, 1],
+            rotation: [0, 0, 1, 1]
+          }
+        }
+      ]
+    }
+  };
+}
+
+function createEmptyVmdCounts(): MmdAnimation["metadata"]["counts"] {
+  return {
+    bones: 0,
+    morphs: 0,
+    cameras: 0,
+    lights: 0,
+    selfShadows: 0,
+    properties: 0
+  };
 }
