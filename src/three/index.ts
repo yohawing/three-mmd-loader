@@ -104,6 +104,11 @@ export interface ThreeMmdLoaderOptions {
   readonly runtime?: DefaultMmdRuntimeOptions;
 }
 
+export interface ThreeMmdLoadModelOptions {
+  readonly outlines?: boolean;
+  readonly frustumCulled?: boolean;
+}
+
 export type ThreeMmdModelSourceDescriptor =
   | {
       readonly kind: "bytes";
@@ -147,7 +152,10 @@ export class ThreeMmdLoader {
     validateLoaderOptions(options);
   }
 
-  async loadModel(source: ModelSource): Promise<ThreeMmdModel> {
+  async loadModel(
+    source: ModelSource,
+    options: ThreeMmdLoadModelOptions = {}
+  ): Promise<ThreeMmdModel> {
     validateModelSource(source, "loadModel");
     const bytes = await readModelSourceBytes(source);
     const modelData = parseLoaderMmdModelData(bytes);
@@ -171,12 +179,16 @@ export class ThreeMmdLoader {
     );
     mesh.userData.mmdMaterialRenderOrder = renderOrder;
     syncMmdModelShadowFlags(mesh, modelData.materials);
+    if (options.frustumCulled !== undefined) {
+      mesh.frustumCulled = options.frustumCulled;
+    }
     return createThreeMmdModel({
       mesh,
       runtime: new DefaultMmdRuntime(this.options.runtime),
       source: createModelSourceDescriptor(source, bytes.byteLength),
       textureDiagnostics,
-      materials: modelData.materials
+      materials: modelData.materials,
+      outlines: options.outlines ?? true
     });
   }
 
@@ -231,53 +243,32 @@ function createThreeMmdModel(options: {
   readonly source: ThreeMmdModelSourceDescriptor;
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
+  readonly outlines: boolean;
 }): ThreeMmdModel {
-  let outlineMeshes: readonly THREE.SkinnedMesh[] | undefined;
-  let renderOrderMeshes: readonly THREE.SkinnedMesh[] | undefined;
-  const ensureOutlineMeshes = () => {
-    if (!outlineMeshes) {
-      const outlineMesh = createMmdOutlineMesh({
+  const outlineMesh = options.outlines
+    ? createMmdOutlineMesh({
         mesh: options.mesh,
         materials: options.materials
-      });
-      outlineMeshes = outlineMesh ? [outlineMesh] : [];
-      outlineMeshes.forEach((outline) => {
-        syncMmdModelShadowFlags(outline, options.materials);
-        options.mesh.add(outline);
-      });
-    }
-    return outlineMeshes;
-  };
-
-  const model: Omit<ThreeMmdModel, "outlineMeshes" | "renderOrderMeshes"> = {
+      })
+    : undefined;
+  const outlineMeshes = outlineMesh ? [outlineMesh] : [];
+  outlineMeshes.forEach((outline) => {
+    syncMmdModelShadowFlags(outline, options.materials);
+    outline.frustumCulled = options.mesh.frustumCulled;
+  });
+  const renderOrderMeshes = createMmdMaterialRenderOrderMeshes({
     mesh: options.mesh,
+    materials: options.materials
+  });
+
+  return {
+    mesh: options.mesh,
+    outlineMeshes,
+    renderOrderMeshes,
     runtime: options.runtime,
     source: options.source,
     textureDiagnostics: options.textureDiagnostics
   };
-
-  options.mesh.addEventListener("added", ensureOutlineMeshes);
-
-  return Object.defineProperties(model, {
-    outlineMeshes: {
-      enumerable: true,
-      configurable: false,
-      get() {
-        return ensureOutlineMeshes();
-      }
-    },
-    renderOrderMeshes: {
-      enumerable: true,
-      configurable: false,
-      get() {
-        renderOrderMeshes ??= createMmdMaterialRenderOrderMeshes({
-          mesh: options.mesh,
-          materials: options.materials
-        });
-        return renderOrderMeshes;
-      }
-    }
-  }) as ThreeMmdModel;
 }
 
 function createModelSourceDescriptor(

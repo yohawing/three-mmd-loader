@@ -355,10 +355,9 @@ async function loadModel(
       preserveModelSwitcher: true
     });
     const resolvedModelLoader = await modelLoader;
-    currentModel = await resolvedModelLoader.loadModel(source);
-    currentModel.mesh.frustumCulled = false;
+    currentModel = await resolvedModelLoader.loadModel(source, { frustumCulled: false });
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
-    scene.add(currentModel.mesh);
+    addModelToScene(currentModel);
     currentFolderPmxFiles = [createModelSwitcherEntry(source, label)];
     updateModelSwitcher(currentFolderPmxFiles[0]);
     elapsedSeconds = 0;
@@ -413,10 +412,9 @@ async function loadModelFolder(files) {
       preserveModelSwitcher: true
     });
     const folderLoader = await createModelLoader({ textureMap });
-    currentModel = await folderLoader.loadModel(modelFile);
-    currentModel.mesh.frustumCulled = false;
+    currentModel = await folderLoader.loadModel(modelFile, { frustumCulled: false });
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
-    scene.add(currentModel.mesh);
+    addModelToScene(currentModel);
     elapsedSeconds = 0;
     timeline.max = "0.001";
     timeline.value = "0";
@@ -457,10 +455,9 @@ async function switchFolderModel(modelFile) {
       preserveModelSwitcher: true
     });
     const folderLoader = await createModelLoader({ textureMap: currentFolderTextureMap });
-    currentModel = await folderLoader.loadModel(modelFile);
-    currentModel.mesh.frustumCulled = false;
+    currentModel = await folderLoader.loadModel(modelFile, { frustumCulled: false });
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
-    scene.add(currentModel.mesh);
+    addModelToScene(currentModel);
     updateModelSwitcher(modelFile);
     elapsedSeconds = 0;
     timeline.max = "0.001";
@@ -607,6 +604,14 @@ function clearModel(options = {}) {
   updatePlaybackDisplay();
   updateStageState();
   updateTransportState();
+}
+
+function addModelToScene(model) {
+  scene.add(
+    model.mesh,
+    ...(model.outlineMeshes ?? []),
+    ...(model.renderOrderMeshes ?? [])
+  );
 }
 
 function disposeModelResources(model) {

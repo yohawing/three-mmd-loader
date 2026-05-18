@@ -88,7 +88,7 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.isSkinnedMesh).toBe(true);
   });
 
-  it("lazy-creates outline and render-order proxy meshes behind compatible properties", async () => {
+  it("eagerly exposes outline and render-order proxy meshes without added-event side effects", async () => {
     const loader = new ThreeMmdLoader();
     const source: ModelSource = createMinimalPmxModelBytes({
       materialCount: 1,
@@ -101,15 +101,49 @@ describe("ThreeMmdLoader", () => {
 
     expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
     scene.add(model.mesh);
-    expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(true);
+    expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
     const outlineMeshes = model.outlineMeshes;
     expect(model.outlineMeshes).toBe(outlineMeshes);
-    expect(model.mesh.children.filter((child) => child.userData.mmdOutlineProxy)).toHaveLength(
-      outlineMeshes.length
-    );
+    expect(outlineMeshes).toHaveLength(1);
+    expect(outlineMeshes.every((mesh) => !!mesh.userData.mmdOutlineProxy)).toBe(true);
     const renderOrderMeshes = model.renderOrderMeshes;
     expect(model.renderOrderMeshes).toBe(renderOrderMeshes);
     expect(renderOrderMeshes.every((mesh) => !!mesh.userData.mmdMaterialRenderProxy)).toBe(true);
+  });
+
+  it("allows loadModel callers to disable generated outline meshes explicitly", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        edge: true
+      }),
+      { outlines: false }
+    );
+
+    expect(model.outlineMeshes).toEqual([]);
+    expect(model.renderOrderMeshes.every((mesh) => !!mesh.userData.mmdMaterialRenderProxy)).toBe(
+      true
+    );
+  });
+
+  it("applies load-time frustum culling to the mesh and generated proxy meshes", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        edge: true
+      }),
+      { frustumCulled: false }
+    );
+
+    expect(model.mesh.frustumCulled).toBe(false);
+    expect(model.outlineMeshes.every((mesh) => mesh.frustumCulled === false)).toBe(true);
+    expect(model.renderOrderMeshes.every((mesh) => mesh.frustumCulled === false)).toBe(true);
   });
 
   it("keeps imported PMX vertex normals on the loaded Three.js geometry", async () => {
