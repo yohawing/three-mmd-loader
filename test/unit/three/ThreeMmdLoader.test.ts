@@ -59,6 +59,23 @@ describe("ThreeMmdLoader", () => {
     expect(model.textureDiagnostics).toEqual([]);
   });
 
+  it("lazy-creates outline and render-order proxy meshes behind compatible properties", async () => {
+    const loader = new ThreeMmdLoader();
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
+    const outlineMeshes = model.outlineMeshes;
+    expect(model.outlineMeshes).toBe(outlineMeshes);
+    expect(model.mesh.children.filter((child) => child.userData.mmdOutlineProxy)).toHaveLength(
+      outlineMeshes.length
+    );
+    const renderOrderMeshes = model.renderOrderMeshes;
+    expect(model.renderOrderMeshes).toBe(renderOrderMeshes);
+    expect(renderOrderMeshes.every((mesh) => !!mesh.userData.mmdMaterialRenderProxy)).toBe(true);
+  });
+
   it("keeps imported PMX vertex normals on the loaded Three.js geometry", async () => {
     const loader = new ThreeMmdLoader();
 

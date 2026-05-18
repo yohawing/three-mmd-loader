@@ -145,8 +145,6 @@ export class ThreeMmdLoader {
       geometry: mesh.geometry,
       morphs: modelData.morphs
     });
-    const outlineMeshes = createMmdOutlineMeshes({ mesh, materials: modelData.materials });
-    outlineMeshes.forEach((outline) => mesh.add(outline));
     const renderOrder = computeMmdMaterialRenderOrder(
       materials.map((material, materialIndex) => ({
         materialIndex,
@@ -155,19 +153,13 @@ export class ThreeMmdLoader {
     );
     mesh.userData.mmdMaterialRenderOrder = renderOrder;
     syncMmdModelShadowFlags(mesh, modelData.materials);
-    outlineMeshes.forEach((outline) => syncMmdModelShadowFlags(outline, modelData.materials));
-    const renderOrderMeshes = createMmdMaterialRenderOrderMeshes({
+    return createThreeMmdModel({
       mesh,
-      materials: modelData.materials
-    });
-    return {
-      mesh,
-      outlineMeshes,
-      renderOrderMeshes,
       runtime: new DefaultMmdRuntime(this.options.runtime),
       source,
-      textureDiagnostics
-    };
+      textureDiagnostics,
+      materials: modelData.materials
+    });
   }
 
   async loadAnimation(source: ModelSource, model?: ThreeMmdModel): Promise<ThreeMmdAnimation> {
@@ -226,6 +218,55 @@ export class ThreeMmdLoader {
       morphTargetDictionary: model.mesh.morphTargetDictionary ?? undefined
     });
   }
+}
+
+function createThreeMmdModel(options: {
+  readonly mesh: THREE.SkinnedMesh;
+  readonly runtime?: MmdRuntime;
+  readonly source: ModelSource;
+  readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
+  readonly materials: readonly LoaderMmdModelData["materials"][number][];
+}): ThreeMmdModel {
+  let outlineMeshes: readonly THREE.SkinnedMesh[] | undefined;
+  let renderOrderMeshes: readonly THREE.SkinnedMesh[] | undefined;
+
+  const model: Omit<ThreeMmdModel, "outlineMeshes" | "renderOrderMeshes"> = {
+    mesh: options.mesh,
+    runtime: options.runtime,
+    source: options.source,
+    textureDiagnostics: options.textureDiagnostics
+  };
+
+  return Object.defineProperties(model, {
+    outlineMeshes: {
+      enumerable: true,
+      configurable: false,
+      get() {
+        if (!outlineMeshes) {
+          outlineMeshes = createMmdOutlineMeshes({
+            mesh: options.mesh,
+            materials: options.materials
+          });
+          outlineMeshes.forEach((outline) => {
+            syncMmdModelShadowFlags(outline, options.materials);
+            options.mesh.add(outline);
+          });
+        }
+        return outlineMeshes;
+      }
+    },
+    renderOrderMeshes: {
+      enumerable: true,
+      configurable: false,
+      get() {
+        renderOrderMeshes ??= createMmdMaterialRenderOrderMeshes({
+          mesh: options.mesh,
+          materials: options.materials
+        });
+        return renderOrderMeshes;
+      }
+    }
+  }) as ThreeMmdModel;
 }
 
 function createEmptySourceError(method: string): Error {
