@@ -96,6 +96,34 @@ npm install @yohawing/three-mmd-loader three
 - `physics`: `MmdPhysicsBackend`、disabled fallback backend、validation /
   debug ヘルパー、任意の Ammo backend 実装。
 
+## Visual Regression Renderer
+
+`npm run render:visual` は deterministic な material case PNG を
+`test-results/visual/current/` に出力し、`npm run render:visual:baseline` は
+同じ manifest case を `test-results/visual/baseline/` に出力します。case は
+`scripts/visual-regression/cases.manifest.json` に列挙され、単体では
+`node scripts/visual-regression/render-cases.mjs --case <id>` で描画できます。
+初期 baseline は regression detection 用であり、MMD/MMM/nanoem との視覚一致の
+証明ではありません。renderer は 512x512 canvas、`pixelRatio=1`、
+orthographic camera、固定 ambient / directional light、固定背景、
+`NoToneMapping`、`SRGBColorSpace` を使います。外部 asset や
+`MMD_VIEWER_DATA_ROOT` は読み込みません。
+
+`npm run visual:report` は `baseline` と `current` を比較し、
+`test-results/visual/diff/` に heatmap PNG、`test-results/visual/report.json`
+に case ごとの `mean`、`p95`、`max`、threshold、pass/fail を含む
+machine-readable report を出力します。threshold は manifest に置き、初期 CI
+reporting 用に意図的に緩めています。
+
+ユーザー所有の PMX/VMD asset に対する local/manual チェックでは、
+リポジトリ外のディレクトリを `MMD_VIEWER_DATA_ROOT` に設定し、
+`scripts/visual-regression/real-models.manifest.json` のローカルコピーへ
+その root からの相対パスを記述します。`npm run render:visual:real-models`
+は `test-results/visual/real-models/current/` に current PNG を出力し、
+baseline 用 script は `test-results/visual/real-models/baseline/` に出力します。
+`MMD_VIEWER_DATA_ROOT` 未設定時は skip message を表示して正常終了します。
+real-model の出力と asset は local-only で、通常 CI の必須条件ではありません。
+
 ## 使い方 - モデル読み込み
 
 ```ts

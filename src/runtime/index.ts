@@ -44,11 +44,15 @@ export interface MmdRuntimeDebugState {
 
 export interface MmdRuntime {
   setAnimation(clip: THREE.AnimationClip, mesh: THREE.SkinnedMesh): void;
-  evaluate(seconds: number): MmdFrameState;
+  evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
   reset(seconds?: number): MmdFrameState;
   frameState(): MmdFrameState;
   debugState(): MmdRuntimeDebugState;
   debugRigidBodyWorldTransformsColumnMajor?(): readonly (readonly number[])[];
+}
+
+export interface MmdRuntimeEvaluateOptions {
+  readonly physics?: boolean;
 }
 
 export interface DefaultMmdRuntimeOptions {
@@ -74,6 +78,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private readonly physicsMode: "none" | "stateful-spring" | "external";
   private readonly physicsBackend: MmdPhysicsBackend | undefined;
   private previousEvaluateSeconds: number | undefined;
+  private physicsDisabled = false;
 
   constructor(options: DefaultMmdRuntimeOptions = {}) {
     this.frameRate = normalizeFrameRate(options.frameRate ?? 30);
@@ -82,7 +87,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.state = createFrameState(options.initialSeconds ?? 0, this.frameRate);
   }
 
-  evaluate(seconds: number): MmdFrameState {
+  evaluate(seconds: number, options: MmdRuntimeEvaluateOptions = {}): MmdFrameState {
     const previousSeconds = this.state.seconds;
     this.state = createFrameState(seconds, this.frameRate);
     if (this.mmdAnimation && this.mesh) {
@@ -102,11 +107,19 @@ export class DefaultMmdRuntime implements MmdRuntime {
     const ikSourceBoneIndices = this.solveIk();
     this.reapplyAppendTransformsForSources(ikSourceBoneIndices);
     this.captureDebugStage("ik");
-    this.stepStatefulSpringPhysics();
-    this.stepExternalPhysics(previousSeconds);
+    if (options.physics === false) {
+      if (!this.physicsDisabled) {
+        this.resetPhysicsState();
+      }
+      this.physicsDisabled = true;
+    } else {
+      this.stepStatefulSpringPhysics();
+      this.stepExternalPhysics(previousSeconds);
+      this.physicsDisabled = false;
+    }
     this.mesh?.skeleton.update();
     this.captureDebugStage("physics");
-    this.previousEvaluateSeconds = seconds;
+    this.previousEvaluateSeconds = options.physics === false ? undefined : seconds;
     return this.frameState();
   }
 
@@ -131,6 +144,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.bonePhysicsToggles = {};
     this.debugStages = createEmptyDebugStages();
     this.previousEvaluateSeconds = undefined;
+    this.physicsDisabled = false;
     this.state = createFrameState(seconds, this.frameRate);
     return this.frameState();
   }
@@ -164,6 +178,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
         : undefined;
     this.physicsBackend?.reset?.(createPhysicsResetContext(this.state));
     this.previousEvaluateSeconds = undefined;
+    this.physicsDisabled = false;
     this.mmdAnimation = readMmdAnimation(clip);
     if (this.mmdAnimation) {
       this.mixer = undefined;
@@ -501,6 +516,11 @@ export class DefaultMmdRuntime implements MmdRuntime {
       mergePhysicsOutputDeltas(context, inputTranslations, inputRotations, prePhysics);
     }
     applyPhysicsOutputToSkeleton(mesh, context);
+  }
+
+  private resetPhysicsState(): void {
+    this.physicsSimulation?.reset(this.state.seconds);
+    this.physicsBackend?.reset?.(createPhysicsResetContext(this.state));
   }
 
   private captureDebugStage(stage: keyof MmdRuntimeDebugState["stages"]): void {

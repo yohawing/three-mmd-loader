@@ -13,6 +13,7 @@ import type { MmdMaterialTransparencyMode } from "./textures.js";
 import { clampColor } from "./utils.js";
 
 const MMD_OUTLINE_MODEL_SPACE_SCALE = 30;
+const MMD_OUTLINE_SCREEN_SPACE_SCALE = 300;
 
 export interface MmdOutlineOptions {
   readonly scale?: number;
@@ -205,12 +206,15 @@ export function attachMmdOutlineExpansion(
         .join("\n")
     );
     shader.vertexShader = shader.vertexShader.replace(
-      "#include <begin_vertex>",
+      "#include <project_vertex>",
       [
-        "#include <begin_vertex>",
+        "#include <project_vertex>",
+        "vec3 mmdOutlineNormal = -objectNormal;",
+        "vec4 mmdOutlineOffsetPosition = projectionMatrix * modelViewMatrix * vec4( transformed + mmdOutlineNormal, 1.0 );",
+        "vec4 mmdOutlineDirection = normalize( gl_Position - mmdOutlineOffsetPosition );",
         hasVertexEdgeScale
-          ? "transformed += normal * mmdOutlineWidth * mmdEdgeScale;"
-          : "transformed += normal * mmdOutlineWidth;"
+          ? "gl_Position += mmdOutlineDirection * mmdOutlineWidth * gl_Position.w * mmdEdgeScale;"
+          : "gl_Position += mmdOutlineDirection * mmdOutlineWidth * gl_Position.w;"
       ].join("\n")
     );
   };
@@ -227,7 +231,7 @@ function mmdOutlineExpansionWidth(
   hasEdge: boolean
 ): number {
   const edgeSize = hasEdge ? material.edgeSize : options.forceFallback ? 0.5 : 0;
-  return Math.min(Math.max(edgeSize, 0), 3) / MMD_OUTLINE_MODEL_SPACE_SCALE;
+  return Math.min(Math.max(edgeSize, 0), 3) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
 }
 
 export function createMmdMaterialRenderOrderMeshes(
@@ -342,7 +346,7 @@ export function syncMmdOutlineMaterialStates(
 
 function mmdOutlineRuntimeWidth(edgeSize: number, fallback: boolean): number {
   if (fallback && edgeSize <= 0) {
-    return 0.5 / MMD_OUTLINE_MODEL_SPACE_SCALE;
+    return 0.5 / MMD_OUTLINE_SCREEN_SPACE_SCALE;
   }
-  return Math.min(Math.max(edgeSize, 0), 3) / MMD_OUTLINE_MODEL_SPACE_SCALE;
+  return Math.min(Math.max(edgeSize, 0), 3) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
 }

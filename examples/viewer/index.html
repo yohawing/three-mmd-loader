@@ -4,86 +4,79 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>three-mmd-loader viewer</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" />
     <link rel="stylesheet" href="./styles.css" />
     <script type="importmap">
       {
         "imports": {
-          "three": "https://unpkg.com/three@0.176.0/build/three.module.js",
-          "three/addons/": "https://unpkg.com/three@0.176.0/examples/jsm/"
+          "three": "/node_modules/three/build/three.module.js",
+          "three/addons/": "/node_modules/three/examples/jsm/"
         }
       }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/ammo.js@0.0.10/ammo.js"></script>
   </head>
   <body>
     <main class="viewer-shell">
       <header class="top-bar" aria-label="Viewer menu">
-        <div class="brand">
-          <strong>MMD Viewer</strong>
-          <span id="status">Ready</span>
-        </div>
-
         <nav class="menu-actions" aria-label="Model and motion loading">
           <details class="load-menu" id="load-menu">
-            <summary>Load</summary>
+            <summary aria-label="Menu">
+              <span class="material-symbols-rounded" aria-hidden="true">menu</span>
+            </summary>
             <div class="load-menu-panel" role="menu" aria-label="Load options">
-              <button id="load-sample-scene" type="button" role="menuitem">Sample scene</button>
-              <button id="load-sample-model" type="button" role="menuitem">Sample model</button>
-              <button id="load-sample-motion" type="button" role="menuitem">Sample VMD</button>
-              <button id="choose-model" type="button" role="menuitem">Model file...</button>
-              <button id="choose-model-folder" type="button" role="menuitem">Model folder...</button>
-              <button id="choose-motion" type="button" role="menuitem">Motion (VMD)...</button>
-              <button id="choose-pose" type="button" role="menuitem">Pose (VPD)...</button>
+              <section class="load-section" aria-labelledby="model-section-title">
+                <h2 id="model-section-title">Model</h2>
+                <button id="choose-model-file" type="button" role="menuitem">Load Model File</button>
+                <button id="choose-model-folder" type="button" role="menuitem">Load Model Folder</button>
+              </section>
+              <section class="load-section" aria-labelledby="motion-section-title">
+                <h2 id="motion-section-title">Motion</h2>
+                <button id="choose-motion" type="button" role="menuitem">Motion (VMD)...</button>
+                <button id="choose-pose" type="button" role="menuitem">Pose (VPD)...</button>
+              </section>
+              <section class="load-section" aria-labelledby="audio-section-title">
+                <h2 id="audio-section-title">Audio</h2>
+                <button id="choose-audio" type="button" role="menuitem">Load Audio</button>
+              </section>
             </div>
           </details>
         </nav>
+
+        <div class="loaded-files" aria-label="Loaded files">
+          <span id="model-name" hidden></span>
+          <span id="motion-name" hidden></span>
+          <span id="audio-name" hidden></span>
+        </div>
+
+        <span class="status" id="status"></span>
 
         <input id="model-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
         <input id="model-folder" type="file" webkitdirectory directory multiple />
         <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
         <input id="pose-file" type="file" accept=".vpd,text/plain" />
+        <input id="audio-file" type="file" accept=".wav,.mp3,.ogg,audio/wav,audio/mpeg,audio/ogg" />
+        <audio id="bgm-audio" hidden></audio>
       </header>
 
       <section class="stage" aria-label="MMD model viewport">
         <canvas id="viewer-canvas"></canvas>
         <div class="empty-state" id="empty-state">
-          Drop a PMX/PMD file, or click Load -> Sample scene
-        </div>
-        <div class="viewport-tools" aria-label="Viewport options">
-          <div class="segmented" role="group" aria-label="Viewport display toggles">
-            <label><input id="show-grid" type="checkbox" checked /> <span>Grid</span></label>
-            <label><input id="show-skeleton" type="checkbox" checked /> <span>Skeleton</span></label>
-            <label><input id="wireframe" type="checkbox" /> <span>Wire</span></label>
-          </div>
-          <button id="reset-view" type="button">Reset View</button>
+          Drop a PMX/PMD file or model folder, or click Menu -> Load Model
         </div>
         <div class="drop-target" id="drop-target">
-          <strong>Drop model folders, PMX / PMD, VMD, or VPD files</strong>
+          <strong>Drop model folders, PMX / PMD, VMD, VPD, or audio files</strong>
           <span>Model textures are resolved when a folder is selected.</span>
         </div>
+        <div class="physics-error" id="physics-error" role="status" hidden></div>
       </section>
 
-      <div class="hud" aria-label="Loaded file status">
-        <dl>
-          <div><dt>Model</dt><dd id="model-name">none</dd></div>
-          <div><dt>Motion</dt><dd id="motion-name">none</dd></div>
-          <div><dt>Bones</dt><dd id="bone-count">0</dd></div>
-        </dl>
-        <span id="model-file-name" hidden>PMX / PMD or model folder</span>
-        <span id="motion-file-name" hidden>VMD</span>
-        <span id="pose-file-name" hidden>VPD</span>
-      </div>
-
-      <footer class="transport" aria-label="Playback controls">
-        <button id="play-toggle" type="button">Play</button>
+      <footer class="transport" aria-label="Playback controls" hidden>
+        <button id="play-toggle" type="button" aria-label="Play">
+          <span class="material-symbols-rounded" aria-hidden="true">play_arrow</span>
+        </button>
         <label>
           <span id="frame-value">0</span>
           <input id="timeline" type="range" min="0" max="10" value="0" step="0.001" />
-        </label>
-        <label>
-          Speed
-          <input id="speed" type="range" min="0" max="2" value="1" step="0.05" />
-          <output id="speed-value" for="speed">1.0x</output>
         </label>
       </footer>
     </main>

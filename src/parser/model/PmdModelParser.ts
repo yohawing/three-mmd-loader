@@ -1,5 +1,6 @@
 import { BinaryReader } from "../binary/index.js";
 import { createModelDiagnostics } from "./diagnostics.js";
+import { sanitizeNonFiniteModelNormals } from "./normalSanitization.js";
 import type {
   GeometryBuffers,
   DisplayFrameData,
@@ -290,6 +291,7 @@ export function parsePmd(bytes: Uint8Array): ParsedPmd {
       )}.`
     });
   }
+  sanitizeNonFiniteModelNormals(positions, normals, indices, diagnostics);
 
   return {
     metadata: {

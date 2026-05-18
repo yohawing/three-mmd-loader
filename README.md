@@ -95,6 +95,34 @@ version and final `private: true` removal remain release decisions.
 - `physics`: `MmdPhysicsBackend`, disabled fallback backend, validation/debug
   helpers, and optional Ammo backend implementation.
 
+## Visual Regression Renderer
+
+`npm run render:visual` writes deterministic material case PNGs to
+`test-results/visual/current/`; `npm run render:visual:baseline` writes the
+same manifest cases to `test-results/visual/baseline/`. Cases are listed in
+`scripts/visual-regression/cases.manifest.json` and can be rendered one at a
+time with `node scripts/visual-regression/render-cases.mjs --case <id>`. The
+initial baselines are for regression detection only and are not proof of
+MMD/MMM/nanoem visual equivalence. The renderer uses a 512x512 canvas with
+`pixelRatio=1`, an orthographic camera, fixed ambient and directional lights,
+fixed background, `NoToneMapping`, and `SRGBColorSpace`. It does not load
+external assets or `MMD_VIEWER_DATA_ROOT`.
+
+`npm run visual:report` compares `baseline` and `current`, writes heatmap PNGs
+to `test-results/visual/diff/`, and writes a machine-readable
+`test-results/visual/report.json` with per-case `mean`, `p95`, `max`,
+thresholds, and pass/fail status. Thresholds live in the case manifest and are
+intentionally loose for early CI reporting.
+
+For local manual checks against user-owned PMX/VMD assets, set
+`MMD_VIEWER_DATA_ROOT` to a directory outside the repository and edit a local
+copy of `scripts/visual-regression/real-models.manifest.json` with paths
+relative to that root. `npm run render:visual:real-models` writes current PNGs
+to `test-results/visual/real-models/current/`; the baseline script writes
+`test-results/visual/real-models/baseline/`. If `MMD_VIEWER_DATA_ROOT` is not
+set, the profile exits successfully with a skip message. Real-model outputs and
+assets are local-only and are not required for normal CI.
+
 ## Usage - Model Loading
 
 ```ts

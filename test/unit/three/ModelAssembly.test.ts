@@ -62,9 +62,25 @@ describe("loader model assembly", () => {
     });
     expect(modelData.skeleton.bones).toHaveLength(1);
   });
+
+  it("sanitizes non-finite PMD vertex normals into warning diagnostics", () => {
+    const modelData = parseLoaderMmdModelData(
+      createMinimalPmdTriangleBytes({ firstNormal: [Number.NaN, Number.NaN, Number.NaN] })
+    );
+
+    expect(Array.from(modelData.geometry.normals.slice(0, 3))).toEqual([0, 0, 1]);
+    expect(modelData.metadata.diagnostics).toContainEqual({
+      level: "warning",
+      code: "MODEL_NORMALS_SANITIZED",
+      message:
+        "1 vertex normals contained non-finite values and were recomputed from neighbouring face normals."
+    });
+  });
 });
 
-function createMinimalPmdTriangleBytes(): Uint8Array {
+function createMinimalPmdTriangleBytes(options: {
+  firstNormal?: readonly [number, number, number];
+} = {}): Uint8Array {
   const bytes: number[] = [];
   const encoder = new TextEncoder();
   const u8 = (value: number) => bytes.push(value & 0xff);
@@ -87,13 +103,17 @@ function createMinimalPmdTriangleBytes(): Uint8Array {
     const encoded = encoder.encode(value).slice(0, byteLength);
     bytes.push(...encoded, ...Array.from({ length: byteLength - encoded.byteLength }, () => 0));
   };
-  const vertex = (position: readonly [number, number, number], uv: readonly [number, number]) => {
+  const vertex = (
+    position: readonly [number, number, number],
+    uv: readonly [number, number],
+    normal: readonly [number, number, number] = [0, 0, 1]
+  ) => {
     f32(position[0]);
     f32(position[1]);
     f32(position[2]);
-    f32(0);
-    f32(0);
-    f32(1);
+    f32(normal[0]);
+    f32(normal[1]);
+    f32(normal[2]);
     f32(uv[0]);
     f32(uv[1]);
     u16(0);
@@ -107,7 +127,7 @@ function createMinimalPmdTriangleBytes(): Uint8Array {
   fixedText("tri", 20);
   fixedText("generated test triangle", 256);
   u32(3);
-  vertex([0, 0, 0], [0, 0]);
+  vertex([0, 0, 0], [0, 0], options.firstNormal);
   vertex([1, 0, 0], [1, 0]);
   vertex([0, 1, 0], [0, 1]);
   u32(3);

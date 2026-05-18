@@ -298,6 +298,49 @@ describe("DefaultMmdRuntime", () => {
     expect(runtime.debugState().stages.physics.worldMatricesColumnMajor[14]).toBe(3);
   });
 
+  it("skips and resets external physics when evaluate disables physics", () => {
+    const bone = new THREE.Bone();
+    bone.name = "physics";
+    bone.userData.mmdBoneName = "physics";
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.userData.mmdPhysics = {
+      rigidBodies: [
+        {
+          name: "body",
+          boneIndex: 0,
+          group: 1,
+          mask: 0xffff,
+          shape: "sphere",
+          mode: "dynamic",
+          size: [0.5, 0.5, 0.5],
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          mass: 1,
+          linearDamping: 0,
+          angularDamping: 0,
+          restitution: 0,
+          friction: 0.5
+        }
+      ],
+      joints: []
+    };
+    const backend = new TranslatingPhysicsBackend([1, 2, 3]);
+    const runtime = new DefaultMmdRuntime({
+      physics: "external",
+      physicsBackend: backend
+    });
+
+    runtime.setAnimation(createEmptyMmdClip("external-skip"), mesh);
+    runtime.evaluate(0, { physics: false });
+    runtime.evaluate(0, { physics: false });
+
+    expect(backend.stepCount).toBe(0);
+    expect(backend.resetCount).toBe(2);
+    expect(bone.position.toArray()).toEqual([0, 0, 0]);
+  });
+
   it("passes absolute MMD rest positions to an external physics backend", () => {
     const parent = new THREE.Bone();
     parent.name = "parent";
@@ -457,6 +500,7 @@ class TranslatingPhysicsBackend implements MmdPhysicsBackend {
   readonly name = "test-external";
   readonly disabled = false;
   readonly disposed = false;
+  resetCount = 0;
   stepCount = 0;
   lastContext: MmdPhysicsStepContext | undefined;
 
@@ -468,6 +512,10 @@ class TranslatingPhysicsBackend implements MmdPhysicsBackend {
     context.output?.translations?.set(this.translation, 0);
     context.output?.updatedBoneIndices?.push(0);
     return { simulated: true };
+  }
+
+  reset(): void {
+    this.resetCount += 1;
   }
 }
 

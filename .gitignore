@@ -4,7 +4,15 @@ node_modules/
 # Build outputs and caches
 dist/
 coverage/
+test-results/
+!test-results/visual/
+test-results/visual/current/
+test-results/visual/baseline/
+test-results/visual/diff/
+test-results/visual/report.json
+test-results/visual/real-models/
 .cache/
+tmp/
 *.tsbuildinfo
 *.log
 *.tmp
@@ -12,6 +20,7 @@ coverage/
 # Local fixture data
 data/
 mmd_fixture_data.zip
+test/fixtures/generated/*.pmx
 
 # OS / editor noise
 .DS_Store

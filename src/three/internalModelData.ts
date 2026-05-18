@@ -8,6 +8,7 @@ import type {
   RigidBodyData,
   SoftBodyData
 } from "../parser/model/modelTypes.js";
+import { sanitizeNonFiniteModelNormals } from "../parser/model/normalSanitization.js";
 import type { ThreeMmdGeometryBuffers } from "./geometry.js";
 import type { ThreeMmdSkeletonData } from "./skeleton.js";
 
@@ -71,6 +72,7 @@ export function validateLoaderMmdModelData(modelData: LoaderMmdModelData): void 
     throw new TypeError(`LOADER_MMD_MODEL_COORDINATE_SYSTEM_INVALID:${modelData.coordinateSystem}`);
   }
   validateMetadata(modelData.metadata);
+  sanitizeGeometryNormals(modelData);
   validateGeometryShape(modelData.geometry);
   validateMaterials(modelData.materials);
   validateMorphs(modelData.morphs);
@@ -95,6 +97,22 @@ function validateMetadata(metadata: LoaderMmdModelMetadata): void {
     metadata.encoding !== "unknown"
   ) {
     throw new TypeError(`LOADER_MMD_MODEL_ENCODING_INVALID:${metadata.encoding}`);
+  }
+}
+
+function sanitizeGeometryNormals(modelData: LoaderMmdModelData): void {
+  const { positions, normals, indices } = modelData.geometry;
+  if (
+    positions instanceof Float32Array &&
+    normals instanceof Float32Array &&
+    (indices instanceof Uint16Array || indices instanceof Uint32Array)
+  ) {
+    sanitizeNonFiniteModelNormals(
+      positions,
+      normals,
+      indices,
+      modelData.metadata.diagnostics as Diagnostic[]
+    );
   }
 }
 

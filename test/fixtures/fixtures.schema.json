@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "./fixtures.schema.json",
+  "title": "three-mmd-loader fixture inventory",
+  "description": "Inventory of fixture files used by three-mmd-loader smoke checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "paths"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional JSON Schema URI for editor tooling."
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Fixture inventory schema version."
+    },
+    "basePath": {
+      "type": "string",
+      "default": ".",
+      "description": "Base directory for fixture entries, resolved relative to the directory containing this JSON file."
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["releaseSmoke"],
+      "properties": {
+        "releaseSmoke": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["byExtension"],
+          "properties": {
+            "byExtension": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["pmx", "pmd", "vmd", "vpd"],
+              "properties": {
+                "pmx": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "PMX fixture paths keyed by arbitrary names such as pmx001 or oneBoneCube."
+                },
+                "pmd": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "PMD fixture paths keyed by arbitrary names such as pmd001."
+                },
+                "vmd": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "VMD fixture paths keyed by arbitrary names such as vmd001 or walkMotion."
+                },
+                "vpd": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "VPD fixture paths keyed by arbitrary names such as vpd001."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional human-readable notes about the inventory."
+    }
+  },
+  "$defs": {
+    "relativeFilePath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A file path resolved from basePath. Relative paths are recommended for portable inventories."
+    },
+    "fixtureMap": {
+      "type": "object",
+      "description": "Map of arbitrary fixture keys to file paths.",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "patternProperties": {
+        "^.+$": {
+          "$ref": "#/$defs/relativeFilePath"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

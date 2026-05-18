@@ -47,8 +47,17 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "example:viewer": "npm run build && node scripts/serve-example-viewer.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs",
+    "dev": "npm run build && node scripts/serve-example-viewer.mjs",
+    "check:fixtures": "node scripts/check-fixtures.mjs",
+    "check:fixtures:physics": "node scripts/check-fixtures.mjs --physics",
+    "generate:fixtures:minimal-pmx": "node scripts/fixtures/generate-minimal-pmx.mjs",
+    "render:visual": "node scripts/visual-regression/render-cases.mjs",
+    "render:visual:baseline": "node scripts/visual-regression/render-cases.mjs --mode baseline",
+    "render:visual:real-models": "npm run build && node scripts/visual-regression/render-real-models.mjs",
+    "render:visual:real-models:baseline": "npm run build && node scripts/visual-regression/render-real-models.mjs --mode baseline",
+    "visual:report": "node scripts/visual-regression/compute-metrics.mjs",
+    "visual:report:real-models": "node scripts/visual-regression/compute-metrics.mjs --profile real-models",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "test": "vitest run",
     "lint": "eslint ."
@@ -61,9 +70,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.26.0",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.15.3",
     "@types/three": "^0.176.0",
     "eslint": "^9.26.0",
+    "pngjs": "^7.0.0",
     "three": "^0.176.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.32.0",

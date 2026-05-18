@@ -1,5 +1,6 @@
 import { BinaryReader } from "../binary/index.js";
 import { createModelDiagnostics } from "./diagnostics.js";
+import { sanitizeNonFiniteModelNormals } from "./normalSanitization.js";
 import type {
   Diagnostic,
   GeometryBuffers,
@@ -182,6 +183,7 @@ export function parsePmx(bytes: Uint8Array): ParsedPmx {
       message: `${reader.remaining} trailing PMX bytes were left unparsed.`
     });
   }
+  sanitizeNonFiniteModelNormals(positions, normals, indices, diagnostics);
 
   return {
     metadata: {

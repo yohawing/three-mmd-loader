@@ -14,6 +14,21 @@ describe("createThreeBufferGeometry", () => {
     expect(Array.from(geometry.index?.array ?? [])).toEqual([0, 2, 1, 0, 3, 2]);
   });
 
+  it("preserves imported vertex normals instead of replacing them with face normals", () => {
+    const geometry = createThreeBufferGeometry({
+      ...createQuadBuffers(),
+      positions: new Float32Array([0, 0, 1, 1, 0, 1, 0, 1, 1]),
+      normals: new Float32Array([0, 1, 0, 0.5, 0.5, 0, 1, 0, 0]),
+      uvs: new Float32Array([0, 0, 1, 0, 0, 1]),
+      indices: new Uint16Array([0, 1, 2]),
+      skinIndices: new Uint16Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      skinWeights: new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0])
+    });
+
+    expectAttributeArray(geometry, "normal", [0, 1, -0, 0.5, 0.5, -0, 1, 0, -0]);
+    expect(Array.from(geometry.index?.array ?? [])).toEqual([0, 2, 1]);
+  });
+
   it("attaches additional UV, skinning, edge scale, and SDEF attributes", () => {
     const geometry = createThreeBufferGeometry({
       ...createQuadBuffers(),

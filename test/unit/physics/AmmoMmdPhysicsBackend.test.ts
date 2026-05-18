@@ -105,6 +105,116 @@ describe("AmmoMmdPhysicsBackend", () => {
     expect(context.output.updatedBoneIndices).toEqual([0, 1]);
     backend.dispose?.();
   });
+
+  it("resets dynamic rigid bodies to the current bone pose instead of the rest pose", async () => {
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+    const backend = createAmmoMmdPhysicsBackend(Ammo, {
+      gravity: [0, 0, 0],
+      fixedTimeStep: 1 / 60,
+      maxSubSteps: 0,
+      resetCatchUpSteps: 0
+    });
+    const context = createStepContext();
+
+    backend.step(context);
+    writeBoneTranslation(context, 0, [0, 5, 0]);
+    context.output.translations.fill(0);
+    context.output.rotations.fill(0);
+    context.output.worldMatricesColumnMajor.fill(0);
+    context.output.updatedBoneIndices.length = 0;
+    backend.reset?.({ seconds: context.seconds, frame: context.frame, frameRate: context.frameRate });
+
+    const resetStep = backend.step(context);
+
+    expect(resetStep.simulated).toBe(false);
+    expect(Array.from(context.output.translations ?? [])).toEqual([0, 0, 0]);
+    expect(context.output.updatedBoneIndices).toEqual([]);
+    backend.dispose?.();
+  });
+});
+
+describe("AmmoMmdPhysicsBackend smoke coverage", () => {
+  it("moves a Generic6DofSpring constrained body in the expected direction on the next frame", async () => {
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+    const backend = createAmmoMmdPhysicsBackend(Ammo, {
+      gravity: [0, 0, 0],
+      fixedTimeStep: 1 / 60,
+      maxSubSteps: 1,
+      resetCatchUpSteps: 0
+    });
+    const context = createSpringStepContext();
+    const initialDynamicX = context.output.translations[3];
+
+    backend.step(context);
+    writeBoneTranslation(context, 0, [0.25, 0, 0]);
+    context.output.updatedBoneIndices.length = 0;
+    for (let frame = 1; frame <= 10; frame += 1) {
+      backend.step({
+        ...context,
+        seconds: frame / 60,
+        deltaSeconds: 1 / 60,
+        frame
+      });
+    }
+
+    const dynamicX = context.output.translations[3];
+    expect(Array.from(context.output.translations).every(Number.isFinite)).toBe(true);
+    expect(dynamicX).toBeGreaterThan(initialDynamicX);
+    backend.dispose?.();
+  });
+
+  it("keeps dynamicWithBone output translation following the input bone motion direction", async () => {
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+    const backend = createAmmoMmdPhysicsBackend(Ammo, {
+      gravity: [0, 0, 0],
+      fixedTimeStep: 1 / 60,
+      maxSubSteps: 1,
+      resetCatchUpSteps: 0
+    });
+    const context = createDynamicWithBoneStepContext();
+
+    backend.step(context);
+    writeBoneTranslation(context, 0, [0.5, 0, 0]);
+    context.output.updatedBoneIndices.length = 0;
+    backend.step({
+      ...context,
+      seconds: 1 / 60,
+      deltaSeconds: 1 / 60,
+      frame: 1
+    });
+
+    expect(Array.from(context.output.translations).every(Number.isFinite)).toBe(true);
+    expect(context.output.translations[0]).toBeGreaterThan(0);
+    expect(context.output.updatedBoneIndices).toContain(0);
+    backend.dispose?.();
+  });
+
+  it("can bypass the legacy HEAP32 additional damping patch for build validation", async () => {
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+    const backend = createAmmoMmdPhysicsBackend(Ammo, {
+      additionalDampingPatch: true,
+      disableAdditionalDampingPatch: true
+    });
+    const context = createStepContext();
+
+    backend.step(context);
+    for (let frame = 1; frame <= 20; frame += 1) {
+      backend.step({
+        ...context,
+        seconds: frame / 60,
+        deltaSeconds: 1 / 60,
+        frame
+      });
+    }
+
+    expect(Array.from(context.output.translations).every(Number.isFinite)).toBe(true);
+    expect(Array.from(context.output.rotations).every(Number.isFinite)).toBe(true);
+    backend.dispose?.();
+  });
 });
 
 function createStepContext(): MmdPhysicsStepContext {
@@ -209,6 +319,120 @@ function createHierarchyStepContext(): MmdPhysicsStepContext {
   };
 }
 
+function createSpringStepContext(): MmdPhysicsStepContext {
+  const inputTranslations = new Float32Array([0, 0, 0, 1, 0, 0]);
+  const inputRotations = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1]);
+  const inputWorldMatricesColumnMajor = new Float32Array([
+    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1
+  ]);
+  return {
+    seconds: 0,
+    deltaSeconds: 0,
+    frame: 0,
+    frameRate: 60,
+    skeleton: {
+      bones: [
+        {
+          index: 0,
+          name: "anchor",
+          parentIndex: -1,
+          restTranslation: [0, 0, 0],
+          restRotation: [0, 0, 0, 1]
+        },
+        {
+          index: 1,
+          name: "dynamic",
+          parentIndex: -1,
+          restTranslation: [1, 0, 0],
+          restRotation: [0, 0, 0, 1]
+        }
+      ]
+    },
+    rigidBodies: [
+      {
+        index: 0,
+        name: "anchorBody",
+        boneIndex: 0,
+        motionType: "static",
+        shape: {
+          type: "sphere",
+          size: [0.2, 0.2, 0.2]
+        },
+        localTranslation: [0, 0, 0],
+        localRotation: [0, 0, 0, 1],
+        mass: 0,
+        linearDamping: 0,
+        angularDamping: 0,
+        restitution: 0,
+        friction: 0.5,
+        collisionGroup: 0,
+        collisionMask: 0xffff
+      },
+      {
+        index: 1,
+        name: "springBody",
+        boneIndex: 1,
+        motionType: "dynamic",
+        shape: {
+          type: "sphere",
+          size: [0.2, 0.2, 0.2]
+        },
+        localTranslation: [1, 0, 0],
+        localRotation: [0, 0, 0, 1],
+        mass: 1,
+        linearDamping: 0,
+        angularDamping: 0,
+        restitution: 0,
+        friction: 0.5,
+        collisionGroup: 0,
+        collisionMask: 0xffff
+      }
+    ],
+    joints: [
+      {
+        index: 0,
+        name: "spring",
+        rigidBodyIndexA: 0,
+        rigidBodyIndexB: 1,
+        translation: [0.5, 0, 0],
+        rotation: [0, 0, 0, 1],
+        linearLimit: {
+          lower: [0, 0, 0],
+          upper: [0, 0, 0]
+        },
+        angularLimit: {
+          lower: [0, 0, 0],
+          upper: [0, 0, 0]
+        },
+        spring: {
+          linear: [80, 0, 0],
+          angular: [0, 0, 0]
+        }
+      }
+    ],
+    inputTranslations,
+    inputRotations,
+    inputWorldMatricesColumnMajor,
+    output: {
+      translations: new Float32Array(inputTranslations),
+      rotations: new Float32Array(inputRotations),
+      worldMatricesColumnMajor: new Float32Array(inputWorldMatricesColumnMajor),
+      updatedBoneIndices: []
+    }
+  };
+}
+
+function createDynamicWithBoneStepContext(): MmdPhysicsStepContext {
+  const context = createStepContext();
+  context.rigidBodies[0] = {
+    ...context.rigidBodies[0],
+    motionType: "dynamicWithBone",
+    localTranslation: [0, 0, 0],
+    mass: 1
+  };
+  return context;
+}
+
 function createRigidBody(
   index: number,
   name: string,
@@ -234,4 +458,23 @@ function createRigidBody(
     collisionGroup: 0,
     collisionMask: 0xffff
   };
+}
+
+function writeBoneTranslation(
+  context: MmdPhysicsStepContext,
+  boneIndex: number,
+  translation: [number, number, number]
+): void {
+  const translationOffset = boneIndex * 3;
+  context.inputTranslations[translationOffset] = translation[0];
+  context.inputTranslations[translationOffset + 1] = translation[1];
+  context.inputTranslations[translationOffset + 2] = translation[2];
+  const matrixOffset = boneIndex * 16;
+  context.inputWorldMatricesColumnMajor[matrixOffset] = 1;
+  context.inputWorldMatricesColumnMajor[matrixOffset + 5] = 1;
+  context.inputWorldMatricesColumnMajor[matrixOffset + 10] = 1;
+  context.inputWorldMatricesColumnMajor[matrixOffset + 12] = translation[0];
+  context.inputWorldMatricesColumnMajor[matrixOffset + 13] = translation[1];
+  context.inputWorldMatricesColumnMajor[matrixOffset + 14] = translation[2];
+  context.inputWorldMatricesColumnMajor[matrixOffset + 15] = 1;
 }

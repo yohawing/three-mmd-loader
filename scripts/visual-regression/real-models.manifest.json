@@ -1,0 +1,22 @@
+{
+  "note": "Local manual real-model visual regression profile. Cases are placeholders and require user-owned assets under MMD_VIEWER_DATA_ROOT; no model or motion assets are committed.",
+  "render": {
+    "resolution": { "width": 512, "height": 512 },
+    "pixelRatio": 1,
+    "background": "#f4f1ea",
+    "lights": {
+      "ambient": { "color": "#ffffff", "intensity": 1.2 },
+      "directional": { "color": "#ffffff", "intensity": 1.8, "position": [2.5, 5, 4] }
+    }
+  },
+  "cases": [
+    {
+      "name": "local-model-front-fit-frame000",
+      "model": "pmx/<your-model>/<your-model>.pmx",
+      "motion": "vmd/<your-motion>/<your-motion>.vmd",
+      "timeSeconds": 0,
+      "camera": "front-fit",
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    }
+  ]
+}
