@@ -1,5 +1,6 @@
 export { detectModelFormat } from "./formatDetection.js";
 export type { MmdModelFormat } from "./formatDetection.js";
+export type { MmdAnimation, MmdPose } from "./model/modelTypes.js";
 export { parsePmdMetadata, parsePmdSectionInventory } from "./pmd/index.js";
 export type {
   PmdHeader,

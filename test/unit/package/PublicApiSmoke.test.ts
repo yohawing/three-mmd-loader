@@ -26,6 +26,7 @@ import {
   mmdWorldMatrixToThree,
   resolveMappedTexture
 } from "../../../src/index.js";
+import * as publicApi from "../../../src/index.js";
 
 describe("public API smoke", () => {
   it("runs the README parser sample against the one-bone PMX fixture", async () => {
@@ -82,6 +83,11 @@ center
 
   it("exports Three.js adapter geometry helpers from the public barrel", () => {
     expect(createThreeBufferGeometry).toBeTypeOf("function");
+  });
+
+  it("does not expose Three.js AnimationClip creation from the public barrel", () => {
+    expect("createThreeAnimationClip" in publicApi).toBe(false);
+    expect("createThreePoseAnimationClip" in publicApi).toBe(false);
   });
 
   it("exports Three.js adapter skeleton helpers from the public barrel", () => {

@@ -24,7 +24,18 @@ export async function readModelSourceBytes(source: ModelSource): Promise<Uint8Ar
     return new Uint8Array(await source.arrayBuffer());
   }
 
-  throw new TypeError(
-    `${MODEL_SOURCE_STRING_UNRESOLVED}: string ModelSource requires a URL/file path resolution policy before bytes can be read`
-  );
+  if (typeof source === "string") {
+    if (typeof fetch !== "function") {
+      throw new TypeError(
+        `${MODEL_SOURCE_STRING_UNRESOLVED}: string ModelSource requires fetch to be available`
+      );
+    }
+    const response = await fetch(source);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch MMD source ${source}: ${response.status}`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  throw new TypeError("Unsupported MMD model source");
 }

@@ -5,6 +5,8 @@ export {
   type CcdIkLink,
   type CcdIkLinkAngleLimit,
   type CcdIkPose,
+  type CcdIkPreparedChain,
+  type CcdIkPreparedSolveInput,
   type CcdIkSolveInput,
   type CcdIkSolveResult,
   type MutableQuatTuple,

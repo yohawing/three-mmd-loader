@@ -19,6 +19,7 @@ import {
 } from "../physics/legacyPhysicsBridge.js";
 import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
 import { CcdIkSolver } from "./ik/index.js";
+import type { CcdIkBone, CcdIkPreparedChain } from "./ik/index.js";
 
 export * from "./ik/index.js";
 
@@ -43,8 +44,23 @@ export interface MmdRuntimeDebugState {
 }
 
 export interface MmdRuntime {
-  setAnimation(clip: THREE.AnimationClip, mesh: THREE.SkinnedMesh): void;
+  setAnimation(animation: MmdAnimation, mesh: THREE.SkinnedMesh): void;
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
+  tick(seconds: number, options?: MmdRuntimeTickOptions): MmdFrameState;
+  /**
+   * @deprecated Use tick(seconds, { mesh, ...options }) instead.
+   */
+  tick(
+    seconds: number,
+    mesh: THREE.Object3D | null | undefined,
+    options?: MmdRuntimeEvaluateOptions
+  ): MmdFrameState;
+  seek(seconds: number): MmdFrameState;
+  resetPose(): void;
+  clearAnimation(): void;
+  /**
+   * @deprecated Prefer seek / resetPose / clearAnimation for finer control.
+   */
   reset(seconds?: number): MmdFrameState;
   frameState(): MmdFrameState;
   debugState(): MmdRuntimeDebugState;
@@ -53,6 +69,11 @@ export interface MmdRuntime {
 
 export interface MmdRuntimeEvaluateOptions {
   readonly physics?: boolean;
+  readonly ik?: boolean;
+}
+
+export interface MmdRuntimeTickOptions extends MmdRuntimeEvaluateOptions {
+  readonly mesh?: THREE.Object3D | null | undefined;
 }
 
 export interface DefaultMmdRuntimeOptions {
@@ -65,7 +86,6 @@ export interface DefaultMmdRuntimeOptions {
 export class DefaultMmdRuntime implements MmdRuntime {
   private readonly frameRate: number;
   private readonly ikSolver = new CcdIkSolver();
-  private mixer: THREE.AnimationMixer | undefined;
   private mesh: THREE.SkinnedMesh | undefined;
   private mmdAnimation: MmdAnimation | undefined;
   private restTransforms: RuntimeRestTransform[] = [];
@@ -79,6 +99,18 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private readonly physicsBackend: MmdPhysicsBackend | undefined;
   private previousEvaluateSeconds: number | undefined;
   private physicsDisabled = false;
+  private preparedIkChains: CcdIkPreparedChain[] = [];
+  private readonly scratchAppendTranslations: THREE.Vector3[] = [];
+  private readonly scratchAppendRotations: THREE.Quaternion[] = [];
+  private readonly scratchReapplyAppendTranslations: THREE.Vector3[] = [];
+  private readonly scratchReapplyAppendRotations: THREE.Quaternion[] = [];
+  private readonly scratchVector3A = new THREE.Vector3();
+  private readonly scratchQuaternionA = new THREE.Quaternion();
+  private readonly scratchExternalPhysicsInput = {
+    translations: new Float32Array(0),
+    rotations: new Float32Array(0),
+    worldMatricesColumnMajor: new Float32Array(0)
+  };
 
   constructor(options: DefaultMmdRuntimeOptions = {}) {
     this.frameRate = normalizeFrameRate(options.frameRate ?? 30);
@@ -93,19 +125,13 @@ export class DefaultMmdRuntime implements MmdRuntime {
     if (this.mmdAnimation && this.mesh) {
       this.applyMmdAnimation(this.state.frame);
       this.captureDebugStage("vmdInterpolation");
-    } else if (this.mixer) {
-      const delta = seconds - previousSeconds;
-      if (delta >= 0) {
-        this.mixer.update(delta);
-      } else {
-        this.mixer.setTime(seconds);
-      }
-      this.captureDebugStage("vmdInterpolation");
     }
     this.applyAppendTransforms();
     this.captureDebugStage("appendTransform");
-    const ikSourceBoneIndices = this.solveIk();
-    this.reapplyAppendTransformsForSources(ikSourceBoneIndices);
+    if (options.ik !== false) {
+      const ikSourceBoneIndices = this.solveIk();
+      this.reapplyAppendTransformsForSources(ikSourceBoneIndices);
+    }
     this.captureDebugStage("ik");
     if (options.physics === false) {
       if (!this.physicsDisabled) {
@@ -123,45 +149,82 @@ export class DefaultMmdRuntime implements MmdRuntime {
     return this.frameState();
   }
 
-  reset(seconds = 0): MmdFrameState {
+  tick(seconds: number, options?: MmdRuntimeTickOptions): MmdFrameState;
+  /**
+   * @deprecated Use tick(seconds, { mesh, ...options }) instead.
+   */
+  tick(
+    seconds: number,
+    mesh: THREE.Object3D | null | undefined,
+    options?: MmdRuntimeEvaluateOptions
+  ): MmdFrameState;
+  tick(
+    seconds: number,
+    meshOrOptions?: THREE.Object3D | MmdRuntimeTickOptions | null,
+    options?: MmdRuntimeEvaluateOptions
+  ): MmdFrameState {
+    const tickOptions = normalizeTickOptions(meshOrOptions, options);
+    const { mesh, ...evaluateOptions } = tickOptions;
+    const state = this.evaluate(seconds, evaluateOptions);
+    syncRuntimeMeshForRender(mesh ?? undefined);
+    return state;
+  }
+
+  seek(seconds: number): MmdFrameState {
+    this.state = createFrameState(seconds, this.frameRate);
+    return this.frameState();
+  }
+
+  resetPose(): void {
     this.restoreRestTransforms();
-    if (this.mixer) {
-      this.mixer.stopAllAction();
-      if (this.mesh) {
-        this.mixer.uncacheRoot(this.mesh);
-      }
-      this.mixer = undefined;
-      this.mesh = undefined;
-    }
-    this.mmdAnimation = undefined;
-    this.restTransforms = [];
     this.preAppendTransforms = [];
+  }
+
+  clearAnimation(): void {
+    this.mmdAnimation = undefined;
+    this.bonePhysicsToggles = {};
+  }
+
+  /**
+   * @deprecated Prefer seek / resetPose / clearAnimation for finer control.
+   */
+  reset(seconds = 0): MmdFrameState {
+    this.seek(seconds);
+    this.resetPose();
+    this.clearAnimation();
+    this.mesh = undefined;
+    this.restTransforms = [];
     this.physicsSimulation?.reset(seconds);
     this.physicsBackend?.reset?.(
       createPhysicsResetContext(createFrameState(seconds, this.frameRate))
     );
     this.externalPhysicsData = undefined;
     this.bonePhysicsToggles = {};
+    this.preparedIkChains = [];
     this.debugStages = createEmptyDebugStages();
     this.previousEvaluateSeconds = undefined;
     this.physicsDisabled = false;
-    this.state = createFrameState(seconds, this.frameRate);
     return this.frameState();
   }
 
-  setAnimation(clip: THREE.AnimationClip, mesh: THREE.SkinnedMesh): void {
-    if (!(clip instanceof THREE.AnimationClip)) {
-      throw new TypeError("MMD runtime animation clip must be a THREE.AnimationClip");
-    }
+  setAnimation(animation: MmdAnimation, mesh: THREE.SkinnedMesh): void {
     if (!mesh.isSkinnedMesh) {
       throw new TypeError("MMD runtime mesh must be a THREE.SkinnedMesh");
     }
-    if (this.mixer) {
-      this.mixer.stopAllAction();
-      if (this.mesh) {
-        this.mixer.uncacheRoot(this.mesh);
-      }
+    if (!isMmdAnimation(animation)) {
+      throw new TypeError("MMD runtime animation must be an MmdAnimation");
     }
+    this.prepareAnimationTarget(mesh);
+    this.mmdAnimation = animation;
+    this.preparedIkChains = this.ikSolver.prepareChains(
+      readIkChains(mesh),
+      createCcdIkStaticBones(mesh)
+    );
+    this.applyMmdAnimation(this.state.frame);
+  }
+
+  private prepareAnimationTarget(mesh: THREE.SkinnedMesh): void {
+    this.restoreRestTransforms();
     this.mesh = mesh;
     this.restTransforms = mesh.skeleton.bones.map((bone) => ({
       position: bone.position.clone(),
@@ -179,14 +242,6 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.physicsBackend?.reset?.(createPhysicsResetContext(this.state));
     this.previousEvaluateSeconds = undefined;
     this.physicsDisabled = false;
-    this.mmdAnimation = readMmdAnimation(clip);
-    if (this.mmdAnimation) {
-      this.mixer = undefined;
-      this.applyMmdAnimation(this.state.frame);
-      return;
-    }
-    this.mixer = new THREE.AnimationMixer(mesh);
-    this.mixer.clipAction(clip).play();
   }
 
   frameState(): MmdFrameState {
@@ -228,17 +283,18 @@ export class DefaultMmdRuntime implements MmdRuntime {
     if (!mesh) {
       return new Set();
     }
-    const chains = readIkChains(mesh);
+    const chains = this.preparedIkChains;
     if (chains.length === 0) {
       return new Set();
     }
+    mesh.updateWorldMatrix(false, true);
     const bones = mesh.skeleton.bones.map((bone) => ({
       parentIndex:
         bone.parent instanceof THREE.Bone ? mesh.skeleton.bones.indexOf(bone.parent) : -1,
       translation: [bone.position.x, bone.position.y, -bone.position.z] as [number, number, number]
     }));
     const rotations = mesh.skeleton.bones.map((bone) => threeQuaternionToMmd(bone.quaternion));
-    this.ikSolver.solve({
+    this.ikSolver.solvePrepared({
       bones,
       pose: { rotations },
       chains
@@ -310,9 +366,9 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
 
     const bones = mesh.skeleton.bones;
-    const appendTranslations = bones.map(() => new THREE.Vector3());
-    const appendRotations = bones.map(() => new THREE.Quaternion());
-    for (let index = 0; index < bones.length; index += 1) {
+    const appendTranslations = prepareVector3ScratchArray(this.scratchAppendTranslations, bones.length);
+    const appendRotations = prepareQuaternionScratchArray(this.scratchAppendRotations, bones.length);
+    for (const index of appendTransformOrder(bones)) {
       const bone = bones[index];
       if (!bone) {
         continue;
@@ -340,16 +396,18 @@ export class DefaultMmdRuntime implements MmdRuntime {
 
       if (flags.appendRotate) {
         const sourceRotation = sourceBone.quaternion;
-        const slerpQ = weightedThreeQuaternion(sourceRotation, weight);
-        appendRotations[index] = slerpQ.clone();
+        const slerpQ = weightedThreeQuaternion(sourceRotation, weight, this.scratchQuaternionA);
+        appendRotations[index].copy(slerpQ);
         bone.quaternion.multiply(slerpQ);
       }
       if (flags.appendTranslate) {
-        const weightedTranslation =
+        const weightedTranslation = this.scratchVector3A.copy(
           !flags.appendLocal && parentHasAppend
-            ? appendTranslations[appendTransform.parentIndex].clone().multiplyScalar(weight)
-            : sourceBone.position.clone().multiplyScalar(weight);
-        appendTranslations[index] = weightedTranslation.clone();
+            ? appendTranslations[appendTransform.parentIndex]
+            : sourceBone.position
+        );
+        weightedTranslation.multiplyScalar(weight);
+        appendTranslations[index].copy(weightedTranslation);
         bone.position.add(weightedTranslation);
       }
     }
@@ -361,14 +419,21 @@ export class DefaultMmdRuntime implements MmdRuntime {
       return;
     }
     const bones = mesh.skeleton.bones;
-    const appendTranslations = bones.map(() => new THREE.Vector3());
-    const appendRotations = bones.map(() => new THREE.Quaternion());
+    const appendTranslations = prepareVector3ScratchArray(
+      this.scratchReapplyAppendTranslations,
+      bones.length
+    );
+    const appendRotations = prepareQuaternionScratchArray(
+      this.scratchReapplyAppendRotations,
+      bones.length
+    );
     const changedBoneIndices = new Set(sourceBoneIndices);
     const reappliedBoneIndices = new Set<number>();
+    const order = appendTransformOrder(bones);
     let changed = true;
     while (changed) {
       changed = false;
-      for (let index = 0; index < bones.length; index += 1) {
+      for (const index of order) {
         if (reappliedBoneIndices.has(index)) {
           continue;
         }
@@ -405,24 +470,27 @@ export class DefaultMmdRuntime implements MmdRuntime {
             !flags.appendLocal && parentHasAppend
               ? appendRotations[appendTransform.parentIndex]
               : sourceBone.quaternion;
-          const weightedRotation = weightedThreeQuaternion(sourceRotation, appendTransform.weight);
-          appendRotations[index] = weightedRotation.clone();
+          const weightedRotation = weightedThreeQuaternion(
+            sourceRotation,
+            appendTransform.weight,
+            this.scratchQuaternionA
+          );
+          appendRotations[index].copy(weightedRotation);
           bone.quaternion.multiply(weightedRotation);
         }
         if (flags.appendTranslate) {
-          const sourceTranslation =
+          const sourceTranslation = this.scratchVector3A.copy(
             !flags.appendLocal && parentHasAppend
               ? appendTranslations[appendTransform.parentIndex]
               : sourceBone.position
-                  .clone()
-                  .sub(
-                    this.preAppendTransforms[appendTransform.parentIndex]?.position ??
-                      new THREE.Vector3()
-                  );
-          const weightedTranslation = sourceTranslation
-            .clone()
-            .multiplyScalar(appendTransform.weight);
-          appendTranslations[index] = weightedTranslation.clone();
+          );
+          if (flags.appendLocal || !parentHasAppend) {
+            sourceTranslation.sub(
+              this.preAppendTransforms[appendTransform.parentIndex]?.position ?? zeroVector3
+            );
+          }
+          const weightedTranslation = sourceTranslation.multiplyScalar(appendTransform.weight);
+          appendTranslations[index].copy(weightedTranslation);
           bone.position.add(weightedTranslation);
         }
         reappliedBoneIndices.add(index);
@@ -459,8 +527,18 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
 
     mesh.updateWorldMatrix(false, true);
-    const inputTranslations = new Float32Array(mesh.skeleton.bones.length * 3);
-    const inputRotations = new Float32Array(mesh.skeleton.bones.length * 4);
+    const inputTranslations = ensureFloat32ArrayLength(
+      this.scratchExternalPhysicsInput.translations,
+      mesh.skeleton.bones.length * 3
+    );
+    this.scratchExternalPhysicsInput.translations = inputTranslations;
+    inputTranslations.fill(0, 0, mesh.skeleton.bones.length * 3);
+    const inputRotations = ensureFloat32ArrayLength(
+      this.scratchExternalPhysicsInput.rotations,
+      mesh.skeleton.bones.length * 4
+    );
+    this.scratchExternalPhysicsInput.rotations = inputRotations;
+    inputRotations.fill(0, 0, mesh.skeleton.bones.length * 4);
     for (let index = 0; index < mesh.skeleton.bones.length; index += 1) {
       const bone = mesh.skeleton.bones[index];
       if (!bone) {
@@ -473,7 +551,11 @@ export class DefaultMmdRuntime implements MmdRuntime {
       ]);
       writeQuaternionToBuffer(inputRotations, index, threeQuaternionToMmd(bone.quaternion));
     }
-    const inputWorldMatricesColumnMajor = new Float32Array(extractMmdWorldMatrices(mesh));
+    const inputWorldMatricesColumnMajor = copyNumbersToFloat32Scratch(
+      extractMmdWorldMatrices(mesh),
+      this.scratchExternalPhysicsInput.worldMatricesColumnMajor
+    );
+    this.scratchExternalPhysicsInput.worldMatricesColumnMajor = inputWorldMatricesColumnMajor;
     const prePhysics = createPrePhysicsInputBuffersIfNeeded(
       data.skeleton,
       inputTranslations,
@@ -1100,13 +1182,6 @@ function cloneDebugStage(stage: MmdRuntimeDebugStageState): MmdRuntimeDebugStage
   };
 }
 
-function readMmdAnimation(clip: THREE.AnimationClip): MmdAnimation | undefined {
-  const animation = (
-    clip as THREE.AnimationClip & { readonly userData?: { readonly mmdAnimation?: unknown } }
-  ).userData?.mmdAnimation;
-  return isMmdAnimation(animation) ? animation : undefined;
-}
-
 function isMmdAnimation(value: unknown): value is MmdAnimation {
   return (
     typeof value === "object" && value !== null && "boneTracks" in value && "morphTracks" in value
@@ -1368,21 +1443,129 @@ function threeQuaternionToMmd(quaternion: THREE.Quaternion): [number, number, nu
   return [-quaternion.x, -quaternion.y, quaternion.z, quaternion.w];
 }
 
-function weightedThreeQuaternion(source: THREE.Quaternion, weight: number): THREE.Quaternion {
+const zeroVector3 = new THREE.Vector3();
+
+function weightedThreeQuaternion(
+  source: THREE.Quaternion,
+  weight: number,
+  target = new THREE.Quaternion()
+): THREE.Quaternion {
   if (weight === 0) {
-    return new THREE.Quaternion();
+    return target.identity();
   }
-  const normalized = source.clone().normalize();
+  target.copy(source).normalize();
+  let x = target.x;
+  let y = target.y;
+  let z = target.z;
+  const w = target.w;
   if (weight < 0) {
-    normalized.set(-normalized.x, -normalized.y, -normalized.z, normalized.w);
-    return new THREE.Quaternion().slerp(normalized, -weight);
+    x = -x;
+    y = -y;
+    z = -z;
+    return slerpIdentityQuaternionInto(x, y, z, w, -weight, target);
   }
-  return new THREE.Quaternion().slerp(normalized, weight);
+  return slerpIdentityQuaternionInto(x, y, z, w, weight, target);
+}
+
+function slerpIdentityQuaternionInto(
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  weight: number,
+  target: THREE.Quaternion
+): THREE.Quaternion {
+  let bx = x;
+  let by = y;
+  let bz = z;
+  let bw = w;
+  let cos = bw;
+  if (cos < 0) {
+    cos = -cos;
+    bx = -bx;
+    by = -by;
+    bz = -bz;
+    bw = -bw;
+  }
+  if (cos > 0.9995) {
+    return target.set(bx * weight, by * weight, bz * weight, 1 + (bw - 1) * weight).normalize();
+  }
+  const theta0 = Math.acos(cos);
+  const theta = theta0 * weight;
+  const sinTheta = Math.sin(theta);
+  const sinTheta0 = Math.sin(theta0);
+  const s0 = Math.cos(theta) - (cos * sinTheta) / sinTheta0;
+  const s1 = sinTheta / sinTheta0;
+  return target.set(bx * s1, by * s1, bz * s1, s0 + bw * s1);
+}
+
+function prepareVector3ScratchArray(target: THREE.Vector3[], length: number): THREE.Vector3[] {
+  for (let index = target.length; index < length; index += 1) {
+    target.push(new THREE.Vector3());
+  }
+  target.length = length;
+  for (const vector of target) {
+    vector.set(0, 0, 0);
+  }
+  return target;
+}
+
+function prepareQuaternionScratchArray(
+  target: THREE.Quaternion[],
+  length: number
+): THREE.Quaternion[] {
+  for (let index = target.length; index < length; index += 1) {
+    target.push(new THREE.Quaternion());
+  }
+  target.length = length;
+  for (const quaternion of target) {
+    quaternion.identity();
+  }
+  return target;
+}
+
+function ensureFloat32ArrayLength(
+  buffer: Float32Array,
+  length: number
+): Float32Array<ArrayBuffer> {
+  return buffer.length === length ? (buffer as Float32Array<ArrayBuffer>) : new Float32Array(length);
+}
+
+function copyNumbersToFloat32Scratch(
+  values: readonly number[],
+  buffer: Float32Array
+): Float32Array<ArrayBuffer> {
+  const target = ensureFloat32ArrayLength(buffer, values.length);
+  target.set(values);
+  return target;
+}
+
+function appendTransformOrder(bones: readonly THREE.Bone[]): number[] {
+  return bones
+    .map((bone, index) => ({
+      index,
+      layer: readBoneLayer(bone)
+    }))
+    .sort((left, right) => left.layer - right.layer || left.index - right.index)
+    .map((entry) => entry.index);
+}
+
+function readBoneLayer(bone: THREE.Bone): number {
+  const layer = bone.userData.mmdLayer;
+  return Number.isFinite(layer) ? Number(layer) : 0;
 }
 
 function readIkChains(mesh: THREE.SkinnedMesh): RuntimeIkChain[] {
   const chains = mesh.userData.mmdIkChains;
   return Array.isArray(chains) ? chains.filter(isRuntimeIkChain) : [];
+}
+
+function createCcdIkStaticBones(mesh: THREE.SkinnedMesh): CcdIkBone[] {
+  return mesh.skeleton.bones.map((bone) => ({
+    parentIndex:
+      bone.parent instanceof THREE.Bone ? mesh.skeleton.bones.indexOf(bone.parent) : -1,
+    translation: [0, 0, 0] as const
+  }));
 }
 
 function collectIkSourceBoneIndices(chains: readonly RuntimeIkChain[]): Set<number> {
@@ -1448,17 +1631,39 @@ function expandGroupMorphWeights(morphs: readonly RuntimeMorph[], weights: numbe
   }
   const directWeights = weights.slice();
   for (let index = 0; index < morphs.length; index += 1) {
-    const morph = morphs[index];
     const weight = directWeights[index] ?? 0;
-    if ((morph?.type !== "group" && morph?.type !== "flip") || weight === 0) {
+    if (weight === 0) {
       continue;
     }
-    const offsets = morph.type === "flip" ? (morph.flipOffsets ?? []) : morph.groupOffsets;
-    for (const offset of offsets) {
-      if (offset.morphIndex >= 0 && offset.morphIndex < weights.length) {
-        weights[offset.morphIndex] += weight * offset.weight;
-      }
+    expandMorphWeight(morphs, weights, index, weight, new Set([index]));
+  }
+}
+
+function expandMorphWeight(
+  morphs: readonly RuntimeMorph[],
+  weights: number[],
+  morphIndex: number,
+  weight: number,
+  path: Set<number>
+): void {
+  const morph = morphs[morphIndex];
+  if ((morph?.type !== "group" && morph?.type !== "flip") || weight === 0) {
+    return;
+  }
+  const offsets = morph.type === "flip" ? (morph.flipOffsets ?? []) : morph.groupOffsets;
+  for (const offset of offsets) {
+    const targetIndex = offset.morphIndex;
+    if (targetIndex < 0 || targetIndex >= weights.length) {
+      continue;
     }
+    const contribution = weight * offset.weight;
+    weights[targetIndex] += contribution;
+    if (contribution === 0 || path.has(targetIndex)) {
+      continue;
+    }
+    path.add(targetIndex);
+    expandMorphWeight(morphs, weights, targetIndex, contribution, path);
+    path.delete(targetIndex);
   }
 }
 
@@ -1676,6 +1881,48 @@ function applyPhysicsOutputToSkeleton(
       );
     }
   }
+}
+
+function syncRuntimeMeshForRender(mesh: THREE.Object3D | undefined): void {
+  if (!mesh) {
+    return;
+  }
+  // Keep renderer-facing world and bone matrices in sync after runtime evaluation.
+  mesh.updateMatrixWorld(true);
+  mesh.traverse((object) => {
+    if (isSkinnedMesh(object)) {
+      object.skeleton.update();
+    }
+  });
+}
+
+function normalizeTickOptions(
+  meshOrOptions: THREE.Object3D | MmdRuntimeTickOptions | null | undefined,
+  options: MmdRuntimeEvaluateOptions | undefined
+): MmdRuntimeTickOptions {
+  if (isObject3D(meshOrOptions)) {
+    return { ...(options ?? {}), mesh: meshOrOptions };
+  }
+  if (meshOrOptions == null) {
+    return options ?? {};
+  }
+  return meshOrOptions;
+}
+
+function isObject3D(value: unknown): value is THREE.Object3D {
+  return value instanceof THREE.Object3D || hasBooleanFlag(value, "isObject3D");
+}
+
+function isSkinnedMesh(value: THREE.Object3D): value is THREE.SkinnedMesh {
+  return value instanceof THREE.SkinnedMesh || hasBooleanFlag(value, "isSkinnedMesh");
+}
+
+function hasBooleanFlag(value: unknown, key: "isObject3D" | "isSkinnedMesh"): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as Record<typeof key, unknown>)[key] === true
+  );
 }
 
 function writeVector3ToBuffer(

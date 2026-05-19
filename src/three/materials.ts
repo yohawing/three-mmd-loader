@@ -38,9 +38,11 @@ export interface ThreeMmdMaterialTextureOptions {
   readonly textureResolver?: TextureResolver;
   readonly textureMap?: TextureMap;
   readonly textureLoader?: ThreeMmdTextureLoader;
+  readonly textureCache?: Map<string, Promise<THREE.Texture | undefined>>;
   readonly modelUrl?: string;
   readonly geometry?: THREE.BufferGeometry;
   readonly morphs?: readonly MorphData[];
+  readonly geometryAwareAlpha?: boolean;
 }
 
 export type ThreeMmdSphereMappedToonMaterial = THREE.MeshToonMaterial & {
@@ -102,7 +104,8 @@ export async function applyThreeMmdMaterialTextures(
         options.modelUrl,
         resolver,
         diagnostics,
-        textureLoader
+        textureLoader,
+        options.textureCache
       );
       if (texture) {
         material.map = texture;
@@ -117,7 +120,8 @@ export async function applyThreeMmdMaterialTextures(
             options.morphs ?? [],
             options.geometry,
             materialIndex,
-            texture
+            texture,
+            { geometryAwareAlpha: options.geometryAwareAlpha }
           );
         material.transparent = transparencyMode === "alphaBlend";
         material.depthWrite = mmdMaterialDepthWrite(transparencyMode);

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { parseVmd } from "../../../../src/parser/vmd/index.js";
+import { parseVmd, parseVmdSectionInventory } from "../../../../src/parser/vmd/index.js";
 import { ThreeMmdLoader } from "../../../../src/three/index.js";
 import type { VmdBoneFrame, VmdMorphFrame } from "../../../../src/parser/model/modelTypes.js";
 
@@ -56,6 +56,36 @@ describe("parseVmd", () => {
       fov: [5 / 127, 11 / 127, 17 / 127, 23 / 127]
     });
   });
+
+  it("reads extended property frame physics simulation bytes", () => {
+    const animation = parseVmd(createPropertyOnlyVmd({ physicsSimulation: false }));
+    const inventory = parseVmdSectionInventory(createPropertyOnlyVmd({ physicsSimulation: false }));
+
+    expect(animation.propertyFrames).toEqual([
+      {
+        frame: 7,
+        visible: true,
+        physicsSimulation: false,
+        ikStates: []
+      }
+    ]);
+    expect(inventory.sections.find((section) => section.name === "property")?.byteLength).toBe(10);
+    expect(inventory.trailingBytes).toBe(0);
+  });
+
+  it("keeps classic property frames physics-enabled when no physics byte is present", () => {
+    const animation = parseVmd(createPropertyOnlyVmd({ physicsSimulation: undefined }));
+    const inventory = parseVmdSectionInventory(createPropertyOnlyVmd({ physicsSimulation: undefined }));
+
+    expect(animation.propertyFrames[0]).toMatchObject({
+      frame: 7,
+      visible: true,
+      physicsSimulation: true,
+      ikStates: []
+    });
+    expect(inventory.sections.find((section) => section.name === "property")?.byteLength).toBe(9);
+    expect(inventory.trailingBytes).toBe(0);
+  });
 });
 
 function expectSortedFrames(frames: readonly VmdBoneFrame[] | readonly VmdMorphFrame[]): void {
@@ -93,6 +123,32 @@ function createCameraOnlyVmd(): Uint8Array {
   bytes.push(...Array.from({ length: 24 }, (_, index) => index));
   u32(45);
   bytes.push(0);
+  u32(0);
+
+  return new Uint8Array(bytes);
+}
+
+function createPropertyOnlyVmd(options: { readonly physicsSimulation: boolean | undefined }): Uint8Array {
+  const bytes: number[] = [];
+  const u32 = (value: number) => {
+    const buffer = new ArrayBuffer(4);
+    new DataView(buffer).setUint32(0, value, true);
+    bytes.push(...new Uint8Array(buffer));
+  };
+
+  pushFixedText(bytes, "Vocaloid Motion Data 0002", 30);
+  pushFixedText(bytes, "property", 20);
+  u32(0);
+  u32(0);
+  u32(0);
+  u32(0);
+  u32(0);
+  u32(1);
+  u32(7);
+  bytes.push(1);
+  if (options.physicsSimulation !== undefined) {
+    bytes.push(options.physicsSimulation ? 1 : 0);
+  }
   u32(0);
 
   return new Uint8Array(bytes);

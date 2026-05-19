@@ -21,6 +21,7 @@ tmp/
 data/
 mmd_fixture_data.zip
 test/fixtures/generated/*.pmx
+test/fixtures/generated/**/*.pmx
 
 # OS / editor noise
 .DS_Store

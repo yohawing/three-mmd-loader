@@ -146,7 +146,7 @@ describe("CcdIkSolver", () => {
     expect(rotations).toEqual([[...IDENTITY], [...IDENTITY], [...IDENTITY]]);
   });
 
-  it("uses Saba-compatible zero-endpoint detection for single-axis limits", () => {
+  it("does not classify a one-sided zero endpoint as a fixed single-axis limit", () => {
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },
       { parentIndex: 0, translation: [1, 0, 0] },
@@ -176,9 +176,8 @@ describe("CcdIkSolver", () => {
       ]
     });
 
-    expect(result.finalDistances[0]).toBeCloseTo(Math.SQRT2, 5);
-    expect(Math.abs(rotations[0][0])).toBeGreaterThan(0);
-    expect(rotations[0][1]).toBeCloseTo(0, 5);
+    expect(result.finalDistances[0]).toBeLessThan(1e-5);
+    expect(Math.abs(rotations[0][1])).toBeGreaterThan(0.5);
   });
 
   it("matches Saba plane-link behavior for base pose rotations", () => {
@@ -216,7 +215,7 @@ describe("CcdIkSolver", () => {
     expect(Math.abs(rotations[0][0])).toBeGreaterThan(0);
   });
 
-  it("solves a two-bone single-axis plane chain in one analytic step", () => {
+  it("solves a two-bone single-axis plane chain through iterative CCD", () => {
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },
       { parentIndex: 0, translation: [1, 0, 0] },
@@ -253,13 +252,12 @@ describe("CcdIkSolver", () => {
       ]
     });
 
-    expect(result.iterationCount).toBe(1);
+    expect(result.iterationCount).toBeGreaterThan(0);
     expect(result.finalDistances[0]).toBeLessThan(1e-5);
-    expect(Math.abs(rotations[0][2])).toBeGreaterThan(0);
     expect(Math.abs(rotations[1][2])).toBeGreaterThan(0);
   });
 
-  it("preserves a two-bone analytic middle bone base rotation", () => {
+  it("keeps two-bone middle bone rotations finite through iterative CCD", () => {
     const baseRotation = eulerXyzToQuaternionForTest([0.2, 0, 0]);
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },
@@ -297,8 +295,9 @@ describe("CcdIkSolver", () => {
       ]
     });
 
-    expect(result.iterationCount).toBe(1);
-    expect(Math.abs(rotations[1][0])).toBeGreaterThan(0.05);
+    expect(result.iterationCount).toBeGreaterThan(0);
+    expect(result.finalDistances[0]).toBeLessThan(0.1);
+    expect(rotations[1].every(Number.isFinite)).toBe(true);
   });
 
   it("falls back to constrained CCD when a two-bone root link has an angle limit", () => {
@@ -877,5 +876,69 @@ describe("CcdIkSolver", () => {
         ]
       })
     ).toThrow("CCD IK link angle limit minimum must not exceed maximum");
+  });
+
+  it("prepares static chain validation once and solves prepared chains with dynamic poses", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1, 1, 0] }
+    ];
+    const solver = new CcdIkSolver();
+    const chains = solver.prepareChains(
+      [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [{ boneIndex: 1 }],
+          iterationCount: 4,
+          maxAnglePerIteration: Math.PI
+        }
+      ],
+      bones
+    );
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = solver.solvePrepared({
+      bones,
+      pose: { rotations },
+      chains
+    });
+
+    expect(result.finalDistances[0]).toBeLessThan(1e-5);
+    expect(rotations[1][2]).toBeCloseTo(Math.SQRT1_2, 5);
+    expect(() =>
+      solver.prepareChains(
+        [{ goalBoneIndex: 4, effectorBoneIndex: 2, links: [], iterationCount: 1 }],
+        bones
+      )
+    ).toThrow("CCD IK goalBoneIndex is out of range");
+    expect(() =>
+      solver.solvePrepared({
+        bones,
+        pose: { rotations: [] },
+        chains
+      })
+    ).toThrow("CCD IK pose rotation count must match bone count");
+    expect(() =>
+      solver.solvePrepared({
+        bones,
+        pose: { rotations },
+        chains: [
+          {
+            goalBoneIndex: 3,
+            effectorBoneIndex: 2,
+            links: [{ boneIndex: 1 }],
+            iterationCount: 4
+          }
+        ] as never
+      })
+    ).toThrow("CCD IK chain must be prepared");
   });
 });

@@ -2,7 +2,6 @@ import * as THREE from "three";
 
 import { parseVmd, parseVpd } from "../parser/index.js";
 import { DefaultMmdRuntime } from "../runtime/index.js";
-import { createThreeAnimationClip, createThreePoseAnimationClip } from "./animation.js";
 import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
 import type { MmdAnimation, MmdPose, VmdBoneFrame } from "../parser/model/modelTypes.js";
 import { createThreeBufferGeometry } from "./geometry.js";
@@ -17,12 +16,11 @@ import { attachMmdSdefSkinning } from "./material/material-sdef.js";
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
-import { createMmdMaterialRenderOrderMeshes, createMmdOutlineMeshes } from "./outline.js";
+import { createMmdMaterialRenderOrderMeshes, createMmdOutlineMesh } from "./outline.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry } from "./geometry.js";
-export { createThreeAnimationClip, createThreePoseAnimationClip } from "./animation.js";
 export { isModelSource } from "./modelSource.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 export { mmdWorldMatrixToThree, syncThreeMmdRuntimeToMesh } from "./runtime-sync.js";
@@ -102,15 +100,37 @@ export interface ThreeMmdLoaderOptions {
   readonly textureResolver?: TextureResolver;
   readonly textureMap?: TextureMap;
   readonly textureLoader?: ThreeMmdTextureLoader;
+  readonly geometryAwareAlpha?: boolean;
   readonly runtime?: DefaultMmdRuntimeOptions;
 }
+
+export interface ThreeMmdLoadModelOptions {
+  readonly outlines?: boolean;
+  readonly frustumCulled?: boolean;
+}
+
+export type ThreeMmdModelSourceDescriptor =
+  | {
+      readonly kind: "bytes";
+      readonly byteLength: number;
+    }
+  | {
+      readonly kind: "url";
+      readonly byteLength: number;
+      readonly name?: string;
+    }
+  | {
+      readonly kind: "file";
+      readonly byteLength: number;
+      readonly name?: string;
+    };
 
 export interface ThreeMmdModel {
   readonly mesh: THREE.SkinnedMesh;
   readonly outlineMeshes: readonly THREE.SkinnedMesh[];
   readonly renderOrderMeshes: readonly THREE.SkinnedMesh[];
   readonly runtime?: MmdRuntime;
-  readonly source: ModelSource;
+  readonly source: ThreeMmdModelSourceDescriptor;
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
 }
 
@@ -118,7 +138,6 @@ export interface ThreeMmdAnimation {
   readonly source: ModelSource;
   readonly name?: string;
   readonly animation: MmdAnimation;
-  readonly clip?: THREE.AnimationClip;
 }
 
 export interface ThreeMmdPose {
@@ -127,11 +146,16 @@ export interface ThreeMmdPose {
 }
 
 export class ThreeMmdLoader {
+  private readonly textureCache = new Map<string, Promise<THREE.Texture | undefined>>();
+
   constructor(readonly options: ThreeMmdLoaderOptions = {}) {
     validateLoaderOptions(options);
   }
 
-  async loadModel(source: ModelSource): Promise<ThreeMmdModel> {
+  async loadModel(
+    source: ModelSource,
+    options: ThreeMmdLoadModelOptions = {}
+  ): Promise<ThreeMmdModel> {
     validateModelSource(source, "loadModel");
     const bytes = await readModelSourceBytes(source);
     const modelData = parseLoaderMmdModelData(bytes);
@@ -143,10 +167,10 @@ export class ThreeMmdLoader {
       textureLoader: this.options.textureLoader,
       modelUrl: typeof source === "string" ? source : undefined,
       geometry: mesh.geometry,
-      morphs: modelData.morphs
+      morphs: modelData.morphs,
+      geometryAwareAlpha: this.options.geometryAwareAlpha,
+      textureCache: this.textureCache
     });
-    const outlineMeshes = createMmdOutlineMeshes({ mesh, materials: modelData.materials });
-    outlineMeshes.forEach((outline) => mesh.add(outline));
     const renderOrder = computeMmdMaterialRenderOrder(
       materials.map((material, materialIndex) => ({
         materialIndex,
@@ -155,22 +179,20 @@ export class ThreeMmdLoader {
     );
     mesh.userData.mmdMaterialRenderOrder = renderOrder;
     syncMmdModelShadowFlags(mesh, modelData.materials);
-    outlineMeshes.forEach((outline) => syncMmdModelShadowFlags(outline, modelData.materials));
-    const renderOrderMeshes = createMmdMaterialRenderOrderMeshes({
+    if (options.frustumCulled !== undefined) {
+      mesh.frustumCulled = options.frustumCulled;
+    }
+    return createThreeMmdModel({
       mesh,
-      materials: modelData.materials
-    });
-    return {
-      mesh,
-      outlineMeshes,
-      renderOrderMeshes,
       runtime: new DefaultMmdRuntime(this.options.runtime),
-      source,
-      textureDiagnostics
-    };
+      source: createModelSourceDescriptor(source, bytes.byteLength),
+      textureDiagnostics,
+      materials: modelData.materials,
+      outlines: options.outlines ?? true
+    });
   }
 
-  async loadAnimation(source: ModelSource, model?: ThreeMmdModel): Promise<ThreeMmdAnimation> {
+  async loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation> {
     validateModelSource(source, "loadAnimation");
     const bytes = await readModelSourceBytes(source);
     if (bytes.byteLength === 0) {
@@ -180,8 +202,7 @@ export class ThreeMmdLoader {
     return {
       source,
       name: animation.metadata.modelName,
-      animation,
-      clip: model ? this.createAnimationClip(animation, model) : undefined
+      animation
     };
   }
 
@@ -199,8 +220,7 @@ export class ThreeMmdLoader {
 
   async loadPoseAnimation(
     source: ModelSource,
-    name = "pose",
-    model?: ThreeMmdModel
+    name = "pose"
   ): Promise<ThreeMmdAnimation> {
     validateModelSource(source, "loadPoseAnimation");
     const bytes = await readModelSourceBytes(source);
@@ -212,20 +232,67 @@ export class ThreeMmdLoader {
     return {
       source,
       name,
-      animation,
-      clip: model
-        ? createThreePoseAnimationClip(pose, model.mesh.skeleton.bones, name)
-        : createThreeAnimationClip(animation, createPoseBones(pose), {
-            morphTargetDictionary: {}
-          })
+      animation
     };
   }
+}
 
-  createAnimationClip(animation: MmdAnimation, model: ThreeMmdModel): THREE.AnimationClip {
-    return createThreeAnimationClip(animation, model.mesh.skeleton.bones, {
-      morphTargetDictionary: model.mesh.morphTargetDictionary ?? undefined
-    });
+function createThreeMmdModel(options: {
+  readonly mesh: THREE.SkinnedMesh;
+  readonly runtime?: MmdRuntime;
+  readonly source: ThreeMmdModelSourceDescriptor;
+  readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
+  readonly materials: readonly LoaderMmdModelData["materials"][number][];
+  readonly outlines: boolean;
+}): ThreeMmdModel {
+  const outlineMesh = options.outlines
+    ? createMmdOutlineMesh({
+        mesh: options.mesh,
+        materials: options.materials
+      })
+    : undefined;
+  const outlineMeshes = outlineMesh ? [outlineMesh] : [];
+  outlineMeshes.forEach((outline) => {
+    syncMmdModelShadowFlags(outline, options.materials);
+    outline.frustumCulled = options.mesh.frustumCulled;
+  });
+  const renderOrderMeshes = createMmdMaterialRenderOrderMeshes({
+    mesh: options.mesh,
+    materials: options.materials
+  });
+
+  return {
+    mesh: options.mesh,
+    outlineMeshes,
+    renderOrderMeshes,
+    runtime: options.runtime,
+    source: options.source,
+    textureDiagnostics: options.textureDiagnostics
+  };
+}
+
+function createModelSourceDescriptor(
+  source: ModelSource,
+  byteLength: number
+): ThreeMmdModelSourceDescriptor {
+  if (typeof source === "string") {
+    return {
+      kind: "url",
+      byteLength,
+      name: source.split(/[\\/]/).at(-1)
+    };
   }
+  if (typeof File !== "undefined" && source instanceof File) {
+    return {
+      kind: "file",
+      byteLength,
+      name: source.name || undefined
+    };
+  }
+  return {
+    kind: "bytes",
+    byteLength
+  };
 }
 
 function createEmptySourceError(method: string): Error {
@@ -411,15 +478,6 @@ function createMmdAnimationFromPose(pose: MmdPose, name: string): MmdAnimation {
     selfShadowFrames: [],
     propertyFrames: []
   };
-}
-
-function createPoseBones(pose: MmdPose): THREE.Bone[] {
-  return Object.keys(pose.bones).map((boneName) => {
-    const bone = new THREE.Bone();
-    bone.name = boneName;
-    bone.userData.mmdBoneName = boneName;
-    return bone;
-  });
 }
 
 function normalizeMeshMaterials(

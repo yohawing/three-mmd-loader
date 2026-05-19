@@ -44,6 +44,48 @@ describe("parsePmx vertex bone index size fallback", () => {
       )
     ).toThrow("Unsupported PMX vertex weight type: 9");
   });
+
+  it("rejects impossible section counts before allocating geometry buffers", () => {
+    expect(() =>
+      parsePmx(
+        createMinimalPmxBytes({
+          headerBoneIndexSize: 1,
+          vertexBoneIndexSize: 1,
+          vertexCount: 10_000_001
+        })
+      )
+    ).toThrow("Invalid PMX vertex count: 10000001");
+
+    expect(() =>
+      parsePmx(
+        createMinimalPmxBytes({
+          headerBoneIndexSize: 1,
+          vertexBoneIndexSize: 1,
+          vertexIndexCount: 10_000_001
+        })
+      )
+    ).toThrow("Invalid PMX vertex index count: 10000001");
+
+    expect(() =>
+      parsePmx(
+        createMinimalPmxBytes({
+          headerBoneIndexSize: 1,
+          vertexBoneIndexSize: 1,
+          textureCount: 10_000_001
+        })
+      )
+    ).toThrow("Invalid PMX texture count: 10000001");
+
+    expect(() =>
+      parsePmx(
+        createMinimalPmxBytes({
+          headerBoneIndexSize: 1,
+          vertexBoneIndexSize: 1,
+          materialCount: 10_000_001
+        })
+      )
+    ).toThrow("Invalid PMX material count: 10000001");
+  });
 });
 
 interface MinimalPmxOptions {
@@ -51,6 +93,10 @@ interface MinimalPmxOptions {
   readonly vertexBoneIndexSize: 1 | 2 | 4;
   readonly weightType?: number;
   readonly vertexIndexBytes?: readonly number[];
+  readonly vertexCount?: number;
+  readonly vertexIndexCount?: number;
+  readonly textureCount?: number;
+  readonly materialCount?: number;
 }
 
 function createMinimalPmxBytes(options: MinimalPmxOptions): Uint8Array {
@@ -100,7 +146,7 @@ function createMinimalPmxBytes(options: MinimalPmxOptions): Uint8Array {
   text("synthetic");
   text("");
   text("");
-  count(1);
+  count(options.vertexCount ?? 1);
   f32(1);
   f32(2);
   f32(3);
@@ -112,10 +158,10 @@ function createMinimalPmxBytes(options: MinimalPmxOptions): Uint8Array {
   u8(options.weightType ?? 0);
   index(0, options.vertexBoneIndexSize);
   f32(1);
-  count(options.vertexIndexBytes?.length ?? 0);
+  count(options.vertexIndexCount ?? options.vertexIndexBytes?.length ?? 0);
   bytes.push(...(options.vertexIndexBytes ?? []));
-  count(0);
-  count(0);
+  count(options.textureCount ?? 0);
+  count(options.materialCount ?? 0);
   count(0);
   count(0);
   count(0);

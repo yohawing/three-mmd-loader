@@ -20,13 +20,18 @@ export interface MmdDefaultMaterialTextureSet {
   readonly sphereTexture: THREE.Texture | undefined;
 }
 
+export interface MmdDefaultMaterialTransparencyOptions {
+  readonly geometryAwareAlpha?: boolean;
+}
+
 export async function loadMmdDefaultMaterialTextureSet(
   material: MaterialInfo,
   materialIndex: number,
   modelUrl: string | undefined,
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
-  textureLoader?: ThreeMmdTextureLoader
+  textureLoader?: ThreeMmdTextureLoader,
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
 ): Promise<MmdDefaultMaterialTextureSet> {
   const shouldLoadSphereTexture = material.sphereMode !== "none";
   const [texture, gradientMap, sphereTexture] = await Promise.all([
@@ -38,7 +43,8 @@ export async function loadMmdDefaultMaterialTextureSet(
       modelUrl,
       textureResolver,
       textureDiagnostics,
-      textureLoader
+      textureLoader,
+      textureCache
     ),
     loadToonTexture(
       material,
@@ -46,7 +52,8 @@ export async function loadMmdDefaultMaterialTextureSet(
       modelUrl,
       textureResolver,
       textureDiagnostics,
-      textureLoader
+      textureLoader,
+      textureCache
     ),
     shouldLoadSphereTexture
       ? loadMaterialTextureWithDiagnostics(
@@ -57,7 +64,8 @@ export async function loadMmdDefaultMaterialTextureSet(
           modelUrl,
           textureResolver,
           textureDiagnostics,
-          textureLoader
+          textureLoader,
+          textureCache
         )
       : undefined
   ]);
@@ -69,15 +77,18 @@ export function evaluateMmdDefaultMaterialTransparency(
   morphs: readonly MorphData[],
   geometry: THREE.BufferGeometry,
   materialIndex: number,
-  texture: THREE.Texture | undefined
+  texture: THREE.Texture | undefined,
+  options: MmdDefaultMaterialTransparencyOptions = {}
 ): {
   readonly transparencyMode: MmdMaterialTransparencyMode;
   readonly textureTransparencyMode: MmdMaterialTransparencyMode | undefined;
   readonly morphAlphaTransparent: boolean;
 } {
   const textureTransparencyMode = texture
-    ? (evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
-      evaluateMmdTextureAlphaTexture(texture))
+    ? (options.geometryAwareAlpha
+      ? (evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
+        evaluateMmdTextureAlphaTexture(texture))
+      : evaluateMmdTextureAlphaTexture(texture))
     : undefined;
   const baseTransparencyMode = mmdMaterialTransparencyMode(
     material,

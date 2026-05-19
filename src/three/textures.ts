@@ -42,6 +42,8 @@ const bundledSharedToonTextureUrls: TextureMap = {
 };
 
 let defaultToonGradientMap: THREE.DataTexture | undefined;
+const blobTextureCacheKeys = new WeakMap<Blob, number>();
+let nextBlobTextureCacheKey = 1;
 
 export function evaluateMmdTextureAlphaSamples(
   alphaSamples: ArrayLike<number>,
@@ -318,7 +320,8 @@ export async function loadToonTexture(
   modelUrl: string | undefined,
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
-  textureLoader?: ThreeMmdTextureLoader
+  textureLoader?: ThreeMmdTextureLoader,
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
 ): Promise<THREE.Texture | undefined> {
   if (!material.toonTexturePath && material.sharedToonIndex === undefined) {
     return getDefaultToonGradientMap();
@@ -331,13 +334,23 @@ export async function loadToonTexture(
     ? resolveBundledSharedToonTexture(toonTexture.path)
     : undefined;
   const texture = bundledSharedToonTexture
-    ? await loadResolvedTexture(bundledSharedToonTexture, toonTexture.path, undefined, textureLoader)
+    ? await loadResolvedTexture(
+        bundledSharedToonTexture,
+        toonTexture.path,
+        undefined,
+        textureLoader,
+        textureCache,
+        "toon",
+        modelUrl
+      )
     : await loadMaterialTexture(
         toonTexture.path,
         toonTexture.textureInfo,
         modelUrl,
         textureResolver,
-        textureLoader
+        textureLoader,
+        textureCache,
+        "toon"
       );
   if (!texture && material.toonTexturePath) {
     textureDiagnostics.push({
@@ -413,18 +426,18 @@ export function rotateMmdToonTexture(texture: THREE.Texture): THREE.Texture {
     return texture;
   }
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = height;
+  canvas.height = width;
   const context = canvas.getContext("2d");
   if (!context) {
     return texture;
   }
-  context.clearRect(0, 0, width, height);
-  context.translate(width / 2, height / 2);
+  context.clearRect(0, 0, height, width);
+  context.translate(height / 2, width / 2);
   context.rotate(Math.PI / 2);
   context.translate(-width / 2, -height / 2);
   context.drawImage(texture.image as CanvasImageSource, 0, 0);
-  texture.image = context.getImageData(0, 0, width, height);
+  texture.image = context.getImageData(0, 0, height, width);
   texture.userData.mmdToonTextureRotated = true;
   texture.needsUpdate = true;
   return texture;
@@ -438,14 +451,17 @@ export async function loadMaterialTextureWithDiagnostics(
   modelUrl: string | undefined,
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
-  textureLoader?: ThreeMmdTextureLoader
+  textureLoader?: ThreeMmdTextureLoader,
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
 ): Promise<THREE.Texture | undefined> {
   const texture = await loadMaterialTexture(
     texturePath,
     textureInfo,
     modelUrl,
     textureResolver,
-    textureLoader
+    textureLoader,
+    textureCache,
+    textureKind
   );
   if (!texture && texturePath) {
     textureDiagnostics.push({
@@ -464,6 +480,8 @@ export function configureMmdTexture(
   textureInfo?: MaterialInfo["textureInfo"]
 ): THREE.Texture {
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
   texture.flipY = textureInfo?.invertY ?? false;
   if (textureInfo?.noMipmap) {
     texture.generateMipmaps = false;
@@ -699,7 +717,9 @@ async function loadMaterialTexture(
   textureInfo: MaterialInfo["textureInfo"],
   modelUrl: string | undefined,
   textureResolver: TextureResolver | undefined,
-  textureLoader?: ThreeMmdTextureLoader
+  textureLoader?: ThreeMmdTextureLoader,
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  cacheNamespace = "material"
 ): Promise<THREE.Texture | undefined> {
   if (!texturePath) {
     return undefined;
@@ -716,10 +736,62 @@ async function loadMaterialTexture(
       return tgaTexture;
     }
   }
-  return loadResolvedTexture(resolved, texturePath, textureInfo, textureLoader);
+  return loadResolvedTexture(
+    resolved,
+    texturePath,
+    textureInfo,
+    textureLoader,
+    textureCache,
+    cacheNamespace,
+    modelUrl
+  );
 }
 
 async function loadResolvedTexture(
+  resolved: string | URL | Blob,
+  texturePath: string,
+  textureInfo: MaterialInfo["textureInfo"],
+  textureLoader?: ThreeMmdTextureLoader,
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  cacheNamespace = "material",
+  modelUrl?: string
+): Promise<THREE.Texture | undefined> {
+  const cacheKey = createTextureCacheKey(
+    cacheNamespace,
+    texturePath,
+    textureInfo,
+    resolved,
+    modelUrl
+  );
+  const cached = textureCache?.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  let promise: Promise<THREE.Texture | undefined>;
+  promise = loadResolvedTextureUncached(
+    resolved,
+    texturePath,
+    textureInfo,
+    textureLoader
+  ).then(
+    (texture) => {
+      if (!texture && textureCache?.get(cacheKey) === promise) {
+        textureCache.delete(cacheKey);
+      }
+      return texture;
+    },
+    (error: unknown) => {
+      if (textureCache?.get(cacheKey) === promise) {
+        textureCache.delete(cacheKey);
+      }
+      throw error;
+    }
+  );
+  textureCache?.set(cacheKey, promise);
+  return promise;
+}
+
+async function loadResolvedTextureUncached(
   resolved: string | URL | Blob,
   texturePath: string,
   textureInfo: MaterialInfo["textureInfo"],
@@ -728,6 +800,12 @@ async function loadResolvedTexture(
   const request = await createTextureLoadRequest(resolved, texturePath);
   const loader = textureLoader ?? new THREE.TextureLoader();
   return new Promise((resolve) => {
+    const finish = (texture: THREE.Texture | undefined) => {
+      if (request.revokeUrl) {
+        URL.revokeObjectURL(request.url);
+      }
+      resolve(texture);
+    };
     try {
       loader.load(
         request.url,
@@ -736,13 +814,13 @@ async function loadResolvedTexture(
           if (request.alphaMode) {
             texture.userData.mmdTextureAlphaMode = request.alphaMode;
           }
-          resolve(texture);
+          finish(texture);
         },
         undefined,
-        () => resolve(undefined)
+        () => finish(undefined)
       );
     } catch {
-      resolve(undefined);
+      finish(undefined);
     }
   });
 }
@@ -783,10 +861,10 @@ function resolveBundledSharedToonTexture(texturePath: string): string | URL | Bl
 async function createTextureLoadRequest(
   resolved: string | URL | Blob,
   texturePath: string
-): Promise<{ url: string; alphaMode?: MmdMaterialTransparencyMode }> {
+): Promise<{ url: string; alphaMode?: MmdMaterialTransparencyMode; revokeUrl?: boolean }> {
   if (typeof Blob !== "undefined" && resolved instanceof Blob) {
     if (!isMmdBmpLikeTexturePath(texturePath)) {
-      return { url: URL.createObjectURL(resolved) };
+      return { url: URL.createObjectURL(resolved), revokeUrl: true };
     }
     const buffer = await resolved.arrayBuffer();
     const injected = injectMmdBmp32BitAlphaHeader(buffer);
@@ -798,7 +876,8 @@ async function createTextureLoadRequest(
             })
           : resolved
       ),
-      alphaMode: evaluateMmdBmpTextureAlpha(buffer)
+      alphaMode: evaluateMmdBmpTextureAlpha(buffer),
+      revokeUrl: true
     };
   }
   const url = String(resolved);
@@ -818,11 +897,44 @@ async function createTextureLoadRequest(
           type: "image/bmp"
         })
       ),
-      alphaMode: evaluateMmdBmpTextureAlpha(buffer)
+      alphaMode: evaluateMmdBmpTextureAlpha(buffer),
+      revokeUrl: true
     };
   } catch {
     return { url };
   }
+}
+
+function createTextureCacheKey(
+  namespace: string,
+  texturePath: string,
+  textureInfo: MaterialInfo["textureInfo"],
+  resolved: string | URL | Blob,
+  modelUrl: string | undefined
+): string {
+  const normalizedPath = normalizeMmdTexturePath(texturePath).toLowerCase();
+  const resolvedKey =
+    typeof Blob !== "undefined" && resolved instanceof Blob
+      ? `blob:${getBlobTextureCacheKey(resolved)}`
+      : String(resolved);
+  return [
+    namespace,
+    modelUrl ?? "",
+    normalizedPath,
+    resolvedKey,
+    textureInfo?.invertY ? "invertY" : "",
+    textureInfo?.noMipmap ? "noMipmap" : ""
+  ].join("\0");
+}
+
+function getBlobTextureCacheKey(blob: Blob): number {
+  let key = blobTextureCacheKeys.get(blob);
+  if (key === undefined) {
+    key = nextBlobTextureCacheKey;
+    nextBlobTextureCacheKey += 1;
+    blobTextureCacheKeys.set(blob, key);
+  }
+  return key;
 }
 
 function evaluateBmp16BitfieldAlpha(

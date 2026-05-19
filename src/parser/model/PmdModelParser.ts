@@ -28,6 +28,9 @@ const asciiDecoder = new TextDecoder("ascii");
 const shiftJisDecoder = new TextDecoder("shift-jis");
 const pmdAlphaShadowDisable = 0.98;
 const pmdAlphaShadowEpsilon = 1e-5;
+const maxPmdSectionCount = 10_000_000;
+const pmdVertexByteLength = 38;
+const pmdMaterialByteLength = 70;
 
 export function parsePmd(bytes: Uint8Array): ParsedPmd {
   const reader = new BinaryReader(bytes);
@@ -42,7 +45,9 @@ export function parsePmd(bytes: Uint8Array): ParsedPmd {
   const comment = readFixedText(reader, 256);
   let englishComment = "";
 
-  const vertexCount = reader.u32();
+  const vertexCount = readCount(reader, "vertex", {
+    remainingBytesPerEntry: pmdVertexByteLength
+  });
   const positions = new Float32Array(vertexCount * 3);
   const normals = new Float32Array(vertexCount * 3);
   const uvs = new Float32Array(vertexCount * 2);
@@ -68,13 +73,15 @@ export function parsePmd(bytes: Uint8Array): ParsedPmd {
     reader.skip(1);
   }
 
-  const indexCount = reader.u32();
+  const indexCount = readCount(reader, "vertex index", { remainingBytesPerEntry: 2 });
   const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
   for (let i = 0; i < indexCount; i++) {
     indices[i] = reader.u16();
   }
 
-  const materialCount = reader.u32();
+  const materialCount = readCount(reader, "material", {
+    remainingBytesPerEntry: pmdMaterialByteLength
+  });
   const materials: MaterialInfo[] = [];
   const materialToonIndices: number[] = [];
   for (let i = 0; i < materialCount; i++) {
@@ -204,7 +211,7 @@ export function parsePmd(bytes: Uint8Array): ParsedPmd {
   const baseMorphVertexIndices: number[] = [];
   for (let i = 0; i < morphCount; i++) {
     const morphName = readFixedText(reader, 20);
-    const morphVertexCount = reader.u32();
+    const morphVertexCount = readCount(reader, "morph vertex", { remainingBytesPerEntry: 16 });
     const morphType = reader.u8();
     const morph: MorphData = {
       name: morphName,
@@ -376,7 +383,7 @@ function readPmdDisplayFrames(
   if (reader.remaining < 4) {
     return { displayFrames, boneDisplayNameCount, boneDisplayFrameStart };
   }
-  const boneDisplayCount = reader.u32();
+  const boneDisplayCount = readCount(reader, "bone display", { remainingBytesPerEntry: 3 });
   for (let i = 0; i < boneDisplayCount; i++) {
     const boneIndex = reader.u16();
     const frameIndex = reader.u8();
@@ -386,6 +393,34 @@ function readPmdDisplayFrames(
     }
   }
   return { displayFrames, boneDisplayNameCount, boneDisplayFrameStart };
+}
+
+function readCount(
+  reader: BinaryReader,
+  label: string,
+  options: { readonly remainingBytesPerEntry?: number } = {}
+): number {
+  const count = reader.u32();
+  validateCount(count, `PMD ${label}`, reader.remaining, options.remainingBytesPerEntry);
+  return count;
+}
+
+function validateCount(
+  count: number,
+  label: string,
+  remaining: number,
+  remainingBytesPerEntry: number | undefined
+): void {
+  if (count > maxPmdSectionCount) {
+    throw new Error(`Invalid ${label} count: ${count}`);
+  }
+  if (remainingBytesPerEntry === undefined) {
+    return;
+  }
+  const minimumByteLength = count * remainingBytesPerEntry;
+  if (!Number.isSafeInteger(minimumByteLength) || minimumByteLength > remaining) {
+    throw new Error(`Invalid ${label} count: ${count}`);
+  }
 }
 
 function readFixedText(reader: BinaryReader, byteLength: number): string {
@@ -556,7 +591,7 @@ function readOptionalRigidBodies(reader: BinaryReader): RigidBodyData[] {
   if (reader.remaining < 4) {
     return [];
   }
-  const count = reader.u32();
+  const count = readCount(reader, "rigid body");
   const rigidBodies: RigidBodyData[] = [];
   for (let i = 0; i < count; i++) {
     rigidBodies.push({
@@ -602,7 +637,7 @@ function readOptionalJoints(reader: BinaryReader): JointData[] {
   if (reader.remaining < 4) {
     return [];
   }
-  const count = reader.u32();
+  const count = readCount(reader, "joint");
   const joints: JointData[] = [];
   for (let i = 0; i < count; i++) {
     joints.push({

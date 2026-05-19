@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
 import { DefaultMmdRuntime } from "../../../src/index.js";
+import type { MmdAnimation } from "../../../src/index.js";
 import type {
   MmdPhysicsBackend,
   MmdPhysicsStepContext,
@@ -34,6 +35,99 @@ describe("DefaultMmdRuntime", () => {
     });
   });
 
+  it("ticks evaluation and syncs renderer-facing skeleton matrices", () => {
+    const bone = new THREE.Bone();
+    bone.name = "moving";
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.updateMatrixWorld(true);
+    mesh.skeleton.update();
+    const initialBoneMatrix = Array.from(mesh.skeleton.boneMatrices.slice(0, 16));
+
+    const animation = createEmptyMmdAnimation();
+    animation.metadata.maxFrame = 1;
+    animation.boneTracks.moving = [
+      { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 1, translation: [1, 2, 3], rotation: [0, 0, 0, 1] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.tick(1 / 30, mesh, { physics: false });
+
+    expect(Array.from(mesh.skeleton.boneMatrices.slice(0, 16))).not.toEqual(initialBoneMatrix);
+    expect(renderedBoneWorldPosition(mesh, 0).toArray()).toEqual([1, 2, -3]);
+  });
+
+  it("accepts the consolidated tick options object with a render-sync mesh", () => {
+    const bone = new THREE.Bone();
+    bone.name = "moving";
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.updateMatrixWorld(true);
+    mesh.skeleton.update();
+    const initialBoneMatrix = Array.from(mesh.skeleton.boneMatrices.slice(0, 16));
+    const animation = createEmptyMmdAnimation();
+    animation.metadata.maxFrame = 1;
+    animation.boneTracks.moving = [
+      { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 1, translation: [1, 0, 0], rotation: [0, 0, 0, 1] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.tick(1 / 30, { mesh, physics: false });
+
+    expect(Array.from(mesh.skeleton.boneMatrices.slice(0, 16))).not.toEqual(initialBoneMatrix);
+    expect(renderedBoneWorldPosition(mesh, 0).x).toBeCloseTo(1);
+  });
+
+  it("ticks evaluation without render sync when mesh is omitted", () => {
+    const bone = new THREE.Bone();
+    bone.name = "moving";
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const animation = createEmptyMmdAnimation();
+    animation.metadata.maxFrame = 1;
+    animation.boneTracks.moving = [
+      { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 1, translation: [1, 0, 0], rotation: [0, 0, 0, 1] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+
+    expect(runtime.tick(1 / 30, { physics: false })).toEqual({
+      seconds: 1 / 30,
+      frame: 1,
+      frameRate: 30
+    });
+    expect(bone.position.x).toBeCloseTo(1);
+    expect(bone.position.y).toBeCloseTo(0);
+    expect(bone.position.z).toBeCloseTo(0);
+  });
+
+  it("samples direct MMD animation bone translation with VMD Bezier interpolation", () => {
+    const bone = new THREE.Bone();
+    bone.name = "center";
+    bone.userData.mmdBoneName = "センター";
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(createBezierTranslationAnimation(), mesh);
+    runtime.tick(0.5, mesh, { ik: false, physics: false });
+
+    expect(bone.position.x).toBeCloseTo(1.25, 3);
+    expect(bone.position.y).toBeCloseTo(0);
+    expect(bone.position.z).toBeCloseTo(0);
+  });
+
   it("resets to zero seconds unless a seek time is provided", () => {
     const runtime = new DefaultMmdRuntime({ initialSeconds: 2 });
 
@@ -52,6 +146,41 @@ describe("DefaultMmdRuntime", () => {
       frame: 15,
       frameRate: 30
     });
+  });
+
+  it("splits seek, resetPose, and clearAnimation responsibilities", () => {
+    const bone = new THREE.Bone();
+    bone.name = "moving";
+    bone.position.set(0.25, 0, 0);
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    const animation = createEmptyMmdAnimation();
+    animation.metadata.maxFrame = 30;
+    animation.boneTracks.moving = [
+      { frame: 0, translation: [1, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 30, translation: [2, 0, 0], rotation: [0, 0, 0, 1] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0, { ik: false, physics: false });
+    expect(bone.position.x).toBeCloseTo(1.25);
+
+    expect(runtime.seek(1)).toEqual({ seconds: 1, frame: 30, frameRate: 30 });
+    expect(bone.position.x).toBeCloseTo(1.25);
+
+    runtime.resetPose();
+    expect(bone.position.x).toBeCloseTo(0.25);
+
+    runtime.evaluate(1, { ik: false, physics: false });
+    expect(bone.position.x).toBeCloseTo(2.25);
+
+    runtime.clearAnimation();
+    runtime.seek(0);
+    runtime.evaluate(0, { ik: false, physics: false });
+
+    expect(bone.position.x).toBeCloseTo(2.25);
   });
 
   it("rejects non-finite frame state inputs", () => {
@@ -96,25 +225,80 @@ describe("DefaultMmdRuntime", () => {
         groupOffsets: []
       }
     ];
-    const clip = new THREE.AnimationClip("group", 0, []);
-    clip.userData = {
-      mmdAnimation: {
-        kind: "vmd",
-        metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-        boneTracks: {},
-        morphTracks: { group: [{ frame: 0, weight: 0.5 }] },
-        cameraFrames: [],
-        lightFrames: [],
-        selfShadowFrames: [],
-        propertyFrames: []
-      }
-    };
+    const animation = createEmptyMmdAnimation();
+    animation.morphTracks.group = [{ frame: 0, weight: 0.5 }];
 
     const runtime = new DefaultMmdRuntime();
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(0);
 
     expect(mesh.morphTargetInfluences).toEqual([0.5, 1]);
+  });
+
+  it("recursively expands nested group morph weights", () => {
+    const bone = new THREE.Bone();
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.morphTargetDictionary = { outer: 0, inner: 1, target: 2 };
+    mesh.morphTargetInfluences = [0, 0, 0];
+    mesh.userData.mmdMorphs = [
+      {
+        type: "group",
+        groupOffsets: [{ morphIndex: 1, weight: 0.5 }]
+      },
+      {
+        type: "group",
+        groupOffsets: [{ morphIndex: 2, weight: 2 }]
+      },
+      {
+        type: "vertex",
+        groupOffsets: []
+      }
+    ];
+    const animation = createEmptyMmdAnimation();
+    animation.morphTracks.outer = [{ frame: 0, weight: 1 }];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0);
+
+    expect(mesh.morphTargetInfluences).toEqual([1, 0.5, 1]);
+  });
+
+  it("recursively expands flip morph weights through referenced groups without cycling", () => {
+    const bone = new THREE.Bone();
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.morphTargetDictionary = { flip: 0, group: 1, target: 2 };
+    mesh.morphTargetInfluences = [0, 0, 0];
+    mesh.userData.mmdMorphs = [
+      {
+        type: "flip",
+        groupOffsets: [],
+        flipOffsets: [{ morphIndex: 1, weight: 0.25 }]
+      },
+      {
+        type: "group",
+        groupOffsets: [
+          { morphIndex: 2, weight: 4 },
+          { morphIndex: 0, weight: 1 }
+        ]
+      },
+      {
+        type: "vertex",
+        groupOffsets: []
+      }
+    ];
+    const animation = createEmptyMmdAnimation();
+    animation.morphTracks.flip = [{ frame: 0, weight: 1 }];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0);
+
+    expect(mesh.morphTargetInfluences).toEqual([1.25, 0.25, 1]);
   });
 
   it("applies the old package stateful spring physics pass when enabled", () => {
@@ -136,22 +320,10 @@ describe("DefaultMmdRuntime", () => {
       ],
       joints: []
     };
-    const clip = new THREE.AnimationClip("spring", 0, []);
-    clip.userData = {
-      mmdAnimation: {
-        kind: "vmd",
-        metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-        boneTracks: {},
-        morphTracks: {},
-        cameraFrames: [],
-        lightFrames: [],
-        selfShadowFrames: [],
-        propertyFrames: []
-      }
-    };
+    const animation = createEmptyMmdAnimation();
 
     const runtime = new DefaultMmdRuntime({ physics: "stateful-spring" });
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(0);
     runtime.evaluate(1 / 30);
 
@@ -179,22 +351,11 @@ describe("DefaultMmdRuntime", () => {
         ]
       }
     ];
-    const clip = new THREE.AnimationClip("boneMorph", 0, []);
-    clip.userData = {
-      mmdAnimation: {
-        kind: "vmd",
-        metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-        boneTracks: {},
-        morphTracks: { boneMorph: [{ frame: 0, weight: 0.5 }] },
-        cameraFrames: [],
-        lightFrames: [],
-        selfShadowFrames: [],
-        propertyFrames: []
-      }
-    };
+    const animation = createEmptyMmdAnimation();
+    animation.morphTracks.boneMorph = [{ frame: 0, weight: 0.5 }];
 
     const runtime = new DefaultMmdRuntime();
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(0);
 
     expect(bone.position.y).toBe(0.5);
@@ -232,12 +393,148 @@ describe("DefaultMmdRuntime", () => {
     ];
 
     const runtime = new DefaultMmdRuntime();
-    runtime.setAnimation(createEmptyMmdClip("append-chain"), mesh);
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
     runtime.evaluate(0);
 
     expect(Math.abs(appendA.quaternion.z)).toBeGreaterThan(0.5);
     expect(appendB.quaternion.z).toBeCloseTo(appendA.quaternion.z, 5);
     expect(appendB.quaternion.w).toBeCloseTo(appendA.quaternion.w, 5);
+  });
+
+  it("evaluates append transforms by PMX layer before bone array order", () => {
+    const source = new THREE.Bone();
+    source.name = "source";
+    source.userData.mmdLayer = 0;
+    const appendB = new THREE.Bone();
+    appendB.name = "appendB";
+    appendB.userData.mmdLayer = 2;
+    appendB.userData.mmdAppendTransform = { parentIndex: 2, weight: 1 };
+    appendB.userData.mmdFlags = { appendRotate: true };
+    const appendA = new THREE.Bone();
+    appendA.name = "appendA";
+    appendA.userData.mmdLayer = 1;
+    appendA.userData.mmdAppendTransform = { parentIndex: 0, weight: 1 };
+    appendA.userData.mmdFlags = { appendRotate: true };
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(source, appendB, appendA);
+    mesh.bind(new THREE.Skeleton([source, appendB, appendA]));
+    const animation = createEmptyMmdAnimation();
+    const halfTurnZ = Math.sin(Math.PI / 4);
+    animation.boneTracks.source = [
+      { frame: 0, translation: [0, 0, 0], rotation: [0, 0, halfTurnZ, halfTurnZ] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0, { ik: false, physics: false });
+
+    expect(appendA.quaternion.z).toBeCloseTo(halfTurnZ, 5);
+    expect(appendA.quaternion.w).toBeCloseTo(halfTurnZ, 5);
+    expect(appendB.quaternion.z).toBeCloseTo(appendA.quaternion.z, 5);
+    expect(appendB.quaternion.w).toBeCloseTo(appendA.quaternion.w, 5);
+  });
+
+  it("reuses append transform scratch state without carrying translations between frames", () => {
+    const source = new THREE.Bone();
+    source.name = "source";
+    const append = new THREE.Bone();
+    append.name = "append";
+    append.userData.mmdAppendTransform = { parentIndex: 0, weight: 0.5 };
+    append.userData.mmdFlags = { appendTranslate: true };
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(source, append);
+    mesh.bind(new THREE.Skeleton([source, append]));
+    const animation = createEmptyMmdAnimation();
+    animation.boneTracks.source = [
+      { frame: 0, translation: [2, 0, 0], rotation: [0, 0, 0, 1] },
+      { frame: 1, translation: [0, 0, 0], rotation: [0, 0, 0, 1] }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0, { ik: false, physics: false });
+    expect(append.position.x).toBeCloseTo(1);
+
+    runtime.evaluate(1 / 30, { ik: false, physics: false });
+
+    expect(append.position.x).toBeCloseTo(0);
+  });
+
+  it("can skip IK evaluation without changing default IK behavior", () => {
+    const ikSource = new THREE.Bone();
+    ikSource.name = "ikSource";
+    const effector = new THREE.Bone();
+    effector.name = "effector";
+    effector.position.set(1, 0, 0);
+    ikSource.add(effector);
+    const goal = new THREE.Bone();
+    goal.name = "goal";
+    goal.position.set(0, 1, 0);
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(ikSource, goal);
+    mesh.bind(new THREE.Skeleton([ikSource, effector, goal]));
+    mesh.userData.mmdIkChains = [
+      {
+        goalBoneIndex: 2,
+        effectorBoneIndex: 1,
+        iterationCount: 4,
+        maxAnglePerIteration: Math.PI,
+        links: [{ boneIndex: 0 }]
+      }
+    ];
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
+    runtime.evaluate(0, { ik: false });
+
+    expect(ikSource.quaternion.equals(new THREE.Quaternion())).toBe(true);
+
+    runtime.evaluate(0);
+
+    expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
+  });
+
+  it("resets bone pose before rebinding motions so IK does not drift across switches", () => {
+    const ikSource = new THREE.Bone();
+    ikSource.name = "ikSource";
+    const effector = new THREE.Bone();
+    effector.name = "effector";
+    effector.position.set(1, 0, 0);
+    ikSource.add(effector);
+    const goal = new THREE.Bone();
+    goal.name = "goal";
+    goal.position.set(0, 1, 0);
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(ikSource, goal);
+    mesh.bind(new THREE.Skeleton([ikSource, effector, goal]));
+    mesh.userData.mmdIkChains = [
+      {
+        goalBoneIndex: 2,
+        effectorBoneIndex: 1,
+        iterationCount: 8,
+        maxAnglePerIteration: Math.PI,
+        links: [{ boneIndex: 0 }]
+      }
+    ];
+    const motionA = createGoalTranslationAnimation([0, 0, 0]);
+    const motionB = createGoalTranslationAnimation([0, -2, 0]);
+    const runtime = new DefaultMmdRuntime();
+
+    runtime.setAnimation(motionA, mesh);
+    runtime.evaluate(0, { physics: false });
+    const firstA = cloneBonePose(mesh);
+    runtime.setAnimation(motionB, mesh);
+    runtime.evaluate(0, { physics: false });
+    const firstB = cloneBonePose(mesh);
+    runtime.setAnimation(motionA, mesh);
+    runtime.evaluate(0, { physics: false });
+    const secondA = cloneBonePose(mesh);
+    runtime.setAnimation(motionB, mesh);
+    runtime.evaluate(0, { physics: false });
+    const secondB = cloneBonePose(mesh);
+
+    expectBonePoseClose(secondA, firstA);
+    expectBonePoseClose(secondB, firstB);
   });
 
   it("steps an external physics backend and applies updated local bone transforms", () => {
@@ -268,26 +565,14 @@ describe("DefaultMmdRuntime", () => {
       ],
       joints: []
     };
-    const clip = new THREE.AnimationClip("external", 0, []);
-    clip.userData = {
-      mmdAnimation: {
-        kind: "vmd",
-        metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-        boneTracks: {},
-        morphTracks: {},
-        cameraFrames: [],
-        lightFrames: [],
-        selfShadowFrames: [],
-        propertyFrames: []
-      }
-    };
+    const animation = createEmptyMmdAnimation();
     const backend = new TranslatingPhysicsBackend([1, 2, 3]);
     const runtime = new DefaultMmdRuntime({
       physics: "external",
       physicsBackend: backend
     });
 
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(1 / 30);
 
     expect(backend.stepCount).toBe(1);
@@ -332,7 +617,7 @@ describe("DefaultMmdRuntime", () => {
       physicsBackend: backend
     });
 
-    runtime.setAnimation(createEmptyMmdClip("external-skip"), mesh);
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
     runtime.evaluate(0, { physics: false });
     runtime.evaluate(0, { physics: false });
 
@@ -377,14 +662,14 @@ describe("DefaultMmdRuntime", () => {
       ],
       joints: []
     };
-    const clip = createEmptyMmdClip("absolute-rest");
+    const animation = createEmptyMmdAnimation();
     const backend = new InspectingPhysicsBackend();
     const runtime = new DefaultMmdRuntime({
       physics: "external",
       physicsBackend: backend
     });
 
-    runtime.setAnimation(clip, mesh);
+    runtime.setAnimation(animation, mesh);
     runtime.evaluate(1 / 30);
 
     expect(backend.lastContext?.skeleton?.bones[0]?.restTranslation).toEqual([0, 10, 2]);
@@ -486,7 +771,7 @@ describe("DefaultMmdRuntime", () => {
       physicsBackend: backend
     });
 
-    runtime.setAnimation(createEmptyMmdClip("remap-physics"), mesh);
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
     runtime.evaluate(1 / 30);
 
     expect(backend.lastContext?.rigidBodies).toHaveLength(2);
@@ -495,6 +780,36 @@ describe("DefaultMmdRuntime", () => {
     expect(backend.lastContext?.morphImpulses?.[0]?.rigidBodyIndex).toBe(1);
   });
 });
+
+function renderedBoneWorldPosition(mesh: THREE.SkinnedMesh, boneIndex: number): THREE.Vector3 {
+  const boneMatrix = new THREE.Matrix4().fromArray(mesh.skeleton.boneMatrices, boneIndex * 16);
+  const bindMatrix = mesh.skeleton.boneInverses[boneIndex].clone().invert();
+  return new THREE.Vector3().setFromMatrixPosition(boneMatrix.multiply(bindMatrix));
+}
+
+function cloneBonePose(mesh: THREE.SkinnedMesh): Array<{
+  readonly position: THREE.Vector3;
+  readonly quaternion: THREE.Quaternion;
+}> {
+  return mesh.skeleton.bones.map((bone) => ({
+    position: bone.position.clone(),
+    quaternion: bone.quaternion.clone()
+  }));
+}
+
+function expectBonePoseClose(
+  actual: ReturnType<typeof cloneBonePose>,
+  expected: ReturnType<typeof cloneBonePose>
+): void {
+  expect(actual).toHaveLength(expected.length);
+  for (let index = 0; index < expected.length; index += 1) {
+    expect(actual[index]?.position.distanceTo(expected[index]?.position ?? new THREE.Vector3()))
+      .toBeLessThanOrEqual(1e-6);
+    expect(
+      actual[index]?.quaternion.angleTo(expected[index]?.quaternion ?? new THREE.Quaternion())
+    ).toBeLessThanOrEqual(1e-6);
+  }
+}
 
 class TranslatingPhysicsBackend implements MmdPhysicsBackend {
   readonly name = "test-external";
@@ -531,19 +846,67 @@ class InspectingPhysicsBackend implements MmdPhysicsBackend {
   }
 }
 
-function createEmptyMmdClip(name: string): THREE.AnimationClip {
-  const clip = new THREE.AnimationClip(name, 0, []);
-  clip.userData = {
-    mmdAnimation: {
-      kind: "vmd",
-      metadata: { format: "vmd", modelName: "", counts: {}, maxFrame: 0 },
-      boneTracks: {},
-      morphTracks: {},
-      cameraFrames: [],
-      lightFrames: [],
-      selfShadowFrames: [],
-      propertyFrames: []
+function createEmptyMmdAnimation(): MmdAnimation {
+  return {
+    kind: "vmd",
+    bytes: new Uint8Array(),
+    metadata: { format: "vmd", modelName: "", counts: createEmptyVmdCounts(), maxFrame: 0 },
+    boneTracks: {},
+    morphTracks: {},
+    cameraFrames: [],
+    lightFrames: [],
+    selfShadowFrames: [],
+    propertyFrames: []
+  };
+}
+
+function createBezierTranslationAnimation(): MmdAnimation {
+  const easeIn = [20 / 127, 0, 107 / 127, 0] as [number, number, number, number];
+  return {
+    ...createEmptyMmdAnimation(),
+    metadata: { format: "vmd", modelName: "", counts: createEmptyVmdCounts(), maxFrame: 30 },
+    boneTracks: {
+      センター: [
+        {
+          frame: 0,
+          translation: [0, 0, 0],
+          rotation: [0, 0, 0, 1]
+        },
+        {
+          frame: 30,
+          translation: [10, 0, 0],
+          rotation: [0, 0, 0, 1],
+          interpolation: {
+            translationX: easeIn,
+            translationY: [0, 0, 1, 1],
+            translationZ: [0, 0, 1, 1],
+            rotation: [0, 0, 1, 1]
+          }
+        }
+      ]
     }
   };
-  return clip;
+}
+
+function createGoalTranslationAnimation(translation: [number, number, number]): MmdAnimation {
+  const animation = createEmptyMmdAnimation();
+  animation.boneTracks.goal = [
+    {
+      frame: 0,
+      translation,
+      rotation: [0, 0, 0, 1]
+    }
+  ];
+  return animation;
+}
+
+function createEmptyVmdCounts(): MmdAnimation["metadata"]["counts"] {
+  return {
+    bones: 0,
+    morphs: 0,
+    cameras: 0,
+    lights: 0,
+    selfShadows: 0,
+    properties: 0
+  };
 }

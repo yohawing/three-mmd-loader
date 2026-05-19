@@ -16,7 +16,9 @@
       "motion": "vmd/<your-motion>/<your-motion>.vmd",
       "timeSeconds": 0,
       "camera": "front-fit",
-      "thresholds": { "mean": 0.03, "p95": 0.12 }
+      "thresholds": { "mean": 0.03, "p95": 0.12 },
+      "watchBones": ["センター", "腰", "下半身", "上半身", "左ひざ", "右ひざ", "左足", "右足"],
+      "restPoseThresholdDegrees": 0.1
     }
   ]
 }
