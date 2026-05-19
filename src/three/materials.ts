@@ -129,11 +129,7 @@ export async function applyThreeMmdMaterialTextures(
           mmdMaterial.diffuse[3],
           mmdMaterial.flags
         );
-        material.alphaTest = mmdMaterialAlphaTest(
-          mmdMaterial,
-          !!texture,
-          textureTransparencyMode
-        );
+        material.alphaTest = transparencyMode === "alphaTest" ? 0.01 : 0;
         attachMmdMaterialMetadata(material, mmdMaterial, materialIndex, transparencyMode);
         material.userData.mmdMaterial.textureTransparencyMode = textureTransparencyMode;
         if (morphAlphaTransparent) {

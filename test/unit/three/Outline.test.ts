@@ -33,6 +33,12 @@ describe("MMD outline meshes", () => {
     material?.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
     expect(material?.userData.mmdOutlineMaterial.outlineWidth).toBeCloseTo(0.6 / 300);
+    expect(material?.side).toBe(THREE.BackSide);
+    expect(material?.depthTest).toBe(true);
+    expect(material?.depthWrite).toBe(false);
+    expect(material?.polygonOffset).toBe(true);
+    expect(material?.polygonOffsetFactor).toBe(1);
+    expect(material?.polygonOffsetUnits).toBe(1);
     expect(shader.vertexShader).toContain("vec4 mmdOutlineDirection = normalize( gl_Position - mmdOutlineOffsetPosition );");
     expect(shader.vertexShader).toContain("gl_Position += mmdOutlineDirection * mmdOutlineWidth * gl_Position.w");
     expect(shader.vertexShader).not.toContain("transformed += normal * mmdOutlineWidth");

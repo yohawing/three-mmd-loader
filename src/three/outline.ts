@@ -143,8 +143,11 @@ function createMmdOutlineMaterial(
     opacity: visible ? clampColor(hasEdge ? material.edgeColor[3] : 1) : 0,
     transparent: !visible || alphaBlend,
     side: THREE.BackSide,
-    depthWrite: visible && !alphaBlend,
+    depthWrite: false,
     depthTest: true,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
     toneMapped: false,
     alphaTest
   };
@@ -326,7 +329,7 @@ export function syncMmdOutlineMaterialStates(
     material.opacity = metadata?.fallback ? material.opacity : alpha;
     material.transparent = material.opacity < 1;
     material.visible = !suppressColor && (!!metadata?.fallback || (state.edgeSize > 0 && alpha > 0));
-    material.depthWrite = material.visible && material.opacity >= 1;
+    material.depthWrite = false;
     material.userData.mmdOutlineMaterial = {
       ...(metadata ?? {}),
       edgeColor: [...state.edgeColor],

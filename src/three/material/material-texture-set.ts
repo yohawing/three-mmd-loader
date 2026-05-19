@@ -95,9 +95,15 @@ export function evaluateMmdDefaultMaterialTransparency(
     !!texture,
     textureTransparencyMode
   );
+  const transparencyMode =
+    baseTransparencyMode !== "opaque"
+      ? baseTransparencyMode
+      : options.geometryAwareAlpha && textureTransparencyMode && textureTransparencyMode !== "opaque"
+        ? textureTransparencyMode
+        : "opaque";
   const morphAlphaTransparent = mmdMaterialMorphCanAffectAlpha(morphs, materialIndex);
   return {
-    transparencyMode: morphAlphaTransparent ? "alphaBlend" : baseTransparencyMode,
+    transparencyMode: morphAlphaTransparent ? "alphaBlend" : transparencyMode,
     textureTransparencyMode,
     morphAlphaTransparent
   };

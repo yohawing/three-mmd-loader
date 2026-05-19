@@ -63,6 +63,19 @@ function createTransparentDataTexture(alphaMode: "opaque" | "alphaTest" | "alpha
   return texture;
 }
 
+function createReadableAlphaDataTexture(): THREE.DataTexture {
+  const size = 4;
+  const data = new Uint8Array(size * size * 4);
+  for (let index = 0; index < size * size; index += 1) {
+    data[index * 4] = 255;
+    data[index * 4 + 1] = 255;
+    data[index * 4 + 2] = 255;
+    data[index * 4 + 3] = 100;
+  }
+  data[3] = 0;
+  return new THREE.DataTexture(data, size, size);
+}
+
 function createAlphaEvaluationGeometry(materialIndex = 0): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 0.25, 0, 0, 0.25], 2));
@@ -313,8 +326,104 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("opaque");
   });
 
-  it("keeps geometry-aware texture alpha evaluation available as an opt-in", async () => {
+  it("keeps atlas alpha opaque unless PMX material data requests transparency", async () => {
+    const texture = createTransparentDataTexture("alphaBlend");
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.png" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry()
+    });
+
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.alphaTest).toBe(0);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
+  });
+
+  it("keeps readable texture alpha opaque when geometry-aware evaluation is not enabled", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.png" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry()
+    });
+
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("opaque");
+  });
+
+  it("preserves alpha blending when PMX diffuse alpha requests transparency", async () => {
     const texture = createTransparentDataTexture("opaque");
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const mmdMaterials = [
+      createMaterialInfo({ diffuse: [0.5, 0.6, 0.7, 0.5], texturePath: "textures/hair.png" })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/hair.png": "resolved/hair.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry()
+    });
+
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.opacity).toBe(0.5);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+  });
+
+  it("preserves alpha blending from evaluated PMX transparency metadata", async () => {
+    const texture = createTransparentDataTexture("opaque");
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const mmdMaterials = [
+      createMaterialInfo({ evaluatedTransparency: 0x10, texturePath: "textures/decal.png" })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/decal.png": "resolved/decal.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry()
+    });
+
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+  });
+
+  it("keeps geometry-aware texture alpha evaluation available as an opt-in", async () => {
+    const texture = createReadableAlphaDataTexture();
     const textureLoader: ThreeMmdTextureLoader = {
       load(url, onLoad) {
         texture.name = url;
@@ -333,7 +442,7 @@ describe("Three.js MMD materials", () => {
     });
 
     expect(materials[0]?.transparent).toBe(true);
-    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaTest");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
   });
 
   it("resolves default toon and all bundled shared toon BMPs to non-null gradient maps", async () => {

@@ -14,6 +14,10 @@ export interface MmdMaterialRenderOrderEntry {
   readonly renderOrder: number;
 }
 
+interface MmdMaterialAlphaTestFlags {
+  readonly alphaTest?: boolean;
+}
+
 export function attachMmdMaterialMetadata(
   material: THREE.Material,
   materialInfo: MaterialInfo,
@@ -82,20 +86,23 @@ export function mmdMaterialAlphaTest(
 
 export function mmdMaterialTransparencyMode(
   material: MaterialInfo,
-  hasDiffuseTexture: boolean,
+  _hasDiffuseTexture: boolean,
   textureTransparencyMode?: MmdMaterialTransparencyMode
 ): MmdMaterialTransparencyMode {
   if (material.diffuse[3] < 1) {
     return "alphaBlend";
   }
+  if ((material.flags as MmdMaterialAlphaTestFlags).alphaTest) {
+    return "alphaTest";
+  }
   const evaluatedTransparencyMode = mmdEvaluatedTransparencyMode(material.evaluatedTransparency);
   if (evaluatedTransparencyMode) {
     return evaluatedTransparencyMode;
   }
-  if (textureTransparencyMode) {
-    return textureTransparencyMode === "opaque" ? "opaque" : "alphaBlend";
+  if (textureTransparencyMode === "opaque") {
+    return "opaque";
   }
-  return hasDiffuseTexture ? "alphaTest" : "opaque";
+  return "opaque";
 }
 
 export function mmdMaterialDepthWrite(_transparencyMode: MmdMaterialTransparencyMode): boolean {
