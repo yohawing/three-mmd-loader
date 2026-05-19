@@ -86,6 +86,32 @@ describe("createThreeBufferGeometry", () => {
     ]);
   });
 
+  it("sorts geometry groups by MMD material render order while preserving material indices", () => {
+    const geometry = createThreeBufferGeometry(
+      {
+        ...createQuadBuffers(),
+        indices: new Uint16Array([0, 1, 2, 0, 2, 3, 0, 3, 1]),
+        materialGroups: [
+          { start: 6, count: 3, materialIndex: 2 },
+          { start: 3, count: 3, materialIndex: 1 },
+          { start: 0, count: 3, materialIndex: 0 }
+        ]
+      },
+      [
+        { faceCount: 1, transparencyMode: "opaque" },
+        { faceCount: 1, transparencyMode: "alphaBlend" },
+        { faceCount: 1, transparencyMode: "opaque" }
+      ]
+    );
+
+    expect(geometry.groups.map((group) => group.materialIndex)).toEqual([0, 1, 2]);
+    expect(geometry.groups).toEqual([
+      { start: 0, count: 3, materialIndex: 0 },
+      { start: 3, count: 3, materialIndex: 1 },
+      { start: 6, count: 3, materialIndex: 2 }
+    ]);
+  });
+
   it("converts vertex, UV, and additional UV morph offsets into relative morph attributes", () => {
     const morphs: ThreeMmdGeometryMorph[] = [
       {

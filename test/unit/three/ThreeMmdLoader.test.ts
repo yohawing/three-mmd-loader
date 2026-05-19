@@ -88,7 +88,7 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.isSkinnedMesh).toBe(true);
   });
 
-  it("eagerly exposes outline and render-order proxy meshes without added-event side effects", async () => {
+  it("eagerly exposes outline meshes and a stable render-order mesh array without added-event side effects", async () => {
     const loader = new ThreeMmdLoader();
     const source: ModelSource = createMinimalPmxModelBytes({
       materialCount: 1,
@@ -108,7 +108,37 @@ describe("ThreeMmdLoader", () => {
     expect(outlineMeshes.every((mesh) => !!mesh.userData.mmdOutlineProxy)).toBe(true);
     const renderOrderMeshes = model.renderOrderMeshes;
     expect(model.renderOrderMeshes).toBe(renderOrderMeshes);
-    expect(renderOrderMeshes.every((mesh) => !!mesh.userData.mmdMaterialRenderProxy)).toBe(true);
+    expect(renderOrderMeshes).toEqual([]);
+  });
+
+  it("does not create render-order proxy meshes by default", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true
+      })
+    );
+
+    expect(model.renderOrderMeshes).toEqual([]);
+  });
+
+  it("creates render-order proxy meshes when explicitly requested", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true
+      }),
+      { renderOrderProxies: true }
+    );
+
+    expect(model.renderOrderMeshes).toHaveLength(1);
+    expect(model.renderOrderMeshes.every((mesh) => !!mesh.userData.mmdMaterialRenderProxy)).toBe(
+      true
+    );
   });
 
   it("allows loadModel callers to disable generated outline meshes explicitly", async () => {
@@ -124,9 +154,7 @@ describe("ThreeMmdLoader", () => {
     );
 
     expect(model.outlineMeshes).toEqual([]);
-    expect(model.renderOrderMeshes.every((mesh) => !!mesh.userData.mmdMaterialRenderProxy)).toBe(
-      true
-    );
+    expect(model.renderOrderMeshes).toEqual([]);
   });
 
   it("applies load-time frustum culling to the mesh and generated proxy meshes", async () => {
@@ -138,7 +166,7 @@ describe("ThreeMmdLoader", () => {
         triangle: true,
         edge: true
       }),
-      { frustumCulled: false }
+      { frustumCulled: false, renderOrderProxies: true }
     );
 
     expect(model.mesh.frustumCulled).toBe(false);

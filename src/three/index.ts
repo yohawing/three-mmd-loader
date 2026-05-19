@@ -107,6 +107,7 @@ export interface ThreeMmdLoaderOptions {
 export interface ThreeMmdLoadModelOptions {
   readonly outlines?: boolean;
   readonly frustumCulled?: boolean;
+  readonly renderOrderProxies?: boolean;
 }
 
 export type ThreeMmdModelSourceDescriptor =
@@ -188,7 +189,8 @@ export class ThreeMmdLoader {
       source: createModelSourceDescriptor(source, bytes.byteLength),
       textureDiagnostics,
       materials: modelData.materials,
-      outlines: options.outlines ?? true
+      outlines: options.outlines ?? true,
+      renderOrderProxies: options.renderOrderProxies ?? false
     });
   }
 
@@ -244,6 +246,7 @@ function createThreeMmdModel(options: {
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
   readonly outlines: boolean;
+  readonly renderOrderProxies: boolean;
 }): ThreeMmdModel {
   const outlineMesh = options.outlines
     ? createMmdOutlineMesh({
@@ -256,10 +259,12 @@ function createThreeMmdModel(options: {
     syncMmdModelShadowFlags(outline, options.materials);
     outline.frustumCulled = options.mesh.frustumCulled;
   });
-  const renderOrderMeshes = createMmdMaterialRenderOrderMeshes({
-    mesh: options.mesh,
-    materials: options.materials
-  });
+  const renderOrderMeshes = options.renderOrderProxies
+    ? createMmdMaterialRenderOrderMeshes({
+        mesh: options.mesh,
+        materials: options.materials
+      })
+    : [];
 
   return {
     mesh: options.mesh,

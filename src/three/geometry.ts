@@ -1,5 +1,8 @@
 import * as THREE from "three";
 
+import { computeMmdMaterialRenderOrder } from "./material/material-metadata.js";
+import type { MmdMaterialTransparencyMode } from "./textures.js";
+
 export interface ThreeMmdMaterialGroup {
   readonly start: number;
   readonly count: number;
@@ -8,6 +11,8 @@ export interface ThreeMmdMaterialGroup {
 
 export interface ThreeMmdGeometryMaterial {
   readonly faceCount: number;
+  readonly materialIndex?: number;
+  readonly transparencyMode?: MmdMaterialTransparencyMode;
 }
 
 export interface ThreeMmdSdefBuffers {
@@ -154,21 +159,57 @@ export function createThreeBufferGeometry(
     });
   }
 
-  if (buffers.materialGroups?.length) {
-    buffers.materialGroups.forEach((group) => {
-      geometry.addGroup(group.start, group.count, group.materialIndex);
-    });
-  } else {
-    let groupStart = 0;
-    materials.forEach((material, materialIndex) => {
-      const groupCount = material.faceCount * 3;
-      geometry.addGroup(groupStart, groupCount, materialIndex);
-      groupStart += groupCount;
-    });
-  }
+  createMmdRenderOrderGroups(buffers, materials).forEach((group) => {
+    geometry.addGroup(group.start, group.count, group.materialIndex);
+  });
 
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+function createMmdRenderOrderGroups(
+  buffers: ThreeMmdGeometryBuffers,
+  materials: readonly ThreeMmdGeometryMaterial[]
+): ThreeMmdMaterialGroup[] {
+  const groups = buffers.materialGroups?.length
+    ? [...buffers.materialGroups]
+    : createMaterialFaceCountGroups(materials);
+  if (materials.length === 0 || groups.length <= 1) {
+    return groups;
+  }
+
+  const renderOrderByMaterial = new Map(
+    computeMmdMaterialRenderOrder(
+      materials.map((material, fallbackIndex) => ({
+        materialIndex: material.materialIndex ?? fallbackIndex,
+        transparencyMode: material.transparencyMode ?? "opaque"
+      }))
+    ).map((entry) => [entry.materialIndex, entry.renderOrder])
+  );
+  return groups
+    .map((group, sourceOrder) => ({ group, sourceOrder }))
+    .sort((a, b) => {
+      const aOrder = renderOrderByMaterial.get(a.group.materialIndex) ?? Number.POSITIVE_INFINITY;
+      const bOrder = renderOrderByMaterial.get(b.group.materialIndex) ?? Number.POSITIVE_INFINITY;
+      return aOrder - bOrder || a.sourceOrder - b.sourceOrder;
+    })
+    .map((entry) => entry.group);
+}
+
+function createMaterialFaceCountGroups(
+  materials: readonly ThreeMmdGeometryMaterial[]
+): ThreeMmdMaterialGroup[] {
+  let groupStart = 0;
+  return materials.map((material, materialIndex) => {
+    const groupCount = material.faceCount * 3;
+    const group = {
+      start: groupStart,
+      count: groupCount,
+      materialIndex
+    };
+    groupStart += groupCount;
+    return group;
+  });
 }
 
 function validateGeometryInput(
