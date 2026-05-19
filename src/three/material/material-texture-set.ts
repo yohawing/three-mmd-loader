@@ -80,17 +80,23 @@ export function evaluateMmdDefaultMaterialTransparency(
   readonly morphAlphaTransparent: boolean;
 } {
   const morphAlphaTransparent = mmdMaterialMorphCanAffectAlpha(morphs, materialIndex);
+  const textureMetadataTransparencyMode = texture?.userData.mmdTextureAlphaMode as
+    | MmdMaterialTransparencyMode
+    | undefined;
   const needsTextureTransparencyScan =
-    !!options.geometryAwareAlpha ||
-    material.diffuse[3] < 1 ||
-    (material.flags as { alphaTest?: boolean }).alphaTest === true ||
-    morphAlphaTransparent;
-  const textureTransparencyMode = texture && needsTextureTransparencyScan
-    ? (options.geometryAwareAlpha
-      ? (textureAlpha.evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
-        textureAlpha.evaluateMmdTextureAlphaTexture(texture))
-      : textureAlpha.evaluateMmdTextureAlphaTexture(texture))
-    : undefined;
+    textureMetadataTransparencyMode === undefined &&
+    (!!options.geometryAwareAlpha ||
+      material.diffuse[3] < 1 ||
+      (material.flags as { alphaTest?: boolean }).alphaTest === true ||
+      morphAlphaTransparent);
+  const textureTransparencyMode =
+    textureMetadataTransparencyMode ??
+    (texture && needsTextureTransparencyScan
+      ? (options.geometryAwareAlpha
+        ? (textureAlpha.evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
+          textureAlpha.evaluateMmdTextureAlphaTexture(texture))
+        : textureAlpha.evaluateMmdTextureAlphaTexture(texture))
+      : undefined);
   const baseTransparencyMode = mmdMaterialTransparencyMode(
     material,
     !!texture,
@@ -99,7 +105,9 @@ export function evaluateMmdDefaultMaterialTransparency(
   const transparencyMode =
     baseTransparencyMode !== "opaque"
       ? baseTransparencyMode
-      : options.geometryAwareAlpha && textureTransparencyMode && textureTransparencyMode !== "opaque"
+      : textureTransparencyMode &&
+          textureTransparencyMode !== "opaque" &&
+          (options.geometryAwareAlpha || textureMetadataTransparencyMode !== undefined)
         ? textureTransparencyMode
         : "opaque";
   return {

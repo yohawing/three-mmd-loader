@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 
 const root = process.cwd();
+const viewerRoot = resolve(root, "examples", "viewer");
 const dataRoot = process.env.MMD_VIEWER_DATA_ROOT === undefined
   ? undefined
   : resolve(process.env.MMD_VIEWER_DATA_ROOT);
@@ -31,7 +32,15 @@ const mimeTypes = new Map([
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? `${host}:${port}`}`);
-    const pathname = url.pathname === "/" ? "/examples/viewer/index.html" : url.pathname;
+    if (url.pathname === "/examples/viewer" || url.pathname === "/examples/viewer/") {
+      response.writeHead(302, {
+        Location: "/"
+      });
+      response.end();
+      return;
+    }
+
+    const pathname = url.pathname;
     const filePath = resolveRequestPath(pathname);
 
     if (!isAllowedPath(filePath)) {
@@ -57,7 +66,7 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`MMD viewer example: http://${host}:${port}/examples/viewer/`);
+  console.log(`MMD viewer example: http://${host}:${port}/`);
   if (dataRoot === undefined) {
     console.log(`MMD viewer data route disabled. Set MMD_VIEWER_DATA_ROOT to serve local MMD assets.`);
   } else {
@@ -76,11 +85,28 @@ function resolveRequestPath(pathname) {
     );
     return resolve(dataRoot, relativePath);
   }
+  if (pathname === "/") {
+    return resolve(viewerRoot, "index.html");
+  }
+  if (pathname.startsWith("/lib/")) {
+    const relativePath = normalize(decodeURIComponent(pathname.slice("/lib/".length))).replace(
+      /^[/\\]+/,
+      ""
+    );
+    return resolve(viewerRoot, "lib", relativePath);
+  }
+  if (pathname === "/main.js" || pathname === "/styles.css" || pathname === "/viewer.js") {
+    return resolve(viewerRoot, pathname.slice(1));
+  }
   return resolve(root, `.${normalize(decodeURIComponent(pathname))}`);
 }
 
 function isAllowedPath(filePath) {
-  return isPathInside(filePath, root) || (dataRoot !== undefined && isPathInside(filePath, dataRoot));
+  return (
+    isPathInside(filePath, root) ||
+    isPathInside(filePath, viewerRoot) ||
+    (dataRoot !== undefined && isPathInside(filePath, dataRoot))
+  );
 }
 
 function isPathInside(filePath, parentPath) {

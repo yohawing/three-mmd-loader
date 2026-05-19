@@ -306,7 +306,7 @@ describe("Three.js MMD materials", () => {
   });
 
   it("does not run UV-rasterized texture alpha evaluation by default", async () => {
-    const texture = createTransparentDataTexture("opaque");
+    const texture = createReadableAlphaDataTexture();
     const textureLoader: ThreeMmdTextureLoader = {
       load(url, onLoad) {
         texture.name = url;
@@ -314,21 +314,23 @@ describe("Three.js MMD materials", () => {
         return texture;
       }
     };
-    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.png" })];
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.jpg" })];
     const materials = createThreeMmdMaterials(mmdMaterials);
 
     await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
-      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureMap: { "textures/body.jpg": "resolved/body.jpg" },
       textureLoader,
       geometry: createAlphaEvaluationGeometry()
     });
 
+    expect(geometryAlphaSpy).not.toHaveBeenCalled();
     expect(materials[0]?.transparent).toBe(false);
     expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
   });
 
-  it("keeps atlas alpha opaque unless PMX material data requests transparency", async () => {
-    const texture = createTransparentDataTexture("alphaBlend");
+  it("keeps non-PNG atlas alpha opaque unless PMX material data requests transparency", async () => {
+    const texture = createReadableAlphaDataTexture();
     const textureLoader: ThreeMmdTextureLoader = {
       load(url, onLoad) {
         texture.name = url;
@@ -336,11 +338,11 @@ describe("Three.js MMD materials", () => {
         return texture;
       }
     };
-    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.png" })];
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.jpg" })];
     const materials = createThreeMmdMaterials(mmdMaterials);
 
     await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
-      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureMap: { "textures/body.jpg": "resolved/body.jpg" },
       textureLoader,
       geometry: createAlphaEvaluationGeometry()
     });
@@ -360,11 +362,11 @@ describe("Three.js MMD materials", () => {
         return texture;
       }
     };
-    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.png" })];
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.jpg" })];
     const materials = createThreeMmdMaterials(mmdMaterials);
 
     await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
-      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureMap: { "textures/body.jpg": "resolved/body.jpg" },
       textureLoader,
       geometry: createAlphaEvaluationGeometry()
     });
@@ -384,11 +386,11 @@ describe("Three.js MMD materials", () => {
       }
     };
     const textureAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaTexture");
-    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.png" })];
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.jpg" })];
     const materials = createThreeMmdMaterials(mmdMaterials);
 
     await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
-      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureMap: { "textures/body.jpg": "resolved/body.jpg" },
       textureLoader,
       geometry: createAlphaEvaluationGeometry()
     });
@@ -409,18 +411,46 @@ describe("Three.js MMD materials", () => {
     };
     const textureAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaTexture");
     const mmdMaterials = [
-      createMaterialInfo({ diffuse: [0.5, 0.6, 0.7, 0.5], texturePath: "textures/hair.png" })
+      createMaterialInfo({ diffuse: [0.5, 0.6, 0.7, 0.5], texturePath: "textures/hair.jpg" })
     ];
     const materials = createThreeMmdMaterials(mmdMaterials);
 
     await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
-      textureMap: { "textures/hair.png": "resolved/hair.png" },
+      textureMap: { "textures/hair.jpg": "resolved/hair.jpg" },
       textureLoader,
       geometry: createAlphaEvaluationGeometry()
     });
 
     expect(textureAlphaSpy).toHaveBeenCalledTimes(1);
     expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
+  });
+
+  it("treats PNG diffuse textures as alpha blending without scanning pixels", async () => {
+    const texture = new THREE.Texture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const textureAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaTexture");
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/skin.png" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/skin.png": "resolved/skin.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    expect(geometryAlphaSpy).not.toHaveBeenCalled();
+    expect(textureAlphaSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
     expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
   });
 
@@ -482,11 +512,11 @@ describe("Three.js MMD materials", () => {
         return texture;
       }
     };
-    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.png" })];
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.jpg" })];
     const materials = createThreeMmdMaterials(mmdMaterials);
 
     await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
-      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureMap: { "textures/body.jpg": "resolved/body.jpg" },
       textureLoader,
       geometry: createAlphaEvaluationGeometry(),
       geometryAwareAlpha: true

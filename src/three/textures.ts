@@ -288,6 +288,12 @@ export function evaluateMmdTextureAlphaGeometry(
   materialIndex: number,
   options: MmdTextureAlphaEvaluationOptions = {}
 ): MmdMaterialTransparencyMode | undefined {
+  const metadataAlphaMode = texture.userData.mmdTextureAlphaMode as
+    | MmdMaterialTransparencyMode
+    | undefined;
+  if (metadataAlphaMode) {
+    return metadataAlphaMode;
+  }
   const image = texture.image as
     | { data?: ArrayLike<number>; width?: number; height?: number }
     | undefined;
@@ -606,6 +612,10 @@ export function isMmdTgaLikeTexturePath(texturePath: string): boolean {
   return /\.tga$/i.test(texturePath);
 }
 
+export function isMmdPngLikeTexturePath(texturePath: string): boolean {
+  return /\.png$/i.test(texturePath);
+}
+
 export function createTextureResolver(
   textureResolver?: TextureResolver,
   textureMap?: TextureMap
@@ -877,6 +887,13 @@ async function createTextureLoadRequest(
   texturePath: string
 ): Promise<{ url: string; alphaMode?: MmdMaterialTransparencyMode; revokeUrl?: boolean }> {
   if (typeof Blob !== "undefined" && resolved instanceof Blob) {
+    if (isMmdPngLikeTexturePath(texturePath)) {
+      return {
+        url: URL.createObjectURL(resolved),
+        alphaMode: "alphaBlend",
+        revokeUrl: true
+      };
+    }
     if (!isMmdBmpLikeTexturePath(texturePath)) {
       return { url: URL.createObjectURL(resolved), revokeUrl: true };
     }
@@ -895,6 +912,9 @@ async function createTextureLoadRequest(
     };
   }
   const url = String(resolved);
+  if (isMmdPngLikeTexturePath(texturePath)) {
+    return { url, alphaMode: "alphaBlend" };
+  }
   if (!isMmdBmpLikeTexturePath(texturePath)) {
     return { url };
   }
