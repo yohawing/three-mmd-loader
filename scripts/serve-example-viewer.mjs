@@ -9,7 +9,7 @@ const dataRoot = process.env.MMD_VIEWER_DATA_ROOT === undefined
   ? undefined
   : resolve(process.env.MMD_VIEWER_DATA_ROOT);
 const dataRoute = "/__mmd_data/";
-const port = Number.parseInt(process.env.PORT ?? "4173", 10);
+const port = Number.parseInt(process.env.PORT ?? "3939", 10);
 const host = process.env.HOST ?? "127.0.0.1";
 
 const mimeTypes = new Map([
