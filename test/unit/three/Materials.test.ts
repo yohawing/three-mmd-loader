@@ -9,6 +9,7 @@ import {
 } from "../../../src/three/index.js";
 import type { MaterialInfo } from "../../../src/parser/model/modelTypes.js";
 import type { ThreeMmdTextureLoader } from "../../../src/three/index.js";
+import * as Textures from "../../../src/three/textures.js";
 
 function createMaterialInfo(overrides: Partial<MaterialInfo> = {}): MaterialInfo {
   return {
@@ -323,7 +324,7 @@ describe("Three.js MMD materials", () => {
     });
 
     expect(materials[0]?.transparent).toBe(false);
-    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
   });
 
   it("keeps atlas alpha opaque unless PMX material data requests transparency", async () => {
@@ -347,7 +348,7 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.transparent).toBe(false);
     expect(materials[0]?.alphaTest).toBe(0);
     expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
-    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
   });
 
   it("keeps readable texture alpha opaque when geometry-aware evaluation is not enabled", async () => {
@@ -370,6 +371,56 @@ describe("Three.js MMD materials", () => {
 
     expect(materials[0]?.transparent).toBe(false);
     expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
+  it("skips texture alpha scans when PMX material data is already opaque", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const textureAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaTexture");
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.png" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/body.png": "resolved/body.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry()
+    });
+
+    expect(textureAlphaSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
+  it("runs texture alpha scans when PMX diffuse alpha requests transparency", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const textureAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaTexture");
+    const mmdMaterials = [
+      createMaterialInfo({ diffuse: [0.5, 0.6, 0.7, 0.5], texturePath: "textures/hair.png" })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/hair.png": "resolved/hair.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry()
+    });
+
+    expect(textureAlphaSpy).toHaveBeenCalledTimes(1);
+    expect(materials[0]?.transparent).toBe(true);
     expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("opaque");
   });
 

@@ -3,12 +3,7 @@ import type * as THREE from "three";
 
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "../materials.js";
 import type { MmdMaterialTransparencyMode, TextureResolver } from "../textures.js";
-import {
-  evaluateMmdTextureAlphaGeometry,
-  evaluateMmdTextureAlphaTexture,
-  loadMaterialTextureWithDiagnostics,
-  loadToonTexture
-} from "../textures.js";
+import * as textureAlpha from "../textures.js";
 import {
   mmdMaterialMorphCanAffectAlpha,
   mmdMaterialTransparencyMode
@@ -35,7 +30,7 @@ export async function loadMmdDefaultMaterialTextureSet(
 ): Promise<MmdDefaultMaterialTextureSet> {
   const shouldLoadSphereTexture = material.sphereMode !== "none";
   const [texture, gradientMap, sphereTexture] = await Promise.all([
-    loadMaterialTextureWithDiagnostics(
+    textureAlpha.loadMaterialTextureWithDiagnostics(
       material.texturePath,
       material.textureInfo,
       "diffuse",
@@ -46,7 +41,7 @@ export async function loadMmdDefaultMaterialTextureSet(
       textureLoader,
       textureCache
     ),
-    loadToonTexture(
+    textureAlpha.loadToonTexture(
       material,
       materialIndex,
       modelUrl,
@@ -56,7 +51,7 @@ export async function loadMmdDefaultMaterialTextureSet(
       textureCache
     ),
     shouldLoadSphereTexture
-      ? loadMaterialTextureWithDiagnostics(
+      ? textureAlpha.loadMaterialTextureWithDiagnostics(
           material.sphereTexturePath,
           material.sphereTextureInfo,
           "sphere",
@@ -84,11 +79,17 @@ export function evaluateMmdDefaultMaterialTransparency(
   readonly textureTransparencyMode: MmdMaterialTransparencyMode | undefined;
   readonly morphAlphaTransparent: boolean;
 } {
-  const textureTransparencyMode = texture
+  const morphAlphaTransparent = mmdMaterialMorphCanAffectAlpha(morphs, materialIndex);
+  const needsTextureTransparencyScan =
+    !!options.geometryAwareAlpha ||
+    material.diffuse[3] < 1 ||
+    (material.flags as { alphaTest?: boolean }).alphaTest === true ||
+    morphAlphaTransparent;
+  const textureTransparencyMode = texture && needsTextureTransparencyScan
     ? (options.geometryAwareAlpha
-      ? (evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
-        evaluateMmdTextureAlphaTexture(texture))
-      : evaluateMmdTextureAlphaTexture(texture))
+      ? (textureAlpha.evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
+        textureAlpha.evaluateMmdTextureAlphaTexture(texture))
+      : textureAlpha.evaluateMmdTextureAlphaTexture(texture))
     : undefined;
   const baseTransparencyMode = mmdMaterialTransparencyMode(
     material,
@@ -101,7 +102,6 @@ export function evaluateMmdDefaultMaterialTransparency(
       : options.geometryAwareAlpha && textureTransparencyMode && textureTransparencyMode !== "opaque"
         ? textureTransparencyMode
         : "opaque";
-  const morphAlphaTransparent = mmdMaterialMorphCanAffectAlpha(morphs, materialIndex);
   return {
     transparencyMode: morphAlphaTransparent ? "alphaBlend" : transparencyMode,
     textureTransparencyMode,
