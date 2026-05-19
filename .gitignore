@@ -26,3 +26,11 @@ test/fixtures/generated/**/*.pmx
 # OS / editor noise
 .DS_Store
 Thumbs.db
+
+# AI assistant artifacts (local-only conventions, scratch files)
+.claudex/
+.codex/
+AGENTS.md
+CLAUDE.md
+.cursor/
+.aider*
