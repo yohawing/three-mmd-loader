@@ -16,14 +16,20 @@ import {
   DefaultMmdRuntime,
   ThreeMmdLoader,
   createAmmoMmdPhysicsBackend,
+  createMmdTextureMapFromFiles,
   createThreeBufferGeometry,
   createThreeSkeleton,
   createDisabledMmdPhysicsBackend,
   createMmdBuiltInToonTextureMap,
+  disposeMmdModel,
+  findMmdModelFiles,
+  findMmdMotionFiles,
   type AmmoNamespace,
   type MmdPhysicsStepContext,
   isModelSource,
+  loadAmmoNamespace,
   mmdWorldMatrixToThree,
+  normalizeMmdRelativePath,
   resolveMappedTexture
 } from "../../../src/index.js";
 import * as publicApi from "../../../src/index.js";
@@ -94,6 +100,14 @@ center
     expect(createThreeSkeleton).toBeTypeOf("function");
   });
 
+  it("exports viewer-shared Three.js adapter helpers from the public barrel", () => {
+    expect(disposeMmdModel).toBeTypeOf("function");
+    expect(createMmdTextureMapFromFiles).toBeTypeOf("function");
+    expect(findMmdModelFiles).toBeTypeOf("function");
+    expect(findMmdMotionFiles).toBeTypeOf("function");
+    expect(normalizeMmdRelativePath("models\\miku.pmx")).toBe("models/miku.pmx");
+  });
+
   it("exports representative Three.js adapter utility helpers from the public barrel", () => {
     const matrix = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 2, 3, 1]);
 
@@ -159,6 +173,10 @@ center
 
     backend.dispose?.();
     expect(backend.disposed).toBe(true);
+  });
+
+  it("exports the browser Ammo namespace loader from the public barrel", () => {
+    expect(loadAmmoNamespace).toBeTypeOf("function");
   });
 
   it("loads a PMX model and disposes a concrete Ammo physics backend", async () => {

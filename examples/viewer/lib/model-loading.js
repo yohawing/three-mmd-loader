@@ -1,4 +1,10 @@
-import { ThreeMmdLoader, syncMmdSpecularDirection } from "../../../dist/three/index.js";
+import {
+  ThreeMmdLoader,
+  createMmdTextureMapFromFiles,
+  findMmdModelFiles,
+  normalizeMmdRelativePath,
+  syncMmdSpecularDirection
+} from "../../../dist/three/index.js";
 
 import { createPhysicsBackend, disposeActivePhysicsBackend } from "./ammo-bootstrap.js";
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
@@ -86,7 +92,7 @@ export async function loadModelFolder(files) {
 
   const textureMap = createFolderTextureMap(files, modelFile);
   const folderName =
-    normalizeRelativePath(modelFile.webkitRelativePath || modelFile.name).split("/")[0] || "folder";
+    normalizeMmdRelativePath(modelFile.webkitRelativePath || modelFile.name).split("/")[0] || "folder";
   state.currentFolderTextureMap = textureMap;
   state.currentFolderPmxFiles = modelFiles;
   updateModelSwitcher(modelFile);
@@ -319,17 +325,10 @@ export function findModelFile(files) {
   return findModelFiles(files)[0];
 }
 
-export function findModelFiles(files) {
-  return files
-    .filter((file) => {
-      const lowerName = file.name.toLowerCase();
-      return lowerName.endsWith(".pmx") || lowerName.endsWith(".pmd");
-    })
-    .sort((a, b) => modelFileKey(a).localeCompare(modelFileKey(b), undefined, { numeric: true }));
-}
+export const findModelFiles = findMmdModelFiles;
 
 export function modelFileKey(file) {
-  return normalizeRelativePath(file.webkitRelativePath || file.name);
+  return normalizeMmdRelativePath(file.webkitRelativePath || file.name);
 }
 
 function createModelSwitcherEntry(source, label) {
@@ -367,46 +366,7 @@ export function resetFolderModelState() {
   updateChromeHeights();
 }
 
-export function createFolderTextureMap(files, modelFile) {
-  const textureMap = {};
-  const modelDirectory = directoryName(
-    normalizeRelativePath(modelFile.webkitRelativePath || modelFile.name)
-  );
-
-  for (const file of files) {
-    if (!isTextureFile(file)) {
-      continue;
-    }
-
-    const relativePath = normalizeRelativePath(file.webkitRelativePath || file.name);
-    const relativeToModel = modelDirectory
-      ? stripPrefix(relativePath, `${modelDirectory}/`)
-      : relativePath;
-
-    textureMap[relativePath] = file;
-    textureMap[relativeToModel] = file;
-    textureMap[file.name] = file;
-  }
-
-  return textureMap;
-}
-
-function isTextureFile(file) {
-  return /\.(bmp|gif|jpe?g|png|tga|webp)$/i.test(file.name);
-}
-
-function normalizeRelativePath(path) {
-  return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
-}
-
-function directoryName(path) {
-  const slashIndex = path.lastIndexOf("/");
-  return slashIndex === -1 ? "" : path.slice(0, slashIndex);
-}
-
-function stripPrefix(path, prefix) {
-  return path.startsWith(prefix) ? path.slice(prefix.length) : path;
-}
+export const createFolderTextureMap = createMmdTextureMapFromFiles;
 
 export async function createUrlTextureLoader(modelUrl) {
   return await createModelLoader({

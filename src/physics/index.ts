@@ -5,6 +5,7 @@ export {
   type AmmoPhysicsBackendOptions,
   type AmmoPhysicsBackendTuningOptions
 } from "./ammoMmdPhysicsBackend.js";
+export { loadAmmoNamespace, type AmmoBrowserLoaderOptions } from "./ammoBrowserLoader.js";
 
 export type MmdPhysicsDiagnosticLevel = "warning" | "error";
 

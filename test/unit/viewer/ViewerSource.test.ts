@@ -8,11 +8,9 @@ describe("example viewer source", () => {
     const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");
 
     expect(modelSource).toContain("disposeModelResources(state.currentModel)");
-    expect(disposeSource).toContain("function collectMaterialTextures(material)");
-    expect(disposeSource).toContain("value instanceof THREE.Texture");
-    expect(disposeSource).toContain("disposeSkeletonResources(mesh.skeleton");
-    expect(disposeSource).toContain("...(model.outlineMeshes ?? [])");
-    expect(disposeSource).toContain("...(model.renderOrderMeshes ?? [])");
+    expect(disposeSource).toContain('import { disposeMmdModel } from "../../../dist/three/index.js"');
+    expect(disposeSource).toContain("disposeMmdModel(model)");
+    expect(disposeSource).not.toContain("function collectMaterialTextures(material)");
   });
 
   it("surfaces texture diagnostics from loaded models", async () => {
@@ -49,6 +47,8 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("state.currentFolderTextureMap = textureMap");
     expect(modelSource).toContain("state.currentFolderPmxFiles = modelFiles");
     expect(modelSource).toContain("updateModelSwitcher(modelFile)");
+    expect(modelSource).toContain("findMmdModelFiles");
+    expect(modelSource).toContain("createMmdTextureMapFromFiles");
     expect(modelSource).toContain("export async function switchFolderModel(modelFile)");
     expect(modelSource).toContain('setStatus(`Switching to ${modelFile.name}`, "loading")');
     expect(modelSource).toContain("createModelLoader({ textureMap: state.currentFolderTextureMap })");
@@ -81,7 +81,8 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("currentMotionVmdFiles: []");
     expect(mainSource).toContain("state.currentMotionVmdFiles = [file]");
     expect(modelSource).toContain("state.currentMotionVmdFiles = vmdFiles");
-    expect(motionSource).toContain("export function findVmdFiles(files)");
+    expect(motionSource).toContain("export const findVmdFiles = findMmdMotionFiles");
+    expect(motionSource).toContain("findMmdMotionFiles");
     expect(motionSource).toContain("export async function switchMotion(file)");
     expect(motionSource).toContain('setStatus(`Switching motion to ${file.name}`, "loading")');
     expect(motionSource).toContain("dom.motionSwitcher.hidden = state.currentMotionVmdFiles.length === 0");
@@ -95,5 +96,15 @@ describe("example viewer source", () => {
     expect(dropHandler).toContain("vmdFiles.includes(file)");
     expect(dropHandler).not.toContain('lowerName.endsWith(".vmd")');
     expect(dropHandler).not.toContain("await loadMotion(file)");
+  });
+
+  it("delegates Ammo script loading to the public physics browser loader", async () => {
+    const ammoSource = await readFile("examples/viewer/lib/ammo-bootstrap.js", "utf8");
+
+    expect(ammoSource).toContain("loadAmmoNamespace");
+    expect(ammoSource).toContain("state.ammoScriptLoadPromise ??= loadAmmoNamespace(state.ammoScriptUrl)");
+    expect(ammoSource).toContain("dom.physicsErrorBanner.textContent = message");
+    expect(ammoSource).not.toContain("function loadAmmoScript");
+    expect(ammoSource).not.toContain("function getAmmoCandidate");
   });
 });

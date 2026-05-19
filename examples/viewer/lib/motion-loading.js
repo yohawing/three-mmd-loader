@@ -1,4 +1,5 @@
 import { parseVmd } from "../../../dist/parser/index.js";
+import { findMmdMotionFiles, normalizeMmdRelativePath } from "../../../dist/three/index.js";
 
 import { dom, setStatus, updateChromeHeights, updatePlaybackDisplay, updateTransportState } from "./dom.js";
 import { animationDurationSeconds, state } from "./state.js";
@@ -98,14 +99,10 @@ export async function loadPose(source, label = source.name ?? "pose") {
   }
 }
 
-export function findVmdFiles(files) {
-  return files
-    .filter((file) => file.name.toLowerCase().endsWith(".vmd"))
-    .sort((a, b) => motionFileKey(a).localeCompare(motionFileKey(b), undefined, { numeric: true }));
-}
+export const findVmdFiles = findMmdMotionFiles;
 
 export function motionFileKey(file) {
-  return normalizeRelativePath(file.webkitRelativePath || file.name);
+  return normalizeMmdRelativePath(file.webkitRelativePath || file.name);
 }
 
 export async function switchMotion(file) {
@@ -150,8 +147,4 @@ export function resetMotionSwitcherState() {
     dom.motionSwitcher.hidden = true;
   }
   updateChromeHeights();
-}
-
-function normalizeRelativePath(path) {
-  return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
