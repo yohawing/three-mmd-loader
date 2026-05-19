@@ -383,11 +383,9 @@ function rendererHtml() {
           scene.add(model.mesh);
 
           if (visualCase.motionUrl !== undefined) {
-            const animation = await loader.loadAnimation(await fetchBytes(visualCase.motionUrl), model);
-            if (animation.clip !== undefined) {
-              model.runtime?.setAnimation(animation.clip, model.mesh);
-              model.runtime?.evaluate(visualCase.timeSeconds, { physics: false });
-            }
+            const { animation } = await loader.loadAnimation(await fetchBytes(visualCase.motionUrl));
+            model.runtime?.setAnimation(animation, model.mesh);
+            model.runtime?.evaluate(visualCase.timeSeconds, { physics: false });
           } else {
             model.runtime?.evaluate(visualCase.timeSeconds, { physics: false });
           }

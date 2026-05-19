@@ -2,12 +2,7 @@
 
 A TypeScript library for loading and playing back MMD models and motions on Three.js.
 
-Japanese: [README.ja.md](./README.ja.md) / Roadmap: [ROADMAP.md](./ROADMAP.md)
-
-## Demo
-
-<!-- TODO: replace with YouTube link -->
-[![Demo video](demo-thumbnail.png)](https://www.youtube.com/)
+Japanese: [docs/README.ja.md](./docs/README.ja.md)
 
 ## Compatibility Matrix
 
@@ -40,12 +35,13 @@ Japanese: [README.ja.md](./README.ja.md) / Roadmap: [ROADMAP.md](./ROADMAP.md)
 
 ## Verified Assets
 
-Loading and playback verified on the following assets:
+Loading and playback are covered by committed fixtures and local manual
+checks. The committed release evidence currently includes:
 
-- PMD models: 5
-- PMX models: 5
-- VMD motions: 15
 - Unit-test fixtures: 7 PMX / 3 VMD
+
+Additional user-owned PMD, PMX, and VMD assets are used for local smoke checks,
+but those assets and screenshots are not distributed with the package.
 
 ## Out Of Scope (Initial Release)
 
@@ -62,6 +58,7 @@ Loading and playback verified on the following assets:
 This project was developed with reference to:
 
 - [Babylon-MMD](https://github.com/noname0310/babylon-mmd)
+- [saba](https://github.com/benikabocha/saba)
 - [nanoem](https://github.com/hkrn/nanoem)
 
 ---
@@ -73,9 +70,6 @@ npm install @yohawing/three-mmd-loader three
 ```
 
 `three` is a peer dependency.
-
-Publish readiness note: the package is still private in this workspace. The
-version and final `private: true` removal remain release decisions.
 
 ## Package Boundaries
 
@@ -95,47 +89,13 @@ version and final `private: true` removal remain release decisions.
 - `physics`: `MmdPhysicsBackend`, disabled fallback backend, validation/debug
   helpers, and optional Ammo backend implementation.
 
-## Visual Regression Renderer
-
-`npm run render:visual` writes deterministic material case PNGs to
-`test-results/visual/current/`; `npm run render:visual:baseline` writes the
-same manifest cases to `test-results/visual/baseline/`. Cases are listed in
-`scripts/visual-regression/cases.manifest.json` and can be rendered one at a
-time with `node scripts/visual-regression/render-cases.mjs --case <id>`. The
-initial baselines are for regression detection only and are not proof of
-MMD/MMM/nanoem visual equivalence. The renderer uses a 512x512 canvas with
-`pixelRatio=1`, an orthographic camera, fixed ambient and directional lights,
-fixed background, `NoToneMapping`, and `SRGBColorSpace`. It does not load
-external assets or `MMD_VIEWER_DATA_ROOT`.
-
-`npm run visual:report` compares `baseline` and `current`, writes heatmap PNGs
-to `test-results/visual/diff/`, and writes a machine-readable
-`test-results/visual/report.json` with per-case `mean`, `p95`, `max`,
-thresholds, and pass/fail status. Thresholds live in the case manifest and are
-intentionally loose for early CI reporting.
-
-For local manual checks against user-owned PMX/VMD assets, set
-`MMD_VIEWER_DATA_ROOT` to a directory outside the repository and edit a local
-copy of `scripts/visual-regression/real-models.manifest.json` with paths
-relative to that root. `npm run render:visual:real-models` writes current PNGs
-to `test-results/visual/real-models/current/`; the baseline script writes
-`test-results/visual/real-models/baseline/`. If `MMD_VIEWER_DATA_ROOT` is not
-set, the profile exits successfully with a skip message. Real-model outputs and
-assets are local-only and are not required for normal CI.
-
-The same real-model manifest can also drive rest-pose quaternion snapshots:
-`npm run snapshot:real-models:rest-pose:baseline`,
-`npm run snapshot:real-models:rest-pose`, then
-`npm run compare:real-models:rest-pose`. Cases may define `watchBones`; when
-omitted, the default torso list is `センター`, `腰`, `下半身`, and `上半身`.
-
 ## Usage - Model Loading
 
 ```ts
 import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
 
 const loader = new ThreeMmdLoader();
-const { mesh } = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path resolved via fetch)
+const { mesh, runtime } = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path resolved via fetch)
 scene.add(mesh);
 
 const { mesh: remoteMesh } = await loader.loadModel("/models/example.pmx");
@@ -162,6 +122,7 @@ needed outside the loader.
 ## Usage - Animation
 
 ```ts
+const model = await loader.loadModel(modelSource);
 const { animation } = await loader.loadAnimation(vmdSource);
 model.runtime?.setAnimation(animation, model.mesh);
 

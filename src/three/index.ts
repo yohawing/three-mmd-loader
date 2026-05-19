@@ -309,10 +309,7 @@ function createModelSourceDescriptor(
 }
 
 function createEmptySourceError(method: string): Error {
-  return new Error(
-    `ThreeMmdLoader.${method} source must not be empty; ` +
-      `ThreeMmdLoader.${method} is not implemented in this migration slice for empty sources`
-  );
+  return new Error(`ThreeMmdLoader.${method} source must not be empty`);
 }
 
 function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {

@@ -1,9 +1,13 @@
 {
   "name": "@yohawing/three-mmd-loader",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/yohawing/three-mmd-loader.git"
@@ -49,6 +53,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs",
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",
+    "example:viewer": "npm run dev",
     "check:fixtures": "node scripts/check-fixtures.mjs",
     "check:fixtures:physics": "node scripts/check-fixtures.mjs --physics",
     "generate:fixtures:minimal-pmx": "node scripts/fixtures/generate-minimal-pmx.mjs",

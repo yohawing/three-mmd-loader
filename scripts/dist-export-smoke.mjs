@@ -261,14 +261,13 @@ const rootLoader = new RootThreeMmdLoader();
 const packageLoader = new PackageThreeMmdLoader();
 const packageRootLoader = new PackageRootThreeMmdLoader();
 
-async function expectLoaderMethodNotImplemented(loaderInstance, method) {
-  const source = method === "loadModel" ? pmxBytes : new Uint8Array();
+async function expectLoaderMethodRejectsEmptySource(loaderInstance, method) {
   assert.match(
-    await loaderInstance[method](source).then(
+    await loaderInstance[method](new Uint8Array()).then(
       () => "",
       (error) => String(error instanceof Error ? error.message : error)
     ),
-    new RegExp(`ThreeMmdLoader\\.${method}.*is not implemented`)
+    new RegExp(`ThreeMmdLoader\\.${method} source must not be empty`)
   );
 }
 
@@ -277,9 +276,20 @@ for (const loaderInstance of [loader, rootLoader, packageLoader, packageRootLoad
   assert.equal(model.mesh.name, "TestModel");
   assert.equal(model.mesh.skeleton.bones.length, 1);
   assert.equal(model.mesh.geometry.getAttribute("position").count, 14);
-  await expectLoaderMethodNotImplemented(loaderInstance, "loadAnimation");
-  await expectLoaderMethodNotImplemented(loaderInstance, "loadPose");
-  await expectLoaderMethodNotImplemented(loaderInstance, "loadPoseAnimation");
+  const loadedAnimation = await loaderInstance.loadAnimation(vmdBytes);
+  assert.equal(loadedAnimation.animation.metadata.modelName, "Smoke model");
+  assert.equal(loadedAnimation.animation.metadata.counts.bones, 0);
+  assert.equal(loadedAnimation.name, "Smoke model");
+  const loadedPose = await loaderInstance.loadPose(vpdBytes);
+  assert.equal(loadedPose.pose.metadata.boneCount, 1);
+  assert.equal(loadedPose.pose.bones.center.translation[1], 1);
+  const loadedPoseAnimation = await loaderInstance.loadPoseAnimation(vpdBytes, "smokePose");
+  assert.equal(loadedPoseAnimation.name, "smokePose");
+  assert.equal(loadedPoseAnimation.animation.metadata.counts.bones, 1);
+  assert.equal(loadedPoseAnimation.animation.boneTracks.center[0].translation[2], 2);
+  await expectLoaderMethodRejectsEmptySource(loaderInstance, "loadAnimation");
+  await expectLoaderMethodRejectsEmptySource(loaderInstance, "loadPose");
+  await expectLoaderMethodRejectsEmptySource(loaderInstance, "loadPoseAnimation");
 }
 
 function createMinimalPmdBytes() {

@@ -305,17 +305,17 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.geometry.index?.count ?? 0).toBe(0);
   });
 
-  it("exposes unimplemented async animation loading methods explicitly", async () => {
+  it("rejects empty animation and pose sources", async () => {
     const loader = new ThreeMmdLoader();
 
     await expect(loader.loadAnimation(new Uint8Array())).rejects.toThrow(
-      "ThreeMmdLoader.loadAnimation is not implemented in this migration slice"
+      "ThreeMmdLoader.loadAnimation source must not be empty"
     );
     await expect(loader.loadPose(new Uint8Array())).rejects.toThrow(
-      "ThreeMmdLoader.loadPose is not implemented in this migration slice"
+      "ThreeMmdLoader.loadPose source must not be empty"
     );
     await expect(loader.loadPoseAnimation(new Uint8Array(), "pose")).rejects.toThrow(
-      "ThreeMmdLoader.loadPoseAnimation is not implemented in this migration slice"
+      "ThreeMmdLoader.loadPoseAnimation source must not be empty"
     );
   });
 
