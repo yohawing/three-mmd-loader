@@ -1,10 +1,13 @@
 # @yohawing/three-mmd-loader
 
-A TypeScript-first ESM library for loading and playing back MMD models and
-motions on Three.js. It ships JavaScript runtime files with TypeScript
-declarations.
+A library for loading and playing back MMD models and motions on Three.js.
 
-Japanese: [docs/README.ja.md](./docs/README.ja.md) / Development: [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)
+Japanese: [docs/README.ja.md](./docs/README.ja.md)
+
+![three-mmd-loader viewer screenshot](./docs/assets/screenshots.png)
+
+Screenshot assets: model [Tda式初音ミク V4X by Tda](https://3d.nicovideo.jp/works/td30681),
+motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576784).
 
 ## Compatibility Matrix
 
@@ -159,3 +162,8 @@ const disabledPhysicsBackend = createDisabledMmdPhysicsBackend();
 const Ammo = await import("ammo.js").then((m) => m.default ?? m);
 const physicsBackend = createAmmoMmdPhysicsBackend(Ammo);
 ```
+
+## Development
+
+Development notes for tests, scripts, fixtures, and release checks are in
+[docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md).

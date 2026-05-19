@@ -1,10 +1,13 @@
 # @yohawing/three-mmd-loader
 
-Three.js 上で MMD モデルとモーションを読み込み・再生するための
-TypeScript-first な ESM ライブラリです。実行時は JavaScript として利用でき、
-TypeScript 型定義を同梱します。
+Three.js 上で MMD モデルとモーションを読み込み・再生するためのライブラリです。
 
-English: [README.md](../README.md) / Development: [DEVELOPMENT.md](./DEVELOPMENT.md)
+English: [README.md](../README.md)
+
+![three-mmd-loader viewer screenshot](./assets/screenshots.png)
+
+スクリーンショット使用アセット: モデル [Tda式初音ミク V4X by Tda](https://3d.nicovideo.jp/works/td30681)、
+モーション [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576784)。
 
 ## Compatibility Matrix
 
@@ -140,3 +143,8 @@ const disabledPhysicsBackend = createDisabledMmdPhysicsBackend();
 const Ammo = await import("ammo.js").then((m) => m.default ?? m);
 const physicsBackend = createAmmoMmdPhysicsBackend(Ammo);
 ```
+
+## Development
+
+テスト、script、fixture、release check などの開発メモは
+[DEVELOPMENT.md](./DEVELOPMENT.md) にあります。
