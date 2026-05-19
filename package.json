@@ -68,7 +68,8 @@
     "visual:report:real-models": "node scripts/visual-regression/compute-metrics.mjs --profile real-models",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "test": "vitest run",
-    "lint": "eslint ."
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "ammo.js": "^0.0.10"
