@@ -16,7 +16,11 @@ import { attachMmdSdefSkinning } from "./material/material-sdef.js";
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
-import { createMmdMaterialRenderOrderMeshes, createMmdOutlineMesh } from "./outline.js";
+import {
+  createMmdMaterialRenderOrderMeshes,
+  createMmdOutlineMesh,
+  createMmdOutlineMeshes
+} from "./outline.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
@@ -114,6 +118,7 @@ export interface ThreeMmdLoaderOptions {
 
 export interface ThreeMmdLoadModelOptions {
   readonly outlines?: boolean;
+  readonly outlineMode?: "postOutline" | "mmdCompat";
   readonly frustumCulled?: boolean;
   readonly renderOrderProxies?: boolean;
 }
@@ -198,6 +203,7 @@ export class ThreeMmdLoader {
       textureDiagnostics,
       materials: modelData.materials,
       outlines: options.outlines ?? true,
+      outlineMode: options.outlineMode ?? "postOutline",
       renderOrderProxies: options.renderOrderProxies ?? false
     });
   }
@@ -254,26 +260,38 @@ function createThreeMmdModel(options: {
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
   readonly outlines: boolean;
+  readonly outlineMode: "postOutline" | "mmdCompat";
   readonly renderOrderProxies: boolean;
 }): ThreeMmdModel {
-  const outlineMesh = options.outlines
-    ? createMmdOutlineMesh({
-        mesh: options.mesh,
-        materials: options.materials
-      })
-    : undefined;
-  const outlineMeshes = outlineMesh ? [outlineMesh] : [];
-  outlineMeshes.forEach((outline) => {
-    syncMmdModelShadowFlags(outline, options.materials);
-    outline.frustumCulled = options.mesh.frustumCulled;
-  });
-  const renderOrderMeshes = options.renderOrderProxies
-    ? createMmdMaterialRenderOrderMeshes({
+  const postOutlineMesh =
+    options.outlines && options.outlineMode === "postOutline"
+      ? createMmdOutlineMesh({
+          mesh: options.mesh,
+          materials: options.materials
+        })
+      : undefined;
+  const outlineMeshes = postOutlineMesh
+    ? [postOutlineMesh]
+    : options.outlines && options.outlineMode === "mmdCompat"
+    ? createMmdOutlineMeshes({
         mesh: options.mesh,
         materials: options.materials
       })
     : [];
-
+  outlineMeshes.forEach((outline) => {
+    syncMmdModelShadowFlags(outline, options.materials);
+    outline.frustumCulled = options.mesh.frustumCulled;
+  });
+  const renderOrderMeshes =
+    options.renderOrderProxies || (options.outlines && options.outlineMode === "mmdCompat")
+      ? createMmdMaterialRenderOrderMeshes({
+          mesh: options.mesh,
+          materials: options.materials
+        })
+      : [];
+  if (renderOrderMeshes.length > 0) {
+    options.mesh.geometry.setDrawRange(0, 0);
+  }
   return {
     mesh: options.mesh,
     outlineMeshes,

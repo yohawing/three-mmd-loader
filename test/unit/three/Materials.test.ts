@@ -426,8 +426,8 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
   });
 
-  it("treats PNG diffuse textures as alpha blending without scanning pixels", async () => {
-    const texture = new THREE.Texture();
+  it("uses geometry-aware alpha scans for PNG diffuse textures", async () => {
+    const texture = createReadableAlphaDataTexture();
     const textureLoader: ThreeMmdTextureLoader = {
       load(url, onLoad) {
         texture.name = url;
@@ -447,7 +447,7 @@ describe("Three.js MMD materials", () => {
       geometryAwareAlpha: true
     });
 
-    expect(geometryAlphaSpy).not.toHaveBeenCalled();
+    expect(geometryAlphaSpy).toHaveBeenCalledTimes(1);
     expect(textureAlphaSpy).not.toHaveBeenCalled();
     expect(materials[0]?.transparent).toBe(true);
     expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");

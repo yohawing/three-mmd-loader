@@ -13,6 +13,7 @@ import {
 import {
   configureMmdTexture,
   evaluateMmdTextureAlphaRgba,
+  evaluateMmdTextureTransparencySamples,
   rotateMmdToonTexture
 } from "../../../src/three/textures.js";
 
@@ -143,6 +144,16 @@ describe("MMD texture path utilities", () => {
     ]);
 
     expect(evaluateMmdTextureAlphaRgba(rgba)).toBe("opaque");
+  });
+
+  it("classifies soft transparency ramps as alpha blending", () => {
+    const transparency = new Uint8Array([
+      3, 4, 5, 6, 7, 8, 10, 12,
+      20, 32, 45, 60, 81, 101, 127, 151,
+      178, 199, 226, 240, 254, 255
+    ]);
+
+    expect(evaluateMmdTextureTransparencySamples(transparency)).toBe("alphaBlend");
   });
 
   it("rotates non-square CanvasImageSource toon textures without clipping dimensions", () => {

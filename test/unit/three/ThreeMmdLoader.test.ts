@@ -109,6 +109,25 @@ describe("ThreeMmdLoader", () => {
     const renderOrderMeshes = model.renderOrderMeshes;
     expect(model.renderOrderMeshes).toBe(renderOrderMeshes);
     expect(renderOrderMeshes).toEqual([]);
+    expect(model.mesh.geometry.drawRange.count).not.toBe(0);
+  });
+
+  it("can use MMD-compatible material outline proxies explicitly", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        edge: true
+      }),
+      { outlineMode: "mmdCompat" }
+    );
+
+    expect(model.outlineMeshes).toHaveLength(1);
+    expect(model.outlineMeshes[0]?.userData.mmdOutlineProxy.sourceMaterialIndex).toBe(0);
+    expect(model.renderOrderMeshes).toHaveLength(1);
+    expect(model.renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
+    expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
   });
 
   it("does not create render-order proxy meshes by default", async () => {
