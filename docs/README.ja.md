@@ -2,7 +2,7 @@
 
 Three.js で MMD モデルとモーションをロード・再生するための TypeScript ライブラリです。
 
-English: [README.md](../README.md)
+English: [README.md](../README.md) / Development: [DEVELOPMENT.md](./DEVELOPMENT.md)
 
 ## Compatibility Matrix
 

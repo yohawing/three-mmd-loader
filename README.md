@@ -2,7 +2,7 @@
 
 A TypeScript library for loading and playing back MMD models and motions on Three.js.
 
-Japanese: [docs/README.ja.md](./docs/README.ja.md)
+Japanese: [docs/README.ja.md](./docs/README.ja.md) / Development: [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)
 
 ## Compatibility Matrix
 

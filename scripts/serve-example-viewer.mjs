@@ -4,7 +4,9 @@ import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 
 const root = process.cwd();
-const dataRoot = resolve(process.env.MMD_VIEWER_DATA_ROOT ?? "F:\\Develop\\MMDDev\\data");
+const dataRoot = process.env.MMD_VIEWER_DATA_ROOT === undefined
+  ? undefined
+  : resolve(process.env.MMD_VIEWER_DATA_ROOT);
 const dataRoute = "/__mmd_data/";
 const port = Number.parseInt(process.env.PORT ?? "4173", 10);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -56,11 +58,18 @@ const server = createServer(async (request, response) => {
 
 server.listen(port, host, () => {
   console.log(`MMD viewer example: http://${host}:${port}/examples/viewer/`);
-  console.log(`MMD viewer data route: ${dataRoute} -> ${dataRoot}`);
+  if (dataRoot === undefined) {
+    console.log(`MMD viewer data route disabled. Set MMD_VIEWER_DATA_ROOT to serve local MMD assets.`);
+  } else {
+    console.log(`MMD viewer data route: ${dataRoute} -> ${dataRoot}`);
+  }
 });
 
 function resolveRequestPath(pathname) {
   if (pathname.startsWith(dataRoute)) {
+    if (dataRoot === undefined) {
+      return resolve(root, "__mmd_data_root_not_configured__");
+    }
     const relativePath = normalize(decodeURIComponent(pathname.slice(dataRoute.length))).replace(
       /^[/\\]+/,
       ""
@@ -71,7 +80,7 @@ function resolveRequestPath(pathname) {
 }
 
 function isAllowedPath(filePath) {
-  return isPathInside(filePath, root) || isPathInside(filePath, dataRoot);
+  return isPathInside(filePath, root) || (dataRoot !== undefined && isPathInside(filePath, dataRoot));
 }
 
 function isPathInside(filePath, parentPath) {

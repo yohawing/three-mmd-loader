@@ -14,8 +14,8 @@
     }
   ],
   "sources": {
-    "model": "F:\\Develop\\MMDDev\\data\\for_unit_test\\test_1bone_cube.pmx",
-    "motion": "F:\\Develop\\MMDDev\\data\\for_unit_test\\test_1bone_cube_motion.vmd",
+    "model": "test/fixtures/test_1bone_cube.pmx",
+    "motion": "test/fixtures/test_1bone_cube_motion.vmd",
     "cameraMotion": null,
     "pose": null
   },
