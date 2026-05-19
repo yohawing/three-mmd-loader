@@ -27,6 +27,7 @@ npm run lint
 npm test
 npm run build
 npm run smoke:dist
+npm run smoke:types
 npm run check:fixtures
 npm pack --dry-run --json
 ```
@@ -40,6 +41,7 @@ Command summary:
 | `npm test` | Runs the Vitest unit and integration suite. |
 | `npm run build` | Compiles TypeScript and copies bundled MMD toon BMP assets into `dist`. |
 | `npm run smoke:dist` | Verifies built package exports and key dist runtime paths. |
+| `npm run smoke:types` | Packs the library, installs it into a temporary TypeScript consumer, and verifies root/subpath imports with `tsc --noEmit`. |
 | `npm run check:fixtures` | Parses the fixture manifest and writes `tmp/fixture-parse-report.json`. |
 | `npm run check:fixtures:physics` | Runs fixture checks with physics-related validation enabled. |
 | `npm pack --dry-run --json` | Verifies npm tarball contents without writing a package. |
@@ -87,7 +89,17 @@ npm run generate:fixtures:minimal-pmx
 exports, Three.js helpers, physics exports, loader model loading, VMD loading,
 VPD loading, pose-to-animation conversion, and bundled toon texture paths.
 
-Run `npm run build` before `npm run smoke:dist` when source files changed.
+`npm run smoke:types` runs `scripts/type-consumer-smoke.mjs`. It creates a
+temporary package, installs the packed tarball, and checks typed imports from:
+
+- `@yohawing/three-mmd-loader`
+- `@yohawing/three-mmd-loader/parser`
+- `@yohawing/three-mmd-loader/runtime`
+- `@yohawing/three-mmd-loader/three`
+- `@yohawing/three-mmd-loader/physics`
+
+Run `npm run build` before `npm run smoke:dist` and `npm run smoke:types` when
+source files changed.
 
 `npm pack --dry-run --json` should include:
 
@@ -144,6 +156,7 @@ npm run lint
 npm test
 npm run build
 npm run smoke:dist
+npm run smoke:types
 ```
 
 The release workflow additionally validates that the package is publishable,

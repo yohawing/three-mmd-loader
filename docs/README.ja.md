@@ -1,6 +1,8 @@
 # @yohawing/three-mmd-loader
 
-Three.js で MMD モデルとモーションをロード・再生するための TypeScript ライブラリです。
+Three.js 上で MMD モデルとモーションを読み込み・再生するための
+TypeScript-first な ESM ライブラリです。実行時は JavaScript として利用でき、
+TypeScript 型定義を同梱します。
 
 English: [README.md](../README.md) / Development: [DEVELOPMENT.md](./DEVELOPMENT.md)
 

@@ -1,6 +1,8 @@
 # @yohawing/three-mmd-loader
 
-A TypeScript library for loading and playing back MMD models and motions on Three.js.
+A TypeScript-first ESM library for loading and playing back MMD models and
+motions on Three.js. It ships JavaScript runtime files with TypeScript
+declarations.
 
 Japanese: [docs/README.ja.md](./docs/README.ja.md) / Development: [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)
 

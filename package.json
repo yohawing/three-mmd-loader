@@ -1,6 +1,7 @@
 {
   "name": "@yohawing/three-mmd-loader",
   "version": "0.1.0",
+  "description": "TypeScript-first ESM library for Three.js MMD loading and playback.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -67,11 +68,13 @@
     "visual:report": "node scripts/visual-regression/compute-metrics.mjs",
     "visual:report:real-models": "node scripts/visual-regression/compute-metrics.mjs --profile real-models",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
+    "smoke:types": "node scripts/type-consumer-smoke.mjs",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
+    "@types/three": "^0.176.0",
     "ammo.js": "^0.0.10"
   },
   "peerDependencies": {
@@ -81,7 +84,6 @@
     "@eslint/js": "^9.26.0",
     "@playwright/test": "^1.60.0",
     "@types/node": "^22.15.3",
-    "@types/three": "^0.176.0",
     "eslint": "^9.26.0",
     "pngjs": "^7.0.0",
     "three": "^0.176.0",

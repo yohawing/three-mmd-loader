@@ -49,3 +49,6 @@ jobs:
 
       - name: Smoke dist exports
         run: npm run smoke:dist
+
+      - name: Smoke TypeScript consumer
+        run: npm run smoke:types

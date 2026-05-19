@@ -1,0 +1,89 @@
+#!/usr/bin/env node
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+
+const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const workDir = await mkdtemp(join(tmpdir(), "three-mmd-loader-types-"));
+
+try {
+  const packOutput = execFileSync("npm", ["pack", "--json", "--pack-destination", workDir], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"]
+  });
+  const [packedPackage] = JSON.parse(packOutput);
+  if (!packedPackage?.filename) {
+    throw new Error("npm pack did not report a package filename");
+  }
+
+  const packagePath = join(workDir, packedPackage.filename);
+  await writeFile(
+    join(workDir, "package.json"),
+    JSON.stringify(
+      {
+        private: true,
+        type: "module",
+        dependencies: {
+          "@yohawing/three-mmd-loader": `file:${packagePath.replaceAll("\\", "/")}`,
+          three: "^0.176.0"
+        },
+        devDependencies: {
+          typescript: "^5.8.3"
+        }
+      },
+      null,
+      2
+    )
+  );
+  await writeFile(
+    join(workDir, "tsconfig.json"),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          strict: true,
+          skipLibCheck: false,
+          noEmit: true
+        },
+        include: ["consumer.ts"]
+      },
+      null,
+      2
+    )
+  );
+  await writeFile(
+    join(workDir, "consumer.ts"),
+    `import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
+import { parsePmxMetadata } from "@yohawing/three-mmd-loader/parser";
+import { DefaultMmdRuntime } from "@yohawing/three-mmd-loader/runtime";
+import { createThreeSkeleton } from "@yohawing/three-mmd-loader/three";
+import { createDisabledMmdPhysicsBackend } from "@yohawing/three-mmd-loader/physics";
+
+const loader: ThreeMmdLoader = new ThreeMmdLoader();
+const runtime: DefaultMmdRuntime = new DefaultMmdRuntime();
+const physics = createDisabledMmdPhysicsBackend();
+
+void loader;
+void runtime;
+void physics;
+void parsePmxMetadata;
+void createThreeSkeleton;
+`
+  );
+
+  execFileSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], {
+    cwd: workDir,
+    stdio: "inherit"
+  });
+  execFileSync("npx", ["tsc", "--noEmit"], {
+    cwd: workDir,
+    stdio: "inherit"
+  });
+} finally {
+  await rm(workDir, { recursive: true, force: true });
+}
