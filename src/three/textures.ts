@@ -45,73 +45,84 @@ let defaultToonGradientMap: THREE.DataTexture | undefined;
 const blobTextureCacheKeys = new WeakMap<Blob, number>();
 let nextBlobTextureCacheKey = 1;
 
+interface AlphaStats {
+  maxAlpha: number;
+  middleAlphaTotal: number;
+  middleAlphaCount: number;
+  sampleCount: number;
+}
+
+function createAlphaStats(): AlphaStats {
+  return {
+    maxAlpha: 0,
+    middleAlphaTotal: 0,
+    middleAlphaCount: 0,
+    sampleCount: 0
+  };
+}
+
+function recordAlphaSample(stats: AlphaStats, alpha: number | undefined): void {
+  if (!Number.isFinite(alpha)) {
+    return;
+  }
+  const value = alpha as number;
+  stats.sampleCount += 1;
+  stats.maxAlpha = Math.max(stats.maxAlpha, value);
+  if (value > 0 && value < 255) {
+    stats.middleAlphaTotal += value;
+    stats.middleAlphaCount += 1;
+  }
+}
+
+function evaluateAlphaStats(
+  stats: AlphaStats,
+  options: MmdTextureAlphaEvaluationOptions
+): MmdMaterialTransparencyMode {
+  const alphaThreshold = options.alphaThreshold ?? 195;
+  const alphaBlendThreshold = options.alphaBlendThreshold ?? 100;
+  const averageMiddleAlpha =
+    stats.middleAlphaCount > 0 ? stats.middleAlphaTotal / stats.middleAlphaCount : 0;
+  if (stats.maxAlpha < alphaThreshold) {
+    return "opaque";
+  }
+  return averageMiddleAlpha + alphaBlendThreshold < stats.maxAlpha ? "alphaTest" : "alphaBlend";
+}
+
 export function evaluateMmdTextureAlphaSamples(
   alphaSamples: ArrayLike<number>,
   options: MmdTextureAlphaEvaluationOptions = {}
 ): MmdMaterialTransparencyMode {
-  const alphaThreshold = options.alphaThreshold ?? 195;
-  const alphaBlendThreshold = options.alphaBlendThreshold ?? 100;
-  let maxAlpha = 0;
-  let middleAlphaTotal = 0;
-  let middleAlphaCount = 0;
+  const stats = createAlphaStats();
   for (let index = 0; index < alphaSamples.length; index += 1) {
-    const alpha = alphaSamples[index];
-    if (!Number.isFinite(alpha)) {
-      continue;
-    }
-    maxAlpha = Math.max(maxAlpha, alpha);
-    if (alpha > 0 && alpha < 255) {
-      middleAlphaTotal += alpha;
-      middleAlphaCount += 1;
-    }
+    recordAlphaSample(stats, alphaSamples[index]);
   }
-  const averageMiddleAlpha = middleAlphaCount > 0 ? middleAlphaTotal / middleAlphaCount : 0;
-  if (maxAlpha < alphaThreshold) {
-    return "opaque";
-  }
-  return averageMiddleAlpha + alphaBlendThreshold < maxAlpha ? "alphaTest" : "alphaBlend";
+  return evaluateAlphaStats(stats, options);
 }
 
 export function evaluateMmdTextureTransparencySamples(
   alphaSamples: ArrayLike<number>,
   options: MmdTextureAlphaEvaluationOptions = {}
 ): MmdMaterialTransparencyMode {
-  const alphaThreshold = options.alphaThreshold ?? 195;
-  const alphaBlendThreshold = options.alphaBlendThreshold ?? 100;
-  let maxTransparency = 0;
-  let middleTransparencyTotal = 0;
-  let middleTransparencyCount = 0;
+  const stats = createAlphaStats();
   for (let index = 0; index < alphaSamples.length; index += 1) {
     const alpha = alphaSamples[index];
     if (!Number.isFinite(alpha)) {
       continue;
     }
-    const transparency = 255 - alpha;
-    maxTransparency = Math.max(maxTransparency, transparency);
-    if (transparency > 0 && transparency < 255) {
-      middleTransparencyTotal += transparency;
-      middleTransparencyCount += 1;
-    }
+    recordAlphaSample(stats, 255 - alpha);
   }
-  if (maxTransparency < alphaThreshold) {
-    return "opaque";
-  }
-  const averageMiddleTransparency =
-    middleTransparencyCount > 0 ? middleTransparencyTotal / middleTransparencyCount : 0;
-  return averageMiddleTransparency + alphaBlendThreshold < maxTransparency
-    ? "alphaTest"
-    : "alphaBlend";
+  return evaluateAlphaStats(stats, options);
 }
 
 export function evaluateMmdTextureAlphaRgba(
   rgbaPixels: ArrayLike<number>,
   options: MmdTextureAlphaEvaluationOptions = {}
 ): MmdMaterialTransparencyMode {
-  const alphaSamples: number[] = [];
+  const stats = createAlphaStats();
   for (let index = 3; index < rgbaPixels.length; index += 4) {
-    alphaSamples.push(rgbaPixels[index]);
+    recordAlphaSample(stats, rgbaPixels[index]);
   }
-  return evaluateMmdTextureAlphaSamples(alphaSamples, options);
+  return evaluateAlphaStats(stats, options);
 }
 
 export function evaluateMmdBmpTextureAlpha(
@@ -182,7 +193,7 @@ export function evaluateMmdBmpTextureAlpha(
   if (pixelOffset + pixelCount * 4 > data.length) {
     return undefined;
   }
-  const alphaSamples: number[] = [];
+  const stats = createAlphaStats();
   if (compression === 3 || compression === 6) {
     const alphaMask = readBmpBitfieldAlphaMask(view, dibHeaderSize, pixelOffset);
     if (alphaMask === undefined) {
@@ -195,14 +206,17 @@ export function evaluateMmdBmpTextureAlpha(
     const alphaMax = alphaMask >>> alphaShift;
     for (let index = 0; index < pixelCount; index += 1) {
       const value = view.getUint32(pixelOffset + index * 4, true);
-      alphaSamples.push(Math.round((((value & alphaMask) >>> alphaShift) / alphaMax) * 255));
+      recordAlphaSample(
+        stats,
+        Math.round((((value & alphaMask) >>> alphaShift) / alphaMax) * 255)
+      );
     }
   } else {
     for (let index = 0; index < pixelCount; index += 1) {
-      alphaSamples.push(data[pixelOffset + index * 4 + 3] ?? 255);
+      recordAlphaSample(stats, data[pixelOffset + index * 4 + 3] ?? 255);
     }
   }
-  return evaluateMmdTextureAlphaSamples(alphaSamples, options);
+  return evaluateAlphaStats(stats, options);
 }
 
 export function injectMmdBmp32BitAlphaHeader(
@@ -287,15 +301,15 @@ export function evaluateMmdTextureAlphaGeometry(
     return undefined;
   }
   const indexArray = geometry.index?.array;
-  const alphaSamples: number[] = [];
+  const stats = createAlphaStats();
   const resolution = 512;
   for (const group of groups) {
     for (let offset = group.start; offset < group.start + group.count; offset += 3) {
       const a = Number(indexArray?.[offset] ?? offset);
       const b = Number(indexArray?.[offset + 1] ?? offset + 1);
       const c = Number(indexArray?.[offset + 2] ?? offset + 2);
-      pushRasterizedUvTriangleTransparency(
-        alphaSamples,
+      recordRasterizedUvTriangleTransparency(
+        stats,
         rgba.data,
         rgba.width,
         rgba.height,
@@ -306,9 +320,7 @@ export function evaluateMmdTextureAlphaGeometry(
       );
     }
   }
-  return alphaSamples.length > 0
-    ? evaluateMmdTextureAlphaSamples(alphaSamples, options)
-    : undefined;
+  return stats.sampleCount > 0 ? evaluateAlphaStats(stats, options) : undefined;
 }
 
 export async function loadToonTexture(
@@ -767,8 +779,7 @@ async function loadResolvedTexture(
   if (cached) {
     return cached;
   }
-  let promise: Promise<THREE.Texture | undefined>;
-  promise = loadResolvedTextureUncached(
+  const promise: Promise<THREE.Texture | undefined> = loadResolvedTextureUncached(
     resolved,
     texturePath,
     textureInfo,
@@ -891,13 +902,13 @@ async function createTextureLoadRequest(
     }
     const buffer = await response.arrayBuffer();
     const injected = injectMmdBmp32BitAlphaHeader(buffer);
+    const alphaMode = evaluateMmdBmpTextureAlpha(buffer);
+    if (!injected) {
+      return { url, alphaMode };
+    }
     return {
-      url: URL.createObjectURL(
-        new Blob([injected ? (injected.buffer as ArrayBuffer) : buffer], {
-          type: "image/bmp"
-        })
-      ),
-      alphaMode: evaluateMmdBmpTextureAlpha(buffer),
+      url: URL.createObjectURL(new Blob([injected.buffer as ArrayBuffer], { type: "image/bmp" })),
+      alphaMode,
       revokeUrl: true
     };
   } catch {
@@ -955,15 +966,18 @@ function evaluateBmp16BitfieldAlpha(
   }
   const alphaShift = trailingZeroBits(alphaMask);
   const alphaMax = alphaMask >>> alphaShift;
-  const alphaSamples: number[] = [];
+  const stats = createAlphaStats();
   for (let y = 0; y < absoluteHeight; y += 1) {
     const rowOffset = pixelOffset + y * rowSize;
     for (let x = 0; x < width; x += 1) {
       const value = view.getUint16(rowOffset + x * 2, true);
-      alphaSamples.push(Math.round((((value & alphaMask) >>> alphaShift) / alphaMax) * 255));
+      recordAlphaSample(
+        stats,
+        Math.round((((value & alphaMask) >>> alphaShift) / alphaMax) * 255)
+      );
     }
   }
-  return evaluateMmdTextureAlphaSamples(alphaSamples, options);
+  return evaluateAlphaStats(stats, options);
 }
 
 const bmpV4HeaderExtension = new Uint8Array([
@@ -1082,8 +1096,8 @@ function sampleRgbaAlphaByUv(
   return rgba[(y * width + x) * 4 + 3] ?? 255;
 }
 
-function pushRasterizedUvTriangleTransparency(
-  target: number[],
+function recordRasterizedUvTriangleTransparency(
+  stats: AlphaStats,
   rgba: ArrayLike<number>,
   width: number,
   height: number,
@@ -1115,7 +1129,8 @@ function pushRasterizedUvTriangleTransparency(
       const wB = ((c[1] - a[1]) * (px - c[0]) + (a[0] - c[0]) * (py - c[1])) / denominator;
       const wC = 1 - wA - wB;
       if (wA >= 0 && wB >= 0 && wC >= 0) {
-        target.push(
+        recordAlphaSample(
+          stats,
           255 - sampleRgbaAlphaByUv(rgba, width, height, px / resolution, py / resolution)
         );
       }

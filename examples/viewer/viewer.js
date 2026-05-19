@@ -99,6 +99,7 @@ let isPlaying = false;
 let isSeeking = false;
 let audioObjectUrl;
 let isSyncingAudioState = false;
+let viewerDisposed = false;
 const debugMaterialState = new Map();
 
 const viewerApi = {
@@ -127,6 +128,8 @@ renderer.setAnimationLoop(render);
 
 function bindControls() {
   window.addEventListener("resize", resize);
+  window.addEventListener("pagehide", disposeViewerResources, { once: true });
+  window.addEventListener("beforeunload", disposeViewerResources, { once: true });
   document.addEventListener("click", (event) => {
     if (loadMenu && !loadMenu.contains(event.target)) {
       closeLoadMenu();
@@ -264,7 +267,7 @@ async function loadModelFromUrl(url) {
   try {
     setStatus(`Loading ${url}`, "loading");
     const bytes = await fetchBytes(url);
-    await loadModel(bytes, url.split("/").at(-1) ?? url, createUrlTextureLoader(url));
+    await loadModel(bytes, url.split("/").at(-1) ?? url, () => createUrlTextureLoader(url));
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
   }
@@ -341,11 +344,7 @@ function clearAudioSource() {
   setDisplayedText(audioNameText, "");
 }
 
-async function loadModel(
-  source,
-  label = source.name ?? "model",
-  modelLoader = createModelLoader()
-) {
+async function loadModel(source, label = source.name ?? "model", modelLoader) {
   try {
     setStatus(`Loading model: ${label}`, "loading");
     resetFolderModelState();
@@ -354,7 +353,10 @@ async function loadModel(
       preserveMotion: Boolean(preservedMotion),
       preserveModelSwitcher: true
     });
-    const resolvedModelLoader = await modelLoader;
+    const resolvedModelLoader =
+      typeof modelLoader === "function"
+        ? await modelLoader()
+        : await (modelLoader ?? createModelLoader());
     currentModel = await resolvedModelLoader.loadModel(source, { frustumCulled: false });
     syncMmdSpecularDirection(currentModel.mesh.material, keyLight);
     addModelToScene(currentModel);
@@ -588,6 +590,7 @@ function clearModel(options = {}) {
     disposeModelResources(currentModel);
   }
   currentModel = undefined;
+  disposeActivePhysicsBackend();
   if (!options.preserveMotion) {
     currentMotion = undefined;
   }
@@ -626,6 +629,7 @@ function disposeModelResources(model) {
   ];
   for (const mesh of meshes) {
     mesh.parent?.remove(mesh);
+    disposeSkeletonResources(mesh.skeleton, disposedTextures);
     if (mesh.geometry && !disposedGeometries.has(mesh.geometry)) {
       mesh.geometry.dispose();
       disposedGeometries.add(mesh.geometry);
@@ -637,14 +641,38 @@ function disposeModelResources(model) {
 }
 
 function disposeMaterialResources(material, disposedMaterials, disposedTextures) {
-  disposeTexture(material.map, disposedTextures);
-  disposeTexture(material.gradientMap, disposedTextures);
-  disposeTexture(material.alphaMap, disposedTextures);
-  disposeTexture(material.userData?.mmdSphereTexture, disposedTextures);
+  for (const texture of collectMaterialTextures(material)) {
+    disposeTexture(texture, disposedTextures);
+  }
   if (!disposedMaterials.has(material)) {
     material.dispose();
     disposedMaterials.add(material);
   }
+}
+
+function collectMaterialTextures(material) {
+  const textures = [];
+  for (const value of Object.values(material)) {
+    if (value instanceof THREE.Texture) {
+      textures.push(value);
+    }
+  }
+  for (const value of Object.values(material.userData ?? {})) {
+    if (value instanceof THREE.Texture) {
+      textures.push(value);
+    }
+  }
+  for (const value of Object.values(material.userData ?? {})) {
+    const uniforms = value?.uniforms;
+    if (uniforms && typeof uniforms === "object") {
+      for (const uniform of Object.values(uniforms)) {
+        if (uniform?.value instanceof THREE.Texture) {
+          textures.push(uniform.value);
+        }
+      }
+    }
+  }
+  return textures;
 }
 
 function disposeTexture(texture, disposedTextures) {
@@ -653,6 +681,14 @@ function disposeTexture(texture, disposedTextures) {
   }
   texture.dispose();
   disposedTextures.add(texture);
+}
+
+function disposeSkeletonResources(skeleton, disposedTextures) {
+  if (!skeleton) {
+    return;
+  }
+  disposeTexture(skeleton.boneTexture, disposedTextures);
+  skeleton.dispose?.();
 }
 
 function fitCameraToObject(object) {
@@ -1371,9 +1407,7 @@ async function createModelLoader(extraOptions = {}) {
 }
 
 async function createPhysicsBackend() {
-  if (activePhysicsBackend && !activePhysicsBackend.disposed) {
-    activePhysicsBackend.dispose?.();
-  }
+  disposeActivePhysicsBackend();
   if (!ammoNamespace) {
     setStatus("Loading physics engine...", "loading");
   }
@@ -1393,6 +1427,30 @@ async function createPhysicsBackend() {
     );
   }
   return activePhysicsBackend;
+}
+
+function disposeActivePhysicsBackend() {
+  if (activePhysicsBackend && !activePhysicsBackend.disposed) {
+    activePhysicsBackend.dispose?.();
+  }
+  activePhysicsBackend = undefined;
+}
+
+function disposeViewerResources() {
+  if (viewerDisposed) {
+    return;
+  }
+  viewerDisposed = true;
+  renderer.setAnimationLoop(null);
+  clearModel();
+  resetFolderModelState();
+  resetMotionSwitcherState();
+  pendingMotionSource = undefined;
+  pendingMotionLabel = undefined;
+  clearAudioSource();
+  controls.dispose();
+  renderer.dispose();
+  renderer.forceContextLoss?.();
 }
 
 async function initAmmoNamespace() {

@@ -7,9 +7,9 @@ describe("example viewer source", () => {
     const source = await readFile("examples/viewer/viewer.js", "utf8");
 
     expect(source).toContain("disposeModelResources(currentModel)");
-    expect(source).toContain("disposeTexture(material.map");
-    expect(source).toContain("disposeTexture(material.gradientMap");
-    expect(source).toContain("disposeTexture(material.userData?.mmdSphereTexture");
+    expect(source).toContain("function collectMaterialTextures(material)");
+    expect(source).toContain("value instanceof THREE.Texture");
+    expect(source).toContain("disposeSkeletonResources(mesh.skeleton");
     expect(source).toContain("...(model.outlineMeshes ?? [])");
     expect(source).toContain("...(model.renderOrderMeshes ?? [])");
   });
