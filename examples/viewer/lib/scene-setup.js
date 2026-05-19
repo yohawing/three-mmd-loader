@@ -1,12 +1,16 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/state.controls/OrbitControls.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 import { dom, updateChromeHeights } from "./dom.js";
 import { state } from "./state.js";
 
 export function setupScene() {
   if (!(dom.canvas instanceof HTMLCanvasElement)) throw new Error("Viewer canvas is missing");
-  state.renderer = new THREE.WebGLRenderer({ antialias: true, canvas: dom.canvas });
+  state.renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    canvas: dom.canvas,
+    logarithmicDepthBuffer: true
+  });
   state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   state.renderer.setClearColor(0xffffff, 1);
   state.scene = new THREE.Scene();

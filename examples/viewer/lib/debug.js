@@ -1,5 +1,6 @@
 import * as THREE from "three";
 
+import { dom } from "./dom.js";
 import { normalizeMaterials } from "./dispose.js";
 import { evaluateRuntime } from "./playback.js";
 import { state } from "./state.js";
@@ -97,8 +98,8 @@ function rememberDebugMaterial(mesh) {
 }
 
 export function restoreDebugMaterials() {
-  for (const [mesh, state] of state.debugMaterialState) {
-    mesh.material = state.material;
+  for (const [mesh, debugState] of state.debugMaterialState) {
+    mesh.material = debugState.material;
   }
   state.debugMaterialState.clear();
   return "materials restored";

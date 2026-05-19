@@ -10,7 +10,11 @@ import {
   resolveMappedTexture,
   resolveMmdToonTextureReference
 } from "../../../src/three/index.js";
-import { configureMmdTexture, rotateMmdToonTexture } from "../../../src/three/textures.js";
+import {
+  configureMmdTexture,
+  evaluateMmdTextureAlphaRgba,
+  rotateMmdToonTexture
+} from "../../../src/three/textures.js";
 
 describe("MMD texture path utilities", () => {
   it("normalizes Windows separators and leading current-directory segments", () => {
@@ -128,6 +132,17 @@ describe("MMD texture path utilities", () => {
     expect(texture.generateMipmaps).toBe(false);
     expect(texture.userData.mmdTextureInfo).toEqual({ invertY: true, noMipmap: true });
     expect(texture.version).toBeGreaterThan(0);
+  });
+
+  it("keeps fully opaque RGBA texture alpha samples opaque", () => {
+    const rgba = new Uint8Array([
+      255, 255, 255, 255,
+      0, 0, 0, 255,
+      128, 128, 128, 255,
+      255, 0, 0, 255
+    ]);
+
+    expect(evaluateMmdTextureAlphaRgba(rgba)).toBe("opaque");
   });
 
   it("rotates non-square CanvasImageSource toon textures without clipping dimensions", () => {

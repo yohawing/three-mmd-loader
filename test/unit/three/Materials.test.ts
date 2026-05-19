@@ -421,7 +421,7 @@ describe("Three.js MMD materials", () => {
 
     expect(textureAlphaSpy).toHaveBeenCalledTimes(1);
     expect(materials[0]?.transparent).toBe(true);
-    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
   });
 
   it("preserves alpha blending when PMX diffuse alpha requests transparency", async () => {

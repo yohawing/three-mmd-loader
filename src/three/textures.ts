@@ -46,6 +46,7 @@ const blobTextureCacheKeys = new WeakMap<Blob, number>();
 let nextBlobTextureCacheKey = 1;
 
 interface AlphaStats {
+  minAlpha: number;
   maxAlpha: number;
   middleAlphaTotal: number;
   middleAlphaCount: number;
@@ -54,6 +55,7 @@ interface AlphaStats {
 
 function createAlphaStats(): AlphaStats {
   return {
+    minAlpha: 255,
     maxAlpha: 0,
     middleAlphaTotal: 0,
     middleAlphaCount: 0,
@@ -67,6 +69,7 @@ function recordAlphaSample(stats: AlphaStats, alpha: number | undefined): void {
   }
   const value = alpha as number;
   stats.sampleCount += 1;
+  stats.minAlpha = Math.min(stats.minAlpha, value);
   stats.maxAlpha = Math.max(stats.maxAlpha, value);
   if (value > 0 && value < 255) {
     stats.middleAlphaTotal += value;
@@ -82,7 +85,7 @@ function evaluateAlphaStats(
   const alphaBlendThreshold = options.alphaBlendThreshold ?? 100;
   const averageMiddleAlpha =
     stats.middleAlphaCount > 0 ? stats.middleAlphaTotal / stats.middleAlphaCount : 0;
-  if (stats.maxAlpha < alphaThreshold) {
+  if (stats.sampleCount === 0 || stats.minAlpha >= alphaThreshold) {
     return "opaque";
   }
   return averageMiddleAlpha + alphaBlendThreshold < stats.maxAlpha ? "alphaTest" : "alphaBlend";

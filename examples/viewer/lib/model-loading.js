@@ -386,6 +386,7 @@ export async function createModelLoader(extraOptions = {}) {
   const physicsBackend = await createPhysicsBackend();
   return new ThreeMmdLoader({
     ...extraOptions,
+    geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
     runtime: {
       ...runtimeOptions,
       frameRate: 30,
