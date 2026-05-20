@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/yohawing/three-mmd-loader.git"
+    "url": "git+https://github.com/yohawing/three-mmd-loader.git"
   },
   "homepage": "https://github.com/yohawing/three-mmd-loader#readme",
   "bugs": {
