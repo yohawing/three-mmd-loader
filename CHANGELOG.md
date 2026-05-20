@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2026-05-20
+
+### Changed
+
+- Relax the Three.js peer dependency range to allow newer 0.x releases.
+- Verify the development toolchain against Three.js 0.184.x.
+
 ## [0.1.1] - 2026-05-20
 
 ### Changed
