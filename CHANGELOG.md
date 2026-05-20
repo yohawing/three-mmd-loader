@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-05-20
+
+### Changed
+
+- Harden the GitHub Actions release workflow for npm trusted publishing.
+- Add fixture parsing to the release gate before packaging.
+- Use the HTTPS GitHub repository URL in package metadata.
+
 ## [0.1.0] - 2026-05-19
 
 Initial public release candidate for `@yohawing/three-mmd-loader`.
