@@ -34,6 +34,7 @@ describe("MMD folder file utilities", () => {
     expect(isMmdTextureFile(file("toon.bmp"))).toBe(true);
     expect(isMmdTextureFile(file("diffuse.JPG"))).toBe(true);
     expect(isMmdTextureFile(file("normal.tga"))).toBe(true);
+    expect(isMmdTextureFile(file("skin.dds"))).toBe(true);
     expect(isMmdTextureFile(file("notes.txt"))).toBe(false);
   });
 

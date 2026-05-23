@@ -476,8 +476,19 @@ export async function loadMaterialTextureWithDiagnostics(
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
   textureLoader?: ThreeMmdTextureLoader,
-  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  ddsLoader?: ThreeMmdTextureLoader
 ): Promise<THREE.Texture | undefined> {
+  if (texturePath && isMmdDdsTexturePath(texturePath) && !ddsLoader) {
+    textureDiagnostics.push({
+      level: "warning",
+      code: "TEXTURE_FORMAT_UNSUPPORTED",
+      materialIndex,
+      textureKind,
+      path: texturePath
+    });
+    return undefined;
+  }
   const texture = await loadMaterialTexture(
     texturePath,
     textureInfo,
@@ -485,7 +496,8 @@ export async function loadMaterialTextureWithDiagnostics(
     textureResolver,
     textureLoader,
     textureCache,
-    textureKind
+    textureKind,
+    ddsLoader
   );
   if (!texture && texturePath) {
     textureDiagnostics.push({
@@ -613,6 +625,10 @@ export function isMmdBmpLikeTexturePath(texturePath: string): boolean {
 
 export function isMmdTgaLikeTexturePath(texturePath: string): boolean {
   return /\.tga$/i.test(texturePath);
+}
+
+export function isMmdDdsTexturePath(texturePath: string): boolean {
+  return /\.dds$/i.test(texturePath);
 }
 
 export function createTextureResolver(
@@ -743,7 +759,8 @@ async function loadMaterialTexture(
   textureResolver: TextureResolver | undefined,
   textureLoader?: ThreeMmdTextureLoader,
   textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
-  cacheNamespace = "material"
+  cacheNamespace = "material",
+  ddsLoader?: ThreeMmdTextureLoader
 ): Promise<THREE.Texture | undefined> {
   if (!texturePath) {
     return undefined;
@@ -760,11 +777,12 @@ async function loadMaterialTexture(
       return tgaTexture;
     }
   }
+  const effectiveTextureLoader = isMmdDdsTexturePath(texturePath) ? ddsLoader : textureLoader;
   return loadResolvedTexture(
     resolved,
     texturePath,
     textureInfo,
-    textureLoader,
+    effectiveTextureLoader,
     textureCache,
     cacheNamespace,
     modelUrl

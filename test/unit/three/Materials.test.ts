@@ -595,4 +595,47 @@ describe("Three.js MMD materials", () => {
       }
     ]);
   });
+
+  it("reports unsupported DDS diffuse textures when no DDS loader is supplied", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "skin.dds": "resolved/skin.dds" },
+      textureLoader: createTextureLoaderMock()
+    });
+
+    expect(materials[0]?.map).toBeNull();
+    expect(diagnostics).toContainEqual({
+      level: "warning",
+      code: "TEXTURE_FORMAT_UNSUPPORTED",
+      materialIndex: 0,
+      textureKind: "diffuse",
+      path: "skin.dds"
+    });
+  });
+
+  it("loads DDS diffuse textures through the supplied DDS loader", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const ddsLoader = createTextureLoaderMock();
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "skin.dds": "resolved/skin.dds" },
+      textureLoader: createTextureLoaderMock(),
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(ddsLoadSpy).toHaveBeenCalledWith(
+      "resolved/skin.dds",
+      expect.any(Function),
+      undefined,
+      expect.any(Function)
+    );
+    expect(materials[0]?.map?.name).toBe("resolved/skin.dds");
+  });
 });

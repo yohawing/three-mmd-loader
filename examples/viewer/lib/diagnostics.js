@@ -15,8 +15,13 @@ export function reportTextureDiagnostics(model) {
   }));
 
   const readableRows = summaryRows.map(
-    (diagnostic) =>
-      `${diagnostic.level} ${diagnostic.code} material=${diagnostic.materialIndex} kind=${diagnostic.textureKind} path=${diagnostic.path}`
+    (diagnostic) => {
+      const hint =
+        diagnostic.code === "TEXTURE_FORMAT_UNSUPPORTED"
+          ? " — DDS textures are not natively supported; supply a ddsLoader option to enable DDS"
+          : "";
+      return `${diagnostic.level} ${diagnostic.code} material=${diagnostic.materialIndex} kind=${diagnostic.textureKind} path=${diagnostic.path}${hint}`;
+    }
   );
 
   globalThis.console.warn("[mmd-viewer] texture diagnostics:", summaryRows, readableRows);

@@ -6,6 +6,7 @@ import {
   createTextureResolver,
   defaultSharedToonTexturePath,
   getDefaultToonGradientMap,
+  isMmdDdsTexturePath,
   normalizeMmdTexturePath,
   resolveMappedTexture,
   resolveMmdToonTextureReference
@@ -22,6 +23,12 @@ describe("MMD texture path utilities", () => {
     expect(normalizeMmdTexturePath("textures\\body.bmp")).toBe("textures/body.bmp");
     expect(normalizeMmdTexturePath("./textures\\face.bmp")).toBe("textures/face.bmp");
     expect(normalizeMmdTexturePath(".//textures\\toon\\toon01.bmp")).toBe("textures/toon/toon01.bmp");
+  });
+
+  it("detects DDS texture paths case-insensitively", () => {
+    expect(isMmdDdsTexturePath("skin.DDS")).toBe(true);
+    expect(isMmdDdsTexturePath("skin.dds")).toBe(true);
+    expect(isMmdDdsTexturePath("skin.png")).toBe(false);
   });
 
   it("resolves texture maps with normalized case-insensitive paths", () => {

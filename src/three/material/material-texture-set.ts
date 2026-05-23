@@ -26,7 +26,8 @@ export async function loadMmdDefaultMaterialTextureSet(
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
   textureLoader?: ThreeMmdTextureLoader,
-  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  ddsLoader?: ThreeMmdTextureLoader
 ): Promise<MmdDefaultMaterialTextureSet> {
   const shouldLoadSphereTexture = material.sphereMode !== "none";
   const [texture, gradientMap, sphereTexture] = await Promise.all([
@@ -39,7 +40,8 @@ export async function loadMmdDefaultMaterialTextureSet(
       textureResolver,
       textureDiagnostics,
       textureLoader,
-      textureCache
+      textureCache,
+      ddsLoader
     ),
     textureAlpha.loadToonTexture(
       material,
@@ -60,7 +62,8 @@ export async function loadMmdDefaultMaterialTextureSet(
           textureResolver,
           textureDiagnostics,
           textureLoader,
-          textureCache
+          textureCache,
+          ddsLoader
         )
       : undefined
   ]);

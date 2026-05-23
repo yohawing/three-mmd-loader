@@ -74,6 +74,7 @@ export {
   createTextureResolver,
   defaultSharedToonTexturePath,
   getDefaultToonGradientMap,
+  isMmdDdsTexturePath,
   normalizeMmdTexturePath,
   resolveMappedTexture,
   resolveMmdToonTextureReference
@@ -112,6 +113,7 @@ export interface ThreeMmdLoaderOptions {
   readonly textureResolver?: TextureResolver;
   readonly textureMap?: TextureMap;
   readonly textureLoader?: ThreeMmdTextureLoader;
+  readonly ddsLoader?: ThreeMmdTextureLoader;
   readonly geometryAwareAlpha?: boolean;
   readonly runtime?: DefaultMmdRuntimeOptions;
 }
@@ -179,6 +181,7 @@ export class ThreeMmdLoader {
       textureResolver: this.options.textureResolver,
       textureMap: this.options.textureMap,
       textureLoader: this.options.textureLoader,
+      ddsLoader: this.options.ddsLoader,
       modelUrl: typeof source === "string" ? source : undefined,
       geometry: mesh.geometry,
       morphs: modelData.morphs,
@@ -554,6 +557,15 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
     }
     if (typeof options.textureLoader.load !== "function") {
       throw new TypeError("ThreeMmdLoader textureLoader.load must be a function");
+    }
+  }
+
+  if (options.ddsLoader !== undefined) {
+    if (typeof options.ddsLoader !== "object" || options.ddsLoader === null) {
+      throw new TypeError("ThreeMmdLoader ddsLoader must be an object");
+    }
+    if (typeof options.ddsLoader.load !== "function") {
+      throw new TypeError("ThreeMmdLoader ddsLoader.load must be a function");
     }
   }
 
