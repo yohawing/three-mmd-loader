@@ -142,6 +142,40 @@ describe("createThreeBufferGeometry", () => {
     );
   });
 
+  it("uses precomputed dense morph offsets when provided", () => {
+    const morphs: ThreeMmdGeometryMorph[] = [
+      {
+        vertexOffsets: [{ vertexIndex: 2, position: [9, 9, 9] }],
+        densePositionOffsets: new Float32Array([0, 0, 0, 0, 0, 0, 0.25, -0.5, -1.5, 0, 0, 0]),
+        uvOffsets: [{ vertexIndex: 1, uv: [9, 9, 0, 0] }],
+        denseUvOffsets: new Float32Array([0, 0, 0.125, -0.25, 0, 0, 0, 0]),
+        additionalUvOffsets: [{ vertexIndex: 0, uvIndex: 0, uv: [9, 9, 9, 9] }],
+        denseAdditionalUvOffsets: [
+          new Float32Array([0.1, 0.2, 0.3, 0.4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        ]
+      }
+    ];
+    const geometry = createThreeBufferGeometry(
+      {
+        ...createQuadBuffers(),
+        additionalUvs: [new Float32Array(16)]
+      },
+      [],
+      morphs
+    );
+
+    expect(Array.from(geometry.morphAttributes.position?.[0]?.array ?? [])).toEqual([
+      0, 0, 0, 0, 0, 0, 0.25, -0.5, -1.5, 0, 0, 0
+    ]);
+    expect(Array.from(geometry.morphAttributes.uv?.[0]?.array ?? [])).toEqual([
+      0, 0, 0.125, -0.25, 0, 0, 0, 0
+    ]);
+    expectFloatArrayClose(
+      Array.from(geometry.morphAttributes.uv1?.[0]?.array ?? []),
+      [0.1, 0.2, 0.3, 0.4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    );
+  });
+
   it("rejects malformed geometry buffers before creating Three.js attributes", () => {
     expect(() =>
       createThreeBufferGeometry({

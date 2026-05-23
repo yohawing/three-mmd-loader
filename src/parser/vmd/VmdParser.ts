@@ -45,12 +45,19 @@ export function parseVmd(input: Uint8Array | ArrayBuffer): MmdAnimation {
   for (let index = 0; index < boneCount; index += 1) {
     const name = readFixedText(reader, 15, shiftJisDecoder);
     const frame = reader.u32();
+    const translation = readVec3(reader);
+    const rotation = readVec4(reader);
+    const interpolationBytes = reader.bytes(64);
+    const physicsToggle = readBonePhysicsToggle(interpolationBytes);
     const boneFrame: VmdBoneFrame = {
       frame,
-      translation: readVec3(reader),
-      rotation: readVec4(reader),
-      interpolation: readBoneInterpolation(reader.bytes(64))
+      translation,
+      rotation,
+      interpolation: readBoneInterpolation(interpolationBytes)
     };
+    if (physicsToggle !== undefined) {
+      boneFrame.physicsToggle = physicsToggle;
+    }
     pushTrackFrame(boneTracks, name, boneFrame);
     maxFrame = Math.max(maxFrame, frame);
   }
@@ -248,6 +255,17 @@ function readBoneInterpolation(bytes: Uint8Array): VmdBoneInterpolation {
     translationZ: normalizeInterpolationCurve([bytes[2] ?? 0, bytes[6] ?? 0, bytes[10] ?? 0, bytes[14] ?? 0]),
     rotation: normalizeInterpolationCurve([bytes[3] ?? 0, bytes[7] ?? 0, bytes[11] ?? 0, bytes[15] ?? 0])
   };
+}
+
+function readBonePhysicsToggle(bytes: Uint8Array): number | undefined {
+  const physicsInfo = ((bytes[2] ?? 0) << 8) | (bytes[3] ?? 0);
+  if (physicsInfo === 0x0000) {
+    return 1;
+  }
+  if (physicsInfo === 0x630f) {
+    return 0;
+  }
+  return undefined;
 }
 
 function readCameraInterpolation(bytes: Uint8Array): VmdCameraInterpolation {

@@ -52,7 +52,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-wasm.mjs",
+    "build:wasm": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-wasm.ps1",
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",
     "example:viewer": "npm run dev",
     "check:fixtures": "node scripts/check-fixtures.mjs",

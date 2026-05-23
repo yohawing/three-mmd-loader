@@ -32,7 +32,7 @@ const maxPmdSectionCount = 10_000_000;
 const pmdVertexByteLength = 38;
 const pmdMaterialByteLength = 70;
 
-export function parsePmd(bytes: Uint8Array): ParsedPmd {
+export function parsePmd(bytes: Uint8Array, options: { skipGeometry?: boolean } = {}): ParsedPmd {
   const reader = new BinaryReader(bytes);
   const signature = asciiDecoder.decode(reader.bytes(3));
   if (signature !== "Pmd") {
@@ -48,35 +48,48 @@ export function parsePmd(bytes: Uint8Array): ParsedPmd {
   const vertexCount = readCount(reader, "vertex", {
     remainingBytesPerEntry: pmdVertexByteLength
   });
-  const positions = new Float32Array(vertexCount * 3);
-  const normals = new Float32Array(vertexCount * 3);
-  const uvs = new Float32Array(vertexCount * 2);
-  const skinIndices = new Uint16Array(vertexCount * 4);
-  const skinWeights = new Float32Array(vertexCount * 4);
-  for (let i = 0; i < vertexCount; i++) {
-    const p = i * 3;
-    positions[p] = reader.f32();
-    positions[p + 1] = reader.f32();
-    positions[p + 2] = reader.f32();
-    normals[p] = reader.f32();
-    normals[p + 1] = reader.f32();
-    normals[p + 2] = reader.f32();
-    const uv = i * 2;
-    uvs[uv] = reader.f32();
-    uvs[uv + 1] = reader.f32();
-    const skin = i * 4;
-    skinIndices[skin] = reader.u16();
-    skinIndices[skin + 1] = reader.u16();
-    const weight = reader.u8() / 100;
-    skinWeights[skin] = weight;
-    skinWeights[skin + 1] = 1 - weight;
-    reader.skip(1);
+  const skipGeometry = options.skipGeometry === true;
+  const positions = skipGeometry ? new Float32Array(0) : new Float32Array(vertexCount * 3);
+  const normals = skipGeometry ? new Float32Array(0) : new Float32Array(vertexCount * 3);
+  const uvs = skipGeometry ? new Float32Array(0) : new Float32Array(vertexCount * 2);
+  const skinIndices = skipGeometry ? new Uint16Array(0) : new Uint16Array(vertexCount * 4);
+  const skinWeights = skipGeometry ? new Float32Array(0) : new Float32Array(vertexCount * 4);
+  if (skipGeometry) {
+    reader.skip(vertexCount * pmdVertexByteLength);
+  } else {
+    for (let i = 0; i < vertexCount; i++) {
+      const p = i * 3;
+      positions[p] = reader.f32();
+      positions[p + 1] = reader.f32();
+      positions[p + 2] = reader.f32();
+      normals[p] = reader.f32();
+      normals[p + 1] = reader.f32();
+      normals[p + 2] = reader.f32();
+      const uv = i * 2;
+      uvs[uv] = reader.f32();
+      uvs[uv + 1] = reader.f32();
+      const skin = i * 4;
+      skinIndices[skin] = reader.u16();
+      skinIndices[skin + 1] = reader.u16();
+      const weight = reader.u8() / 100;
+      skinWeights[skin] = weight;
+      skinWeights[skin + 1] = 1 - weight;
+      reader.skip(1);
+    }
   }
 
   const indexCount = readCount(reader, "vertex index", { remainingBytesPerEntry: 2 });
-  const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
-  for (let i = 0; i < indexCount; i++) {
-    indices[i] = reader.u16();
+  const indices = skipGeometry
+    ? new Uint16Array(0)
+    : vertexCount > 65535
+      ? new Uint32Array(indexCount)
+      : new Uint16Array(indexCount);
+  if (skipGeometry) {
+    reader.skip(indexCount * 2);
+  } else {
+    for (let i = 0; i < indexCount; i++) {
+      indices[i] = reader.u16();
+    }
   }
 
   const materialCount = readCount(reader, "material", {
@@ -298,7 +311,9 @@ export function parsePmd(bytes: Uint8Array): ParsedPmd {
       )}.`
     });
   }
-  sanitizeNonFiniteModelNormals(positions, normals, indices, diagnostics);
+  if (!skipGeometry) {
+    sanitizeNonFiniteModelNormals(positions, normals, indices, diagnostics);
+  }
 
   return {
     metadata: {

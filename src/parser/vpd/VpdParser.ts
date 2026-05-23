@@ -1,5 +1,5 @@
 import { toUint8Array } from "../binary/index.js";
-import type { MmdPose, VpdBonePose, VpdMetadata } from "../model/modelTypes.js";
+import type { MmdAnimation, MmdPose, VpdBonePose, VpdMetadata } from "../model/modelTypes.js";
 
 type MutableVpdMetadata = VpdMetadata & {
   readonly format: "vpd";
@@ -14,7 +14,6 @@ const shiftJisDecoder = new TextDecoder("shift-jis");
 export function parseVpd(input: Uint8Array | string): MmdPose {
   const bytes = typeof input === "string" ? new TextEncoder().encode(input) : toUint8Array(input);
   const text = typeof input === "string" ? input : decodeVpdText(bytes);
-  const encoded = typeof input === "string" ? bytes : toUint8Array(input);
   const parsedPose = readVpdPoseText(text);
   const bones: Record<string, VpdBonePose> = {};
   for (const bonePose of parsedPose.bones) {
@@ -24,32 +23,74 @@ export function parseVpd(input: Uint8Array | string): MmdPose {
       rotation: bonePose.rotation
     };
   }
+  const morphs = readMorphPoses(text, parsedPose.poseTextOffset);
 
   const metadata: MutableVpdMetadata = {
     format: "vpd",
     signature,
     encoding: detectEncoding(bytes),
     modelFile: parsedPose.modelFile,
-    boneCount: parsedPose.bones.length,
-    morphCount: 0
+    boneCount: Object.keys(bones).length,
+    morphCount: Object.keys(morphs).length
   };
 
   return {
     kind: "vpd",
-    bytes: encoded,
+    bytes,
     metadata,
     bones,
-    morphs: {}
+    morphs
+  };
+}
+
+export function vpdPoseToAnimation(pose: MmdPose, name = pose.metadata.modelFile): MmdAnimation {
+  const boneTracks: MmdAnimation["boneTracks"] = {};
+  const morphTracks: MmdAnimation["morphTracks"] = {};
+  for (const bone of Object.values(pose.bones)) {
+    boneTracks[bone.name] = [
+      {
+        frame: 0,
+        translation: bone.translation,
+        rotation: bone.rotation
+      }
+    ];
+  }
+  for (const [morphName, weight] of Object.entries(pose.morphs)) {
+    morphTracks[morphName] = [{ frame: 0, weight }];
+  }
+  return {
+    kind: "vmd",
+    bytes: pose.bytes.slice(),
+    metadata: {
+      modelName: name,
+      counts: {
+        bones: Object.keys(boneTracks).length,
+        morphs: Object.keys(morphTracks).length,
+        cameras: 0,
+        lights: 0,
+        selfShadows: 0,
+        properties: 0
+      },
+      maxFrame: 0
+    },
+    boneTracks,
+    morphTracks,
+    cameraFrames: [],
+    lightFrames: [],
+    selfShadowFrames: [],
+    propertyFrames: []
   };
 }
 
 function readVpdPoseText(text: string): {
   readonly modelFile: string;
+  readonly poseTextOffset: number;
   readonly bones: VpdBonePose[];
 } {
   const header = readVpdHeader(text);
   return {
     modelFile: header.modelFile,
+    poseTextOffset: header.poseTextOffset,
     bones: readBonePoses(text, header.poseTextOffset)
   };
 }
@@ -59,7 +100,7 @@ function readVpdHeader(text: string): {
   readonly poseTextOffset: number;
 } {
   if (!text.startsWith(signature)) {
-    throw new Error("Invalid VPD signature");
+    throw new Error("Invalid VPD header");
   }
   const modelStatement = readStatement(text, signature.length, "model file");
   const countStatement = readStatement(text, modelStatement.nextIndex, "bone count");
@@ -131,27 +172,35 @@ function readBonePoses(text: string, startIndex: number): VpdBonePose[] {
   blockPattern.lastIndex = startIndex;
 
   const bones: VpdBonePose[] = [];
-  const blockRanges: Array<{ readonly start: number; readonly end: number }> = [];
   for (const match of text.matchAll(blockPattern)) {
-    const offset = match.index ?? 0;
-    blockRanges.push({ start: offset, end: offset + match[0].length });
+    const translation = tryParseTuple(match[2] ?? "", 3);
+    const rotation = tryParseTuple(match[3] ?? "", 4);
+    if (!translation || !rotation) {
+      continue;
+    }
     const name = (match[1] ?? "").trim();
     bones.push({
       name,
-      translation: parseTuple(match[2] ?? "", 3),
-      rotation: parseTuple(match[3] ?? "", 4)
+      translation,
+      rotation
     });
   }
+  return bones;
+}
 
-  const blockStartPattern = /Bone\d+\s*\{/g;
-  blockStartPattern.lastIndex = startIndex;
-  for (const match of text.matchAll(blockStartPattern)) {
-    const offset = match.index ?? 0;
-    if (!blockRanges.some((range) => offset >= range.start && offset < range.end)) {
-      throw new Error("Invalid VPD bone block");
+function readMorphPoses(text: string, startIndex: number): Record<string, number> {
+  const morphs: Record<string, number> = {};
+  const blockPattern =
+    /Morph\d+\s*\{\s*([^\r\n]+)\s*\r?\n\s*(?:(?:\/\/)[^\r\n]*\r?\n\s*)?([^;]+);/g;
+  blockPattern.lastIndex = startIndex;
+  for (const match of text.matchAll(blockPattern)) {
+    const name = (match[1] ?? "").trim();
+    const weight = Number((match[2] ?? "").trim());
+    if (Number.isFinite(weight)) {
+      morphs[name] = weight;
     }
   }
-  return bones;
+  return morphs;
 }
 
 function parseTuple(value: string, length: 3): [number, number, number];
@@ -169,6 +218,19 @@ function parseTuple(
     throw new Error(`Invalid VPD numeric tuple: ${value.trim()}`);
   }
   return values as [number, number, number] | [number, number, number, number];
+}
+
+function tryParseTuple(value: string, length: 3): [number, number, number] | undefined;
+function tryParseTuple(value: string, length: 4): [number, number, number, number] | undefined;
+function tryParseTuple(
+  value: string,
+  length: 3 | 4
+): [number, number, number] | [number, number, number, number] | undefined {
+  try {
+    return length === 3 ? parseTuple(value, 3) : parseTuple(value, 4);
+  } catch {
+    return undefined;
+  }
 }
 
 function decodeVpdText(bytes: Uint8Array): string {

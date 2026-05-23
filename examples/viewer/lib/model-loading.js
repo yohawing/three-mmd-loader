@@ -15,15 +15,23 @@ import { dom, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStage
 import { disposeModelResources } from "./dispose.js";
 import { loadMotion, loadPose, findVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
+import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
 import { currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
 import { fitCameraToObject } from "./scene-setup.js";
 
 export async function loadModelFromUrl(url) {
+  const profile = createViewerLoadProfile(`url:${url}`);
+  profile?.mark("start");
   try {
     setStatus(`Loading ${url}`, "loading");
     const bytes = await fetchBytes(url);
-    await loadModel(bytes, url.split("/").at(-1) ?? url, () => createUrlTextureLoader(url));
+    profile?.mark("bytes");
+    await loadModel(bytes, url.split("/").at(-1) ?? url, () => createUrlTextureLoader(url), profile);
   } catch (error) {
+    profile?.mark("error");
+    profile?.measure("source-bytes", "start", "bytes");
+    profile?.measure("failed-total", "start", "error");
+    profile?.report();
     setStatus(error instanceof Error ? error.message : String(error), "error");
   }
 }
@@ -36,7 +44,12 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-export async function loadModel(source, label = source.name ?? "model", modelLoader) {
+export async function loadModel(source, label = source.name ?? "model", modelLoader, profile) {
+  const loadProfile = profile ?? createViewerLoadProfile(describeViewerSource(source, label));
+  if (!profile) {
+    loadProfile?.mark("start");
+  }
+  loadProfile?.mark("load-start");
   try {
     setStatus(`Loading model: ${label}`, "loading");
     resetFolderModelState();
@@ -45,13 +58,17 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
       preserveMotion: Boolean(preservedMotion),
       preserveModelSwitcher: true
     });
+    loadProfile?.mark("cleared");
     const resolvedModelLoader =
       typeof modelLoader === "function"
         ? await modelLoader()
         : await (modelLoader ?? createModelLoader());
+    loadProfile?.mark("loader-ready");
     state.currentModel = await resolvedModelLoader.loadModel(source, { frustumCulled: false });
+    loadProfile?.mark("model-loaded");
     syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
     addModelToScene(state.currentModel);
+    loadProfile?.mark("scene-ready");
     state.currentFolderPmxFiles = [createModelSwitcherEntry(source, label)];
     updateModelSwitcher(state.currentFolderPmxFiles[0]);
     state.elapsedSeconds = 0;
@@ -70,14 +87,19 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     } else {
       state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
     }
+    loadProfile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
     updateStageState();
     renderStillFrame();
+    loadProfile?.mark("first-render");
   } catch (error) {
+    loadProfile?.mark("error");
     resetFolderModelState();
     setStatus(error instanceof Error ? error.message : String(error), "error");
     updateStageState();
+  } finally {
+    measureModelLoadProfile(loadProfile);
   }
 }
 
@@ -94,21 +116,29 @@ export async function loadModelFolder(files) {
   const textureMap = createFolderTextureMap(files, modelFile);
   const folderName =
     normalizeMmdRelativePath(modelFile.webkitRelativePath || modelFile.name).split("/")[0] || "folder";
+  const profile = createViewerLoadProfile(`folder:${folderName}`);
+  profile?.mark("start");
+  profile?.mark("texture-map");
   state.currentFolderTextureMap = textureMap;
   state.currentFolderPmxFiles = modelFiles;
   updateModelSwitcher(modelFile);
 
   try {
+    profile?.mark("load-start");
     setStatus(`Loading model folder: ${folderName}`, "loading");
     const preservedMotion = state.currentMotion;
     clearModel({
       preserveMotion: Boolean(preservedMotion),
       preserveModelSwitcher: true
     });
+    profile?.mark("cleared");
     const folderLoader = await createModelLoader({ textureMap });
+    profile?.mark("loader-ready");
     state.currentModel = await folderLoader.loadModel(modelFile, { frustumCulled: false });
+    profile?.mark("model-loaded");
     syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
     addModelToScene(state.currentModel);
+    profile?.mark("scene-ready");
     state.elapsedSeconds = 0;
     dom.timeline.max = "0.001";
     dom.timeline.value = "0";
@@ -125,14 +155,19 @@ export async function loadModelFolder(files) {
     } else {
       state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
     }
+    profile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
     updateStageState();
     renderStillFrame();
+    profile?.mark("first-render");
   } catch (error) {
+    profile?.mark("error");
     resetFolderModelState();
     setStatus(error instanceof Error ? error.message : String(error), "error");
     updateStageState();
+  } finally {
+    measureModelLoadProfile(profile);
   }
 }
 
@@ -141,6 +176,9 @@ export async function switchFolderModel(modelFile) {
     return;
   }
 
+  const profile = createViewerLoadProfile(`switch:${modelFile.name}`);
+  profile?.mark("start");
+  profile?.mark("load-start");
   try {
     setStatus(`Switching to ${modelFile.name}`, "loading");
     const preservedMotion = state.currentMotion;
@@ -148,11 +186,15 @@ export async function switchFolderModel(modelFile) {
       preserveMotion: Boolean(preservedMotion),
       preserveModelSwitcher: true
     });
+    profile?.mark("cleared");
     const folderLoader = await createModelLoader({ textureMap: state.currentFolderTextureMap });
+    profile?.mark("loader-ready");
     state.currentModel = await folderLoader.loadModel(modelFile, { frustumCulled: false });
+    profile?.mark("model-loaded");
     syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
     addModelToScene(state.currentModel);
     updateModelSwitcher(modelFile);
+    profile?.mark("scene-ready");
     state.elapsedSeconds = 0;
     dom.timeline.max = "0.001";
     dom.timeline.value = "0";
@@ -167,13 +209,18 @@ export async function switchFolderModel(modelFile) {
     } else {
       state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
     }
+    profile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
     updateStageState();
     renderStillFrame();
+    profile?.mark("first-render");
   } catch (error) {
+    profile?.mark("error");
     setStatus(error instanceof Error ? error.message : String(error), "error");
     updateStageState();
+  } finally {
+    measureModelLoadProfile(profile);
   }
 }
 
@@ -368,6 +415,20 @@ export function resetFolderModelState() {
 }
 
 export const createFolderTextureMap = createMmdTextureMapFromFiles;
+
+function measureModelLoadProfile(profile) {
+  profile?.measure("source-bytes", "start", "bytes");
+  profile?.measure("texture-map", "start", "texture-map");
+  profile?.measure("clear-model", "load-start", "cleared");
+  profile?.measure("create-loader", "cleared", "loader-ready");
+  profile?.measure("loader-loadModel", "loader-ready", "model-loaded");
+  profile?.measure("scene-setup", "model-loaded", "scene-ready");
+  profile?.measure("animation-bind", "scene-ready", "animation-ready");
+  profile?.measure("first-render", "animation-ready", "first-render");
+  profile?.measure("total", "start", "first-render");
+  profile?.measure("failed-total", "start", "error");
+  profile?.report();
+}
 
 export async function createUrlTextureLoader(modelUrl) {
   return await createModelLoader({

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import type { MmdModel, MmdRuntime } from "../parser/model/modelTypes.js";
+import type { MaterialRuntimeState, MmdModel } from "../parser/model/modelTypes.js";
 import { syncMmdMaterialStates } from "./material/material-sync.js";
 import { syncMmdOutlineMaterialStates } from "./outline.js";
 
@@ -28,6 +28,13 @@ export type MmdWorldMatrixBuffer =
   | Float32Array
   | Float64Array
   | MmdWorldMatrixColumnMajorTuple;
+
+export interface MmdRuntimeMeshSyncSource {
+  boneMatrices(): Float32Array;
+  morphWeights(): Float32Array;
+  propertyState(): { readonly visible: boolean };
+  materialStates(): readonly MaterialRuntimeState[];
+}
 
 export function mmdWorldMatrixToThree(matrices: MmdWorldMatrixBuffer, index = 0): THREE.Matrix4 {
   if (matrices === null || matrices === undefined || typeof matrices.length !== "number") {
@@ -72,10 +79,7 @@ export function mmdWorldMatrixToThree(matrices: MmdWorldMatrixBuffer, index = 0)
 export function syncThreeMmdRuntimeToMesh(
   model: Pick<MmdModel, "skeleton">,
   mesh: THREE.SkinnedMesh,
-  runtime: Pick<
-    MmdRuntime,
-    "boneMatrices" | "morphWeights" | "propertyState" | "materialStates"
-  >
+  runtime: MmdRuntimeMeshSyncSource
 ): void {
   syncRuntimeBoneTransforms(model, mesh, runtime.boneMatrices());
   syncRuntimeMorphWeights(mesh, runtime.morphWeights());

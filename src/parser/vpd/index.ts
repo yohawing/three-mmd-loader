@@ -1,4 +1,4 @@
-export { parseVpd } from "./VpdParser.js";
+export { parseVpd, vpdPoseToAnimation } from "./VpdParser.js";
 export { parseVpdMetadata, parseVpdPose, parseVpdPoseInventory } from "./VpdMetadataParser.js";
 export type {
   VpdBonePose,

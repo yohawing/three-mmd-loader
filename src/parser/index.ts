@@ -21,6 +21,21 @@ export type {
   PmxSectionCounts,
   PmxTextEncoding
 } from "./pmx/index.js";
+export {
+  createPmmScenePlan,
+  createPmmStaticPreviewPlan,
+  parsePmmManifest,
+  resolvePmmAssetPath,
+  resolvePmmAssetReference
+} from "./pmm/index.js";
+export type {
+  PmmAssetReference,
+  PmmAssetResolution,
+  PmmAssetResolutionOptions,
+  PmmManifest,
+  PmmScenePlan,
+  PmmStaticPreviewPlan
+} from "./pmm/index.js";
 export { parseVmd, parseVmdMetadata, parseVmdSectionInventory } from "./vmd/index.js";
 export type {
   VmdMetadata,
@@ -29,7 +44,13 @@ export type {
   VmdSectionName,
   VmdSectionRecord
 } from "./vmd/index.js";
-export { parseVpd, parseVpdMetadata, parseVpdPose, parseVpdPoseInventory } from "./vpd/index.js";
+export {
+  parseVpd,
+  parseVpdMetadata,
+  parseVpdPose,
+  parseVpdPoseInventory,
+  vpdPoseToAnimation
+} from "./vpd/index.js";
 export type {
   VpdBoneBlockInventory,
   VpdBoneCountMismatch,

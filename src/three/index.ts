@@ -21,6 +21,7 @@ import {
   createMmdOutlineMesh,
   createMmdOutlineMeshes
 } from "./outline.js";
+import { createLoaderPerformanceProfile } from "./performance.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
@@ -173,42 +174,62 @@ export class ThreeMmdLoader {
     options: ThreeMmdLoadModelOptions = {}
   ): Promise<ThreeMmdModel> {
     validateModelSource(source, "loadModel");
-    const bytes = await readModelSourceBytes(source);
-    const modelData = parseLoaderMmdModelData(bytes);
-    const mesh = createThreeMmdMesh(modelData);
-    const materials = normalizeMeshMaterials(mesh.material);
-    const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
-      textureResolver: this.options.textureResolver,
-      textureMap: this.options.textureMap,
-      textureLoader: this.options.textureLoader,
-      ddsLoader: this.options.ddsLoader,
-      modelUrl: typeof source === "string" ? source : undefined,
-      geometry: mesh.geometry,
-      morphs: modelData.morphs,
-      geometryAwareAlpha: this.options.geometryAwareAlpha,
-      textureCache: this.textureCache
-    });
-    const renderOrder = computeMmdMaterialRenderOrder(
-      materials.map((material, materialIndex) => ({
-        materialIndex,
-        transparencyMode: material.userData.mmdMaterial?.transparencyMode ?? "opaque"
-      }))
-    );
-    mesh.userData.mmdMaterialRenderOrder = renderOrder;
-    syncMmdModelShadowFlags(mesh, modelData.materials);
-    if (options.frustumCulled !== undefined) {
-      mesh.frustumCulled = options.frustumCulled;
+    const profile = createLoaderPerformanceProfile(describeModelSourceForPerformance(source));
+    profile?.mark("start");
+    try {
+      const bytes = await readModelSourceBytes(source);
+      profile?.mark("bytes");
+      const modelData = parseLoaderMmdModelData(bytes);
+      profile?.mark("parsed");
+      const mesh = createThreeMmdMesh(modelData);
+      profile?.mark("mesh");
+      const materials = normalizeMeshMaterials(mesh.material);
+      const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
+        textureResolver: this.options.textureResolver,
+        textureMap: this.options.textureMap,
+        textureLoader: this.options.textureLoader,
+        ddsLoader: this.options.ddsLoader,
+        modelUrl: typeof source === "string" ? source : undefined,
+        geometry: mesh.geometry,
+        morphs: modelData.morphs,
+        geometryAwareAlpha: this.options.geometryAwareAlpha,
+        textureCache: this.textureCache
+      });
+      profile?.mark("textures");
+      const renderOrder = computeMmdMaterialRenderOrder(
+        materials.map((material, materialIndex) => ({
+          materialIndex,
+          transparencyMode: material.userData.mmdMaterial?.transparencyMode ?? "opaque"
+        }))
+      );
+      mesh.userData.mmdMaterialRenderOrder = renderOrder;
+      syncMmdModelShadowFlags(mesh, modelData.materials);
+      if (options.frustumCulled !== undefined) {
+        mesh.frustumCulled = options.frustumCulled;
+      }
+      profile?.mark("materials");
+      const model = createThreeMmdModel({
+        mesh,
+        runtime: new DefaultMmdRuntime(this.options.runtime),
+        source: createModelSourceDescriptor(source, bytes.byteLength),
+        textureDiagnostics,
+        materials: modelData.materials,
+        outlines: options.outlines ?? true,
+        outlineMode: options.outlineMode ?? "postOutline",
+        renderOrderProxies: options.renderOrderProxies ?? false
+      });
+      profile?.mark("assembled");
+      profile?.measure("read-bytes", "start", "bytes");
+      profile?.measure("parse-model", "bytes", "parsed");
+      profile?.measure("create-mesh", "parsed", "mesh");
+      profile?.measure("load-textures", "mesh", "textures");
+      profile?.measure("material-metadata", "textures", "materials");
+      profile?.measure("assemble-model", "materials", "assembled");
+      profile?.measure("total", "start", "assembled");
+      return model;
+    } finally {
+      profile?.clear();
     }
-    return createThreeMmdModel({
-      mesh,
-      runtime: new DefaultMmdRuntime(this.options.runtime),
-      source: createModelSourceDescriptor(source, bytes.byteLength),
-      textureDiagnostics,
-      materials: modelData.materials,
-      outlines: options.outlines ?? true,
-      outlineMode: options.outlineMode ?? "postOutline",
-      renderOrderProxies: options.renderOrderProxies ?? false
-    });
   }
 
   async loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation> {
@@ -327,6 +348,22 @@ function createModelSourceDescriptor(
     kind: "bytes",
     byteLength
   };
+}
+
+function describeModelSourceForPerformance(source: ModelSource): string {
+  if (typeof source === "string") {
+    return `url:${source.split(/[\\/]/).at(-1) ?? "model"}`;
+  }
+  if (typeof File !== "undefined" && source instanceof File) {
+    return `file:${source.name || "model"}`;
+  }
+  if (source instanceof Uint8Array) {
+    return `bytes:${source.byteLength}`;
+  }
+  if (source instanceof ArrayBuffer) {
+    return `array-buffer:${source.byteLength}`;
+  }
+  return "model";
 }
 
 function createEmptySourceError(method: string): Error {

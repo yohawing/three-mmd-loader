@@ -107,4 +107,16 @@ describe("example viewer source", () => {
     expect(ammoSource).not.toContain("function loadAmmoScript");
     expect(ammoSource).not.toContain("function getAmmoCandidate");
   });
+
+  it("profiles viewer model load stages only behind the perf query flag", async () => {
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const performanceSource = await readFile("examples/viewer/lib/performance.js", "utf8");
+
+    expect(modelSource).toContain("createViewerLoadProfile");
+    expect(modelSource).toContain('profile?.measure("loader-loadModel", "loader-ready", "model-loaded")');
+    expect(modelSource).toContain('profile?.measure("first-render", "animation-ready", "first-render")');
+    expect(performanceSource).toContain('new window.URLSearchParams(location.search).has("perf")');
+    expect(performanceSource).toContain('"__THREE_MMD_LOADER_PERF__"');
+    expect(performanceSource).toContain('window.console?.table(');
+  });
 });

@@ -210,6 +210,7 @@ export interface MorphData {
     vertexIndex: number;
     position: [number, number, number];
   }>;
+  densePositionOffsets?: Float32Array;
   groupOffsets: Array<{
     morphIndex: number;
     weight: number;
@@ -223,11 +224,13 @@ export interface MorphData {
     vertexIndex: number;
     uv: [number, number, number, number];
   }>;
+  denseUvOffsets?: Float32Array;
   additionalUvOffsets: Array<{
     vertexIndex: number;
     uvIndex: number;
     uv: [number, number, number, number];
   }>;
+  denseAdditionalUvOffsets?: Array<Float32Array | undefined>;
   materialOffsets: MaterialMorphOffset[];
   flipOffsets?: Array<{
     morphIndex: number;
@@ -508,183 +511,6 @@ export interface VpdBonePose {
   rotation: [number, number, number, number];
 }
 
-export interface MmdRuntime {
-  setAnimation(animation: MmdAnimation): void;
-  setPose(pose: MmdPose): void;
-  evaluate(seconds: number): void;
-  resetPhysics(): void;
-  boneMatrices(): Float32Array;
-  morphWeights(): Float32Array;
-  materialStates(): readonly MaterialRuntimeState[];
-  propertyState(): RuntimePropertyState;
-  cameraState(): CameraState | undefined;
-  lightState(): LightState | undefined;
-  physicsState(): PhysicsState;
-  debugState(): RuntimeDebugState;
-  debugRigidBodyWorldTransformsColumnMajor?(): number[][];
-  debugPhysicsContacts?(): MmdPhysicsContactDebug[];
-}
-
-export type PhysicsMode = "none" | "wasm" | "external";
-
-export type ExternalParentTransformMatrix = readonly number[] | Float32Array;
-
-export interface ExternalParentTransformContext {
-  seconds: number;
-  frame: number;
-  key: number;
-  boneIndex: number;
-  bone: BoneData;
-}
-
-export type ExternalParentTransformProvider =
-  | Record<number, ExternalParentTransformMatrix | undefined>
-  | ((context: ExternalParentTransformContext) => ExternalParentTransformMatrix | undefined);
-
-export interface MmdRuntimeOptions {
-  physics?: PhysicsMode;
-  physicsBackend?: MmdPhysicsBackend;
-  externalParentTransforms?: ExternalParentTransformProvider;
-}
-
-export interface PhysicsState {
-  mode: PhysicsMode;
-  backend: "none" | "stateful-spring" | "external";
-  activeRigidBodies: number;
-  activeJoints: number;
-  diagnostics: Diagnostic[];
-}
-
-export interface MmdPhysicsStepContext {
-  seconds: number;
-  skeleton: SkeletonData;
-  rigidBodies: readonly RigidBodyData[];
-  joints: readonly JointData[];
-  translations: Array<[number, number, number]>;
-  rotations: Array<[number, number, number, number]>;
-  worldMatricesColumnMajor: Float32Array;
-  bonePhysicsToggles: Record<string, number>;
-  morphImpulses?: readonly MmdPhysicsImpulse[];
-}
-
-export interface MmdPhysicsImpulse {
-  rigidBodyIndex: number;
-  local: boolean;
-  weight: number;
-  velocity: [number, number, number];
-  torque: [number, number, number];
-}
-
-export interface MmdPhysicsBackend {
-  readonly name: string;
-  /**
-   * Step physics in MMD model space. Backends own simulation state and should
-   * reset it when reset() is called, when the model context changes, or when
-   * their own seek policy detects a discontinuity.
-   */
-  step(context: MmdPhysicsStepContext): void;
-  reset?(): void;
-  diagnostics?(): Diagnostic[];
-  /**
-   * Optional diagnostics hook for evidence tooling. When implemented, returns
-   * current rigid-body world transforms in MMD model space, column-major.
-   */
-  debugRigidBodyWorldTransformsColumnMajor?(): number[][];
-  /**
-   * Optional diagnostics hook for viewer/tooling. Returns currently active
-   * Bullet/contact pairs after the latest physics step.
-   */
-  debugPhysicsContacts?(): MmdPhysicsContactDebug[];
-}
-
-export interface MmdPhysicsContactDebug {
-  bodyIndexA: number;
-  bodyIndexB: number;
-  bodyNameA: string;
-  bodyNameB: string;
-  shapeA: RigidBodyData["shape"];
-  shapeB: RigidBodyData["shape"];
-  modeA: RigidBodyData["mode"];
-  modeB: RigidBodyData["mode"];
-  groupA: number;
-  groupB: number;
-  maskA: number;
-  maskB: number;
-  contactCount: number;
-  minDistance: number;
-}
-
-export interface RuntimeDebugState {
-  stages: {
-    vmdInterpolation: RuntimeStageState;
-    appendTransform: RuntimeStageState;
-    ik: RuntimeStageState;
-    physics: RuntimeStageState;
-  };
-  ikTrace?: RuntimeIkTraceState;
-}
-
-export interface RuntimeStageState {
-  worldMatricesColumnMajor: Float32Array;
-  morphWeights: Float32Array;
-  bonePhysicsToggles: Record<string, number>;
-  property: RuntimePropertyState;
-  camera: CameraState | undefined;
-  light: LightState | undefined;
-  physics: PhysicsState | undefined;
-}
-
-export interface RuntimeIkTraceState {
-  records: RuntimeIkTraceRecord[];
-  truncated: boolean;
-  maxRecords: number;
-}
-
-export interface RuntimeIkTraceRecord {
-  phase: "after-link" | "after-iteration" | "rollback";
-  iteration: number;
-  linkIndex: number | null;
-  ikBoneIndex: number;
-  ikBoneName: string;
-  targetIndex: number;
-  targetName: string | null;
-  linkBoneIndex: number | null;
-  linkBoneName: string | null;
-  targetEffectorDistance: number;
-  update?: RuntimeIkTraceUpdate;
-  linkRotations: RuntimeIkTraceLinkRotation[];
-}
-
-export interface RuntimeIkTraceUpdate {
-  algorithm: string;
-  rawAxis?: [number, number, number];
-  effectiveAxis?: [number, number, number];
-  axisSpace?: "world" | "link-local" | "parent-local";
-  angle?: number;
-  limitAngle?: number;
-  dot?: number;
-  useAxis?: boolean;
-  solveAxis?: string;
-  axisIndex?: number;
-  planeAngle?: number;
-}
-
-export interface RuntimeIkTraceLinkRotation {
-  linkIndex: number;
-  boneIndex: number;
-  boneName: string | null;
-  rotation: [number, number, number, number];
-  eulerXyz: [number, number, number];
-  limitsKind: "pmdKnee" | "pmxLinkLimit" | null;
-}
-
-export interface RuntimePropertyState {
-  visible: boolean;
-  physicsSimulation: boolean;
-  ikStates: Record<string, boolean>;
-  selfShadow: VmdSelfShadowFrame | undefined;
-}
-
 export interface MmdModel {
   metadata(): ModelMetadata;
   geometry(): GeometryBuffers;
@@ -696,7 +522,6 @@ export interface MmdModel {
   joints(): JointData[];
   softBodies(): SoftBodyData[];
   embeddedTextures(): EmbeddedTextureData[];
-  createRuntime(options?: MmdRuntimeOptions): MmdRuntime;
 }
 
 export interface MmdCore {
