@@ -15,6 +15,7 @@ const host = process.env.HOST ?? "127.0.0.1";
 const mimeTypes = new Map([
   [".bmp", "image/bmp"],
   [".css", "text/css; charset=utf-8"],
+  [".dds", "application/octet-stream"],
   [".gif", "image/gif"],
   [".html", "text/html; charset=utf-8"],
   [".jpg", "image/jpeg"],

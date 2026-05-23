@@ -5,6 +5,7 @@ import {
   normalizeMmdRelativePath,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
+import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
 import { createPhysicsBackend, disposeActivePhysicsBackend } from "./ammo-bootstrap.js";
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
@@ -386,6 +387,7 @@ export async function createModelLoader(extraOptions = {}) {
   const physicsBackend = await createPhysicsBackend();
   return new ThreeMmdLoader({
     ...extraOptions,
+    ddsLoader: extraOptions.ddsLoader ?? new DDSLoader(),
     geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
     runtime: {
       ...runtimeOptions,
