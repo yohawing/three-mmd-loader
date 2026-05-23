@@ -59,3 +59,26 @@ export class ParsedModel implements MmdModel {
     return [];
   }
 }
+
+export class DisposableParsedModel extends ParsedModel {
+  private disposed = false;
+
+  constructor(
+    parsed: ParsedData,
+    private readonly release: () => void
+  ) {
+    super(parsed);
+  }
+
+  isDisposed(): boolean {
+    return this.disposed;
+  }
+
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.release();
+  }
+}

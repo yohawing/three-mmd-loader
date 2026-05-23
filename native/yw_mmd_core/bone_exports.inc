@@ -6,6 +6,15 @@ const char *yw_mmd_bone_english_name(int i) {
     const nanoem_model_bone_t *bone = yw_mmd_bone_at(i);
     return bone ? yw_mmd_extract_text_static(yw_mmd_get_emst_factory(), nanoemModelBoneGetName(bone, NANOEM_LANGUAGE_TYPE_ENGLISH)) : "";
 }
+float *yw_mmd_bone_f32_table_ptr(void) {
+    return g_mld.valid ? g_mld.bone_f32_table : NULL;
+}
+int *yw_mmd_bone_i32_table_ptr(void) {
+    return g_mld.valid ? g_mld.bone_i32_table : NULL;
+}
+uint32_t *yw_mmd_bone_string_ptrs_ptr(void) {
+    return g_mld.valid ? g_mld.bone_string_ptrs : NULL;
+}
 float yw_mmd_bone_f32(int i, int field) {
     const nanoem_model_bone_t *bone = yw_mmd_bone_at(i);
     if (!bone) return 0.0f;

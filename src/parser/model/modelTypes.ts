@@ -522,6 +522,7 @@ export interface MmdModel {
   joints(): JointData[];
   softBodies(): SoftBodyData[];
   embeddedTextures(): EmbeddedTextureData[];
+  dispose?(): void;
 }
 
 export interface MmdCore {

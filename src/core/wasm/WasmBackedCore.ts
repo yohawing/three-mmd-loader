@@ -1,4 +1,8 @@
 import { toUint8Array } from "../../parser/binary/index.js";
+import {
+  denseMorphProviderSymbol,
+  type DenseMorphProvider
+} from "../../parser/model/denseMorphProvider.js";
 import { createModelDiagnostics } from "../../parser/model/diagnostics.js";
 import type { YwMmdWasmModule } from "../../parser/wasm/generated/yw_mmd_core.js";
 import { parsePmd } from "../../parser/model/PmdModelParser.js";
@@ -30,12 +34,21 @@ import { parseVmd } from "../../parser/vmd/index.js";
 import { parseVpd, vpdPoseToAnimation } from "../../parser/vpd/index.js";
 import { createParsedModelFromBytes } from "./createParsedModel.js";
 import { parseWasmModelMetadata } from "./wasmModelMetadata.js";
-import { ParsedModel } from "./ParsedModel.js";
+import { DisposableParsedModel, ParsedModel } from "./ParsedModel.js";
 
 const vmdShiftJisDecoder = new TextDecoder("shift-jis");
 
+interface WasmModelCacheState {
+  alive: boolean;
+}
+
+type WasmDenseMorph = MorphData & {
+  [denseMorphProviderSymbol]?: DenseMorphProvider;
+};
+
 export class WasmBackedCore implements MmdCore {
   private readonly coreVersion: string;
+  private activeModel: DisposableParsedModel | undefined;
 
   constructor(private readonly wasm: YwMmdWasmModule) {
     this.coreVersion = wasm.UTF8ToString(wasm._yw_mmd_version());
@@ -81,6 +94,9 @@ export class WasmBackedCore implements MmdCore {
       throw new Error("Failed to allocate Wasm memory for model bytes");
     }
 
+    this.activeModel?.dispose();
+    const cacheState: WasmModelCacheState = { alive: true };
+    let keepModelCache = false;
     try {
       this.wasm.refreshMemoryViews();
       this.wasm.HEAPU8.set(input, dataPtr);
@@ -173,7 +189,7 @@ export class WasmBackedCore implements MmdCore {
 
       const usePhase3 = typeof this.wasm._yw_mmd_material_name === "function";
       const parsed = usePhase3
-        ? this.readModelDataFromWasm(metadata)
+        ? this.readModelDataFromWasm(metadata, cacheState)
         : format === "pmx"
           ? parsePmx(input, { skipGeometry: true })
           : parsePmd(input, { skipGeometry: true });
@@ -202,42 +218,79 @@ export class WasmBackedCore implements MmdCore {
         });
       }
 
-      return new ParsedModel(parsed);
+      if (!usePhase3) {
+        return new ParsedModel(parsed);
+      }
+
+      const model = new DisposableParsedModel(parsed, () => {
+        cacheState.alive = false;
+        this.wasm._yw_mmd_model_free();
+        if (this.activeModel === model) {
+          this.activeModel = undefined;
+        }
+      });
+      this.activeModel = model;
+      keepModelCache = true;
+      return model;
     } finally {
-      this.wasm._yw_mmd_model_free();
+      if (!keepModelCache) {
+        cacheState.alive = false;
+        this.wasm._yw_mmd_model_free();
+      }
       this.wasm._free(dataPtr);
     }
   }
 
-  private readModelDataFromWasm(metadata: ModelMetadata): ParsedPmx {
+  private readModelDataFromWasm(
+    metadata: ModelMetadata,
+    cacheState: WasmModelCacheState
+  ): ParsedPmx {
     const wasm = this.wasm;
-    let heap = wasm.HEAPU8.buffer;
-    const refreshHeap = () => {
-      wasm.refreshMemoryViews();
-      heap = wasm.HEAPU8.buffer;
-    };
+    const heap = wasm.HEAPU8.buffer;
     const readString = (ptr: number) => (ptr ? wasm.UTF8ToString(ptr) : "");
-    const readDenseF32 = (ptr: number, length: number) => {
-      if (!ptr) {
-        return undefined;
-      }
-      refreshHeap();
-      return new Float32Array(heap, ptr, length).slice();
-    };
+    const readF32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Float32Array(heap, ptr, length).slice() : undefined;
+    const readI32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Int32Array(heap, ptr, length).slice() : undefined;
+    const readU32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Uint32Array(heap, ptr, length).slice() : undefined;
 
     const materials: MaterialInfo[] = [];
+    const materialF32Table = readF32Table(
+      wasm._yw_mmd_material_f32_table_ptr?.(),
+      metadata.counts.materials * 16
+    );
+    const materialI32Table = readI32Table(
+      wasm._yw_mmd_material_i32_table_ptr?.(),
+      metadata.counts.materials * 5
+    );
+    const materialStringPtrs = readU32Table(
+      wasm._yw_mmd_material_string_ptrs_ptr?.(),
+      metadata.counts.materials * 5
+    );
     for (let i = 0; i < metadata.counts.materials; i++) {
-      const f = (field: number) => wasm._yw_mmd_material_f32!(i, field);
-      const iv = (field: number) => wasm._yw_mmd_material_i32!(i, field);
+      const f = (field: number) =>
+        materialF32Table?.[i * 16 + field] ?? wasm._yw_mmd_material_f32!(i, field);
+      const iv = (field: number) =>
+        materialI32Table?.[i * 5 + field] ?? wasm._yw_mmd_material_i32!(i, field);
+      const sp = (field: number) => materialStringPtrs?.[i * 5 + field] ?? 0;
       const flagBits = iv(0);
       const sharedToonIndex = iv(2);
       materials.push({
-        name: readString(wasm._yw_mmd_material_name!(i)),
-        englishName: readString(wasm._yw_mmd_material_english_name!(i)),
-        texturePath: readString(wasm._yw_mmd_material_texture_path!(i)),
-        sphereTexturePath: readString(wasm._yw_mmd_material_sphere_texture_path!(i)),
+        name: materialStringPtrs ? readString(sp(0)) : readString(wasm._yw_mmd_material_name!(i)),
+        englishName: materialStringPtrs
+          ? readString(sp(1))
+          : readString(wasm._yw_mmd_material_english_name!(i)),
+        texturePath: materialStringPtrs
+          ? readString(sp(2))
+          : readString(wasm._yw_mmd_material_texture_path!(i)),
+        sphereTexturePath: materialStringPtrs
+          ? readString(sp(3))
+          : readString(wasm._yw_mmd_material_sphere_texture_path!(i)),
         sphereMode: toSphereMode(iv(1)),
-        toonTexturePath: readString(wasm._yw_mmd_material_toon_texture_path!(i)),
+        toonTexturePath: materialStringPtrs
+          ? readString(sp(4))
+          : readString(wasm._yw_mmd_material_toon_texture_path!(i)),
         sharedToonIndex: sharedToonIndex >= 0 ? sharedToonIndex : undefined,
         diffuse: [f(0), f(1), f(2), f(3)],
         specular: [f(4), f(5), f(6)],
@@ -261,9 +314,24 @@ export class WasmBackedCore implements MmdCore {
     }
 
     const bones: BoneData[] = [];
+    const boneF32Table = readF32Table(
+      wasm._yw_mmd_bone_f32_table_ptr?.(),
+      metadata.counts.bones * 17
+    );
+    const boneI32Table = readI32Table(
+      wasm._yw_mmd_bone_i32_table_ptr?.(),
+      metadata.counts.bones * 9
+    );
+    const boneStringPtrs = readU32Table(
+      wasm._yw_mmd_bone_string_ptrs_ptr?.(),
+      metadata.counts.bones * 2
+    );
     for (let i = 0; i < metadata.counts.bones; i++) {
-      const bf = (field: number) => wasm._yw_mmd_bone_f32!(i, field);
-      const bi = (field: number) => wasm._yw_mmd_bone_i32!(i, field);
+      const bf = (field: number) =>
+        boneF32Table?.[i * 17 + field] ?? wasm._yw_mmd_bone_f32!(i, field);
+      const bi = (field: number) =>
+        boneI32Table?.[i * 9 + field] ?? wasm._yw_mmd_bone_i32!(i, field);
+      const sp = (field: number) => boneStringPtrs?.[i * 2 + field] ?? 0;
       const flagBits = bi(3);
       const flags: BoneFlags = {
         indexedTail: (flagBits & 0x0001) !== 0,
@@ -283,7 +351,7 @@ export class WasmBackedCore implements MmdCore {
       const appendParentIndex = bi(4);
       let ik: BoneIk | undefined;
       if (flags.ik) {
-        const linkCount = wasm._yw_mmd_bone_ik_link_count!(i);
+        const linkCount = boneI32Table ? bi(8) : wasm._yw_mmd_bone_ik_link_count!(i);
         const linksPtr = wasm._yw_mmd_bone_ik_links_ptr!(i);
         const links: BoneIkLink[] = [];
         if (linksPtr && linkCount > 0) {
@@ -305,14 +373,16 @@ export class WasmBackedCore implements MmdCore {
         ik = {
           targetIndex: bi(6),
           loopCount: bi(7),
-          limitAngle: wasm._yw_mmd_bone_ik_limit_angle!(i),
+          limitAngle: boneF32Table ? bf(16) : wasm._yw_mmd_bone_ik_limit_angle!(i),
           links
         };
       }
       const externalParentKey = bi(5);
       bones.push({
-        name: readString(wasm._yw_mmd_bone_name!(i)),
-        englishName: readString(wasm._yw_mmd_bone_english_name!(i)),
+        name: boneStringPtrs ? readString(sp(0)) : readString(wasm._yw_mmd_bone_name!(i)),
+        englishName: boneStringPtrs
+          ? readString(sp(1))
+          : readString(wasm._yw_mmd_bone_english_name!(i)),
         parentIndex: bi(0),
         layer: bi(1),
         position: [bf(0), bf(1), bf(2)],
@@ -335,13 +405,28 @@ export class WasmBackedCore implements MmdCore {
     const skeleton: SkeletonData = { bones };
 
     const morphs: MorphData[] = [];
+    const morphI32Table = readI32Table(
+      wasm._yw_mmd_morph_i32_table_ptr?.(),
+      metadata.counts.morphs * 2
+    );
+    const morphStringPtrs = readU32Table(
+      wasm._yw_mmd_morph_string_ptrs_ptr?.(),
+      metadata.counts.morphs * 2
+    );
+    const morphOffsetPtrs = readU32Table(
+      wasm._yw_mmd_morph_offset_ptrs_ptr?.(),
+      metadata.counts.morphs
+    );
     for (let i = 0; i < metadata.counts.morphs; i++) {
-      const nanoemType = wasm._yw_mmd_morph_type!(i);
-      const count = wasm._yw_mmd_morph_offset_count!(i);
-      const ptr = wasm._yw_mmd_morph_offset_ptr!(i);
+      const nanoemType = morphI32Table?.[i * 2] ?? wasm._yw_mmd_morph_type!(i);
+      const count = morphI32Table?.[i * 2 + 1] ?? wasm._yw_mmd_morph_offset_count!(i);
+      const ptr = morphOffsetPtrs?.[i] ?? wasm._yw_mmd_morph_offset_ptr!(i);
+      const sp = (field: number) => morphStringPtrs?.[i * 2 + field] ?? 0;
       const morph: MorphData = {
-        name: readString(wasm._yw_mmd_morph_name!(i)),
-        englishName: readString(wasm._yw_mmd_morph_english_name!(i)),
+        name: morphStringPtrs ? readString(sp(0)) : readString(wasm._yw_mmd_morph_name!(i)),
+        englishName: morphStringPtrs
+          ? readString(sp(1))
+          : readString(wasm._yw_mmd_morph_english_name!(i)),
         type: toMorphType(nanoemType),
         vertexOffsets: [],
         groupOffsets: [],
@@ -356,29 +441,9 @@ export class WasmBackedCore implements MmdCore {
       if (ptr && count > 0 && stride > 0) {
         readMorphOffsets(morph, nanoemType, new Float32Array(heap, ptr, count * stride), count);
       }
-      if (nanoemType === 1 && typeof wasm._yw_mmd_morph_dense_position_ptr === "function") {
-        morph.densePositionOffsets = readDenseF32(
-          wasm._yw_mmd_morph_dense_position_ptr(i, metadata.counts.vertices),
-          metadata.counts.vertices * 3
-        );
-      } else if (nanoemType === 3 && typeof wasm._yw_mmd_morph_dense_uv_ptr === "function") {
-        morph.denseUvOffsets = readDenseF32(
-          wasm._yw_mmd_morph_dense_uv_ptr(i, metadata.counts.vertices),
-          metadata.counts.vertices * 2
-        );
-      } else if (
-        nanoemType >= 4 &&
-        nanoemType <= 7 &&
-        typeof wasm._yw_mmd_morph_dense_additional_uv_ptr === "function"
-      ) {
-        const uvIndex = nanoemType - 4;
-        if (uvIndex < metadata.additionalUvCount) {
-          morph.denseAdditionalUvOffsets = [];
-          morph.denseAdditionalUvOffsets[uvIndex] = readDenseF32(
-            wasm._yw_mmd_morph_dense_additional_uv_ptr(i, uvIndex, metadata.counts.vertices),
-            metadata.counts.vertices * 4
-          );
-        }
+      const denseProvider = this.createDenseMorphProvider(cacheState, i, nanoemType);
+      if (denseProvider) {
+        (morph as WasmDenseMorph)[denseMorphProviderSymbol] = denseProvider;
       }
       morphs.push(morph);
     }
@@ -439,6 +504,70 @@ export class WasmBackedCore implements MmdCore {
       rigidBodies,
       joints,
       softBodies
+    };
+  }
+
+  private createDenseMorphProvider(
+    cacheState: WasmModelCacheState,
+    morphIndex: number,
+    nanoemType: number
+  ): DenseMorphProvider | undefined {
+    if (nanoemType !== 1 && nanoemType !== 3 && (nanoemType < 4 || nanoemType > 7)) {
+      return undefined;
+    }
+    const wasm = this.wasm;
+    const readDenseF32 = (ptr: number, length: number) => {
+      if (!cacheState.alive || !ptr) {
+        return undefined;
+      }
+      wasm.refreshMemoryViews();
+      return new Float32Array(wasm.HEAPU8.buffer, ptr, length).slice();
+    };
+    return {
+      createPositionOffsets(vertexCount) {
+        if (
+          !cacheState.alive ||
+          nanoemType !== 1 ||
+          vertexCount <= 0 ||
+          typeof wasm._yw_mmd_morph_dense_position_ptr !== "function"
+        ) {
+          return undefined;
+        }
+        return readDenseF32(
+          wasm._yw_mmd_morph_dense_position_ptr(morphIndex, vertexCount),
+          vertexCount * 3
+        );
+      },
+      createUvOffsets(vertexCount) {
+        if (
+          !cacheState.alive ||
+          nanoemType !== 3 ||
+          vertexCount <= 0 ||
+          typeof wasm._yw_mmd_morph_dense_uv_ptr !== "function"
+        ) {
+          return undefined;
+        }
+        return readDenseF32(
+          wasm._yw_mmd_morph_dense_uv_ptr(morphIndex, vertexCount),
+          vertexCount * 2
+        );
+      },
+      createAdditionalUvOffsets(uvIndex, vertexCount) {
+        if (
+          !cacheState.alive ||
+          nanoemType < 4 ||
+          nanoemType > 7 ||
+          uvIndex !== nanoemType - 4 ||
+          vertexCount <= 0 ||
+          typeof wasm._yw_mmd_morph_dense_additional_uv_ptr !== "function"
+        ) {
+          return undefined;
+        }
+        return readDenseF32(
+          wasm._yw_mmd_morph_dense_additional_uv_ptr(morphIndex, uvIndex, vertexCount),
+          vertexCount * 4
+        );
+      }
     };
   }
 

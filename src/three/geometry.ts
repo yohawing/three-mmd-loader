@@ -1,5 +1,9 @@
 import * as THREE from "three";
 
+import {
+  denseMorphProviderSymbol,
+  type DenseMorphProvider
+} from "../parser/model/denseMorphProvider.js";
 import { computeMmdMaterialRenderOrder } from "./material/material-metadata.js";
 import type { MmdMaterialTransparencyMode } from "./textures.js";
 
@@ -61,6 +65,10 @@ export interface ThreeMmdGeometryMorph {
   readonly additionalUvOffsets?: readonly ThreeMmdAdditionalUvMorphOffset[];
   readonly denseAdditionalUvOffsets?: readonly (Float32Array | undefined)[];
 }
+
+type DenseProviderMorph = ThreeMmdGeometryMorph & {
+  readonly [denseMorphProviderSymbol]?: DenseMorphProvider;
+};
 
 export function createThreeBufferGeometry(
   buffers: ThreeMmdGeometryBuffers,
@@ -478,6 +486,10 @@ function createThreeMorphPositionOffsets(
   positionLength: number,
   morph: ThreeMmdGeometryMorph
 ): Float32Array {
+  const providerOffsets = getDenseMorphProvider(morph)?.createPositionOffsets(positionLength / 3);
+  if (providerOffsets) {
+    return providerOffsets;
+  }
   if (morph.densePositionOffsets) {
     return morph.densePositionOffsets.slice();
   }
@@ -492,6 +504,10 @@ function createThreeMorphPositionOffsets(
 }
 
 function createThreeMorphUvOffsets(uvLength: number, morph: ThreeMmdGeometryMorph): Float32Array {
+  const providerOffsets = getDenseMorphProvider(morph)?.createUvOffsets(uvLength / 2);
+  if (providerOffsets) {
+    return providerOffsets;
+  }
   if (morph.denseUvOffsets) {
     return morph.denseUvOffsets.slice();
   }
@@ -509,6 +525,13 @@ function createThreeAdditionalMorphUvOffsets(
   uvIndex: number,
   morph: ThreeMmdGeometryMorph
 ): Float32Array {
+  const providerOffsets = getDenseMorphProvider(morph)?.createAdditionalUvOffsets(
+    uvIndex,
+    uvLength / 4
+  );
+  if (providerOffsets) {
+    return providerOffsets;
+  }
   const denseOffsets = morph.denseAdditionalUvOffsets?.[uvIndex];
   if (denseOffsets) {
     return denseOffsets.slice();
@@ -525,4 +548,8 @@ function createThreeAdditionalMorphUvOffsets(
     offsets[base + 3] = offset.uv[3];
   }
   return offsets;
+}
+
+function getDenseMorphProvider(morph: ThreeMmdGeometryMorph): DenseMorphProvider | undefined {
+  return (morph as DenseProviderMorph)[denseMorphProviderSymbol];
 }

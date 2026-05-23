@@ -6,6 +6,15 @@ const char *yw_mmd_morph_english_name(int i) {
     const nanoem_model_morph_t *morph = yw_mmd_morph_at(i);
     return morph ? yw_mmd_extract_text_static(yw_mmd_get_emst_factory(), nanoemModelMorphGetName(morph, NANOEM_LANGUAGE_TYPE_ENGLISH)) : "";
 }
+int *yw_mmd_morph_i32_table_ptr(void) {
+    return g_mld.valid ? g_mld.morph_i32_table : NULL;
+}
+uint32_t *yw_mmd_morph_string_ptrs_ptr(void) {
+    return g_mld.valid ? g_mld.morph_string_ptrs : NULL;
+}
+uint32_t *yw_mmd_morph_offset_ptrs_ptr(void) {
+    return g_mld.valid ? g_mld.morph_offset_ptrs : NULL;
+}
 int yw_mmd_morph_type(int i) {
     const nanoem_model_morph_t *morph = yw_mmd_morph_at(i);
     return morph ? (int)nanoemModelMorphGetType(morph) : -1;

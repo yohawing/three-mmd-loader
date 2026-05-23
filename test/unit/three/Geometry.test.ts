@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  denseMorphProviderSymbol,
+  type DenseMorphProvider
+} from "../../../src/parser/model/denseMorphProvider.js";
 import { createThreeBufferGeometry } from "../../../src/three/index.js";
 import type { ThreeMmdGeometryBuffers, ThreeMmdGeometryMorph } from "../../../src/three/index.js";
 import type * as THREE from "three";
@@ -162,6 +166,46 @@ describe("createThreeBufferGeometry", () => {
       },
       [],
       morphs
+    );
+
+    expect(Array.from(geometry.morphAttributes.position?.[0]?.array ?? [])).toEqual([
+      0, 0, 0, 0, 0, 0, 0.25, -0.5, -1.5, 0, 0, 0
+    ]);
+    expect(Array.from(geometry.morphAttributes.uv?.[0]?.array ?? [])).toEqual([
+      0, 0, 0.125, -0.25, 0, 0, 0, 0
+    ]);
+    expectFloatArrayClose(
+      Array.from(geometry.morphAttributes.uv1?.[0]?.array ?? []),
+      [0.1, 0.2, 0.3, 0.4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    );
+  });
+
+  it("uses internal dense morph providers when geometry is created", () => {
+    const provider: DenseMorphProvider = {
+      createPositionOffsets: (vertexCount) =>
+        vertexCount === 4
+          ? new Float32Array([0, 0, 0, 0, 0, 0, 0.25, -0.5, -1.5, 0, 0, 0])
+          : undefined,
+      createUvOffsets: (vertexCount) =>
+        vertexCount === 4 ? new Float32Array([0, 0, 0.125, -0.25, 0, 0, 0, 0]) : undefined,
+      createAdditionalUvOffsets: (uvIndex, vertexCount) =>
+        uvIndex === 0 && vertexCount === 4
+          ? new Float32Array([0.1, 0.2, 0.3, 0.4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+          : undefined
+    };
+    const morph = {
+      vertexOffsets: [{ vertexIndex: 2, position: [9, 9, 9] }],
+      uvOffsets: [{ vertexIndex: 1, uv: [9, 9, 0, 0] }],
+      additionalUvOffsets: [{ vertexIndex: 0, uvIndex: 0, uv: [9, 9, 9, 9] }],
+      [denseMorphProviderSymbol]: provider
+    } satisfies ThreeMmdGeometryMorph & { [denseMorphProviderSymbol]: DenseMorphProvider };
+    const geometry = createThreeBufferGeometry(
+      {
+        ...createQuadBuffers(),
+        additionalUvs: [new Float32Array(16)]
+      },
+      [],
+      [morph]
     );
 
     expect(Array.from(geometry.morphAttributes.position?.[0]?.array ?? [])).toEqual([

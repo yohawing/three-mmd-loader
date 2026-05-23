@@ -80,10 +80,16 @@ export interface YwMmdWasmModule {
   _yw_mmd_material_texture_path?: (i: number) => number;
   _yw_mmd_material_sphere_texture_path?: (i: number) => number;
   _yw_mmd_material_toon_texture_path?: (i: number) => number;
+  _yw_mmd_material_f32_table_ptr?: () => number;
+  _yw_mmd_material_i32_table_ptr?: () => number;
+  _yw_mmd_material_string_ptrs_ptr?: () => number;
   _yw_mmd_material_f32?: (i: number, field: number) => number;
   _yw_mmd_material_i32?: (i: number, field: number) => number;
   _yw_mmd_bone_name?: (i: number) => number;
   _yw_mmd_bone_english_name?: (i: number) => number;
+  _yw_mmd_bone_f32_table_ptr?: () => number;
+  _yw_mmd_bone_i32_table_ptr?: () => number;
+  _yw_mmd_bone_string_ptrs_ptr?: () => number;
   _yw_mmd_bone_f32?: (i: number, field: number) => number;
   _yw_mmd_bone_i32?: (i: number, field: number) => number;
   _yw_mmd_bone_ik_limit_angle?: (i: number) => number;
@@ -91,6 +97,9 @@ export interface YwMmdWasmModule {
   _yw_mmd_bone_ik_links_ptr?: (i: number) => number;
   _yw_mmd_morph_name?: (i: number) => number;
   _yw_mmd_morph_english_name?: (i: number) => number;
+  _yw_mmd_morph_i32_table_ptr?: () => number;
+  _yw_mmd_morph_string_ptrs_ptr?: () => number;
+  _yw_mmd_morph_offset_ptrs_ptr?: () => number;
   _yw_mmd_morph_type?: (i: number) => number;
   _yw_mmd_morph_offset_count?: (i: number) => number;
   _yw_mmd_morph_offset_ptr?: (i: number) => number;

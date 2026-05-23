@@ -217,7 +217,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     ).toBe(false);
   });
 
-  it("uses Wasm dense vertex morph buffers for generated PMX geometry attributes", async () => {
+  it("creates matching PMX morph geometry from Wasm sparse morph offsets", async () => {
     const bytes = await readFile(resolve("test/fixtures/generated/minimal-loader-smoke.pmx"));
     const parsed = parsePmx(bytes);
     const core = await initCore();
@@ -225,8 +225,8 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     const wasmMorphs = model.morphs();
 
     expect(wasmMorphs[0]).toMatchObject({ name: "tiny_raise", type: "vertex" });
-    expect(wasmMorphs[0]?.densePositionOffsets).toBeInstanceOf(Float32Array);
-    expect(wasmMorphs[0]?.densePositionOffsets).toHaveLength(model.metadata().counts.vertices * 3);
+    expect(wasmMorphs[0]?.densePositionOffsets).toBeUndefined();
+    expect(wasmMorphs[0]?.vertexOffsets).toHaveLength(1);
 
     const wasmGeometry = createThreeBufferGeometry(model.geometry(), model.materials(), wasmMorphs);
     const tsGeometry = createThreeBufferGeometry(

@@ -92,6 +92,11 @@ yw_mmd_model_load(const nanoem_u8_t *data, nanoem_rsize_t length, int format)
     memset(g_mld.skin_indices, 0, (size_t)V * 4 * sizeof(uint16_t));
     memset(g_mld.skin_weights, 0, (size_t)V * 4 * sizeof(float));
     memset(g_mld.sdef_enabled, 0, (size_t)V     * sizeof(float));
+    memset(g_mld.sdef_c, 0, (size_t)V * 3 * sizeof(float));
+    memset(g_mld.sdef_r0, 0, (size_t)V * 3 * sizeof(float));
+    memset(g_mld.sdef_r1, 0, (size_t)V * 3 * sizeof(float));
+    memset(g_mld.sdef_rw0, 0, (size_t)V * 3 * sizeof(float));
+    memset(g_mld.sdef_rw1, 0, (size_t)V * 3 * sizeof(float));
 
     for (int i = 0; i < V; i++) {
         const nanoem_model_vertex_t *v = vertices[i];

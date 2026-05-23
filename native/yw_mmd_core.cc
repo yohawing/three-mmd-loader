@@ -120,6 +120,21 @@ static struct {
     char **mat_diffuse_tex_path;
     char **mat_sphere_tex_path;
     char **mat_toon_tex_path;
+    char **mat_names;
+    char **mat_english_names;
+    float *material_f32_table;   /* material_count * 16 */
+    int *material_i32_table;     /* material_count * 5 */
+    uint32_t *material_string_ptrs; /* material_count * 5: name, en, diffuse, sphere, toon */
+    char **bone_names;
+    char **bone_english_names;
+    float *bone_f32_table;       /* bone_count * 17: fields 0..15 + ik limit angle */
+    int *bone_i32_table;         /* bone_count * 9 */
+    uint32_t *bone_string_ptrs;  /* bone_count * 2: name, en */
+    char **morph_names;
+    char **morph_english_names;
+    int *morph_i32_table;        /* morph_count * 2: type, offset count */
+    uint32_t *morph_string_ptrs; /* morph_count * 2: name, en */
+    uint32_t *morph_offset_ptrs; /* morph_count */
     int    *ik_link_counts;
     float **ik_links_buf;
     int    *morph_offset_counts;
@@ -238,6 +253,32 @@ yw_mmd_clear_mld(void)
         g_mld.mat_sphere_tex_path = NULL;
         g_mld.mat_toon_tex_path = NULL;
     }
+    if (g_mld.mat_names) {
+        for (int i = 0; i < g_mld.material_count_p3; i++) {
+            free(g_mld.mat_names[i]);
+            free(g_mld.mat_english_names ? g_mld.mat_english_names[i] : NULL);
+        }
+        free(g_mld.mat_names);
+        free(g_mld.mat_english_names);
+        g_mld.mat_names = NULL;
+        g_mld.mat_english_names = NULL;
+    }
+    free(g_mld.material_f32_table); g_mld.material_f32_table = NULL;
+    free(g_mld.material_i32_table); g_mld.material_i32_table = NULL;
+    free(g_mld.material_string_ptrs); g_mld.material_string_ptrs = NULL;
+    if (g_mld.bone_names) {
+        for (int i = 0; i < g_mld.bone_count_p3; i++) {
+            free(g_mld.bone_names[i]);
+            free(g_mld.bone_english_names ? g_mld.bone_english_names[i] : NULL);
+        }
+        free(g_mld.bone_names);
+        free(g_mld.bone_english_names);
+        g_mld.bone_names = NULL;
+        g_mld.bone_english_names = NULL;
+    }
+    free(g_mld.bone_f32_table); g_mld.bone_f32_table = NULL;
+    free(g_mld.bone_i32_table); g_mld.bone_i32_table = NULL;
+    free(g_mld.bone_string_ptrs); g_mld.bone_string_ptrs = NULL;
     if (g_mld.ik_links_buf) {
         for (int i = 0; i < g_mld.bone_count_p3; i++) {
             free(g_mld.ik_links_buf[i]);
@@ -253,6 +294,19 @@ yw_mmd_clear_mld(void)
         free(g_mld.morph_offset_bufs);
         g_mld.morph_offset_bufs = NULL;
     }
+    if (g_mld.morph_names) {
+        for (int i = 0; i < g_mld.morph_count_p3; i++) {
+            free(g_mld.morph_names[i]);
+            free(g_mld.morph_english_names ? g_mld.morph_english_names[i] : NULL);
+        }
+        free(g_mld.morph_names);
+        free(g_mld.morph_english_names);
+        g_mld.morph_names = NULL;
+        g_mld.morph_english_names = NULL;
+    }
+    free(g_mld.morph_i32_table); g_mld.morph_i32_table = NULL;
+    free(g_mld.morph_string_ptrs); g_mld.morph_string_ptrs = NULL;
+    free(g_mld.morph_offset_ptrs); g_mld.morph_offset_ptrs = NULL;
     free(g_mld.morph_offset_counts); g_mld.morph_offset_counts = NULL;
     free(g_mld.morph_dense_buf); g_mld.morph_dense_buf = NULL;
     g_mld.morph_dense_capacity = 0;

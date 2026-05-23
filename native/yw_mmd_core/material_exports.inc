@@ -15,6 +15,15 @@ const char *yw_mmd_material_sphere_texture_path(int i) {
 const char *yw_mmd_material_toon_texture_path(int i) {
     return g_mld.valid && g_mld.mat_toon_tex_path && i >= 0 && i < g_mld.material_count_p3 && g_mld.mat_toon_tex_path[i] ? g_mld.mat_toon_tex_path[i] : "";
 }
+float *yw_mmd_material_f32_table_ptr(void) {
+    return g_mld.valid ? g_mld.material_f32_table : NULL;
+}
+int *yw_mmd_material_i32_table_ptr(void) {
+    return g_mld.valid ? g_mld.material_i32_table : NULL;
+}
+uint32_t *yw_mmd_material_string_ptrs_ptr(void) {
+    return g_mld.valid ? g_mld.material_string_ptrs : NULL;
+}
 float yw_mmd_material_f32(int i, int field) {
     const nanoem_model_material_t *mat = yw_mmd_material_at(i);
     if (!mat) return 0.0f;
