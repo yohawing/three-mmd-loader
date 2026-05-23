@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { FallbackCore, initCoreWithFallback } from "../core/index.js";
+import { FallbackCore, initCoreWithFallback } from "../parser/wasm/index.js";
 import { parseVmd, parseVpd } from "../parser/index.js";
 import type { MmdCore } from "../parser/model/modelTypes.js";
 import { DefaultMmdRuntime } from "../runtime/index.js";

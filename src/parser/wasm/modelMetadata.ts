@@ -1,4 +1,4 @@
-import type { ModelMetadata } from "../../parser/model/modelTypes.js";
+import type { ModelMetadata } from "../model/modelTypes.js";
 
 export function mergeWasmMetadata(parsed: ModelMetadata, wasm: ModelMetadata): ModelMetadata {
   return {

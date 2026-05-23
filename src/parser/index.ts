@@ -1,6 +1,7 @@
 export { detectModelFormat } from "./formatDetection.js";
 export type { MmdModelFormat } from "./formatDetection.js";
-export type { MmdAnimation, MmdPose } from "./model/modelTypes.js";
+export type { InitCoreOptions, MmdAnimation, MmdCore, MmdModel, MmdPose } from "./model/modelTypes.js";
+export { FallbackCore, initCore, initCoreWithFallback } from "./wasm/index.js";
 export { parsePmdMetadata, parsePmdSectionInventory } from "./pmd/index.js";
 export type {
   PmdHeader,

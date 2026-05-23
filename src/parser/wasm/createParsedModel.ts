@@ -1,6 +1,6 @@
-import { parsePmd } from "../../parser/model/PmdModelParser.js";
-import { parsePmx } from "../../parser/model/PmxModelParser.js";
-import type { MmdModel, ModelMetadata } from "../../parser/model/modelTypes.js";
+import { parsePmd } from "../model/PmdModelParser.js";
+import { parsePmx } from "../model/PmxModelParser.js";
+import type { MmdModel, ModelMetadata } from "../model/modelTypes.js";
 import { mergeWasmMetadata } from "./modelMetadata.js";
 import { ParsedModel } from "./ParsedModel.js";
 

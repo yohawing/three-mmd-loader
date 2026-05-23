@@ -10,6 +10,7 @@
 static char *yw_mmd_copy_string(const char *value);
 static int   yw_mmd_detect_model_format(const nanoem_u8_t *data, nanoem_rsize_t length);
 static void  yw_mmd_fill_header_metadata(const nanoem_u8_t *data, nanoem_rsize_t length, int format, float *out_f32, int *out_i32);
+extern "C" void yw_mmd_clear_physics_tables(void);
 
 enum {
     YW_MMD_MODEL_FORMAT_AUTO = 0,
@@ -221,6 +222,7 @@ yw_mmd_extract_text_static(nanoem_unicode_string_factory_t *factory,
 static void
 yw_mmd_clear_mld(void)
 {
+    yw_mmd_clear_physics_tables();
     if (g_mld.model) { nanoemModelDestroy(g_mld.model); g_mld.model = NULL; }
     free(g_mld.name);           g_mld.name           = NULL;
     free(g_mld.english_name);   g_mld.english_name   = NULL;

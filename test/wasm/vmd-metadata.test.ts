@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { initCore } from "../../src/core/index.js";
+import { initCore } from "../../src/parser/wasm/index.js";
 
 const wavefileCameraIt = existsSync(resolve("data/vmd/wavefile_camera.vmd")) ? it : it.skip;
 

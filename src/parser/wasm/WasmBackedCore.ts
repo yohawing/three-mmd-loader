@@ -1,13 +1,13 @@
-import { toUint8Array } from "../../parser/binary/index.js";
+import { toUint8Array } from "../binary/index.js";
 import {
   denseMorphProviderSymbol,
   type DenseMorphProvider
-} from "../../parser/model/denseMorphProvider.js";
-import { createModelDiagnostics } from "../../parser/model/diagnostics.js";
-import type { YwMmdWasmModule } from "../../parser/wasm/generated/yw_mmd_core.js";
-import { parsePmd } from "../../parser/model/PmdModelParser.js";
-import { parsePmx, type ParsedPmx } from "../../parser/model/PmxModelParser.js";
-import { detectModelFormat } from "../../parser/formatDetection.js";
+} from "../model/denseMorphProvider.js";
+import { createModelDiagnostics } from "../model/diagnostics.js";
+import type { YwMmdWasmModule } from "./generated/yw_mmd_core.js";
+import { parsePmd } from "../model/PmdModelParser.js";
+import { parsePmx, type ParsedPmx } from "../model/PmxModelParser.js";
+import { detectModelFormat } from "../formatDetection.js";
 import type {
   BoneData,
   BoneFlags,
@@ -29,9 +29,9 @@ import type {
   VmdBoneFrame,
   VmdCameraInterpolation,
   VmdInterpolationCurve
-} from "../../parser/model/modelTypes.js";
-import { parseVmd } from "../../parser/vmd/index.js";
-import { parseVpd, vpdPoseToAnimation } from "../../parser/vpd/index.js";
+} from "../model/modelTypes.js";
+import { parseVmd } from "../vmd/index.js";
+import { parseVpd, vpdPoseToAnimation } from "../vpd/index.js";
 import { createParsedModelFromBytes } from "./createParsedModel.js";
 import { parseWasmModelMetadata } from "./wasmModelMetadata.js";
 import { DisposableParsedModel, ParsedModel } from "./ParsedModel.js";
@@ -572,13 +572,30 @@ export class WasmBackedCore implements MmdCore {
   }
 
   private readRigidBodiesFromWasm(readString: (ptr: number) => string): RigidBodyData[] {
+    const wasm = this.wasm;
+    const heap = wasm.HEAPU8.buffer;
+    const readF32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Float32Array(heap, ptr, length).slice() : undefined;
+    const readI32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Int32Array(heap, ptr, length).slice() : undefined;
+    const readU32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Uint32Array(heap, ptr, length).slice() : undefined;
+    const count = this.wasm._yw_mmd_model_metadata_i32(15);
+    const stringPtrs = readU32Table(wasm._yw_mmd_rigid_body_string_ptrs_ptr?.(), count * 2);
+    const f32Table = readF32Table(wasm._yw_mmd_rigid_body_f32_table_ptr?.(), count * 14);
+    const i32Table = readI32Table(wasm._yw_mmd_rigid_body_i32_table_ptr?.(), count * 5);
     const rigidBodies: RigidBodyData[] = [];
-    for (let i = 0; i < this.wasm._yw_mmd_model_metadata_i32(15); i++) {
-      const f = (field: number) => this.wasm._yw_mmd_rigid_body_f32!(i, field);
-      const iv = (field: number) => this.wasm._yw_mmd_rigid_body_i32!(i, field);
+    for (let i = 0; i < count; i++) {
+      const f = (field: number) =>
+        f32Table?.[i * 14 + field] ?? this.wasm._yw_mmd_rigid_body_f32!(i, field);
+      const iv = (field: number) =>
+        i32Table?.[i * 5 + field] ?? this.wasm._yw_mmd_rigid_body_i32!(i, field);
+      const sp = (field: number) => stringPtrs?.[i * 2 + field] ?? 0;
       rigidBodies.push({
-        name: readString(this.wasm._yw_mmd_rigid_body_name!(i)),
-        englishName: readString(this.wasm._yw_mmd_rigid_body_english_name!(i)),
+        name: stringPtrs ? readString(sp(0)) : readString(this.wasm._yw_mmd_rigid_body_name!(i)),
+        englishName: stringPtrs
+          ? readString(sp(1))
+          : readString(this.wasm._yw_mmd_rigid_body_english_name!(i)),
         boneIndex: iv(0),
         group: iv(1),
         mask: iv(2),
@@ -598,13 +615,30 @@ export class WasmBackedCore implements MmdCore {
   }
 
   private readJointsFromWasm(readString: (ptr: number) => string): JointData[] {
+    const wasm = this.wasm;
+    const heap = wasm.HEAPU8.buffer;
+    const readF32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Float32Array(heap, ptr, length).slice() : undefined;
+    const readI32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Int32Array(heap, ptr, length).slice() : undefined;
+    const readU32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Uint32Array(heap, ptr, length).slice() : undefined;
+    const count = this.wasm._yw_mmd_model_metadata_i32(16);
+    const stringPtrs = readU32Table(wasm._yw_mmd_joint_string_ptrs_ptr?.(), count * 2);
+    const f32Table = readF32Table(wasm._yw_mmd_joint_f32_table_ptr?.(), count * 24);
+    const i32Table = readI32Table(wasm._yw_mmd_joint_i32_table_ptr?.(), count * 3);
     const joints: JointData[] = [];
-    for (let i = 0; i < this.wasm._yw_mmd_model_metadata_i32(16); i++) {
-      const f = (field: number) => this.wasm._yw_mmd_joint_f32!(i, field);
-      const iv = (field: number) => this.wasm._yw_mmd_joint_i32!(i, field);
+    for (let i = 0; i < count; i++) {
+      const f = (field: number) =>
+        f32Table?.[i * 24 + field] ?? this.wasm._yw_mmd_joint_f32!(i, field);
+      const iv = (field: number) =>
+        i32Table?.[i * 3 + field] ?? this.wasm._yw_mmd_joint_i32!(i, field);
+      const sp = (field: number) => stringPtrs?.[i * 2 + field] ?? 0;
       joints.push({
-        name: readString(this.wasm._yw_mmd_joint_name!(i)),
-        englishName: readString(this.wasm._yw_mmd_joint_english_name!(i)),
+        name: stringPtrs ? readString(sp(0)) : readString(this.wasm._yw_mmd_joint_name!(i)),
+        englishName: stringPtrs
+          ? readString(sp(1))
+          : readString(this.wasm._yw_mmd_joint_english_name!(i)),
         type: toJointType(iv(2)),
         rigidBodyIndexA: iv(0),
         rigidBodyIndexB: iv(1),
@@ -622,25 +656,63 @@ export class WasmBackedCore implements MmdCore {
   }
 
   private readSoftBodiesFromWasm(readString: (ptr: number) => string): SoftBodyData[] {
+    const wasm = this.wasm;
+    const heap = wasm.HEAPU8.buffer;
+    const readF32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Float32Array(heap, ptr, length).slice() : undefined;
+    const readI32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Int32Array(heap, ptr, length).slice() : undefined;
+    const readU32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Uint32Array(heap, ptr, length).slice() : undefined;
+    const count = this.wasm._yw_mmd_model_metadata_i32(17);
+    const stringPtrs = readU32Table(wasm._yw_mmd_soft_body_string_ptrs_ptr?.(), count * 2);
+    const f32Table = readF32Table(wasm._yw_mmd_soft_body_f32_table_ptr?.(), count * 23);
+    const i32Table = readI32Table(wasm._yw_mmd_soft_body_i32_table_ptr?.(), count * 14);
+    const anchorOffsets = readI32Table(wasm._yw_mmd_soft_body_anchor_offsets_ptr?.(), count + 1);
+    const totalAnchors = anchorOffsets?.[count] ?? 0;
+    const anchorTable = readI32Table(
+      wasm._yw_mmd_soft_body_anchor_i32_table_ptr?.(),
+      totalAnchors * 3
+    );
+    const pinnedOffsets = readI32Table(wasm._yw_mmd_soft_body_pinned_offsets_ptr?.(), count + 1);
+    const totalPinned = pinnedOffsets?.[count] ?? 0;
+    const pinnedTable = readI32Table(
+      wasm._yw_mmd_soft_body_pinned_vertex_table_ptr?.(),
+      totalPinned
+    );
     const softBodies: SoftBodyData[] = [];
-    for (let i = 0; i < this.wasm._yw_mmd_model_metadata_i32(17); i++) {
-      const f = (field: number) => this.wasm._yw_mmd_soft_body_f32!(i, field);
-      const iv = (field: number) => this.wasm._yw_mmd_soft_body_i32!(i, field);
+    for (let i = 0; i < count; i++) {
+      const f = (field: number) =>
+        f32Table?.[i * 23 + field] ?? this.wasm._yw_mmd_soft_body_f32!(i, field);
+      const iv = (field: number) =>
+        i32Table?.[i * 14 + field] ?? this.wasm._yw_mmd_soft_body_i32!(i, field);
+      const sp = (field: number) => stringPtrs?.[i * 2 + field] ?? 0;
       const anchors: SoftBodyData["anchors"] = [];
       for (let j = 0; j < iv(12); j++) {
+        const anchorIndex = (anchorOffsets?.[i] ?? 0) + j;
+        const tableBase = anchorIndex * 3;
         anchors.push({
-          rigidBodyIndex: this.wasm._yw_mmd_soft_body_anchor_i32!(i, j, 0),
-          vertexIndex: this.wasm._yw_mmd_soft_body_anchor_i32!(i, j, 1),
-          nearMode: this.wasm._yw_mmd_soft_body_anchor_i32!(i, j, 2) !== 0
+          rigidBodyIndex:
+            anchorTable?.[tableBase] ?? this.wasm._yw_mmd_soft_body_anchor_i32!(i, j, 0),
+          vertexIndex:
+            anchorTable?.[tableBase + 1] ?? this.wasm._yw_mmd_soft_body_anchor_i32!(i, j, 1),
+          nearMode:
+            (anchorTable?.[tableBase + 2] ?? this.wasm._yw_mmd_soft_body_anchor_i32!(i, j, 2)) !==
+            0
         });
       }
       const pinnedVertexIndices: number[] = [];
       for (let j = 0; j < iv(13); j++) {
-        pinnedVertexIndices.push(this.wasm._yw_mmd_soft_body_pinned_vertex!(i, j));
+        const pinnedIndex = (pinnedOffsets?.[i] ?? 0) + j;
+        pinnedVertexIndices.push(
+          pinnedTable?.[pinnedIndex] ?? this.wasm._yw_mmd_soft_body_pinned_vertex!(i, j)
+        );
       }
       softBodies.push({
-        name: readString(this.wasm._yw_mmd_soft_body_name!(i)),
-        englishName: readString(this.wasm._yw_mmd_soft_body_english_name!(i)),
+        name: stringPtrs ? readString(sp(0)) : readString(this.wasm._yw_mmd_soft_body_name!(i)),
+        englishName: stringPtrs
+          ? readString(sp(1))
+          : readString(this.wasm._yw_mmd_soft_body_english_name!(i)),
         type: toSoftBodyType(iv(6)),
         materialIndex: iv(0),
         collisionGroup: iv(1),
@@ -735,8 +807,15 @@ export class WasmBackedCore implements MmdCore {
 
   private readVmdFromLoadedWasm(input: Uint8Array): MmdAnimation {
     const wasm = this.wasm;
+    const heap = wasm.HEAPU8.buffer;
     const i32 = wasm._yw_mmd_motion_metadata_i32!;
     const readString = (ptr: number) => (ptr ? wasm.UTF8ToString(ptr) : "");
+    const readF32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Float32Array(heap, ptr, length).slice() : undefined;
+    const readI32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Int32Array(heap, ptr, length).slice() : undefined;
+    const readU32Table = (ptr: number | undefined, length: number) =>
+      ptr ? new Uint32Array(heap, ptr, length).slice() : undefined;
     const counts = {
       bones: i32(0),
       morphs: i32(1),
@@ -750,25 +829,93 @@ export class WasmBackedCore implements MmdCore {
       counts,
       maxFrame: i32(6)
     };
+    const boneNamePtrs = readU32Table(wasm._yw_mmd_motion_bone_name_ptrs_ptr?.(), counts.bones);
+    const boneI32Table = readI32Table(
+      wasm._yw_mmd_motion_bone_i32_table_ptr?.(),
+      counts.bones * 2
+    );
+    const boneF32Table = readF32Table(
+      wasm._yw_mmd_motion_bone_f32_table_ptr?.(),
+      counts.bones * 7
+    );
+    const boneInterpolationTable = readI32Table(
+      wasm._yw_mmd_motion_bone_interpolation_table_ptr?.(),
+      counts.bones * 16
+    );
+    const morphNamePtrs = readU32Table(
+      wasm._yw_mmd_motion_morph_name_ptrs_ptr?.(),
+      counts.morphs
+    );
+    const morphI32Table = readI32Table(
+      wasm._yw_mmd_motion_morph_i32_table_ptr?.(),
+      counts.morphs
+    );
+    const morphF32Table = readF32Table(
+      wasm._yw_mmd_motion_morph_f32_table_ptr?.(),
+      counts.morphs
+    );
+    const cameraI32Table = readI32Table(
+      wasm._yw_mmd_motion_camera_i32_table_ptr?.(),
+      counts.cameras * 3
+    );
+    const cameraF32Table = readF32Table(
+      wasm._yw_mmd_motion_camera_f32_table_ptr?.(),
+      counts.cameras * 7
+    );
+    const cameraInterpolationTable = readI32Table(
+      wasm._yw_mmd_motion_camera_interpolation_table_ptr?.(),
+      counts.cameras * 24
+    );
+    const lightI32Table = readI32Table(
+      wasm._yw_mmd_motion_light_i32_table_ptr?.(),
+      counts.lights
+    );
+    const lightF32Table = readF32Table(
+      wasm._yw_mmd_motion_light_f32_table_ptr?.(),
+      counts.lights * 6
+    );
+    const selfShadowI32Table = readI32Table(
+      wasm._yw_mmd_motion_self_shadow_i32_table_ptr?.(),
+      counts.selfShadows * 2
+    );
+    const selfShadowF32Table = readF32Table(
+      wasm._yw_mmd_motion_self_shadow_f32_table_ptr?.(),
+      counts.selfShadows
+    );
+    const modelI32Table = readI32Table(
+      wasm._yw_mmd_motion_model_i32_table_ptr?.(),
+      counts.properties * 4
+    );
+    const modelConstraintOffsets = readI32Table(
+      wasm._yw_mmd_motion_model_constraint_offsets_ptr?.(),
+      counts.properties + 1
+    );
+    const totalConstraintCount =
+      modelConstraintOffsets && counts.properties > 0
+        ? modelConstraintOffsets[counts.properties]
+        : 0;
+    const modelConstraintNamePtrs = readU32Table(
+      wasm._yw_mmd_motion_model_constraint_name_ptrs_ptr?.(),
+      totalConstraintCount
+    );
+    const modelConstraintEnabledTable = readI32Table(
+      wasm._yw_mmd_motion_model_constraint_enabled_table_ptr?.(),
+      totalConstraintCount
+    );
     const boneTracks: MmdAnimation["boneTracks"] = {};
     const bonePhysicsToggles = readVmdBonePhysicsToggleQueues(input);
     for (let i = 0; i < counts.bones; i++) {
-      const name = readString(wasm._yw_mmd_motion_bone_name!(i));
-      const frame = wasm._yw_mmd_motion_bone_i32!(i, 0);
+      const name = boneNamePtrs
+        ? readString(boneNamePtrs[i])
+        : readString(wasm._yw_mmd_motion_bone_name!(i));
+      const frame = boneI32Table?.[i * 2] ?? wasm._yw_mmd_motion_bone_i32!(i, 0);
+      const f = (field: number) =>
+        boneF32Table?.[i * 7 + field] ?? wasm._yw_mmd_motion_bone_f32!(i, field);
       const boneFrame: VmdBoneFrame = {
         frame,
-        translation: [
-          wasm._yw_mmd_motion_bone_f32!(i, 0),
-          wasm._yw_mmd_motion_bone_f32!(i, 1),
-          wasm._yw_mmd_motion_bone_f32!(i, 2)
-        ] as [number, number, number],
-        rotation: [
-          wasm._yw_mmd_motion_bone_f32!(i, 3),
-          wasm._yw_mmd_motion_bone_f32!(i, 4),
-          wasm._yw_mmd_motion_bone_f32!(i, 5),
-          wasm._yw_mmd_motion_bone_f32!(i, 6)
-        ] as [number, number, number, number],
-        interpolation: readWasmBoneInterpolation(wasm, i)
+        translation: [f(0), f(1), f(2)] as [number, number, number],
+        rotation: [f(3), f(4), f(5), f(6)] as [number, number, number, number],
+        interpolation: readWasmBoneInterpolation(wasm, i, boneInterpolationTable)
       };
       const physicsToggle = consumeVmdBonePhysicsToggle(bonePhysicsToggles, name, frame);
       if (physicsToggle !== undefined) {
@@ -779,74 +926,77 @@ export class WasmBackedCore implements MmdCore {
 
     const morphTracks: MmdAnimation["morphTracks"] = {};
     for (let i = 0; i < counts.morphs; i++) {
-      const name = readString(wasm._yw_mmd_motion_morph_name!(i));
+      const name = morphNamePtrs
+        ? readString(morphNamePtrs[i])
+        : readString(wasm._yw_mmd_motion_morph_name!(i));
       (morphTracks[name] ??= []).push({
-        frame: wasm._yw_mmd_motion_morph_i32!(i, 0),
-        weight: wasm._yw_mmd_motion_morph_f32!(i, 0)
+        frame: morphI32Table?.[i] ?? wasm._yw_mmd_motion_morph_i32!(i, 0),
+        weight: morphF32Table?.[i] ?? wasm._yw_mmd_motion_morph_f32!(i, 0)
       });
     }
 
     const cameraFrames: MmdAnimation["cameraFrames"] = [];
     for (let i = 0; i < counts.cameras; i++) {
+      const ci = (field: number) =>
+        cameraI32Table?.[i * 3 + field] ?? wasm._yw_mmd_motion_camera_i32!(i, field);
+      const cf = (field: number) =>
+        cameraF32Table?.[i * 7 + field] ?? wasm._yw_mmd_motion_camera_f32!(i, field);
       cameraFrames.push({
-        frame: wasm._yw_mmd_motion_camera_i32!(i, 0),
-        distance: wasm._yw_mmd_motion_camera_f32!(i, 0),
-        position: [
-          wasm._yw_mmd_motion_camera_f32!(i, 1),
-          wasm._yw_mmd_motion_camera_f32!(i, 2),
-          wasm._yw_mmd_motion_camera_f32!(i, 3)
-        ],
-        rotation: [
-          wasm._yw_mmd_motion_camera_f32!(i, 4),
-          wasm._yw_mmd_motion_camera_f32!(i, 5),
-          wasm._yw_mmd_motion_camera_f32!(i, 6)
-        ],
-        interpolation: readWasmCameraInterpolation(wasm, i),
-        fov: wasm._yw_mmd_motion_camera_i32!(i, 1),
-        perspective: wasm._yw_mmd_motion_camera_i32!(i, 2) !== 0
+        frame: ci(0),
+        distance: cf(0),
+        position: [cf(1), cf(2), cf(3)],
+        rotation: [cf(4), cf(5), cf(6)],
+        interpolation: readWasmCameraInterpolation(wasm, i, cameraInterpolationTable),
+        fov: ci(1),
+        perspective: ci(2) !== 0
       });
     }
 
     const lightFrames: MmdAnimation["lightFrames"] = [];
     for (let i = 0; i < counts.lights; i++) {
+      const lf = (field: number) =>
+        lightF32Table?.[i * 6 + field] ?? wasm._yw_mmd_motion_light_f32!(i, field);
       lightFrames.push({
-        frame: wasm._yw_mmd_motion_light_i32!(i, 0),
-        color: [
-          wasm._yw_mmd_motion_light_f32!(i, 0),
-          wasm._yw_mmd_motion_light_f32!(i, 1),
-          wasm._yw_mmd_motion_light_f32!(i, 2)
-        ],
-        direction: [
-          wasm._yw_mmd_motion_light_f32!(i, 3),
-          wasm._yw_mmd_motion_light_f32!(i, 4),
-          wasm._yw_mmd_motion_light_f32!(i, 5)
-        ]
+        frame: lightI32Table?.[i] ?? wasm._yw_mmd_motion_light_i32!(i, 0),
+        color: [lf(0), lf(1), lf(2)],
+        direction: [lf(3), lf(4), lf(5)]
       });
     }
 
     const selfShadowFrames: MmdAnimation["selfShadowFrames"] = [];
     for (let i = 0; i < counts.selfShadows; i++) {
+      const si = (field: number) =>
+        selfShadowI32Table?.[i * 2 + field] ??
+        wasm._yw_mmd_motion_self_shadow_i32!(i, field);
       selfShadowFrames.push({
-        frame: wasm._yw_mmd_motion_self_shadow_i32!(i, 0),
-        mode: wasm._yw_mmd_motion_self_shadow_i32!(i, 1),
-        distance: wasm._yw_mmd_motion_self_shadow_f32!(i, 0)
+        frame: si(0),
+        mode: si(1),
+        distance: selfShadowF32Table?.[i] ?? wasm._yw_mmd_motion_self_shadow_f32!(i, 0)
       });
     }
 
     const propertyFrames: MmdAnimation["propertyFrames"] = [];
     for (let i = 0; i < counts.properties; i++) {
       const ikStates = [];
-      const ikCount = wasm._yw_mmd_motion_model_i32!(i, 3);
+      const mi = (field: number) =>
+        modelI32Table?.[i * 4 + field] ?? wasm._yw_mmd_motion_model_i32!(i, field);
+      const ikCount = mi(3);
+      const constraintOffset = modelConstraintOffsets?.[i] ?? 0;
       for (let j = 0; j < ikCount; j++) {
+        const constraintIndex = constraintOffset + j;
         ikStates.push({
-          boneName: readString(wasm._yw_mmd_motion_model_constraint_name!(i, j)),
-          enabled: wasm._yw_mmd_motion_model_constraint_enabled!(i, j) !== 0
+          boneName: modelConstraintNamePtrs
+            ? readString(modelConstraintNamePtrs[constraintIndex])
+            : readString(wasm._yw_mmd_motion_model_constraint_name!(i, j)),
+          enabled: modelConstraintEnabledTable
+            ? modelConstraintEnabledTable[constraintIndex] !== 0
+            : wasm._yw_mmd_motion_model_constraint_enabled!(i, j) !== 0
         });
       }
       propertyFrames.push({
-        frame: wasm._yw_mmd_motion_model_i32!(i, 0),
-        visible: wasm._yw_mmd_motion_model_i32!(i, 1) !== 0,
-        physicsSimulation: wasm._yw_mmd_motion_model_i32!(i, 2) !== 0,
+        frame: mi(0),
+        visible: mi(1) !== 0,
+        physicsSimulation: mi(2) !== 0,
         ikStates
       });
     }
@@ -1072,25 +1222,37 @@ function toSoftBodyAeroModel(value: number): SoftBodyData["aeroModel"] {
   }
 }
 
-function readWasmBoneInterpolation(wasm: YwMmdWasmModule, index: number): VmdBoneInterpolation {
+function readWasmBoneInterpolation(
+  wasm: YwMmdWasmModule,
+  index: number,
+  table?: Int32Array
+): VmdBoneInterpolation {
   const read = wasm._yw_mmd_motion_bone_interpolation!;
+  const readTable = (channel: number, component: number) =>
+    table?.[index * 16 + channel * 4 + component] ?? read(index, channel, component);
   return {
-    translationX: readWasmInterpolationCurve((component) => read(index, 0, component)),
-    translationY: readWasmInterpolationCurve((component) => read(index, 1, component)),
-    translationZ: readWasmInterpolationCurve((component) => read(index, 2, component)),
-    rotation: readWasmInterpolationCurve((component) => read(index, 3, component))
+    translationX: readWasmInterpolationCurve((component) => readTable(0, component)),
+    translationY: readWasmInterpolationCurve((component) => readTable(1, component)),
+    translationZ: readWasmInterpolationCurve((component) => readTable(2, component)),
+    rotation: readWasmInterpolationCurve((component) => readTable(3, component))
   };
 }
 
-function readWasmCameraInterpolation(wasm: YwMmdWasmModule, index: number): VmdCameraInterpolation {
+function readWasmCameraInterpolation(
+  wasm: YwMmdWasmModule,
+  index: number,
+  table?: Int32Array
+): VmdCameraInterpolation {
   const read = wasm._yw_mmd_motion_camera_interpolation!;
+  const readTable = (channel: number, component: number) =>
+    table?.[index * 24 + channel * 4 + component] ?? read(index, channel, component);
   return {
-    positionX: readWasmInterpolationCurve((component) => read(index, 0, component)),
-    positionY: readWasmInterpolationCurve((component) => read(index, 1, component)),
-    positionZ: readWasmInterpolationCurve((component) => read(index, 2, component)),
-    rotation: readWasmInterpolationCurve((component) => read(index, 3, component)),
-    distance: readWasmInterpolationCurve((component) => read(index, 4, component)),
-    fov: readWasmInterpolationCurve((component) => read(index, 5, component))
+    positionX: readWasmInterpolationCurve((component) => readTable(0, component)),
+    positionY: readWasmInterpolationCurve((component) => readTable(1, component)),
+    positionZ: readWasmInterpolationCurve((component) => readTable(2, component)),
+    rotation: readWasmInterpolationCurve((component) => readTable(3, component)),
+    distance: readWasmInterpolationCurve((component) => readTable(4, component)),
+    fov: readWasmInterpolationCurve((component) => readTable(5, component))
   };
 }
 

@@ -7,7 +7,7 @@ scripts used while developing `@yohawing/three-mmd-loader`.
 
 - Node.js 22 or 24.
 - npm with the committed `package-lock.json`.
-- Optional: Emscripten via emsdk when rebuilding the checked-in WASM wrapper.
+- Optional: Emscripten via emsdk when rebuilding the generated WASM wrapper.
 - Optional: Playwright browser dependencies for visual regression scripts.
 
 Install dependencies with:
@@ -21,9 +21,10 @@ another package manager.
 
 ## WASM Wrapper Build
 
-`npm run build` copies the checked-in generated WASM wrapper into `dist`; it
-does not rebuild the native wrapper. Rebuild it only when files under
-`native/**` or the WASM export surface changed:
+`npm run build` copies the locally generated WASM wrapper into `dist`; it does
+not rebuild the native wrapper. Rebuild it before `npm run build` when the
+generated wrapper is missing, or when files under `native/**` or the WASM export
+surface changed:
 
 ```bash
 npm run build:wasm
@@ -39,7 +40,13 @@ emsdk and make it discoverable by one of these methods:
 - Activate emsdk so `em++` is available on `PATH`.
 
 The script supports Windows, macOS, and Linux as long as Emscripten is
-available. Generated files are written to `src/parser/wasm/generated/`.
+available. Generated `.js` and `.wasm` files are written to
+`src/parser/wasm/generated/` and are intentionally not checked in. The
+hand-written `yw_mmd_core.d.ts` declaration file remains in source control.
+
+CI and release packaging install emsdk `5.0.7`, run `npm run build:wasm`, then
+run the normal build/test/smoke sequence. The npm tarball contains the generated
+WASM files only through `dist/**`.
 
 ## Core Checks
 
@@ -63,7 +70,8 @@ Command summary:
 | `npm run lint:fix` | Applies ESLint auto-fixes where available. |
 | `npm test` | Runs the Vitest unit and integration suite. |
 | `npm run build` | Compiles TypeScript and copies bundled MMD toon BMP assets into `dist`. |
-| `npm run bench:wasm:perf -- <model> [repeat]` | Compares WASM `loadModel` speed with the TypeScript fallback against a local PMX / PMD file. |
+| `npm run build:wasm` | Rebuilds the nanoem-backed WASM wrapper into `src/parser/wasm/generated/`. |
+| `npm run bench:wasm:perf -- <model> [repeat]` | Compares WASM and TypeScript fallback `loadModel` speed plus `loadModel + createThreeBufferGeometry` total time against a local PMX / PMD file. |
 | `npm run smoke:dist` | Verifies built package exports and key dist runtime paths. |
 | `npm run smoke:types` | Packs the library, installs it into a temporary TypeScript consumer, and verifies root/subpath imports with `tsc --noEmit`. |
 | `npm run check:fixtures` | Parses the fixture manifest and writes `tmp/fixture-parse-report.json`. |
@@ -176,6 +184,7 @@ GitHub Actions run the same core sequence on Node.js 22 and 24:
 
 ```bash
 npm ci
+npm run build:wasm
 npm run lint
 npm test
 npm run build

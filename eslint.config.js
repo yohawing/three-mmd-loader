@@ -47,7 +47,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ["src/core/wasm/**/*.ts", "test/wasm/**/*.ts"],
+    files: ["src/parser/wasm/**/*.ts", "test/wasm/**/*.ts"],
     rules: {
       "@typescript-eslint/no-non-null-assertion": "off"
     }

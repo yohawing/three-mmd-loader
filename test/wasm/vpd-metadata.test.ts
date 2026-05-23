@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { initCore } from "../../src/core/index.js";
+import { initCore } from "../../src/parser/wasm/index.js";
 
 const luminePmxIt = existsSync(resolve("data/pmx/【女主角_荧】_by_原神/Lumine.pmx")) ? it : it.skip;
 

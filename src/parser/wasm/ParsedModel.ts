@@ -1,5 +1,5 @@
-import type { parsePmd } from "../../parser/model/PmdModelParser.js";
-import type { parsePmx } from "../../parser/model/PmxModelParser.js";
+import type { parsePmd } from "../model/PmdModelParser.js";
+import type { parsePmx } from "../model/PmxModelParser.js";
 import type {
   DisplayFrameData,
   EmbeddedTextureData,
@@ -12,7 +12,7 @@ import type {
   RigidBodyData,
   SkeletonData,
   SoftBodyData
-} from "../../parser/model/modelTypes.js";
+} from "../model/modelTypes.js";
 
 type ParsedData = ReturnType<typeof parsePmx> | ReturnType<typeof parsePmd>;
 

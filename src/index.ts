@@ -4,6 +4,6 @@ export * from "./three/index.js";
 export * from "./physics/index.js";
 
 // Wasm-backed core
-export { FallbackCore } from "./core/wasm/FallbackCore.js";
-export { initCore, initCoreWithFallback } from "./core/index.js";
+export { FallbackCore } from "./parser/wasm/FallbackCore.js";
+export { initCore, initCoreWithFallback } from "./parser/wasm/index.js";
 export type { InitCoreOptions, MmdCore, MmdModel } from "./parser/model/modelTypes.js";

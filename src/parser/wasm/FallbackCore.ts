@@ -1,10 +1,10 @@
-import { toUint8Array } from "../../parser/binary/index.js";
-import type { MmdAnimation, MmdCore, MmdModel, MmdPose } from "../../parser/model/modelTypes.js";
-import { parsePmd } from "../../parser/model/PmdModelParser.js";
-import { parsePmx } from "../../parser/model/PmxModelParser.js";
-import { parseVmd } from "../../parser/vmd/index.js";
-import { parseVpd, vpdPoseToAnimation } from "../../parser/vpd/index.js";
-import { detectModelFormat } from "../../parser/formatDetection.js";
+import { toUint8Array } from "../binary/index.js";
+import type { MmdAnimation, MmdCore, MmdModel, MmdPose } from "../model/modelTypes.js";
+import { parsePmd } from "../model/PmdModelParser.js";
+import { parsePmx } from "../model/PmxModelParser.js";
+import { parseVmd } from "../vmd/index.js";
+import { parseVpd, vpdPoseToAnimation } from "../vpd/index.js";
+import { detectModelFormat } from "../formatDetection.js";
 import { createParsedModelFromBytes } from "./createParsedModel.js";
 
 export class FallbackCore implements MmdCore {

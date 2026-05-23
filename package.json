@@ -52,7 +52,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-wasm.mjs",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-wasm.mjs",
     "build:wasm": "node scripts/build-wasm.mjs",
     "bench:wasm:perf": "node scripts/bench_wasm_perf.mjs",
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",

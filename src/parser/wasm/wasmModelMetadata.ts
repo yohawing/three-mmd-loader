@@ -1,5 +1,5 @@
-import type { YwMmdWasmModule } from "../../parser/wasm/generated/yw_mmd_core.js";
-import type { ModelMetadata } from "../../parser/model/modelTypes.js";
+import type { YwMmdWasmModule } from "./generated/yw_mmd_core.js";
+import type { ModelMetadata } from "../model/modelTypes.js";
 
 export function parseWasmModelMetadata(
   wasm: YwMmdWasmModule,
