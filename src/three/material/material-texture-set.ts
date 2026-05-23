@@ -50,7 +50,8 @@ export async function loadMmdDefaultMaterialTextureSet(
       textureResolver,
       textureDiagnostics,
       textureLoader,
-      textureCache
+      textureCache,
+      ddsLoader
     ),
     shouldLoadSphereTexture
       ? textureAlpha.loadMaterialTextureWithDiagnostics(

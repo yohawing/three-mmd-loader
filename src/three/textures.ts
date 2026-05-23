@@ -345,7 +345,8 @@ export async function loadToonTexture(
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
   textureLoader?: ThreeMmdTextureLoader,
-  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  ddsLoader?: ThreeMmdTextureLoader
 ): Promise<THREE.Texture | undefined> {
   if (!material.toonTexturePath && material.sharedToonIndex === undefined) {
     return getDefaultToonGradientMap();
@@ -357,33 +358,51 @@ export async function loadToonTexture(
   const bundledSharedToonTexture = toonTexture.shared
     ? resolveBundledSharedToonTexture(toonTexture.path)
     : undefined;
-  const texture = bundledSharedToonTexture
-    ? await loadResolvedTexture(
-        bundledSharedToonTexture,
-        toonTexture.path,
-        undefined,
-        textureLoader,
-        textureCache,
-        "toon",
-        modelUrl
-      )
-    : await loadMaterialTexture(
-        toonTexture.path,
-        toonTexture.textureInfo,
-        modelUrl,
-        textureResolver,
-        textureLoader,
-        textureCache,
-        "toon"
-      );
-  if (!texture && material.toonTexturePath) {
+  let unsupportedFormat = false;
+  let texture: THREE.Texture | undefined;
+  if (bundledSharedToonTexture) {
+    texture = await loadResolvedTexture(
+      bundledSharedToonTexture,
+      toonTexture.path,
+      undefined,
+      textureLoader,
+      textureCache,
+      "toon",
+      modelUrl
+    );
+  } else {
+    const result = await loadMaterialTexture(
+      toonTexture.path,
+      toonTexture.textureInfo,
+      modelUrl,
+      textureResolver,
+      textureLoader,
+      textureCache,
+      "toon",
+      ddsLoader
+    );
+    texture = result.texture;
+    unsupportedFormat = result.unsupportedFormat === true;
+  }
+  if (unsupportedFormat && material.toonTexturePath) {
     textureDiagnostics.push({
       level: "warning",
-      code: "TEXTURE_RESOLVE_FAILED",
+      code: "TEXTURE_FORMAT_UNSUPPORTED",
       materialIndex,
       textureKind: "toon",
       path: material.toonTexturePath
     });
+  }
+  if (!texture && material.toonTexturePath) {
+    if (!unsupportedFormat) {
+      textureDiagnostics.push({
+        level: "warning",
+        code: "TEXTURE_RESOLVE_FAILED",
+        materialIndex,
+        textureKind: "toon",
+        path: material.toonTexturePath
+      });
+    }
   }
   if (
     !texture &&
@@ -479,17 +498,7 @@ export async function loadMaterialTextureWithDiagnostics(
   textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
   ddsLoader?: ThreeMmdTextureLoader
 ): Promise<THREE.Texture | undefined> {
-  if (texturePath && isMmdDdsTexturePath(texturePath) && !ddsLoader) {
-    textureDiagnostics.push({
-      level: "warning",
-      code: "TEXTURE_FORMAT_UNSUPPORTED",
-      materialIndex,
-      textureKind,
-      path: texturePath
-    });
-    return undefined;
-  }
-  const texture = await loadMaterialTexture(
+  const result = await loadMaterialTexture(
     texturePath,
     textureInfo,
     modelUrl,
@@ -499,6 +508,17 @@ export async function loadMaterialTextureWithDiagnostics(
     textureKind,
     ddsLoader
   );
+  const texture = result.texture;
+  if (result.unsupportedFormat && texturePath) {
+    textureDiagnostics.push({
+      level: "warning",
+      code: "TEXTURE_FORMAT_UNSUPPORTED",
+      materialIndex,
+      textureKind,
+      path: texturePath
+    });
+    return undefined;
+  }
   if (!texture && texturePath) {
     textureDiagnostics.push({
       level: "warning",
@@ -628,7 +648,7 @@ export function isMmdTgaLikeTexturePath(texturePath: string): boolean {
 }
 
 export function isMmdDdsTexturePath(texturePath: string): boolean {
-  return /\.dds$/i.test(texturePath);
+  return /\.dds(?:[?#].*)?$/i.test(texturePath);
 }
 
 export function createTextureResolver(
@@ -761,32 +781,67 @@ async function loadMaterialTexture(
   textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
   cacheNamespace = "material",
   ddsLoader?: ThreeMmdTextureLoader
-): Promise<THREE.Texture | undefined> {
+): Promise<{ texture?: THREE.Texture; unsupportedFormat?: boolean }> {
   if (!texturePath) {
-    return undefined;
+    return {};
   }
   const resolved = textureResolver
     ? await textureResolver.resolve(texturePath, modelUrl)
     : resolveAdjacentTexture(texturePath, modelUrl);
   if (!resolved) {
-    return undefined;
+    return {};
+  }
+  const resolvedIsDds = isResolvedMmdDdsTexture(texturePath, resolved);
+  if (resolvedIsDds && !ddsLoader) {
+    return { unsupportedFormat: true };
   }
   if (isMmdTgaLikeTexturePath(texturePath)) {
     const tgaTexture = await loadMmdTgaTexture(resolved, textureInfo);
     if (tgaTexture) {
-      return tgaTexture;
+      return { texture: tgaTexture };
     }
   }
-  const effectiveTextureLoader = isMmdDdsTexturePath(texturePath) ? ddsLoader : textureLoader;
-  return loadResolvedTexture(
+  const texture = await loadResolvedTexture(
     resolved,
     texturePath,
     textureInfo,
-    effectiveTextureLoader,
+    resolvedIsDds ? ddsLoader : textureLoader,
     textureCache,
     cacheNamespace,
     modelUrl
   );
+  return { texture };
+}
+
+function isResolvedMmdDdsTexture(texturePath: string, resolved: string | URL | Blob): boolean {
+  if (typeof resolved === "string") {
+    return isResolvedPathDds(texturePath, resolved);
+  }
+  if (typeof Blob !== "undefined" && resolved instanceof Blob) {
+    const fileName =
+      typeof File !== "undefined" && resolved instanceof File ? resolved.name : undefined;
+    if (fileName) {
+      return isMmdDdsTexturePath(fileName);
+    }
+    if (resolved.type) {
+      return /dds/i.test(resolved.type);
+    }
+    return isMmdDdsTexturePath(texturePath);
+  }
+  if (resolved instanceof URL) {
+    return isResolvedPathDds(texturePath, resolved.pathname);
+  }
+  return false;
+}
+
+function isResolvedPathDds(texturePath: string, resolvedPath: string): boolean {
+  if (isMmdDdsTexturePath(resolvedPath)) {
+    return true;
+  }
+  if (/\.(?:bmp|gif|jpe?g|png|tga|webp)(?:[?#].*)?$/i.test(resolvedPath)) {
+    return false;
+  }
+  return isMmdDdsTexturePath(texturePath);
 }
 
 async function loadResolvedTexture(

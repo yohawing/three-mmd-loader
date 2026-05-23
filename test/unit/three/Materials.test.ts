@@ -615,6 +615,53 @@ describe("Three.js MMD materials", () => {
     });
   });
 
+  it("allows texture maps to replace DDS references with supported texture files", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const textureLoader = createTextureLoaderMock();
+    const loadSpy = vi.spyOn(textureLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "skin.dds": "resolved/skin.png" },
+      textureLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(loadSpy).toHaveBeenCalledWith(
+      "resolved/skin.png",
+      expect.any(Function),
+      undefined,
+      expect.any(Function)
+    );
+    expect(materials[0]?.map?.name).toBe("resolved/skin.png");
+  });
+
+  it("allows texture maps to replace DDS references with typed PNG Blob textures", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const textureLoader = createTextureLoaderMock();
+    const ddsLoader = createTextureLoaderMock();
+    const textureLoadSpy = vi.spyOn(textureLoader, "load");
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: {
+        "skin.dds": new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" })
+      },
+      textureLoader,
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(textureLoadSpy).toHaveBeenCalledOnce();
+    expect(ddsLoadSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.map?.name).toMatch(/^blob:/);
+  });
+
   it("loads DDS diffuse textures through the supplied DDS loader", async () => {
     const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
     const materials = createThreeMmdMaterials(mmdMaterials);
@@ -637,5 +684,102 @@ describe("Three.js MMD materials", () => {
       expect.any(Function)
     );
     expect(materials[0]?.map?.name).toBe("resolved/skin.dds");
+  });
+
+  it("loads local DDS File textures through the supplied DDS loader even without a MIME type", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const textureLoader = createTextureLoaderMock();
+    const ddsLoader = createTextureLoaderMock();
+    const textureLoadSpy = vi.spyOn(textureLoader, "load");
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "skin.dds": new File([new Uint8Array([1, 2, 3])], "skin.dds") },
+      textureLoader,
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(textureLoadSpy).not.toHaveBeenCalled();
+    expect(ddsLoadSpy).toHaveBeenCalledOnce();
+    expect(materials[0]?.map?.name).toMatch(/^blob:/);
+  });
+
+  it("uses the DDS loader for extensionless resolver URLs when the original texture is DDS", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const textureLoader = createTextureLoaderMock();
+    const ddsLoader = createTextureLoaderMock();
+    const textureLoadSpy = vi.spyOn(textureLoader, "load");
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureResolver: {
+        resolve: async () => "https://cdn.example.com/signed-texture"
+      },
+      textureLoader,
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(textureLoadSpy).not.toHaveBeenCalled();
+    expect(ddsLoadSpy).toHaveBeenCalledWith(
+      "https://cdn.example.com/signed-texture",
+      expect.any(Function),
+      undefined,
+      expect.any(Function)
+    );
+    expect(materials[0]?.map?.name).toBe("https://cdn.example.com/signed-texture");
+  });
+
+  it("loads explicit DDS toon textures through the supplied DDS loader", async () => {
+    const mmdMaterials = [createMaterialInfo({ toonTexturePath: "toon.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const ddsLoader = createTextureLoaderMock();
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "toon.dds": "resolved/toon.dds" },
+      textureLoader: createTextureLoaderMock(),
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(ddsLoadSpy).toHaveBeenCalledWith(
+      "resolved/toon.dds",
+      expect.any(Function),
+      undefined,
+      expect.any(Function)
+    );
+    expect(materials[0]?.gradientMap?.name).toBe("resolved/toon.dds");
+  });
+
+  it("reports unsupported DDS toon textures when no DDS loader is supplied", async () => {
+    const mmdMaterials = [createMaterialInfo({ toonTexturePath: "toon.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "toon.dds": "resolved/toon.dds" },
+      textureLoader: createTextureLoaderMock()
+    });
+
+    expect(materials[0]?.gradientMap).toBeDefined();
+    expect(diagnostics).toContainEqual({
+      level: "warning",
+      code: "TEXTURE_FORMAT_UNSUPPORTED",
+      materialIndex: 0,
+      textureKind: "toon",
+      path: "toon.dds"
+    });
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_RESOLVE_FAILED" })
+    );
   });
 });

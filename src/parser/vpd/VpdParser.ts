@@ -172,18 +172,27 @@ function readBonePoses(text: string, startIndex: number): VpdBonePose[] {
   blockPattern.lastIndex = startIndex;
 
   const bones: VpdBonePose[] = [];
+  const blockRanges: Array<{ readonly start: number; readonly end: number }> = [];
   for (const match of text.matchAll(blockPattern)) {
-    const translation = tryParseTuple(match[2] ?? "", 3);
-    const rotation = tryParseTuple(match[3] ?? "", 4);
-    if (!translation || !rotation) {
-      continue;
-    }
+    const offset = match.index ?? 0;
+    blockRanges.push({ start: offset, end: offset + match[0].length });
+    const translation = parseTuple(match[2] ?? "", 3);
+    const rotation = parseTuple(match[3] ?? "", 4);
     const name = (match[1] ?? "").trim();
     bones.push({
       name,
       translation,
       rotation
     });
+  }
+
+  const blockStartPattern = /Bone\d+\s*\{/g;
+  blockStartPattern.lastIndex = startIndex;
+  for (const match of text.matchAll(blockStartPattern)) {
+    const offset = match.index ?? 0;
+    if (!blockRanges.some((range) => offset >= range.start && offset < range.end)) {
+      throw new Error("Invalid VPD bone block");
+    }
   }
   return bones;
 }
@@ -218,19 +227,6 @@ function parseTuple(
     throw new Error(`Invalid VPD numeric tuple: ${value.trim()}`);
   }
   return values as [number, number, number] | [number, number, number, number];
-}
-
-function tryParseTuple(value: string, length: 3): [number, number, number] | undefined;
-function tryParseTuple(value: string, length: 4): [number, number, number, number] | undefined;
-function tryParseTuple(
-  value: string,
-  length: 3 | 4
-): [number, number, number] | [number, number, number, number] | undefined {
-  try {
-    return length === 3 ? parseTuple(value, 3) : parseTuple(value, 4);
-  } catch {
-    return undefined;
-  }
 }
 
 function decodeVpdText(bytes: Uint8Array): string {

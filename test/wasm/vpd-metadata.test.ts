@@ -170,29 +170,45 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(pose.morphs).toEqual({ smile: 0.75 });
   });
 
-  it("skips invalid VPD bone and morph blocks instead of rejecting the whole pose", async () => {
+  it("rejects invalid VPD bone blocks instead of returning incomplete poses", async () => {
+    const core = await initCore();
+    expect(() =>
+      core.loadVpd(
+        new TextEncoder().encode(
+          [
+            "Vocaloid Pose Data file",
+            "",
+            "InvalidBone.osm;",
+            "2;",
+            "",
+            "Bone0 { Good",
+            "  1, 2, 3;",
+            "  0, 0, 0, 1;",
+            "}",
+            "",
+            "Bone1 { BadPosition",
+            "  broken;",
+            "  0, 0, 0, 1;",
+            "}"
+          ].join("\n")
+        )
+      )
+    ).toThrow(/Invalid VPD numeric tuple/);
+  });
+
+  it("skips invalid VPD morph weights without rejecting valid bone poses", async () => {
     const core = await initCore();
     const pose = core.loadVpd(
       new TextEncoder().encode(
         [
           "Vocaloid Pose Data file",
           "",
-          "PermissiveInvalid.osm;",
-          "3;",
+          "PermissiveMorph.osm;",
+          "1;",
           "",
           "Bone0 { Good",
           "  1, 2, 3;",
           "  0, 0, 0, 1;",
-          "}",
-          "",
-          "Bone1 { BadPosition",
-          "  broken;",
-          "  0, 0, 0, 1;",
-          "}",
-          "",
-          "Bone2 { BadRotation",
-          "  4, 5, 6;",
-          "  broken;",
           "}",
           "",
           "Morph0 { goodMorph",
