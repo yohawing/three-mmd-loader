@@ -3,7 +3,7 @@ import { parsePmd } from "../parser/model/PmdModelParser.js";
 import { parsePmx } from "../parser/model/PmxModelParser.js";
 import type { ParsedPmd } from "../parser/model/PmdModelParser.js";
 import type { ParsedPmx } from "../parser/model/PmxModelParser.js";
-import type { BoneData, SkeletonData } from "../parser/model/modelTypes.js";
+import type { BoneData, MmdModel, SkeletonData } from "../parser/model/modelTypes.js";
 import { createLoaderMmdModelData } from "./internalModelData.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
 import type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
@@ -33,6 +33,31 @@ export function parseLoaderMmdModelData(bytes: Uint8Array): LoaderMmdModelData {
     rigidBodies: parsed.rigidBodies,
     joints: parsed.joints,
     softBodies: parsed.softBodies
+  });
+}
+
+export function createLoaderMmdModelDataFromModel(model: MmdModel): LoaderMmdModelData {
+  const metadata = model.metadata();
+  return createLoaderMmdModelData({
+    coordinateSystem: "mmd-right-handed-y-up",
+    metadata: {
+      format: metadata.format,
+      version: metadata.version,
+      encoding: metadata.encoding,
+      name: metadata.name,
+      englishName: metadata.englishName,
+      comment: metadata.comment,
+      englishComment: metadata.englishComment,
+      diagnostics: metadata.diagnostics
+    },
+    geometry: model.geometry(),
+    materials: model.materials(),
+    morphs: model.morphs(),
+    skeleton: createThreeMmdSkeletonData(model.skeleton()),
+    displayFrames: model.displayFrames(),
+    rigidBodies: model.rigidBodies(),
+    joints: model.joints(),
+    softBodies: model.softBodies()
   });
 }
 

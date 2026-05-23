@@ -119,4 +119,10 @@ describe("example viewer source", () => {
     expect(performanceSource).toContain('"__THREE_MMD_LOADER_PERF__"');
     expect(performanceSource).toContain('window.console?.table(');
   });
+
+  it("serves Wasm with the browser streaming MIME type", async () => {
+    const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
+
+    expect(serverSource).toContain('[".wasm", "application/wasm"]');
+  });
 });

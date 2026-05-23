@@ -27,6 +27,7 @@ const mimeTypes = new Map([
   [".tga", "image/x-tga"],
   [".vmd", "application/octet-stream"],
   [".vpd", "text/plain; charset=utf-8"],
+  [".wasm", "application/wasm"],
   [".webp", "image/webp"]
 ]);
 

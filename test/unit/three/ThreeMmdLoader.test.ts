@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ThreeMmdLoader } from "../../../src/index.js";
+import { FallbackCore, ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
   ModelSource,
@@ -67,6 +67,17 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.geometry.index?.count).toBe(36);
     expect(model.source).toEqual({ kind: "bytes", byteLength: source.byteLength });
     expect(model.textureDiagnostics).toEqual([]);
+  });
+
+  it("uses the configured core for model loading", async () => {
+    const core = new FallbackCore();
+    const loadModel = vi.spyOn(core, "loadModel");
+    const loader = new ThreeMmdLoader({ core });
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    await loader.loadModel(source);
+
+    expect(loadModel).toHaveBeenCalledOnce();
   });
 
   it("loads a PMX model from a string URL source", async () => {

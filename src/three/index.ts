@@ -1,11 +1,13 @@
 import * as THREE from "three";
 
+import { FallbackCore, initCoreWithFallback } from "../core/index.js";
 import { parseVmd, parseVpd } from "../parser/index.js";
+import type { MmdCore } from "../parser/model/modelTypes.js";
 import { DefaultMmdRuntime } from "../runtime/index.js";
 import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
 import type { MmdAnimation, MmdPose, VmdBoneFrame } from "../parser/model/modelTypes.js";
 import { createThreeBufferGeometry } from "./geometry.js";
-import { parseLoaderMmdModelData } from "./modelAssembly.js";
+import { createLoaderMmdModelDataFromModel } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
 import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 import {
@@ -117,6 +119,7 @@ export interface ThreeMmdLoaderOptions {
   readonly ddsLoader?: ThreeMmdTextureLoader;
   readonly geometryAwareAlpha?: boolean;
   readonly runtime?: DefaultMmdRuntimeOptions;
+  readonly core?: MmdCore | Promise<MmdCore>;
 }
 
 export interface ThreeMmdLoadModelOptions {
@@ -164,9 +167,16 @@ export interface ThreeMmdPose {
 
 export class ThreeMmdLoader {
   private readonly textureCache = new Map<string, Promise<THREE.Texture | undefined>>();
+  private corePromise: Promise<MmdCore> | undefined;
+  private fallbackCore: FallbackCore | undefined;
+  private readonly useExplicitCore: boolean;
 
   constructor(readonly options: ThreeMmdLoaderOptions = {}) {
     validateLoaderOptions(options);
+    this.useExplicitCore = options.core !== undefined;
+    if (options.core) {
+      this.corePromise = Promise.resolve(options.core);
+    }
   }
 
   async loadModel(
@@ -179,56 +189,84 @@ export class ThreeMmdLoader {
     try {
       const bytes = await readModelSourceBytes(source);
       profile?.mark("bytes");
-      const modelData = parseLoaderMmdModelData(bytes);
-      profile?.mark("parsed");
-      const mesh = createThreeMmdMesh(modelData);
-      profile?.mark("mesh");
-      const materials = normalizeMeshMaterials(mesh.material);
-      const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
-        textureResolver: this.options.textureResolver,
-        textureMap: this.options.textureMap,
-        textureLoader: this.options.textureLoader,
-        ddsLoader: this.options.ddsLoader,
-        modelUrl: typeof source === "string" ? source : undefined,
-        geometry: mesh.geometry,
-        morphs: modelData.morphs,
-        geometryAwareAlpha: this.options.geometryAwareAlpha,
-        textureCache: this.textureCache
-      });
-      profile?.mark("textures");
-      const renderOrder = computeMmdMaterialRenderOrder(
-        materials.map((material, materialIndex) => ({
-          materialIndex,
-          transparencyMode: material.userData.mmdMaterial?.transparencyMode ?? "opaque"
-        }))
-      );
-      mesh.userData.mmdMaterialRenderOrder = renderOrder;
-      syncMmdModelShadowFlags(mesh, modelData.materials);
-      if (options.frustumCulled !== undefined) {
-        mesh.frustumCulled = options.frustumCulled;
+      const core = await this.getCore();
+      const parsedModel = this.loadCoreModel(core, bytes);
+      const modelData = createLoaderMmdModelDataFromModel(parsedModel);
+      let parsedModelDisposed = false;
+      try {
+        profile?.mark("parsed");
+        const mesh = createThreeMmdMesh(modelData);
+        parsedModel.dispose?.();
+        parsedModelDisposed = true;
+        profile?.mark("mesh");
+        const materials = normalizeMeshMaterials(mesh.material);
+        const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
+          textureResolver: this.options.textureResolver,
+          textureMap: this.options.textureMap,
+          textureLoader: this.options.textureLoader,
+          ddsLoader: this.options.ddsLoader,
+          modelUrl: typeof source === "string" ? source : undefined,
+          geometry: mesh.geometry,
+          morphs: modelData.morphs,
+          geometryAwareAlpha: this.options.geometryAwareAlpha,
+          textureCache: this.textureCache
+        });
+        profile?.mark("textures");
+        const renderOrder = computeMmdMaterialRenderOrder(
+          materials.map((material, materialIndex) => ({
+            materialIndex,
+            transparencyMode: material.userData.mmdMaterial?.transparencyMode ?? "opaque"
+          }))
+        );
+        mesh.userData.mmdMaterialRenderOrder = renderOrder;
+        syncMmdModelShadowFlags(mesh, modelData.materials);
+        if (options.frustumCulled !== undefined) {
+          mesh.frustumCulled = options.frustumCulled;
+        }
+        profile?.mark("materials");
+        const model = createThreeMmdModel({
+          mesh,
+          runtime: new DefaultMmdRuntime(this.options.runtime),
+          source: createModelSourceDescriptor(source, bytes.byteLength),
+          textureDiagnostics,
+          materials: modelData.materials,
+          outlines: options.outlines ?? true,
+          outlineMode: options.outlineMode ?? "postOutline",
+          renderOrderProxies: options.renderOrderProxies ?? false
+        });
+        profile?.mark("assembled");
+        profile?.measure("read-bytes", "start", "bytes");
+        profile?.measure("parse-model", "bytes", "parsed");
+        profile?.measure("create-mesh", "parsed", "mesh");
+        profile?.measure("load-textures", "mesh", "textures");
+        profile?.measure("material-metadata", "textures", "materials");
+        profile?.measure("assemble-model", "materials", "assembled");
+        profile?.measure("total", "start", "assembled");
+        return model;
+      } finally {
+        if (!parsedModelDisposed) {
+          parsedModel.dispose?.();
+        }
       }
-      profile?.mark("materials");
-      const model = createThreeMmdModel({
-        mesh,
-        runtime: new DefaultMmdRuntime(this.options.runtime),
-        source: createModelSourceDescriptor(source, bytes.byteLength),
-        textureDiagnostics,
-        materials: modelData.materials,
-        outlines: options.outlines ?? true,
-        outlineMode: options.outlineMode ?? "postOutline",
-        renderOrderProxies: options.renderOrderProxies ?? false
-      });
-      profile?.mark("assembled");
-      profile?.measure("read-bytes", "start", "bytes");
-      profile?.measure("parse-model", "bytes", "parsed");
-      profile?.measure("create-mesh", "parsed", "mesh");
-      profile?.measure("load-textures", "mesh", "textures");
-      profile?.measure("material-metadata", "textures", "materials");
-      profile?.measure("assemble-model", "materials", "assembled");
-      profile?.measure("total", "start", "assembled");
-      return model;
     } finally {
       profile?.clear();
+    }
+  }
+
+  private getCore(): Promise<MmdCore> {
+    this.corePromise ??= initCoreWithFallback();
+    return this.corePromise;
+  }
+
+  private loadCoreModel(core: MmdCore, bytes: Uint8Array) {
+    try {
+      return core.loadModel(bytes);
+    } catch (error) {
+      if (this.useExplicitCore) {
+        throw error;
+      }
+      this.fallbackCore ??= new FallbackCore();
+      return this.fallbackCore.loadModel(bytes);
     }
   }
 
@@ -611,6 +649,13 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
     (typeof options.runtime !== "object" || options.runtime === null)
   ) {
     throw new TypeError("ThreeMmdLoader runtime options must be an object");
+  }
+
+  if (
+    options.core !== undefined &&
+    (typeof options.core !== "object" || options.core === null || Array.isArray(options.core))
+  ) {
+    throw new TypeError("ThreeMmdLoader core must be an object or Promise-like object");
   }
 }
 
