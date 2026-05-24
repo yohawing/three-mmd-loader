@@ -764,8 +764,7 @@ function writeMorphs(writer, enabled, indexSizes) {
   writer.u8(1);
   writer.u8(1);
   writer.i32(1);
-  writer.u8(3);
-  writer.index(0, indexSizes.vertex);
+  writer.index(3, indexSizes.vertex);
   writer.vec3([0, 0.05, 0]);
 }
 
