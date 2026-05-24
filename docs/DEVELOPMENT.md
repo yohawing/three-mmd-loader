@@ -50,7 +50,8 @@ WASM files only through `dist/**`.
 
 ## Core Checks
 
-Run these before publishing or opening a release PR:
+Run these before publishing or opening a release PR. The full operator-facing
+release checklist is in [RELEASE.md](./RELEASE.md).
 
 ```bash
 npm run lint

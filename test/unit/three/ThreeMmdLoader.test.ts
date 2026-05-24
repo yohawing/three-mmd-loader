@@ -63,6 +63,12 @@ describe("ThreeMmdLoader", () => {
 
     expect(model.mesh.name).toBe("TestModel");
     expect(model.mesh.isSkinnedMesh).toBe(true);
+    expect(model.object).toBeInstanceOf(THREE.Group);
+    expect(model.object.children).toEqual([
+      model.mesh,
+      ...model.renderOrderMeshes,
+      ...model.outlineMeshes
+    ]);
     expect(model.mesh.skeleton.bones).toHaveLength(1);
     expect(model.mesh.geometry.getAttribute("position").count).toBe(14);
     expect(model.mesh.geometry.index?.count).toBe(36);
@@ -112,7 +118,7 @@ describe("ThreeMmdLoader", () => {
     const scene = new THREE.Scene();
 
     expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
-    scene.add(model.mesh);
+    scene.add(model.object);
     expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
     const outlineMeshes = model.outlineMeshes;
     expect(model.outlineMeshes).toBe(outlineMeshes);
@@ -124,6 +130,7 @@ describe("ThreeMmdLoader", () => {
     expect(renderOrderMeshes).toHaveLength(1);
     expect(renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
     expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
+    expect(model.object.children).toEqual([model.mesh, ...renderOrderMeshes, ...outlineMeshes]);
   });
 
   it("allows loadModel callers to disable generated outline meshes explicitly", async () => {
@@ -140,6 +147,7 @@ describe("ThreeMmdLoader", () => {
 
     expect(model.outlineMeshes).toEqual([]);
     expect(model.renderOrderMeshes).toEqual([]);
+    expect(model.object.children).toEqual([model.mesh]);
   });
 
   it("applies load-time frustum culling to the mesh and generated proxy meshes", async () => {
@@ -157,6 +165,34 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.frustumCulled).toBe(false);
     expect(model.outlineMeshes.every((mesh) => mesh.frustumCulled === false)).toBe(true);
     expect(model.renderOrderMeshes.every((mesh) => mesh.frustumCulled === false)).toBe(true);
+  });
+
+  it("applies root object transforms to the base mesh and generated proxy meshes", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        edge: true
+      })
+    );
+
+    model.object.position.set(1, 2, 3);
+    model.object.rotation.set(0, Math.PI / 2, 0);
+    model.object.scale.set(2, 2, 2);
+    model.object.updateMatrixWorld(true);
+
+    const basePosition = new THREE.Vector3();
+    model.mesh.getWorldPosition(basePosition);
+    expect(basePosition.toArray()).toEqual([1, 2, 3]);
+
+    for (const proxy of [...model.renderOrderMeshes, ...model.outlineMeshes]) {
+      const proxyPosition = new THREE.Vector3();
+      proxy.getWorldPosition(proxyPosition);
+      expect(proxy.parent).toBe(model.object);
+      expect(proxyPosition.toArray()).toEqual(basePosition.toArray());
+      expect(proxy.matrixWorld.elements).toEqual(model.mesh.matrixWorld.elements);
+    }
   });
 
   it("keeps imported PMX vertex normals on the loaded Three.js geometry", async () => {

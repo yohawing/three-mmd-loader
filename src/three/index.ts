@@ -150,6 +150,7 @@ export type ThreeMmdModelSourceDescriptor =
     };
 
 export interface ThreeMmdModel {
+  readonly object: THREE.Group;
   readonly mesh: THREE.SkinnedMesh;
   readonly outlineMeshes: readonly THREE.SkinnedMesh[];
   readonly renderOrderMeshes: readonly THREE.SkinnedMesh[];
@@ -347,7 +348,11 @@ function createThreeMmdModel(options: {
   if (renderOrderMeshes.length > 0) {
     options.mesh.geometry.setDrawRange(0, 0);
   }
+  const object = new THREE.Group();
+  object.name = options.mesh.name;
+  object.add(options.mesh, ...renderOrderMeshes, ...outlineMeshes);
   return {
+    object,
     mesh: options.mesh,
     outlineMeshes,
     renderOrderMeshes,

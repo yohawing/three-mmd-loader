@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-05-25
+
+### Added
+
+- Add the nanoem-backed WASM parser core and route viewer model loading through
+  the WASM-backed path when available.
+- Add DDS texture loading support, including viewer `DDSLoader` integration and
+  diagnostics for unsupported texture formats.
+- Add PMM parser entry points and tests for PMM project metadata parsing.
+- Add generated-PMX visual regression cases and committed baselines for outline,
+  material ordering, and texture-alpha behavior.
+- Add local native-nanoem playback oracle tooling for motion/runtime parity
+  checks.
+- Add `ThreeMmdModel.object` as the scene-ready root containing the base mesh
+  and generated proxy meshes.
+- Add a release checklist under `docs/RELEASE.md`.
+
+### Changed
+
+- Move WASM support under the parser module pipeline and build the generated
+  WASM wrapper in CI/release packaging instead of committing generated binaries.
+- Default the Three.js loader to the `mmdCompat` draw path with PMX-order
+  two-pass outline rendering.
+- Remove the earlier `outlineMode` and `renderOrderProxies` options in favor of
+  the `mmdCompat` compatibility path.
+- Improve outline screen-space width matching and runtime proxy mesh
+  synchronization.
+- Decouple local corpus smoke tests from the local asset database and document
+  the local corpus/playback oracle workflows.
+- Link the release checklist from the README and development documentation.
+
+### Fixed
+
+- Parse morph-only VMD files that omit the camera section.
+- Treat oversized optional VMD tail counts as trailing data instead of failing
+  the parse.
+- Harden WASM parser loading and texture handling review issues.
+- Keep third-party submodules out of the lint target and generate minimal PMX
+  fixtures for WASM metadata tests when needed.
+
 ## [0.1.2] - 2026-05-20
 
 ### Changed

@@ -26,37 +26,12 @@ English: [README.md](../README.md)
 
 | 機能 | 状態 |
 | --- | --- |
-| SkinnedMesh / マテリアル / テクスチャ | ✅ |
-| トゥーン / スフィアテクスチャ | ✅ |
-| ボーン / モーフアニメーション | ✅ |
-| VMD Bezier 補間 | ✅ |
-| CCD IK (モデル定義 chain) | ✅ |
 | IK link-local / parent-local clamp | ⚠️ 単軸固定は対応 / 複数軸は部分対応 |
 | 付与変形 (append transform) | ✅ PMX layer 順 |
-| 物理 (Ammo backend) | ✅ 境界の裏で隔離 |
-| 物理 (disabled fallback) | ✅ |
+| WASM Parser | ✅ PMX / PMD、TypeScript fallback あり |
+| 物理 (Ammo backend) | ✅ Ammo.jsを使用。  |
 | カメラモーション適用 | ❌ |
 | Three.js 視覚回帰ゲート | ⚠️ script はあり / CI gate は未接続 |
-
-## 動作確認
-
-読み込みと再生は、コミット済み fixture と local/manual チェックで確認しています。
-コミット済みの release evidence は現在以下です:
-
-- ユニットテスト fixture: PMX 7 / VMD 3
-
-追加のユーザー所有 PMD、PMX、VMD asset は local smoke check に使っていますが、
-それらの asset と screenshot は package には含めていません。
-
-## 対象外（初期リリース）
-
-- Three.js 以外の renderer adapter
-- cross-renderer visual equivalence の主張
-- 最適化された独自 model / motion フォーマット
-- WebGPU renderer path
-- 別個に公開される physics パッケージ
-- PMM プロジェクトの読み込み
-- ネイティブ MMD と完全に同等な物理挙動
 
 ## Acknowledgements
 
@@ -74,24 +49,6 @@ English: [README.md](../README.md)
 npm install @yohawing/three-mmd-loader three
 ```
 
-## パッケージ境界
-
-```text
-@yohawing/three-mmd-loader
-@yohawing/three-mmd-loader/parser
-@yohawing/three-mmd-loader/runtime
-@yohawing/three-mmd-loader/three
-@yohawing/three-mmd-loader/physics
-```
-
-- `parser`: PMX、PMD、VMD、VPD のバイナリ / テキスト解析。
-- `runtime`: Three.js アニメーション再生、フレーム状態、付与変形処理、
-  CCD IK 評価。
-- `three`: `ThreeMmdLoader`、Three.js geometry / skeleton / material
-  ヘルパー、texture ヘルパー、MMD animation 読み込み。
-- `physics`: `MmdPhysicsBackend`、disabled fallback backend、validation /
-  debug ヘルパー、任意の Ammo backend 実装。
-
 ## 使い方 - モデル読み込み
 
 ```ts
@@ -99,14 +56,14 @@ import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
 
 const loader = new ThreeMmdLoader();
 const model = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path は fetch で解決)
-scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes);
+scene.add(model.object);
 
 const remoteModel = await loader.loadModel("/models/example.pmx");
-scene.add(remoteModel.mesh, ...remoteModel.renderOrderMeshes, ...remoteModel.outlineMeshes);
+scene.add(remoteModel.object);
 ```
 
-返された `renderOrderMeshes` と `outlineMeshes` は base mesh と一緒に scene へ
-追加してください。アウトラインと render-order proxy を生成しない場合は
+`model.object` は scene にそのまま追加できる root で、base mesh と生成された
+outline / render-order proxy mesh を含みます。proxy を生成しない場合は
 `{ outlines: false }` を渡します。
 
 ## 使い方 - アニメーション
@@ -130,9 +87,8 @@ model.runtime?.setAnimation(animation, model.mesh);
 
 ## 使い方 - 物理
 
-物理は `MmdPhysicsBackend` 境界の背後に公開されています。disabled backend は
-シミュレーションを行わない予測可能な fallback で、Ammo backend は Ammo.js
-を明示的に使う呼び出し側向けに提供されています。
+物理は `MmdPhysicsBackend` で抽象化されていて、物理ライブラリを変更可能にしてあります。
+現状の実装は Ammo.js (Bullet Physics) を使用しています。
 
 ```ts
 import {
