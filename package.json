@@ -59,6 +59,8 @@
     "example:viewer": "npm run dev",
     "check:fixtures": "node scripts/check-fixtures.mjs",
     "check:fixtures:physics": "node scripts/check-fixtures.mjs --physics",
+    "fixtures:inventory:db": "node scripts/fixtures/build-inventory-from-db.mjs",
+    "check:fixtures:corpus": "npm run build && node scripts/fixtures/build-inventory-from-db.mjs && node scripts/check-fixtures.mjs --no-three tmp/fixtures.corpus.json",
     "generate:fixtures:minimal-pmx": "node scripts/fixtures/generate-minimal-pmx.mjs",
     "render:visual": "node scripts/visual-regression/render-cases.mjs",
     "render:visual:baseline": "node scripts/visual-regression/render-cases.mjs --mode baseline",
