@@ -126,59 +126,6 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
   });
 
-  it("keeps explicit MMD-compatible material outline proxies aligned with the default", async () => {
-    const loader = new ThreeMmdLoader();
-    const model = await loader.loadModel(
-      createMinimalPmxModelBytes({
-        materialCount: 1,
-        triangle: true,
-        edge: true
-      }),
-      { outlineMode: "mmdCompat" }
-    );
-
-    expect(model.outlineMeshes).toHaveLength(1);
-    expect(model.outlineMeshes[0]?.userData.mmdOutlineProxy.sourceMaterialIndex).toBe(0);
-    expect(model.renderOrderMeshes).toHaveLength(1);
-    expect(model.renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
-    expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
-  });
-
-  it("keeps the legacy combined post-outline path available explicitly", async () => {
-    const loader = new ThreeMmdLoader();
-
-    const model = await loader.loadModel(
-      createMinimalPmxModelBytes({
-        materialCount: 1,
-        triangle: true,
-        edge: true
-      }),
-      { outlineMode: "postOutline" }
-    );
-
-    expect(model.outlineMeshes).toHaveLength(1);
-    expect(model.outlineMeshes[0]?.userData.mmdOutlineProxy.source).toBe("combined");
-    expect(model.renderOrderMeshes).toEqual([]);
-    expect(model.mesh.geometry.drawRange.count).not.toBe(0);
-  });
-
-  it("creates render-order proxy meshes when explicitly requested", async () => {
-    const loader = new ThreeMmdLoader();
-
-    const model = await loader.loadModel(
-      createMinimalPmxModelBytes({
-        materialCount: 1,
-        triangle: true
-      }),
-      { renderOrderProxies: true }
-    );
-
-    expect(model.renderOrderMeshes).toHaveLength(1);
-    expect(model.renderOrderMeshes.every((mesh) => !!mesh.userData.mmdMaterialRenderProxy)).toBe(
-      true
-    );
-  });
-
   it("allows loadModel callers to disable generated outline meshes explicitly", async () => {
     const loader = new ThreeMmdLoader();
 
@@ -204,7 +151,7 @@ describe("ThreeMmdLoader", () => {
         triangle: true,
         edge: true
       }),
-      { frustumCulled: false, renderOrderProxies: true }
+      { frustumCulled: false }
     );
 
     expect(model.mesh.frustumCulled).toBe(false);
@@ -273,27 +220,6 @@ describe("ThreeMmdLoader", () => {
     expect(geometryAlphaSpy).toHaveBeenCalledOnce();
   });
 
-  it("does not enable internal geometry-aware alpha for explicit post-outline mode", async () => {
-    const texture = createReadableAlphaDataTexture();
-    const textureLoader = createDataTextureLoader(texture);
-    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
-    const loader = new ThreeMmdLoader({
-      textureMap: { "tex.png": "resolved/tex.png" },
-      textureLoader
-    });
-
-    await loader.loadModel(
-      createMinimalPmxModelBytes({
-        materialCount: 1,
-        triangle: true,
-        texturePath: "tex.png"
-      }),
-      { outlineMode: "postOutline" }
-    );
-
-    expect(geometryAlphaSpy).not.toHaveBeenCalled();
-  });
-
   it("does not enable internal geometry-aware alpha when outlines are disabled", async () => {
     const texture = createReadableAlphaDataTexture();
     const textureLoader = createDataTextureLoader(texture);
@@ -315,7 +241,7 @@ describe("ThreeMmdLoader", () => {
     expect(geometryAlphaSpy).not.toHaveBeenCalled();
   });
 
-  it("keeps explicit geometry-aware alpha opt-in active with post-outline mode", async () => {
+  it("keeps explicit geometry-aware alpha opt-in active when outlines are disabled", async () => {
     const texture = createReadableAlphaDataTexture();
     const textureLoader = createDataTextureLoader(texture);
     const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
@@ -331,7 +257,7 @@ describe("ThreeMmdLoader", () => {
         triangle: true,
         texturePath: "tex.png"
       }),
-      { outlineMode: "postOutline" }
+      { outlines: false }
     );
 
     expect(geometryAlphaSpy).toHaveBeenCalledOnce();

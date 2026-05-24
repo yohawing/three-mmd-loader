@@ -112,12 +112,11 @@ scene.add(remoteModel.mesh, ...remoteModel.renderOrderMeshes, ...remoteModel.out
 Texture folder resolution failures and related recoverable texture issues are
 reported there with `level: "warning"`.
 
-By default, `loadModel(...)` uses `outlineMode: "mmdCompat"` so body materials
-draw first in PMX material definition order, followed by toon outlines in the
-same order (`body0`, `body1`, ..., `outline0`, `outline1`, ...). This creates
-material-scoped `renderOrderMeshes` and `outlineMeshes`; add them to the scene
-with the base mesh. Callers that need the older single combined outline mesh can
-pass `outlineMode: "postOutline"` explicitly.
+`loadModel(...)` creates material-scoped `renderOrderMeshes` and `outlineMeshes`
+so body materials and toon outlines draw in PMX material definition order
+(`body0`, `outline0`, `body1`, `outline1`, ...). Add those proxy meshes to the
+scene with the base mesh. Pass `{ outlines: false }` to disable generated
+outline and render-order proxies.
 
 ## Loader Options
 

@@ -12,7 +12,6 @@ import type {
 import type { MmdMaterialTransparencyMode } from "./textures.js";
 import { clampColor } from "./utils.js";
 
-const MMD_OUTLINE_MODEL_SPACE_SCALE = 30;
 const MMD_OUTLINE_SCREEN_SPACE_SCALE = 300;
 
 export interface MmdOutlineOptions {
@@ -33,39 +32,6 @@ export interface MmdMaterialRenderOrderMeshOptions {
 
 export interface MmdOutlineRenderOrderOptions {
   readonly renderOrderBase?: number;
-}
-
-export function createMmdOutlineMesh(
-  model: MmdOutlineModelSource,
-  options: MmdOutlineOptions = {}
-): THREE.SkinnedMesh | undefined {
-  const materialInfos = model.materials;
-  if (
-    !options.forceFallback &&
-    !materialInfos.some((material) => material.flags.edge && material.edgeSize > 0)
-  ) {
-    return undefined;
-  }
-
-  const sourceMaterials = Array.isArray(model.mesh.material)
-    ? model.mesh.material
-    : [model.mesh.material];
-  const hasVertexEdgeScale = !!model.mesh.geometry.getAttribute("mmdEdgeScale");
-  const outlineMaterials = materialInfos.map((material, index) =>
-    createMmdOutlineMaterial(material, index, sourceMaterials, options, hasVertexEdgeScale)
-  );
-
-  const outline = new THREE.SkinnedMesh(
-    model.mesh.geometry,
-    outlineMaterials.length === 1 ? outlineMaterials[0] : outlineMaterials
-  );
-  outline.name = `${model.mesh.name || "mmd"} outline`;
-  const scale = options.scale ?? computeMmdOutlineScale(materialInfos);
-  outline.scale.setScalar(scale === 1 && options.forceFallback ? 1.005 : scale);
-  outline.bind(model.mesh.skeleton, model.mesh.bindMatrix);
-  outline.renderOrder = model.mesh.renderOrder - 1;
-  outline.userData.mmdOutlineProxy = { source: "combined" };
-  return outline;
 }
 
 export function createMmdOutlineMeshes(
@@ -331,17 +297,6 @@ function createMmdMaterialProxyGeometry(
   geometry.addGroup(group.start, group.count, 0);
   geometry.setDrawRange(group.start, group.count);
   return geometry;
-}
-
-export function computeMmdOutlineScale(materials: readonly MaterialInfo[]): number {
-  const maxEdgeSize = Math.max(
-    ...materials.map((material) => (material.flags.edge ? material.edgeSize : 0)),
-    0
-  );
-  if (maxEdgeSize <= 0) {
-    return 1;
-  }
-  return 1 + Math.min(Math.max(maxEdgeSize, 0.5), 3) / MMD_OUTLINE_MODEL_SPACE_SCALE;
 }
 
 export function syncMmdOutlineMaterialStates(

@@ -105,6 +105,12 @@ const remoteModel = await loader.loadModel("/models/example.pmx");
 scene.add(remoteModel.mesh, ...remoteModel.renderOrderMeshes, ...remoteModel.outlineMeshes);
 ```
 
+`loadModel(...)` は PMX material 定義順で body と toon outline を描画するための
+material 単位の `renderOrderMeshes` と `outlineMeshes` を返します
+(`body0`, `outline0`, `body1`, `outline1`, ...)。生成された proxy mesh は base
+mesh と一緒に scene へ追加してください。アウトラインと render-order proxy を生成しない
+場合は `{ outlines: false }` を渡します。
+
 ## 使い方 - アニメーション
 
 ```ts
