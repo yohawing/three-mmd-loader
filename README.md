@@ -112,11 +112,9 @@ scene.add(remoteModel.mesh, ...remoteModel.renderOrderMeshes, ...remoteModel.out
 Texture folder resolution failures and related recoverable texture issues are
 reported there with `level: "warning"`.
 
-`loadModel(...)` creates material-scoped `renderOrderMeshes` and `outlineMeshes`
-so body materials and toon outlines draw in PMX material definition order
-(`body0`, `outline0`, `body1`, `outline1`, ...). Add those proxy meshes to the
-scene with the base mesh. Pass `{ outlines: false }` to disable generated
-outline and render-order proxies.
+Add the returned `renderOrderMeshes` and `outlineMeshes` to the scene with the
+base mesh. Pass `{ outlines: false }` to disable generated outline and
+render-order proxies.
 
 ## Loader Options
 
