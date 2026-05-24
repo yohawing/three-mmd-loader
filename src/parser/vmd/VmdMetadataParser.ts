@@ -77,11 +77,19 @@ export function parseVmdSectionInventory(input: ArrayBuffer | Uint8Array): VmdSe
   const morphs = readCount(reader, "morph");
   readFixedSizeSection(reader, sections, "morph", morphs, vmdMorphFrameBytes);
 
-  const cameras = readCount(reader, "camera");
-  readFixedSizeSection(reader, sections, "camera", cameras, vmdCameraFrameBytes);
+  // Old-format / morph-only (lip-sync) VMDs end after the morph section and
+  // omit camera onward entirely, so every trailing count is optional.
+  const cameraCountOffset = reader.offset;
+  const cameras = readOptionalCount(reader, "camera");
+  if (reader.offset !== cameraCountOffset) {
+    readFixedSizeSection(reader, sections, "camera", cameras, vmdCameraFrameBytes, cameraCountOffset);
+  }
 
-  const lights = readCount(reader, "light");
-  readFixedSizeSection(reader, sections, "light", lights, vmdLightFrameBytes);
+  const lightCountOffset = reader.offset;
+  const lights = readOptionalCount(reader, "light");
+  if (reader.offset !== lightCountOffset) {
+    readFixedSizeSection(reader, sections, "light", lights, vmdLightFrameBytes, lightCountOffset);
+  }
 
   const selfShadowCountOffset = reader.offset;
   const selfShadows = readOptionalCount(reader, "self-shadow");

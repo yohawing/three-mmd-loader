@@ -74,7 +74,9 @@ export function parseVmd(input: Uint8Array | ArrayBuffer): MmdAnimation {
     maxFrame = Math.max(maxFrame, frame);
   }
 
-  const cameraCount = readCount(reader, "camera");
+  // Old-format / morph-only (lip-sync) VMDs end after the morph section and
+  // omit camera onward entirely, so every trailing count is optional.
+  const cameraCount = readOptionalCount(reader, "camera");
   for (let index = 0; index < cameraCount; index += 1) {
     const frame = reader.u32();
     const cameraFrame: VmdCameraFrame = {
@@ -90,7 +92,7 @@ export function parseVmd(input: Uint8Array | ArrayBuffer): MmdAnimation {
     maxFrame = Math.max(maxFrame, frame);
   }
 
-  const lightCount = readCount(reader, "light");
+  const lightCount = readOptionalCount(reader, "light");
   for (let index = 0; index < lightCount; index += 1) {
     const frame = reader.u32();
     lightFrames.push({

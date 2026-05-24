@@ -43,6 +43,34 @@ describe("parseVmd", () => {
     });
   });
 
+  it("parses morph-only VMD that ends right after the morph section", () => {
+    const animation = parseVmd(createMorphOnlyVmd());
+
+    expect(animation.morphTracks["blink"]).toHaveLength(2);
+    expect(animation.morphTracks["blink"]?.map((frame) => frame.frame)).toEqual([0, 10]);
+    expect(Object.keys(animation.boneTracks)).toHaveLength(0);
+    expect(animation.cameraFrames).toHaveLength(0);
+    expect(animation.lightFrames).toHaveLength(0);
+    expect(animation.selfShadowFrames).toHaveLength(0);
+    expect(animation.propertyFrames).toHaveLength(0);
+    expect(animation.metadata.counts).toMatchObject({
+      bones: 0,
+      morphs: 2,
+      cameras: 0,
+      lights: 0,
+      selfShadows: 0,
+      properties: 0
+    });
+  });
+
+  it("parses VMD that writes camera count 0 then ends before the light section", () => {
+    const animation = parseVmd(createMorphOnlyVmd({ trailingZeroCameraCount: true }));
+
+    expect(animation.cameraFrames).toHaveLength(0);
+    expect(animation.lightFrames).toHaveLength(0);
+    expect(animation.metadata.counts).toMatchObject({ cameras: 0, lights: 0 });
+  });
+
   it("reads camera interpolation in VMD channel-strided byte layout", () => {
     const animation = parseVmd(createCameraOnlyVmd());
     const interpolation = animation.cameraFrames[0]?.interpolation;
@@ -92,6 +120,38 @@ function expectSortedFrames(frames: readonly VmdBoneFrame[] | readonly VmdMorphF
   for (let index = 1; index < frames.length; index += 1) {
     expect(frames[index]?.frame).toBeGreaterThanOrEqual(frames[index - 1]?.frame ?? 0);
   }
+}
+
+function createMorphOnlyVmd(options: { readonly trailingZeroCameraCount?: boolean } = {}): Uint8Array {
+  const bytes: number[] = [];
+  const u32 = (value: number) => {
+    const buffer = new ArrayBuffer(4);
+    new DataView(buffer).setUint32(0, value, true);
+    bytes.push(...new Uint8Array(buffer));
+  };
+  const f32 = (value: number) => {
+    const buffer = new ArrayBuffer(4);
+    new DataView(buffer).setFloat32(0, value, true);
+    bytes.push(...new Uint8Array(buffer));
+  };
+  const morphFrame = (name: string, frame: number, weight: number) => {
+    pushFixedText(bytes, name, 15);
+    u32(frame);
+    f32(weight);
+  };
+
+  pushFixedText(bytes, "Vocaloid Motion Data 0002", 30);
+  pushFixedText(bytes, "morph-only", 20);
+  u32(0); // bone count
+  u32(2); // morph count
+  morphFrame("blink", 0, 0);
+  morphFrame("blink", 10, 1);
+  // No camera/light/self-shadow/property sections follow: stream ends here.
+  if (options.trailingZeroCameraCount) {
+    u32(0); // explicit camera count, then EOF before the light section
+  }
+
+  return new Uint8Array(bytes);
 }
 
 function createCameraOnlyVmd(): Uint8Array {
