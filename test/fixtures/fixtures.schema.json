@@ -55,6 +55,20 @@
               }
             }
           }
+        },
+        "playbackSmoke": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cases"],
+          "properties": {
+            "cases": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/playbackSmokeCase"
+              },
+              "description": "Optional local runtime playback comparisons against native nanoem oracle dumps."
+            }
+          }
         }
       }
     },
@@ -81,6 +95,95 @@
         }
       },
       "additionalProperties": false
+    },
+    "playbackSmokeCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "model",
+        "motion",
+        "oracle",
+        "oracleKind",
+        "stage",
+        "frames",
+        "watchBones"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "$ref": "#/$defs/playbackSmokeModelRef"
+        },
+        "motion": {
+          "$ref": "#/$defs/playbackSmokeMotionRef"
+        },
+        "oracle": {
+          "$ref": "#/$defs/relativeFilePath",
+          "description": "Path to a gitignored native nanoem oracle JSON, resolved from basePath."
+        },
+        "oracleKind": {
+          "type": "string",
+          "const": "native-nanoem-runtime-dump"
+        },
+        "stage": {
+          "type": "string",
+          "enum": ["vmdInterpolation", "appendTransform", "ik", "physics"],
+          "default": "physics"
+        },
+        "frames": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "number"
+          }
+        },
+        "watchBones": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "matrixEpsilon": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.0001
+        },
+        "morphEpsilon": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.0001
+        }
+      }
+    },
+    "playbackSmokeModelRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extension", "key"],
+      "properties": {
+        "extension": {
+          "type": "string",
+          "enum": ["pmx", "pmd"]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "playbackSmokeMotionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

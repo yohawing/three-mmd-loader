@@ -24,8 +24,13 @@ tmp/
 data/
 mmd_fixture_data.zip
 test/fixtures/fixtures.local.json
+test/fixtures/oracles/*.local.json
 test/fixtures/generated/*.pmx
 test/fixtures/generated/**/*.pmx
+
+# Local native nanoem oracle generator
+scripts/local/oracle/
+native/.oracle-build/
 
 # OS / editor noise
 .DS_Store
