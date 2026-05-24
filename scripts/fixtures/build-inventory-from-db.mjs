@@ -1,22 +1,26 @@
 #!/usr/bin/env node
-// Build a fixture inventory (test/fixtures/fixtures.schema.json) from the local
-// MMD asset SQLite database so the real-world model corpus can be run through
-// the crash-smoke harness in scripts/check-fixtures.mjs.
+// Build a fixture inventory (test/fixtures/fixtures.schema.json) from a local
+// MMD asset SQLite database so a real-world model corpus can be run through the
+// crash-smoke harness in scripts/check-fixtures.mjs.
+//
+// This is a local-only convenience: it emits the gitignored inventory that the
+// corpus smoke consumes. The database path is never hardcoded — point it at
+// your own asset DB via MMD_ASSET_DB or --db. The output (absolute local
+// paths) defaults to the gitignored test/fixtures/fixtures.local.json.
 //
 // Models come from `assets` joined to `asset_urls` (url_kind='file',
 // purpose='main_file'); motions/poses are discovered by scanning the motion
 // directories referenced as url_kind='directory'. Nothing here parses the
-// files — it only emits an inventory of on-disk paths. The output contains
-// absolute local paths, so it is written under tmp/ (gitignored).
+// files — it only emits an inventory of on-disk paths.
 //
 // Usage:
-//   node scripts/fixtures/build-inventory-from-db.mjs
-//   node scripts/fixtures/build-inventory-from-db.mjs --db F:/mmd/data/mmd_assets.sqlite
-//   node scripts/fixtures/build-inventory-from-db.mjs --out tmp/fixtures.corpus.json
+//   MMD_ASSET_DB=/path/to/assets.sqlite node scripts/fixtures/build-inventory-from-db.mjs
+//   node scripts/fixtures/build-inventory-from-db.mjs --db /path/to/assets.sqlite
+//   node scripts/fixtures/build-inventory-from-db.mjs --out test/fixtures/fixtures.local.json
 //   node scripts/fixtures/build-inventory-from-db.mjs --no-motions   # models only
 //
 // Environment:
-//   MMD_ASSET_DB   overrides the default database path
+//   MMD_ASSET_DB   path to the asset database (required unless --db is given)
 
 import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
@@ -26,8 +30,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "..", "..");
-const DEFAULT_DB = process.env.MMD_ASSET_DB ?? "F:/mmd/data/mmd_assets.sqlite";
-const DEFAULT_OUT = resolve(projectRoot, "tmp", "fixtures.corpus.json");
+const DEFAULT_DB = process.env.MMD_ASSET_DB;
+const DEFAULT_OUT = resolve(projectRoot, "test", "fixtures", "fixtures.local.json");
 
 const MODEL_EXTENSIONS = new Set([".pmx", ".pmd"]);
 const MOTION_EXTENSIONS = new Set([".vmd", ".vpd"]);
@@ -164,6 +168,9 @@ function buildFixtureMap(entries, root, prefix) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (!args.db) {
+    throw new Error("No asset database given. Set MMD_ASSET_DB or pass --db <path>.");
+  }
   const dbPath = resolve(args.db);
   if (!existsSync(dbPath)) {
     throw new Error(`Asset database not found: ${dbPath}`);

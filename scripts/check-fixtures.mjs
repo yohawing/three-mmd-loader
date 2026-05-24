@@ -16,6 +16,7 @@
 //   node scripts/check-fixtures.mjs --limit 20 ../data/fixtures.json
 //   FIXTURES_JSON=path/to/fixtures.json node ...    # override fixture index
 
+import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { resolve, dirname, relative, basename } from "node:path";
@@ -92,6 +93,12 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const fixturesPath = args.fixturesPath
     ?? (process.env.FIXTURES_JSON ? resolve(process.env.FIXTURES_JSON) : defaultFixturesPath);
+  // Local corpus inventories are gitignored and absent on fresh clones / CI;
+  // treat a missing inventory as an opt-in skip rather than an error.
+  if (!existsSync(fixturesPath)) {
+    console.log(`Inventory not found, skipping: ${relative(projectRoot, fixturesPath)}`);
+    return;
+  }
   const fixtures = JSON.parse(await readFile(fixturesPath, "utf8"));
   const fixturesRoot = typeof fixtures.basePath === "string"
     ? resolve(dirname(fixturesPath), fixtures.basePath)

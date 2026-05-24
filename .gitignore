@@ -23,6 +23,7 @@ tmp/
 # Local fixture data
 data/
 mmd_fixture_data.zip
+test/fixtures/fixtures.local.json
 test/fixtures/generated/*.pmx
 test/fixtures/generated/**/*.pmx
 
