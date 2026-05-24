@@ -76,6 +76,7 @@ Command summary:
 | `npm run smoke:types` | Packs the library, installs it into a temporary TypeScript consumer, and verifies root/subpath imports with `tsc --noEmit`. |
 | `npm run check:fixtures` | Parses the fixture manifest and writes `tmp/fixture-parse-report.json`. |
 | `npm run check:fixtures:physics` | Runs fixture checks with physics-related validation enabled. |
+| `npm run check:fixtures:local` | Parse-only crash-smoke over a gitignored local corpus inventory; skips when the inventory is absent. |
 | `npm pack --dry-run --json` | Verifies npm tarball contents without writing a package. |
 
 ## Test Layout
@@ -104,6 +105,8 @@ Committed fixtures live under `test/fixtures/`.
   by tests.
 - `test/fixtures/fixtures.sample.json` is the sample manifest consumed by
   `scripts/check-fixtures.mjs`.
+- `test/fixtures/fixtures.local.json` is an optional, gitignored manifest for a
+  large local corpus (see below).
 - `test/fixtures/generated/**` contains generated PMX assets used for focused
   runtime and loader cases.
 - `test/fixtures/oracles/**` contains numeric parity evidence.
@@ -113,6 +116,32 @@ To regenerate the minimal PMX fixture used by smoke tests:
 ```bash
 npm run generate:fixtures:minimal-pmx
 ```
+
+## Local Corpus Crash-Smoke
+
+`npm run check:fixtures:local` runs a parse-only crash-smoke over a large local
+corpus of real PMX / PMD / VMD / VPD files. It is a developer-only check; the
+corpus and its manifest are never committed.
+
+The only coupling to local data is a single gitignored inventory at
+`test/fixtures/fixtures.local.json`. It uses the same schema as the sample
+manifest (`test/fixtures/fixtures.schema.json`): a `basePath` plus
+`paths.releaseSmoke.byExtension.{pmx,pmd,vmd,vpd}` maps of arbitrary keys to
+paths resolved from `basePath`. Generate it however you like (for example from
+your own asset catalog) — the repository intentionally ships no generator and
+no machine-specific paths.
+
+Then build and run the smoke:
+
+```bash
+npm run build
+npm run check:fixtures:local
+```
+
+It parses every listed file, cross-checks each model's geometry array lengths
+against its metadata counts, writes `tmp/fixture-parse-report.json`, and exits
+non-zero if any file fails to parse. When `test/fixtures/fixtures.local.json` is
+absent (fresh clones, CI), the command logs a skip and exits `0`.
 
 ## Dist And Package Smoke
 
