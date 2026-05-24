@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TextEncoder } from "node:util";
+import { PNG } from "pngjs";
 
 const DEFAULT_OUTPUT = "test/fixtures/generated/minimal-loader-smoke.pmx";
 const REST_POSE_OUTPUT_DIR = "test/fixtures/generated/rest-pose";
@@ -156,6 +157,77 @@ const VISUAL_CASES = {
         comment: "single rotated translucent box for outline normal visibility"
       })
     ]
+  },
+  "mmd-texture-alpha-used-uv-cutout": {
+    name: "generated visual texture alpha used uv cutout",
+    englishName: "GeneratedVisualTextureAlphaUsedUvCutout",
+    comment: "redistribution-safe PMX visual fixture for geometry-aware texture alpha",
+    englishComment: "Opaque PMX material whose used UVs sample an alpha cutout texture.",
+    geometry: transformGeometry(
+      boxGeometry({
+        min: [-0.46, 0.12, -0.08],
+        max: [0.46, 1.04, 0.08],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      { rotateY: -0.32, rotateX: 0.04, translate: [0.02, 0, 0] }
+    ),
+    textures: ["texture-alpha-cutout.png"],
+    assets: [
+      {
+        path: "texture-alpha-cutout.png",
+        bytes: () => alphaCutoutPng()
+      }
+    ],
+    materials: [
+      material("mat_alpha_cutout", "AlphaCutout", {
+        diffuse: [1, 1, 1, 1],
+        specular: [0.03, 0.03, 0.03],
+        ambient: [0.35, 0.35, 0.35],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 5,
+        flags: 0x11,
+        textureIndex: 0,
+        faceVertexCount: 36,
+        comment: "opaque PMX material using alpha cutout texture"
+      })
+    ]
+  },
+  "mmd-texture-alpha-atlas-padding-ignored": {
+    name: "generated visual texture alpha atlas padding ignored",
+    englishName: "GeneratedVisualTextureAlphaAtlasPaddingIgnored",
+    comment: "redistribution-safe PMX visual fixture for geometry-aware atlas alpha padding",
+    englishComment: "Opaque PMX material whose texture has transparent unused atlas padding.",
+    geometry: transformGeometry(
+      boxGeometry({
+        min: [-0.46, 0.12, -0.08],
+        max: [0.46, 1.04, 0.08],
+        bone: 0,
+        normalMode: "corner",
+        uvRect: [0.34, 0.34, 0.66, 0.66]
+      }),
+      { rotateY: 0.28, rotateX: -0.04, translate: [0.02, 0, 0] }
+    ),
+    textures: ["texture-atlas-padding.png"],
+    assets: [
+      {
+        path: "texture-atlas-padding.png",
+        bytes: () => atlasPaddingPng()
+      }
+    ],
+    materials: [
+      material("mat_atlas_padding", "AtlasPadding", {
+        diffuse: [1, 1, 1, 1],
+        specular: [0.03, 0.03, 0.03],
+        ambient: [0.35, 0.35, 0.35],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 5,
+        flags: 0x11,
+        textureIndex: 0,
+        faceVertexCount: 36,
+        comment: "opaque PMX material using only opaque texture atlas region"
+      })
+    ]
   }
 };
 
@@ -172,7 +244,8 @@ export function generateMinimalPmx() {
     ],
     morphs: true,
     geometry: defaultGeometry(),
-    materials: [defaultMaterial()]
+    materials: [defaultMaterial()],
+    textures: []
   });
 }
 
@@ -189,7 +262,8 @@ export function generateRestPosePmx(caseId) {
     bones: restCase.bones,
     morphs: false,
     geometry: defaultGeometry(),
-    materials: [defaultMaterial()]
+    materials: [defaultMaterial()],
+    textures: []
   });
 }
 
@@ -206,7 +280,17 @@ export function generateVisualPmx(caseId) {
     bones: [bone("center", "center", [0, 0, 0], -1, { tail: [0, 1, 0] })],
     morphs: false,
     geometry: visualCase.geometry,
-    materials: visualCase.materials
+    materials: visualCase.materials,
+    textures: visualCase.textures ?? [],
+    textEncoding: "utf16le",
+    indexSizes: {
+      vertex: 4,
+      texture: 4,
+      material: 4,
+      bone: 4,
+      morph: 4,
+      rigidBody: 4
+    }
   });
 }
 
@@ -226,33 +310,45 @@ export function restPoseCaseMetadata(caseId) {
   return { ...restCase };
 }
 
-function generatePmx({ name, englishName, comment, englishComment, bones, morphs, geometry, materials }) {
-  const writer = new BinaryWriter();
+function generatePmx({
+  name,
+  englishName,
+  comment,
+  englishComment,
+  bones,
+  morphs,
+  geometry,
+  materials,
+  textures,
+  textEncoding = "utf8",
+  indexSizes = defaultIndexSizes()
+}) {
+  const writer = new BinaryWriter(textEncoding);
 
   writer.bytes(new TextEncoder().encode("PMX "));
   writer.f32(2.0);
   writer.u8(8);
-  writer.u8(1);
+  writer.u8(textEncoding === "utf16le" ? 0 : 1);
   writer.u8(0);
-  writer.u8(1);
-  writer.u8(1);
-  writer.u8(1);
-  writer.u8(1);
-  writer.u8(1);
-  writer.u8(1);
+  writer.u8(indexSizes.vertex);
+  writer.u8(indexSizes.texture);
+  writer.u8(indexSizes.material);
+  writer.u8(indexSizes.bone);
+  writer.u8(indexSizes.morph);
+  writer.u8(indexSizes.rigidBody);
 
   writer.text(name);
   writer.text(englishName);
   writer.text(comment);
   writer.text(englishComment);
 
-  writeVertices(writer, geometry.vertices);
-  writeFaces(writer, geometry.indices);
-  writeTextures(writer);
-  writeMaterials(writer, materials);
-  writeBones(writer, bones);
-  writeMorphs(writer, morphs);
-  writeDisplayFrames(writer);
+  writeVertices(writer, geometry.vertices, indexSizes);
+  writeFaces(writer, geometry.indices, indexSizes);
+  writeTextures(writer, textures);
+  writeMaterials(writer, materials, indexSizes);
+  writeBones(writer, bones, indexSizes);
+  writeMorphs(writer, morphs, indexSizes);
+  writeDisplayFrames(writer, bones, indexSizes);
   writer.i32(0);
   writer.i32(0);
 
@@ -294,9 +390,7 @@ async function main() {
         : VISUAL_OUTPUT_DIR;
     for (const caseId of visualCaseIds()) {
       const outputPath = resolve(outputDir, `${caseId}.pmx`);
-      const bytes = generateVisualPmx(caseId);
-      await mkdir(dirname(outputPath), { recursive: true });
-      await writeFile(outputPath, bytes);
+      const bytes = await writeVisualPmx(caseId, outputPath);
       console.log(`wrote ${bytes.byteLength} bytes to ${outputPath}`);
     }
     return;
@@ -319,7 +413,39 @@ async function main() {
 
   await mkdir(dirname(absoluteOutput), { recursive: true });
   await writeFile(absoluteOutput, bytes);
+  if (visualCaseArgIndex >= 0 && process.argv[visualCaseArgIndex + 1] !== undefined) {
+    await writeVisualAssets(process.argv[visualCaseArgIndex + 1], dirname(absoluteOutput));
+  }
   console.log(`wrote ${bytes.byteLength} bytes to ${outputPath}`);
+}
+
+async function writeVisualPmx(caseId, outputPath) {
+  const bytes = generateVisualPmx(caseId);
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, bytes);
+  await writeVisualAssets(caseId, dirname(outputPath));
+  return bytes;
+}
+
+async function writeVisualAssets(caseId, outputDir) {
+  const visualCase = VISUAL_CASES[caseId];
+  if (!visualCase) {
+    throw new Error(`Unknown visual PMX case: ${caseId}`);
+  }
+  for (const asset of visualCase.assets ?? []) {
+    await writeFile(resolve(outputDir, asset.path), asset.bytes());
+  }
+}
+
+function defaultIndexSizes() {
+  return {
+    vertex: 1,
+    texture: 1,
+    material: 1,
+    bone: 1,
+    morph: 1,
+    rigidBody: 1
+  };
 }
 
 function defaultGeometry() {
@@ -339,9 +465,10 @@ function defaultGeometry() {
   };
 }
 
-function boxGeometry({ min, max, bone, normalMode = "face" }) {
+function boxGeometry({ min, max, bone, normalMode = "face", uvRect = [0, 0, 1, 1] }) {
   const [minX, minY, minZ] = min;
   const [maxX, maxY, maxZ] = max;
+  const [u0, v0, u1, v1] = uvRect;
   const center = [(minX + maxX) * 0.5, (minY + maxY) * 0.5, (minZ + maxZ) * 0.5];
   const faces = [
     {
@@ -404,10 +531,10 @@ function boxGeometry({ min, max, bone, normalMode = "face" }) {
   for (const face of faces) {
     const base = vertices.length;
     vertices.push(
-      { position: face.corners[0], normal: boxNormal(face.corners[0], center, face.normal, normalMode), uv: [0, 1], bone },
-      { position: face.corners[1], normal: boxNormal(face.corners[1], center, face.normal, normalMode), uv: [1, 1], bone },
-      { position: face.corners[2], normal: boxNormal(face.corners[2], center, face.normal, normalMode), uv: [1, 0], bone },
-      { position: face.corners[3], normal: boxNormal(face.corners[3], center, face.normal, normalMode), uv: [0, 0], bone }
+      { position: face.corners[0], normal: boxNormal(face.corners[0], center, face.normal, normalMode), uv: [u0, v1], bone },
+      { position: face.corners[1], normal: boxNormal(face.corners[1], center, face.normal, normalMode), uv: [u1, v1], bone },
+      { position: face.corners[2], normal: boxNormal(face.corners[2], center, face.normal, normalMode), uv: [u1, v0], bone },
+      { position: face.corners[3], normal: boxNormal(face.corners[3], center, face.normal, normalMode), uv: [u0, v0], bone }
     );
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
@@ -468,27 +595,71 @@ function rotateXThenYThenTranslate(value, cosX, sinX, cosY, sinY, translate) {
   ];
 }
 
-function writeVertices(writer, vertices) {
+function alphaCutoutPng() {
+  const size = 96;
+  const png = new PNG({ width: size, height: size });
+  const center = (size - 1) * 0.5;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const index = (y * size + x) * 4;
+      const u = x / (size - 1);
+      const v = y / (size - 1);
+      const stripe = Math.abs(u - v) < 0.09;
+      const dx = x - center;
+      const dy = y - center;
+      const circle = Math.hypot(dx, dy) < size * 0.22;
+      const transparent = stripe || circle;
+      png.data[index] = 45;
+      png.data[index + 1] = 158;
+      png.data[index + 2] = 76;
+      png.data[index + 3] = transparent ? 0 : 255;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+function atlasPaddingPng() {
+  const size = 96;
+  const png = new PNG({ width: size, height: size });
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const index = (y * size + x) * 4;
+      const u = x / (size - 1);
+      const v = y / (size - 1);
+      const usedRegion = u >= 0.3 && u <= 0.7 && v >= 0.3 && v <= 0.7;
+      png.data[index] = usedRegion ? 238 : 120;
+      png.data[index + 1] = usedRegion ? 179 : 84;
+      png.data[index + 2] = usedRegion ? 64 : 180;
+      png.data[index + 3] = usedRegion ? 255 : 0;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+function writeVertices(writer, vertices, indexSizes) {
   writer.i32(vertices.length);
   for (const vertex of vertices) {
     writer.vec3(vertex.position);
     writer.vec3(vertex.normal ?? [0, 0, 1]);
     writer.vec2(vertex.uv);
     writer.u8(0);
-    writer.i8(vertex.bone);
+    writer.index(vertex.bone, indexSizes.bone);
     writer.f32(1);
   }
 }
 
-function writeFaces(writer, indices) {
+function writeFaces(writer, indices, indexSizes) {
   writer.i32(indices.length);
   for (const index of indices) {
-    writer.u8(index);
+    writer.vertexIndex(index, indexSizes.vertex);
   }
 }
 
-function writeTextures(writer) {
-  writer.i32(0);
+function writeTextures(writer, textures) {
+  writer.i32(textures.length);
+  for (const texture of textures) {
+    writer.text(texture);
+  }
 }
 
 function defaultMaterial() {
@@ -518,7 +689,7 @@ function material(name, englishName, options) {
   };
 }
 
-function writeMaterials(writer, materials) {
+function writeMaterials(writer, materials, indexSizes) {
   writer.i32(materials.length);
   for (const material of materials) {
     writer.text(material.name);
@@ -530,28 +701,32 @@ function writeMaterials(writer, materials) {
     writer.u8(material.flags);
     writer.vec4(material.edgeColor);
     writer.f32(material.edgeSize);
-    writer.i8(material.textureIndex);
-    writer.i8(material.sphereTextureIndex);
+    writer.index(material.textureIndex, indexSizes.texture);
+    writer.index(material.sphereTextureIndex, indexSizes.texture);
     writer.u8(material.sphereMode);
     writer.u8(material.toonShared);
-    writer.i8(material.toonTextureIndex);
+    if (material.toonShared) {
+      writer.u8(material.toonTextureIndex);
+    } else {
+      writer.index(material.toonTextureIndex, indexSizes.texture);
+    }
     writer.text(material.comment);
     writer.i32(material.faceVertexCount);
   }
 }
 
-function writeBones(writer, bones) {
+function writeBones(writer, bones, indexSizes) {
   writer.i32(bones.length);
   for (const bone of bones) {
     writer.text(bone.name);
     writer.text(bone.englishName);
     writer.vec3(bone.position);
-    writer.i8(bone.parent);
+    writer.index(bone.parent, indexSizes.bone);
     writer.i32(0);
     writer.u16(bone.flags ?? BASE_BONE_FLAGS);
     writer.vec3(bone.tail ?? [0, 0.4, 0]);
     if (bone.appendTransform) {
-      writer.i8(bone.appendTransform.parent);
+      writer.index(bone.appendTransform.parent, indexSizes.bone);
       writer.f32(bone.appendTransform.weight);
     }
     if (bone.fixedAxis) {
@@ -562,12 +737,12 @@ function writeBones(writer, bones) {
       writer.vec3(bone.localAxis.z);
     }
     if (bone.ik) {
-      writer.i8(bone.ik.target);
+      writer.index(bone.ik.target, indexSizes.bone);
       writer.i32(bone.ik.loopCount);
       writer.f32(bone.ik.limitAngle);
       writer.i32(bone.ik.links.length);
       for (const link of bone.ik.links) {
-        writer.i8(link.bone);
+        writer.index(link.bone, indexSizes.bone);
         writer.u8(link.limits ? 1 : 0);
         if (link.limits) {
           writer.vec3(link.limits.lower);
@@ -578,7 +753,7 @@ function writeBones(writer, bones) {
   }
 }
 
-function writeMorphs(writer, enabled) {
+function writeMorphs(writer, enabled, indexSizes) {
   if (!enabled) {
     writer.i32(0);
     return;
@@ -590,21 +765,20 @@ function writeMorphs(writer, enabled) {
   writer.u8(1);
   writer.i32(1);
   writer.u8(3);
+  writer.index(0, indexSizes.vertex);
   writer.vec3([0, 0.05, 0]);
 }
 
-function writeDisplayFrames(writer) {
+function writeDisplayFrames(writer, bones, indexSizes) {
   writer.i32(1);
   writer.text("Root");
   writer.text("Root");
   writer.u8(1);
-  writer.i32(3);
-  writer.u8(0);
-  writer.i8(0);
-  writer.u8(0);
-  writer.i8(1);
-  writer.u8(0);
-  writer.i8(2);
+  writer.i32(bones.length);
+  for (let boneIndex = 0; boneIndex < bones.length; boneIndex += 1) {
+    writer.u8(0);
+    writer.index(boneIndex, indexSizes.bone);
+  }
 }
 
 function bone(name, englishName, position, parent, options = {}) {
@@ -620,6 +794,11 @@ function bone(name, englishName, position, parent, options = {}) {
 class BinaryWriter {
   #bytes = [];
   #encoder = new TextEncoder();
+  #textEncoding;
+
+  constructor(textEncoding = "utf8") {
+    this.#textEncoding = textEncoding;
+  }
 
   bytes(value) {
     this.#bytes.push(...value);
@@ -633,9 +812,47 @@ class BinaryWriter {
     this.u8(value);
   }
 
+  vertexIndex(value, size) {
+    switch (size) {
+      case 1:
+        this.u8(value);
+        break;
+      case 2:
+        this.u16(value);
+        break;
+      case 4:
+        this.i32(value);
+        break;
+      default:
+        throw new Error(`Unsupported PMX vertex index size: ${size}`);
+    }
+  }
+
+  index(value, size) {
+    switch (size) {
+      case 1:
+        this.i8(value);
+        break;
+      case 2:
+        this.i16(value);
+        break;
+      case 4:
+        this.i32(value);
+        break;
+      default:
+        throw new Error(`Unsupported PMX index size: ${size}`);
+    }
+  }
+
   u16(value) {
     const buffer = new ArrayBuffer(2);
     new DataView(buffer).setUint16(0, value, true);
+    this.bytes(new Uint8Array(buffer));
+  }
+
+  i16(value) {
+    const buffer = new ArrayBuffer(2);
+    new DataView(buffer).setInt16(0, value, true);
     this.bytes(new Uint8Array(buffer));
   }
 
@@ -670,7 +887,8 @@ class BinaryWriter {
   }
 
   text(value) {
-    const encoded = this.#encoder.encode(value);
+    const encoded =
+      this.#textEncoding === "utf16le" ? encodeUtf16Le(value) : this.#encoder.encode(value);
     this.i32(encoded.byteLength);
     this.bytes(encoded);
   }
@@ -678,6 +896,16 @@ class BinaryWriter {
   toUint8Array() {
     return new Uint8Array(this.#bytes);
   }
+}
+
+function encodeUtf16Le(value) {
+  const encoded = new Uint8Array(value.length * 2);
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    encoded[index * 2] = code & 0xff;
+    encoded[index * 2 + 1] = code >> 8;
+  }
+  return encoded;
 }
 
 const entryPath = process.argv[1] ? resolve(process.argv[1]) : "";

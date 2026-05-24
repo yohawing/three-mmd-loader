@@ -35,6 +35,32 @@
         "far": 20
       },
       "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-texture-alpha-used-uv-cutout",
+      "model": "test/fixtures/generated/visual/mmd-texture-alpha-used-uv-cutout.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.04, 0.58, 3.4],
+        "target": [0.04, 0.58, 0],
+        "fov": 28,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-texture-alpha-atlas-padding-ignored",
+      "model": "test/fixtures/generated/visual/mmd-texture-alpha-atlas-padding-ignored.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.04, 0.58, 3.4],
+        "target": [0.04, 0.58, 0],
+        "fov": 28,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     }
   ]
 }
