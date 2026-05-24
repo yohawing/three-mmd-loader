@@ -9,7 +9,7 @@ import {
 import type { MaterialInfo } from "../../../src/parser/model/modelTypes.js";
 
 describe("MMD outline meshes", () => {
-  it("uses screen-space outline width and projection-space expansion like three.js OutlineEffect", () => {
+  it("uses PMX edge size with babylon-mmd compatible screen-space expansion", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
@@ -34,9 +34,9 @@ describe("MMD outline meshes", () => {
       fragmentShader: ""
     };
 
-    material?.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    material?.onBeforeCompile(shader, createRendererMock(512, 512));
 
-    expect(material?.userData.mmdOutlineMaterial.outlineWidth).toBeCloseTo(0.6 / 300);
+    expect(material?.userData.mmdOutlineMaterial.outlineWidth).toBeCloseTo(0.6);
     expect(material?.side).toBe(THREE.BackSide);
     expect(material?.transparent).toBe(true);
     expect(material?.depthTest).toBe(true);
@@ -44,12 +44,26 @@ describe("MMD outline meshes", () => {
     expect(material?.polygonOffset).toBe(true);
     expect(material?.polygonOffsetFactor).toBe(1);
     expect(material?.polygonOffsetUnits).toBe(1);
-    expect(shader.vertexShader).toContain("vec4 mmdOutlineDirection = normalize( gl_Position - mmdOutlineOffsetPosition );");
-    expect(shader.vertexShader).toContain("gl_Position += mmdOutlineDirection * mmdOutlineWidth * gl_Position.w");
+    expect(shader.uniforms.mmdOutlineViewport?.value).toBeInstanceOf(THREE.Vector2);
+    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(512, 512));
+    outline.onBeforeRender(
+      createRendererMock(256, 128),
+      {} as THREE.Scene,
+      {} as THREE.Camera,
+      geometry,
+      material ?? new THREE.Material(),
+      null
+    );
+    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(256, 128));
+    expect(shader.vertexShader).toContain("vec3 mmdOutlineViewNormal = mat3( modelViewMatrix ) * objectNormal;");
+    expect(shader.vertexShader).toContain("vec2 mmdOutlineScreenNormal = mmdOutlineViewNormal.xy;");
+    expect(shader.vertexShader).toContain("mmdOutlineScreenNormalLength > 0.0");
+    expect(shader.vertexShader).toContain("mmdOutlineViewport * 0.25");
+    expect(shader.vertexShader).toContain("gl_Position.xy += mmdOutlineScreenNormal");
     expect(shader.vertexShader).not.toContain("transformed += normal * mmdOutlineWidth");
   });
 
-  it("clamps PMX outline edge size at the library maximum", () => {
+  it("preserves PMX outline edge size without a library clamp", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
@@ -69,7 +83,7 @@ describe("MMD outline meshes", () => {
     });
     const material = outline?.material as THREE.Material | undefined;
 
-    expect(material?.userData.mmdOutlineMaterial.outlineWidth).toBeCloseTo(5 / 300);
+    expect(material?.userData.mmdOutlineMaterial.outlineWidth).toBeCloseTo(8);
   });
 
   it("creates material-scoped outline proxies with shared geometry buffers and stable order", () => {
@@ -183,7 +197,7 @@ describe("MMD outline meshes", () => {
       fragmentShader: "#include <alphatest_fragment>"
     };
 
-    material?.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    material?.onBeforeCompile(shader, createRendererMock(512, 512));
 
     expect(material?.map).toBe(sourceMap);
     expect(material?.alphaTest).toBe(0.35);
@@ -191,6 +205,14 @@ describe("MMD outline meshes", () => {
     expect(shader.fragmentShader).toContain("#include <alphatest_fragment>");
   });
 });
+
+function createRendererMock(width: number, height: number): THREE.WebGLRenderer {
+  return {
+    getCurrentViewport(target: THREE.Vector4) {
+      return target.set(0, 0, width, height);
+    }
+  } as THREE.WebGLRenderer;
+}
 
 function createMaterialInfo(overrides: Partial<MaterialInfo> = {}): MaterialInfo {
   return {

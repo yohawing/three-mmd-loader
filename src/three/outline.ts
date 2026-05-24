@@ -12,9 +12,6 @@ import type {
 import type { MmdMaterialTransparencyMode } from "./textures.js";
 import { clampColor } from "./utils.js";
 
-const MMD_OUTLINE_SCREEN_SPACE_SCALE = 300;
-const MMD_OUTLINE_MAX_EDGE_SIZE = 5;
-
 export interface MmdOutlineOptions {
   readonly scale?: number;
   readonly alphaTest?: number;
@@ -89,6 +86,7 @@ export function createMmdOutlineMeshes(
       edgeSize: materialInfo.edgeSize,
       fallback: !hasEdge && !!options.forceFallback
     };
+    attachMmdOutlineViewportUpdate(outline);
     meshes.push(outline);
   }
   return meshes;
@@ -132,7 +130,7 @@ function createMmdOutlineMaterial(
   }
   const outlineMaterial = new THREE.MeshBasicMaterial(parameters);
   const outlineWidth = mmdOutlineExpansionWidth(material, options, hasEdge);
-  attachMmdOutlineExpansion(outlineMaterial, outlineWidth, hasVertexEdgeScale);
+  attachMmdPmxOutlineExpansion(outlineMaterial, outlineWidth, hasVertexEdgeScale);
   outlineMaterial.visible = visible;
   outlineMaterial.userData.mmdOutlineMaterial = {
     edgeColor: [...material.edgeColor],
@@ -204,13 +202,101 @@ export function attachMmdOutlineExpansion(
   material.needsUpdate = true;
 }
 
+function attachMmdPmxOutlineExpansion(
+  material: THREE.Material,
+  outlineWidth: number,
+  hasVertexEdgeScale: boolean
+): void {
+  const previousOnBeforeCompile = material.onBeforeCompile.bind(material);
+  const previousProgramCacheKey = material.customProgramCacheKey.bind(material);
+  material.onBeforeCompile = (shader, renderer) => {
+    previousOnBeforeCompile(shader, renderer);
+    shader.uniforms.mmdOutlineWidth = { value: outlineWidth };
+    material.userData.mmdOutlineShader = shader;
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <common>",
+      [
+        "#include <common>",
+        "uniform float mmdOutlineWidth;",
+        "uniform vec2 mmdOutlineViewport;",
+        hasVertexEdgeScale ? "attribute float mmdEdgeScale;" : ""
+      ]
+        .filter(Boolean)
+        .join("\n")
+    );
+    const outlineViewport = new THREE.Vector2();
+    const currentViewport = new THREE.Vector4();
+    updateMmdOutlineViewport(renderer, outlineViewport, currentViewport);
+    shader.uniforms.mmdOutlineViewport = { value: outlineViewport };
+    material.userData.mmdOutlineUpdateViewport = (activeRenderer: THREE.WebGLRenderer) => {
+      updateMmdOutlineViewport(activeRenderer, outlineViewport, currentViewport);
+    };
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <project_vertex>",
+      [
+        "#include <project_vertex>",
+        "vec3 mmdOutlineViewNormal = mat3( modelViewMatrix ) * objectNormal;",
+        "vec2 mmdOutlineScreenNormal = mmdOutlineViewNormal.xy;",
+        "float mmdOutlineScreenNormalLength = length( mmdOutlineScreenNormal );",
+        "mmdOutlineScreenNormal = mmdOutlineScreenNormalLength > 0.0 ? mmdOutlineScreenNormal / mmdOutlineScreenNormalLength : vec2( 0.0 );",
+        hasVertexEdgeScale
+          ? "gl_Position.xy += mmdOutlineScreenNormal / ( mmdOutlineViewport * 0.25 ) * mmdOutlineWidth * gl_Position.w * mmdEdgeScale;"
+          : "gl_Position.xy += mmdOutlineScreenNormal / ( mmdOutlineViewport * 0.25 ) * mmdOutlineWidth * gl_Position.w;"
+      ].join("\n")
+    );
+  };
+  material.customProgramCacheKey = () =>
+    `${previousProgramCacheKey()}-yw-mmd-pmx-outline-expansion${
+      hasVertexEdgeScale ? "-edge-scale" : ""
+    }`;
+  material.needsUpdate = true;
+}
+
+function attachMmdOutlineViewportUpdate(outline: THREE.SkinnedMesh): void {
+  outline.onBeforeRender = (renderer) => {
+    syncMmdOutlineViewport(outline.material, renderer);
+  };
+}
+
+function syncMmdOutlineViewport(
+  materials: THREE.Material | THREE.Material[],
+  renderer: THREE.WebGLRenderer
+): void {
+  if (Array.isArray(materials)) {
+    for (const material of materials) {
+      syncMmdOutlineMaterialViewport(material, renderer);
+    }
+    return;
+  }
+  syncMmdOutlineMaterialViewport(materials, renderer);
+}
+
+function syncMmdOutlineMaterialViewport(
+  material: THREE.Material,
+  renderer: THREE.WebGLRenderer
+): void {
+  const updateViewport = material.userData.mmdOutlineUpdateViewport as
+    | ((activeRenderer: THREE.WebGLRenderer) => void)
+    | undefined;
+  updateViewport?.(renderer);
+}
+
+function updateMmdOutlineViewport(
+  renderer: THREE.WebGLRenderer,
+  target: THREE.Vector2,
+  currentViewport: THREE.Vector4
+): void {
+  renderer.getCurrentViewport(currentViewport);
+  target.set(currentViewport.z, currentViewport.w);
+}
+
 function mmdOutlineExpansionWidth(
   material: MaterialInfo,
   options: MmdOutlineOptions,
   hasEdge: boolean
 ): number {
   const edgeSize = hasEdge ? material.edgeSize : options.forceFallback ? 0.5 : 0;
-  return Math.min(Math.max(edgeSize, 0), MMD_OUTLINE_MAX_EDGE_SIZE) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
+  return Math.max(edgeSize, 0);
 }
 
 export function createMmdMaterialRenderOrderMeshes(
@@ -355,7 +441,7 @@ export function syncMmdOutlineMaterialStates(
 
 function mmdOutlineRuntimeWidth(edgeSize: number, fallback: boolean): number {
   if (fallback && edgeSize <= 0) {
-    return 0.5 / MMD_OUTLINE_SCREEN_SPACE_SCALE;
+    return 0.5;
   }
-  return Math.min(Math.max(edgeSize, 0), MMD_OUTLINE_MAX_EDGE_SIZE) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
+  return Math.max(edgeSize, 0);
 }
