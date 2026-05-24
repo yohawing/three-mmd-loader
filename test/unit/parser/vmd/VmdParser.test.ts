@@ -71,6 +71,28 @@ describe("parseVmd", () => {
     expect(animation.metadata.counts).toMatchObject({ cameras: 0, lights: 0 });
   });
 
+  it("ignores non-count tail bytes after optional VMD sections", () => {
+    const animation = parseVmd(
+      createMorphOnlyVmd({
+        trailingZeroCameraCount: true,
+        trailingZeroLightCount: true,
+        trailingBytes: createCameraFramePayloadWithoutCount()
+      })
+    );
+
+    expect(animation.morphTracks["blink"]).toHaveLength(2);
+    expect(animation.cameraFrames).toHaveLength(0);
+    expect(animation.lightFrames).toHaveLength(0);
+    expect(animation.selfShadowFrames).toHaveLength(0);
+    expect(animation.propertyFrames).toHaveLength(0);
+    expect(animation.metadata.counts).toMatchObject({
+      cameras: 0,
+      lights: 0,
+      selfShadows: 0,
+      properties: 0
+    });
+  });
+
   it("reads camera interpolation in VMD channel-strided byte layout", () => {
     const animation = parseVmd(createCameraOnlyVmd());
     const interpolation = animation.cameraFrames[0]?.interpolation;
@@ -122,7 +144,13 @@ function expectSortedFrames(frames: readonly VmdBoneFrame[] | readonly VmdMorphF
   }
 }
 
-function createMorphOnlyVmd(options: { readonly trailingZeroCameraCount?: boolean } = {}): Uint8Array {
+function createMorphOnlyVmd(
+  options: {
+    readonly trailingZeroCameraCount?: boolean;
+    readonly trailingZeroLightCount?: boolean;
+    readonly trailingBytes?: Uint8Array;
+  } = {}
+): Uint8Array {
   const bytes: number[] = [];
   const u32 = (value: number) => {
     const buffer = new ArrayBuffer(4);
@@ -150,6 +178,38 @@ function createMorphOnlyVmd(options: { readonly trailingZeroCameraCount?: boolea
   if (options.trailingZeroCameraCount) {
     u32(0); // explicit camera count, then EOF before the light section
   }
+  if (options.trailingZeroLightCount) {
+    u32(0);
+  }
+  if (options.trailingBytes) {
+    bytes.push(...options.trailingBytes);
+  }
+
+  return new Uint8Array(bytes);
+}
+
+function createCameraFramePayloadWithoutCount(): Uint8Array {
+  const bytes: number[] = [];
+  const u32 = (value: number) => {
+    const buffer = new ArrayBuffer(4);
+    new DataView(buffer).setUint32(0, value, true);
+    bytes.push(...new Uint8Array(buffer));
+  };
+  const f32 = (value: number) => {
+    const buffer = new ArrayBuffer(4);
+    new DataView(buffer).setFloat32(0, value, true);
+    bytes.push(...new Uint8Array(buffer));
+  };
+
+  u32(0);
+  f32(-35);
+  f32(0);
+  f32(8.8);
+  f32(5.1);
+  f32(-0.28);
+  bytes.push(...Array.from({ length: 24 }, () => 0x14));
+  u32(45);
+  bytes.push(0);
 
   return new Uint8Array(bytes);
 }

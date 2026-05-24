@@ -103,7 +103,7 @@ export function parseVmd(input: Uint8Array | ArrayBuffer): MmdAnimation {
     maxFrame = Math.max(maxFrame, frame);
   }
 
-  const selfShadowCount = readOptionalCount(reader, "self-shadow");
+  const selfShadowCount = readOptionalTailCount(reader, "self-shadow");
   for (let index = 0; index < selfShadowCount; index += 1) {
     const frame = reader.u32();
     selfShadowFrames.push({
@@ -114,7 +114,7 @@ export function parseVmd(input: Uint8Array | ArrayBuffer): MmdAnimation {
     maxFrame = Math.max(maxFrame, frame);
   }
 
-  const propertyCount = readOptionalCount(reader, "property");
+  const propertyCount = readOptionalTailCount(reader, "property");
   const propertyLayout = selectPropertyFrameLayout(reader, propertyCount);
   for (let index = 0; index < propertyCount; index += 1) {
     const frame = reader.u32();
@@ -182,6 +182,22 @@ function readOptionalCount(reader: BinaryReader, label: string): number {
     return 0;
   }
   return readCount(reader, label);
+}
+
+function readOptionalTailCount(reader: BinaryReader, label: string): number {
+  if (reader.remaining === 0) {
+    return 0;
+  }
+  if (reader.remaining < 4) {
+    return readCount(reader, label);
+  }
+  const offset = reader.offset;
+  const count = reader.u32();
+  if (count > maxVmdSectionCount) {
+    reader.offset = offset;
+    return 0;
+  }
+  return count;
 }
 
 type VmdPropertyFrameLayout = "classic" | "extendedPhysics";

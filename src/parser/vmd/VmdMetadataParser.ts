@@ -92,7 +92,7 @@ export function parseVmdSectionInventory(input: ArrayBuffer | Uint8Array): VmdSe
   }
 
   const selfShadowCountOffset = reader.offset;
-  const selfShadows = readOptionalCount(reader, "self-shadow");
+  const selfShadows = readOptionalTailCount(reader, "self-shadow");
   if (reader.offset !== selfShadowCountOffset) {
     readFixedSizeSection(
       reader,
@@ -105,7 +105,7 @@ export function parseVmdSectionInventory(input: ArrayBuffer | Uint8Array): VmdSe
   }
 
   const propertyCountOffset = reader.offset;
-  const properties = readOptionalCount(reader, "property");
+  const properties = readOptionalTailCount(reader, "property");
   if (reader.offset !== propertyCountOffset) {
     readPropertySection(reader, sections, properties, propertyCountOffset);
   }
@@ -222,6 +222,22 @@ function readOptionalCount(reader: BinaryReader, label: string): number {
     return 0;
   }
   return readCount(reader, label);
+}
+
+function readOptionalTailCount(reader: BinaryReader, label: string): number {
+  if (reader.remaining === 0) {
+    return 0;
+  }
+  if (reader.remaining < 4) {
+    return readCount(reader, label);
+  }
+  const offset = reader.offset;
+  const count = reader.u32();
+  if (count > maxVmdSectionCount) {
+    reader.offset = offset;
+    return 0;
+  }
+  return count;
 }
 
 function readCount(reader: BinaryReader, label: string): number {
