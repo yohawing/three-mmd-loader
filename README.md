@@ -100,16 +100,24 @@ npm install @yohawing/three-mmd-loader three
 import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
 
 const loader = new ThreeMmdLoader();
-const { mesh, runtime } = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path resolved via fetch)
-scene.add(mesh);
+const model = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path resolved via fetch)
+scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes);
+const { runtime } = model;
 
-const { mesh: remoteMesh } = await loader.loadModel("/models/example.pmx");
-scene.add(remoteMesh);
+const remoteModel = await loader.loadModel("/models/example.pmx");
+scene.add(remoteModel.mesh, ...remoteModel.renderOrderMeshes, ...remoteModel.outlineMeshes);
 ```
 
 `loadModel(...)` also returns `textureDiagnostics: TextureLoadDiagnostic[]`.
 Texture folder resolution failures and related recoverable texture issues are
 reported there with `level: "warning"`.
+
+By default, `loadModel(...)` uses `outlineMode: "mmdCompat"` so body materials
+draw first in PMX material definition order, followed by toon outlines in the
+same order (`body0`, `body1`, ..., `outline0`, `outline1`, ...). This creates
+material-scoped `renderOrderMeshes` and `outlineMeshes`; add them to the scene
+with the base mesh. Callers that need the older single combined outline mesh can
+pass `outlineMode: "postOutline"` explicitly.
 
 ## Loader Options
 

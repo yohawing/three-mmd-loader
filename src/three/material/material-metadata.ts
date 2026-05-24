@@ -143,6 +143,8 @@ export function mmdMaterialMorphCanAffectAlpha(
 export function computeMmdMaterialRenderOrder(
   materials: readonly { materialIndex: number; transparencyMode: MmdMaterialTransparencyMode }[]
 ): MmdMaterialRenderOrderEntry[] {
+  // MMD draws materials in PMX definition order. Transparency buckets stay on
+  // the entries for diagnostics; they must not reorder draw calls here.
   return materials
     .map((material) => ({
       materialIndex: material.materialIndex,

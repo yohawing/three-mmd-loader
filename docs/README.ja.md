@@ -98,11 +98,11 @@ npm install @yohawing/three-mmd-loader three
 import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
 
 const loader = new ThreeMmdLoader();
-const { mesh } = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path は fetch で解決)
-scene.add(mesh);
+const model = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path は fetch で解決)
+scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes);
 
-const { mesh: remoteMesh } = await loader.loadModel("/models/example.pmx");
-scene.add(remoteMesh);
+const remoteModel = await loader.loadModel("/models/example.pmx");
+scene.add(remoteModel.mesh, ...remoteModel.renderOrderMeshes, ...remoteModel.outlineMeshes);
 ```
 
 ## 使い方 - アニメーション

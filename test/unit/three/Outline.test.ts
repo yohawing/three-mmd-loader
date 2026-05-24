@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import {
+  computeMmdMaterialRenderOrder,
   createMmdMaterialRenderOrderMeshes,
   createMmdOutlineMeshes
 } from "../../../src/three/index.js";
@@ -39,7 +40,7 @@ describe("MMD outline meshes", () => {
     expect(material?.side).toBe(THREE.BackSide);
     expect(material?.transparent).toBe(true);
     expect(material?.depthTest).toBe(true);
-    expect(material?.depthWrite).toBe(false);
+    expect(material?.depthWrite).toBe(true);
     expect(material?.polygonOffset).toBe(true);
     expect(material?.polygonOffsetFactor).toBe(1);
     expect(material?.polygonOffsetUnits).toBe(1);
@@ -108,9 +109,63 @@ describe("MMD outline meshes", () => {
         createMaterialInfo({ name: "second", edgeSize: 0.6 })
       ]
     });
-    expect(materialMeshes.map((proxy) => proxy.renderOrder)).toEqual([0, 2]);
+    expect(materialMeshes.map((proxy) => proxy.renderOrder)).toEqual([0, 1]);
     expect(materialMeshes.every((proxy) => !Array.isArray(proxy.material) && proxy.material.transparent)).toBe(true);
-    expect(outlines.map((outline) => outline.renderOrder)).toEqual([1, 3]);
+    expect(outlines.map((outline) => outline.renderOrder)).toEqual([2, 3]);
+    expect(Math.max(...materialMeshes.map((proxy) => proxy.renderOrder))).toBeLessThan(
+      Math.min(...outlines.map((outline) => outline.renderOrder))
+    );
+  });
+
+  it("keeps PMX material definition order even when transparency buckets differ", () => {
+    expect(
+      computeMmdMaterialRenderOrder([
+        { materialIndex: 2, transparencyMode: "alphaBlend" },
+        { materialIndex: 0, transparencyMode: "opaque" },
+        { materialIndex: 1, transparencyMode: "alphaTest" }
+      ])
+    ).toEqual([
+      { materialIndex: 0, bucket: "opaque", renderOrder: 0 },
+      { materialIndex: 1, bucket: "alphaTest", renderOrder: 1 },
+      { materialIndex: 2, bucket: "alphaBlend", renderOrder: 2 }
+    ]);
+  });
+
+  it("carries source texture alpha testing onto outline materials without scanning texture pixels", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
+    geometry.setIndex([0, 1, 2]);
+    geometry.addGroup(0, 3, 0);
+
+    const sourceMap = new THREE.Texture();
+    const mesh = new THREE.SkinnedMesh(
+      geometry,
+      new THREE.MeshToonMaterial({ map: sourceMap, alphaTest: 0.35 })
+    );
+    const bone = new THREE.Bone();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const [outline] = createMmdOutlineMeshes({
+      mesh,
+      materials: [createMaterialInfo({ edgeSize: 0.6 })]
+    });
+    const material = outline?.material as THREE.MeshBasicMaterial | undefined;
+    const shader = {
+      uniforms: {},
+      vertexShader: ["#include <common>", "#include <project_vertex>"].join("\n"),
+      fragmentShader: "#include <alphatest_fragment>"
+    };
+
+    material?.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    expect(material?.map).toBe(sourceMap);
+    expect(material?.alphaTest).toBe(0.35);
+    expect(material?.userData.mmdOutlineMaterial.alphaCutout).toBe(true);
+    expect(shader.fragmentShader).toContain("#include <alphatest_fragment>");
   });
 });
 

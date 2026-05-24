@@ -320,7 +320,7 @@ export function evaluateMmdTextureAlphaGeometry(
       const a = Number(indexArray?.[offset] ?? offset);
       const b = Number(indexArray?.[offset + 1] ?? offset + 1);
       const c = Number(indexArray?.[offset + 2] ?? offset + 2);
-      recordRasterizedUvTriangleTransparency(
+      recordRasterizedUvTriangleAlpha(
         stats,
         rgba.data,
         rgba.width,
@@ -1181,7 +1181,7 @@ function sampleRgbaAlphaByUv(
   return rgba[(y * width + x) * 4 + 3] ?? 255;
 }
 
-function recordRasterizedUvTriangleTransparency(
+function recordRasterizedUvTriangleAlpha(
   stats: AlphaStats,
   rgba: ArrayLike<number>,
   width: number,
@@ -1214,10 +1214,7 @@ function recordRasterizedUvTriangleTransparency(
       const wB = ((c[1] - a[1]) * (px - c[0]) + (a[0] - c[0]) * (py - c[1])) / denominator;
       const wC = 1 - wA - wB;
       if (wA >= 0 && wB >= 0 && wC >= 0) {
-        recordAlphaSample(
-          stats,
-          255 - sampleRgbaAlphaByUv(rgba, width, height, px / resolution, py / resolution)
-        );
+        recordAlphaSample(stats, sampleRgbaAlphaByUv(rgba, width, height, px / resolution, py / resolution));
       }
     }
   }
