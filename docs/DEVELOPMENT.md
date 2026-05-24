@@ -143,6 +143,157 @@ against its metadata counts, writes `tmp/fixture-parse-report.json`, and exits
 non-zero if any file fails to parse. When `test/fixtures/fixtures.local.json` is
 absent (fresh clones, CI), the command logs a skip and exits `0`.
 
+## Local Playback Oracle Tests
+
+The repository also has a local-only playback comparison path for runtime
+motion evaluation. It treats native nanoem as the authority, stores a numeric
+oracle dump locally, registers the same model/motion in the local fixture
+inventory, then compares runtime evaluation output against that oracle.
+
+The committed consumers are:
+
+- `test/integration/animation/local-oracle-playback.test.ts`
+- `test/helpers/nativeNanoemOracle.ts`
+- `test/helpers/localPlaybackFixtures.ts`
+
+All local playback data follows the same separation rule as the local corpus:
+the generator, inventory, and `.local.json` oracle files are developer-local
+and are not committed.
+
+### Step 1: Generate the native nanoem oracle
+
+Oracle generation uses the local-only, gitignored script
+`scripts/local/oracle/native-nanoem-dump.mjs`. The repository does not ship this
+script, so fresh clones will not have it. Local developers provide that script
+at the gitignored path when they need to refresh playback evidence.
+
+The local generator builds a native nanoem CLI from the
+`native/third_party/nanoem` git submodule with emsdk clang, runs it headlessly,
+and writes `native-nanoem-runtime-dump` JSON. Before running it, initialize the
+submodule and make emsdk available through the same discovery paths used by
+`scripts/build-wasm.mjs`:
+
+```bash
+git submodule update --init --recursive native/third_party/nanoem
+```
+
+Then generate an oracle from repository-relative or placeholder paths:
+
+```bash
+node scripts/local/oracle/native-nanoem-dump.mjs \
+  --model <model.pmx|model.pmd> \
+  --motion <motion.vmd> \
+  --frames 0,30,60 \
+  --physics none \
+  --out test/fixtures/oracles/<case>.local.json
+```
+
+`test/fixtures/oracles/*.local.json` is gitignored. Keep physics disabled for
+the initial oracle path; the default comparison stage is still named `physics`
+because it represents the final post-IK runtime snapshot in the oracle format
+when physics is off.
+
+### Step 2: Register the playback fixture
+
+Add a case to the optional, gitignored
+`test/fixtures/fixtures.local.json` inventory. Register the model and motion in
+`paths.releaseSmoke.byExtension.{pmx,pmd,vmd}`, then reference those keys from
+`paths.playbackSmoke.cases`.
+
+Each playback case has these fields:
+
+- `name`: Human-readable case name.
+- `model: { extension, key }`: Reference to a `pmx` or `pmd` key in
+  `paths.releaseSmoke.byExtension`.
+- `motion: { key }`: Reference to a `vmd` key in
+  `paths.releaseSmoke.byExtension.vmd`.
+- `oracle`: Path to the oracle JSON generated in Step 1, resolved from the
+  inventory `basePath`.
+- `oracleKind: "native-nanoem-runtime-dump"`: Oracle reader discriminator.
+- `stage`: Runtime stage to compare. The default is `physics`, which is the
+  post-IK final pose when the oracle was generated with `--physics none`.
+- `frames`: Frame numbers included in the oracle.
+- `watchBones`: Bone names that exist in `oracle.model.bones`.
+- `matrixEpsilon` / `morphEpsilon`: Numeric tolerances. Both default to
+  `1e-4`.
+
+The authoritative schema is
+`test/fixtures/fixtures.schema.json` under `paths.playbackSmoke.cases`.
+
+For the committed cube fixture, the minimal local inventory looks like this:
+
+```json
+{
+  "$schema": "./fixtures.schema.json",
+  "schemaVersion": 1,
+  "basePath": ".",
+  "paths": {
+    "releaseSmoke": {
+      "byExtension": {
+        "pmx": {
+          "oneBoneCube": "test_1bone_cube.pmx"
+        },
+        "pmd": {},
+        "vmd": {
+          "oneBoneCubeMotion": "test_1bone_cube_motion.vmd"
+        },
+        "vpd": {}
+      }
+    },
+    "playbackSmoke": {
+      "cases": [
+        {
+          "name": "one-bone cube",
+          "model": {
+            "extension": "pmx",
+            "key": "oneBoneCube"
+          },
+          "motion": {
+            "key": "oneBoneCubeMotion"
+          },
+          "oracle": "oracles/test_1bone_cube.local.json",
+          "oracleKind": "native-nanoem-runtime-dump",
+          "stage": "physics",
+          "frames": [0, 1, 2],
+          "watchBones": ["全ての親"]
+        }
+      ]
+    }
+  }
+}
+```
+
+Generate that oracle with:
+
+```bash
+node scripts/local/oracle/native-nanoem-dump.mjs \
+  --model test/fixtures/test_1bone_cube.pmx \
+  --motion test/fixtures/test_1bone_cube_motion.vmd \
+  --frames 0,1,2 \
+  --physics none \
+  --out test/fixtures/oracles/test_1bone_cube.local.json
+```
+
+Real models such as Tda, Sour, or Lat Miku cases use the same three-step flow.
+Keep their asset paths in the local inventory; do not commit user-owned corpus
+paths.
+
+### Step 3: Run the playback comparison
+
+Run the local playback test directly:
+
+```bash
+npm test -- test/integration/animation/local-oracle-playback.test.ts
+```
+
+When `test/fixtures/fixtures.local.json` is absent, has no playback cases, or a
+case's model/motion/oracle path is missing, the test is skipped and CI remains
+green. For runnable cases, the test loads the model and VMD through the
+runtime path, calls `DefaultMmdRuntime.evaluate(frame / 30, { physics: false })`,
+extracts each watched bone's world matrix in MMD coordinates, and compares it
+with the matching native nanoem oracle stage. Morph weights are compared when
+the oracle stage includes them.
+
 ## Dist And Package Smoke
 
 `npm run smoke:dist` runs `scripts/dist-export-smoke.mjs` against the compiled
