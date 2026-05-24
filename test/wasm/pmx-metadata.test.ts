@@ -1,11 +1,17 @@
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { initCore } from "../../src/parser/wasm/index.js";
 import { createThreeBufferGeometry } from "../../src/three/index.js";
 import { parsePmd } from "../../src/parser/model/PmdModelParser.js";
 import { parsePmx } from "../../src/parser/model/PmxModelParser.js";
+
+const execFileAsync = promisify(execFile);
+const generatedFixturePath = resolve("test/fixtures/generated/minimal-loader-smoke.pmx");
+const generatorPath = resolve("scripts/fixtures/generate-minimal-pmx.mjs");
 
 const parkingLotPmxIt = existsSync(resolve("data/pmx/background_pmx_Parking_Lot/Parking_Lot.pmx"))
   ? it
@@ -218,7 +224,9 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
   });
 
   it("creates matching PMX morph geometry from Wasm sparse morph offsets", async () => {
-    const bytes = await readFile(resolve("test/fixtures/generated/minimal-loader-smoke.pmx"));
+    await execFileAsync(process.execPath, [generatorPath, "--output", generatedFixturePath]);
+
+    const bytes = await readFile(generatedFixturePath);
     const parsed = parsePmx(bytes);
     const core = await initCore();
     const model = core.loadModel(bytes, { format: "pmx" });
