@@ -37,7 +37,11 @@ export {
 } from "./folder.js";
 export { isModelSource } from "./modelSource.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
-export { mmdWorldMatrixToThree, syncThreeMmdRuntimeToMesh } from "./runtime-sync.js";
+export {
+  mmdWorldMatrixToThree,
+  syncThreeMmdRuntimeToMesh,
+  syncThreeMmdRuntimeToModel
+} from "./runtime-sync.js";
 export { createThreeSkeleton } from "./skeleton.js";
 export {
   attachMmdMaterialMetadata,
@@ -99,7 +103,12 @@ export type {
   MmdOutlineOptions
 } from "./outline.js";
 export type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
-export type { MmdWorldMatrixBuffer, MmdWorldMatrixColumnMajorTuple } from "./runtime-sync.js";
+export type {
+  MmdRuntimeMeshSyncSource,
+  MmdWorldMatrixBuffer,
+  MmdWorldMatrixColumnMajorTuple,
+  ThreeMmdRuntimeSyncTarget
+} from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
 export type {
   MmdToonTextureMaterial,
