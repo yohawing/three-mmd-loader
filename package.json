@@ -71,7 +71,7 @@
     "snapshot:real-models:rest-pose:baseline": "npm run build && node scripts/visual-regression/snapshot-real-models-rest-pose.mjs --mode baseline",
     "compare:real-models:rest-pose": "node scripts/visual-regression/compare-real-models-rest-pose.mjs",
     "visual:report": "node scripts/visual-regression/compute-metrics.mjs",
-    "visual:report:generated-pmx": "node scripts/visual-regression/compute-metrics.mjs --profile generated-pmx",
+    "visual:report:generated-pmx": "node scripts/visual-regression/compute-metrics.mjs --profile generated-pmx --baseline-dir test/fixtures/visual-baselines/generated-pmx",
     "visual:report:real-models": "node scripts/visual-regression/compute-metrics.mjs --profile real-models",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "smoke:types": "node scripts/type-consumer-smoke.mjs",
