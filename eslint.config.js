@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "src/parser/wasm/generated/**"]
+    ignores: ["dist/**", "native/third_party/**", "src/parser/wasm/generated/**"]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

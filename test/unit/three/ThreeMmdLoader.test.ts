@@ -11,6 +11,7 @@ import type {
   ThreeMmdLoaderOptions,
   ThreeMmdTextureLoader
 } from "../../../src/index.js";
+import * as Textures from "../../../src/three/textures.js";
 
 describe("ThreeMmdLoader", () => {
   afterEach(() => {
@@ -99,7 +100,7 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.isSkinnedMesh).toBe(true);
   });
 
-  it("eagerly exposes outline meshes and a stable render-order mesh array without added-event side effects", async () => {
+  it("defaults to MMD-compatible outline and render-order proxies without added-event side effects", async () => {
     const loader = new ThreeMmdLoader();
     const source: ModelSource = createMinimalPmxModelBytes({
       materialCount: 1,
@@ -117,58 +118,12 @@ describe("ThreeMmdLoader", () => {
     expect(model.outlineMeshes).toBe(outlineMeshes);
     expect(outlineMeshes).toHaveLength(1);
     expect(outlineMeshes.every((mesh) => !!mesh.userData.mmdOutlineProxy)).toBe(true);
+    expect(outlineMeshes[0]?.userData.mmdOutlineProxy.sourceMaterialIndex).toBe(0);
     const renderOrderMeshes = model.renderOrderMeshes;
     expect(model.renderOrderMeshes).toBe(renderOrderMeshes);
-    expect(renderOrderMeshes).toEqual([]);
-    expect(model.mesh.geometry.drawRange.count).not.toBe(0);
-  });
-
-  it("can use MMD-compatible material outline proxies explicitly", async () => {
-    const loader = new ThreeMmdLoader();
-    const model = await loader.loadModel(
-      createMinimalPmxModelBytes({
-        materialCount: 1,
-        triangle: true,
-        edge: true
-      }),
-      { outlineMode: "mmdCompat" }
-    );
-
-    expect(model.outlineMeshes).toHaveLength(1);
-    expect(model.outlineMeshes[0]?.userData.mmdOutlineProxy.sourceMaterialIndex).toBe(0);
-    expect(model.renderOrderMeshes).toHaveLength(1);
-    expect(model.renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
+    expect(renderOrderMeshes).toHaveLength(1);
+    expect(renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
     expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
-  });
-
-  it("does not create render-order proxy meshes by default", async () => {
-    const loader = new ThreeMmdLoader();
-
-    const model = await loader.loadModel(
-      createMinimalPmxModelBytes({
-        materialCount: 1,
-        triangle: true
-      })
-    );
-
-    expect(model.renderOrderMeshes).toEqual([]);
-  });
-
-  it("creates render-order proxy meshes when explicitly requested", async () => {
-    const loader = new ThreeMmdLoader();
-
-    const model = await loader.loadModel(
-      createMinimalPmxModelBytes({
-        materialCount: 1,
-        triangle: true
-      }),
-      { renderOrderProxies: true }
-    );
-
-    expect(model.renderOrderMeshes).toHaveLength(1);
-    expect(model.renderOrderMeshes.every((mesh) => !!mesh.userData.mmdMaterialRenderProxy)).toBe(
-      true
-    );
   });
 
   it("allows loadModel callers to disable generated outline meshes explicitly", async () => {
@@ -196,7 +151,7 @@ describe("ThreeMmdLoader", () => {
         triangle: true,
         edge: true
       }),
-      { frustumCulled: false, renderOrderProxies: true }
+      { frustumCulled: false }
     );
 
     expect(model.mesh.frustumCulled).toBe(false);
@@ -243,6 +198,69 @@ describe("ThreeMmdLoader", () => {
     expect(material.map).toBeInstanceOf(THREE.Texture);
     expect(material.map?.wrapS).toBe(THREE.RepeatWrapping);
     expect(material.map?.wrapT).toBe(THREE.RepeatWrapping);
+  });
+
+  it("enables geometry-aware alpha internally for default MMD-compatible outlines", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader = createDataTextureLoader(texture);
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const loader = new ThreeMmdLoader({
+      textureMap: { "tex.png": "resolved/tex.png" },
+      textureLoader
+    });
+
+    await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        texturePath: "tex.png"
+      })
+    );
+
+    expect(geometryAlphaSpy).toHaveBeenCalledOnce();
+  });
+
+  it("does not enable internal geometry-aware alpha when outlines are disabled", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader = createDataTextureLoader(texture);
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const loader = new ThreeMmdLoader({
+      textureMap: { "tex.png": "resolved/tex.png" },
+      textureLoader
+    });
+
+    await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        texturePath: "tex.png"
+      }),
+      { outlines: false }
+    );
+
+    expect(geometryAlphaSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps explicit geometry-aware alpha opt-in active when outlines are disabled", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader = createDataTextureLoader(texture);
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const loader = new ThreeMmdLoader({
+      geometryAwareAlpha: true,
+      textureMap: { "tex.png": "resolved/tex.png" },
+      textureLoader
+    });
+
+    await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        texturePath: "tex.png"
+      }),
+      { outlines: false }
+    );
+
+    expect(geometryAlphaSpy).toHaveBeenCalledOnce();
   });
 
 
@@ -487,6 +505,27 @@ function createMinimalPmxModelBytes(options: {
     text("");
     i32(options.triangle ? 3 : 0);
   }
+}
+
+function createReadableAlphaDataTexture(): THREE.DataTexture {
+  const data = new Uint8Array(4 * 4 * 4);
+  for (let index = 0; index < 4 * 4; index += 1) {
+    data[index * 4] = 255;
+    data[index * 4 + 1] = 255;
+    data[index * 4 + 2] = 255;
+    data[index * 4 + 3] = index === 0 ? 100 : 255;
+  }
+  return new THREE.DataTexture(data, 4, 4, THREE.RGBAFormat);
+}
+
+function createDataTextureLoader(texture: THREE.Texture): ThreeMmdTextureLoader {
+  return {
+    load(url, onLoad) {
+      texture.name = url;
+      onLoad?.(texture);
+      return texture;
+    }
+  };
 }
 
 function createEmptyMmdAnimation(): MmdAnimation {

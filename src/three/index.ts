@@ -20,7 +20,6 @@ import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
 import {
   createMmdMaterialRenderOrderMeshes,
-  createMmdOutlineMesh,
   createMmdOutlineMeshes
 } from "./outline.js";
 import { createLoaderPerformanceProfile } from "./performance.js";
@@ -38,7 +37,11 @@ export {
 } from "./folder.js";
 export { isModelSource } from "./modelSource.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
-export { mmdWorldMatrixToThree, syncThreeMmdRuntimeToMesh } from "./runtime-sync.js";
+export {
+  mmdWorldMatrixToThree,
+  syncThreeMmdRuntimeToMesh,
+  syncThreeMmdRuntimeToModel
+} from "./runtime-sync.js";
 export { createThreeSkeleton } from "./skeleton.js";
 export {
   attachMmdMaterialMetadata,
@@ -61,9 +64,7 @@ export {
 export { syncMmdMaterialStates, syncMmdSpecularDirection } from "./material/material-sync.js";
 export {
   attachMmdOutlineExpansion,
-  computeMmdOutlineScale,
   createMmdMaterialRenderOrderMeshes,
-  createMmdOutlineMesh,
   createMmdOutlineMeshes,
   syncMmdOutlineMaterialStates
 } from "./outline.js";
@@ -102,7 +103,12 @@ export type {
   MmdOutlineOptions
 } from "./outline.js";
 export type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
-export type { MmdWorldMatrixBuffer, MmdWorldMatrixColumnMajorTuple } from "./runtime-sync.js";
+export type {
+  MmdRuntimeMeshSyncSource,
+  MmdWorldMatrixBuffer,
+  MmdWorldMatrixColumnMajorTuple,
+  ThreeMmdRuntimeSyncTarget
+} from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
 export type {
   MmdToonTextureMaterial,
@@ -124,9 +130,7 @@ export interface ThreeMmdLoaderOptions {
 
 export interface ThreeMmdLoadModelOptions {
   readonly outlines?: boolean;
-  readonly outlineMode?: "postOutline" | "mmdCompat";
   readonly frustumCulled?: boolean;
-  readonly renderOrderProxies?: boolean;
 }
 
 export type ThreeMmdModelSourceDescriptor =
@@ -200,6 +204,7 @@ export class ThreeMmdLoader {
         parsedModelDisposed = true;
         profile?.mark("mesh");
         const materials = normalizeMeshMaterials(mesh.material);
+        const effectiveOutlines = options.outlines ?? true;
         const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
           textureResolver: this.options.textureResolver,
           textureMap: this.options.textureMap,
@@ -208,7 +213,7 @@ export class ThreeMmdLoader {
           modelUrl: typeof source === "string" ? source : undefined,
           geometry: mesh.geometry,
           morphs: modelData.morphs,
-          geometryAwareAlpha: this.options.geometryAwareAlpha,
+          geometryAwareAlpha: this.options.geometryAwareAlpha || effectiveOutlines,
           textureCache: this.textureCache
         });
         profile?.mark("textures");
@@ -230,9 +235,7 @@ export class ThreeMmdLoader {
           source: createModelSourceDescriptor(source, bytes.byteLength),
           textureDiagnostics,
           materials: modelData.materials,
-          outlines: options.outlines ?? true,
-          outlineMode: options.outlineMode ?? "postOutline",
-          renderOrderProxies: options.renderOrderProxies ?? false
+          outlines: effectiveOutlines
         });
         profile?.mark("assembled");
         profile?.measure("read-bytes", "start", "bytes");
@@ -322,19 +325,8 @@ function createThreeMmdModel(options: {
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
   readonly outlines: boolean;
-  readonly outlineMode: "postOutline" | "mmdCompat";
-  readonly renderOrderProxies: boolean;
 }): ThreeMmdModel {
-  const postOutlineMesh =
-    options.outlines && options.outlineMode === "postOutline"
-      ? createMmdOutlineMesh({
-          mesh: options.mesh,
-          materials: options.materials
-        })
-      : undefined;
-  const outlineMeshes = postOutlineMesh
-    ? [postOutlineMesh]
-    : options.outlines && options.outlineMode === "mmdCompat"
+  const outlineMeshes = options.outlines
     ? createMmdOutlineMeshes({
         mesh: options.mesh,
         materials: options.materials
@@ -344,13 +336,14 @@ function createThreeMmdModel(options: {
     syncMmdModelShadowFlags(outline, options.materials);
     outline.frustumCulled = options.mesh.frustumCulled;
   });
-  const renderOrderMeshes =
-    options.renderOrderProxies || (options.outlines && options.outlineMode === "mmdCompat")
-      ? createMmdMaterialRenderOrderMeshes({
-          mesh: options.mesh,
-          materials: options.materials
-        })
-      : [];
+  // MMD-compatible outlines need body proxies so body/outline draw in PMX
+  // material definition order: body0, outline0, body1, outline1.
+  const renderOrderMeshes = options.outlines
+    ? createMmdMaterialRenderOrderMeshes({
+        mesh: options.mesh,
+        materials: options.materials
+      })
+    : [];
   if (renderOrderMeshes.length > 0) {
     options.mesh.geometry.setDrawRange(0, 0);
   }

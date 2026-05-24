@@ -100,16 +100,21 @@ npm install @yohawing/three-mmd-loader three
 import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
 
 const loader = new ThreeMmdLoader();
-const { mesh, runtime } = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path resolved via fetch)
-scene.add(mesh);
+const model = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path resolved via fetch)
+scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes);
+const { runtime } = model;
 
-const { mesh: remoteMesh } = await loader.loadModel("/models/example.pmx");
-scene.add(remoteMesh);
+const remoteModel = await loader.loadModel("/models/example.pmx");
+scene.add(remoteModel.mesh, ...remoteModel.renderOrderMeshes, ...remoteModel.outlineMeshes);
 ```
 
 `loadModel(...)` also returns `textureDiagnostics: TextureLoadDiagnostic[]`.
 Texture folder resolution failures and related recoverable texture issues are
 reported there with `level: "warning"`.
+
+Add the returned `renderOrderMeshes` and `outlineMeshes` to the scene with the
+base mesh. Pass `{ outlines: false }` to disable generated outline and
+render-order proxies.
 
 ## Loader Options
 

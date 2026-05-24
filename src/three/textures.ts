@@ -320,14 +320,17 @@ export function evaluateMmdTextureAlphaGeometry(
       const a = Number(indexArray?.[offset] ?? offset);
       const b = Number(indexArray?.[offset + 1] ?? offset + 1);
       const c = Number(indexArray?.[offset + 2] ?? offset + 2);
-      recordRasterizedUvTriangleTransparency(
+      recordRasterizedUvTriangleAlpha(
         stats,
         rgba.data,
         rgba.width,
         rgba.height,
-        [uvAttribute.getX(a), uvAttribute.getY(a)],
-        [uvAttribute.getX(b), uvAttribute.getY(b)],
-        [uvAttribute.getX(c), uvAttribute.getY(c)],
+        uvAttribute.getX(a),
+        uvAttribute.getY(a),
+        uvAttribute.getX(b),
+        uvAttribute.getY(b),
+        uvAttribute.getX(c),
+        uvAttribute.getY(c),
         resolution
       );
     }
@@ -1181,28 +1184,30 @@ function sampleRgbaAlphaByUv(
   return rgba[(y * width + x) * 4 + 3] ?? 255;
 }
 
-function recordRasterizedUvTriangleTransparency(
+function recordRasterizedUvTriangleAlpha(
   stats: AlphaStats,
   rgba: ArrayLike<number>,
   width: number,
   height: number,
-  uvA: readonly [number, number],
-  uvB: readonly [number, number],
-  uvC: readonly [number, number],
+  uvAX: number,
+  uvAY: number,
+  uvBX: number,
+  uvBY: number,
+  uvCX: number,
+  uvCY: number,
   resolution: number
 ): void {
-  const toPoint = (uv: readonly [number, number]): [number, number] => [
-    wrapUnit(uv[0]) * resolution,
-    wrapUnit(uv[1]) * resolution
-  ];
-  const a = toPoint(uvA);
-  const b = toPoint(uvB);
-  const c = toPoint(uvC);
-  const minX = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])));
-  const maxX = Math.min(resolution - 1, Math.ceil(Math.max(a[0], b[0], c[0])));
-  const minY = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1])));
-  const maxY = Math.min(resolution - 1, Math.ceil(Math.max(a[1], b[1], c[1])));
-  const denominator = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+  const ax = wrapUnit(uvAX) * resolution;
+  const ay = wrapUnit(uvAY) * resolution;
+  const bx = wrapUnit(uvBX) * resolution;
+  const by = wrapUnit(uvBY) * resolution;
+  const cx = wrapUnit(uvCX) * resolution;
+  const cy = wrapUnit(uvCY) * resolution;
+  const minX = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
+  const maxX = Math.min(resolution - 1, Math.ceil(Math.max(ax, bx, cx)));
+  const minY = Math.max(0, Math.floor(Math.min(ay, by, cy)));
+  const maxY = Math.min(resolution - 1, Math.ceil(Math.max(ay, by, cy)));
+  const denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
   if (Math.abs(denominator) < 1e-9) {
     return;
   }
@@ -1210,14 +1215,11 @@ function recordRasterizedUvTriangleTransparency(
     for (let x = minX; x <= maxX; x += 1) {
       const px = x + 0.5;
       const py = y + 0.5;
-      const wA = ((b[1] - c[1]) * (px - c[0]) + (c[0] - b[0]) * (py - c[1])) / denominator;
-      const wB = ((c[1] - a[1]) * (px - c[0]) + (a[0] - c[0]) * (py - c[1])) / denominator;
+      const wA = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / denominator;
+      const wB = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / denominator;
       const wC = 1 - wA - wB;
       if (wA >= 0 && wB >= 0 && wC >= 0) {
-        recordAlphaSample(
-          stats,
-          255 - sampleRgbaAlphaByUv(rgba, width, height, px / resolution, py / resolution)
-        );
+        recordAlphaSample(stats, sampleRgbaAlphaByUv(rgba, width, height, px / resolution, py / resolution));
       }
     }
   }

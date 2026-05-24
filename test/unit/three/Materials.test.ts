@@ -454,6 +454,63 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
   });
 
+  it("does not run geometry-aware scans when PMX material data already makes the body transparent", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const textureAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaTexture");
+    const mmdMaterials = [
+      createMaterialInfo({ diffuse: [0.5, 0.6, 0.7, 0.5], texturePath: "textures/hair.png" })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/hair.png": "resolved/hair.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    expect(geometryAlphaSpy).not.toHaveBeenCalled();
+    expect(textureAlphaSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
+  it("does not fall back to full texture alpha scans when geometry-aware evaluation is inconclusive", async () => {
+    const texture = new THREE.Texture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const textureAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaTexture");
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/atlas.png" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/atlas.png": "resolved/atlas.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    expect(geometryAlphaSpy).toHaveBeenCalledTimes(1);
+    expect(textureAlphaSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
   it("preserves alpha blending when PMX diffuse alpha requests transparency", async () => {
     const texture = createTransparentDataTexture("opaque");
     const textureLoader: ThreeMmdTextureLoader = {
