@@ -13,6 +13,7 @@ import type { MmdMaterialTransparencyMode } from "./textures.js";
 import { clampColor } from "./utils.js";
 
 const MMD_OUTLINE_SCREEN_SPACE_SCALE = 300;
+const MMD_OUTLINE_MAX_EDGE_SIZE = 5;
 
 export interface MmdOutlineOptions {
   readonly scale?: number;
@@ -209,7 +210,7 @@ function mmdOutlineExpansionWidth(
   hasEdge: boolean
 ): number {
   const edgeSize = hasEdge ? material.edgeSize : options.forceFallback ? 0.5 : 0;
-  return Math.min(Math.max(edgeSize, 0), 3) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
+  return Math.min(Math.max(edgeSize, 0), MMD_OUTLINE_MAX_EDGE_SIZE) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
 }
 
 export function createMmdMaterialRenderOrderMeshes(
@@ -356,5 +357,5 @@ function mmdOutlineRuntimeWidth(edgeSize: number, fallback: boolean): number {
   if (fallback && edgeSize <= 0) {
     return 0.5 / MMD_OUTLINE_SCREEN_SPACE_SCALE;
   }
-  return Math.min(Math.max(edgeSize, 0), 3) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
+  return Math.min(Math.max(edgeSize, 0), MMD_OUTLINE_MAX_EDGE_SIZE) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
 }

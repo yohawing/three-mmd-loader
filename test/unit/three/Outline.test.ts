@@ -49,6 +49,29 @@ describe("MMD outline meshes", () => {
     expect(shader.vertexShader).not.toContain("transformed += normal * mmdOutlineWidth");
   });
 
+  it("clamps PMX outline edge size at the library maximum", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
+    geometry.setIndex([0, 1, 2]);
+    geometry.addGroup(0, 3, 0);
+
+    const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshToonMaterial());
+    const bone = new THREE.Bone();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const [outline] = createMmdOutlineMeshes({
+      mesh,
+      materials: [createMaterialInfo({ edgeSize: 8 })]
+    });
+    const material = outline?.material as THREE.Material | undefined;
+
+    expect(material?.userData.mmdOutlineMaterial.outlineWidth).toBeCloseTo(5 / 300);
+  });
+
   it("creates material-scoped outline proxies with shared geometry buffers and stable order", () => {
     const geometry = new THREE.BufferGeometry();
     const positions = new THREE.Float32BufferAttribute(
