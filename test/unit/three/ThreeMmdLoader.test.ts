@@ -439,6 +439,32 @@ describe("ThreeMmdLoader", () => {
     );
   });
 
+  it("loads VMD animations through the configured core", async () => {
+    const animation: MmdAnimation = {
+      ...createEmptyMmdAnimation(),
+      metadata: {
+        ...createEmptyMmdAnimation().metadata,
+        modelName: "core-motion"
+      }
+    };
+    const loadVmd = vi.fn(() => animation);
+    const core: MmdCore = {
+      ...createIkFlagCore(),
+      loadVmd
+    };
+    const loader = new ThreeMmdLoader({ core });
+    const bytes = new Uint8Array([1, 2, 3]);
+
+    const loaded = await loader.loadAnimation(bytes);
+
+    expect(loadVmd).toHaveBeenCalledWith(bytes);
+    expect(loaded).toEqual({
+      source: bytes,
+      name: "core-motion",
+      animation
+    });
+  });
+
   it("rejects loadModel bytes before model assembly when the model format is unknown", async () => {
     const loader = new ThreeMmdLoader();
 

@@ -1,15 +1,14 @@
 import { BinaryReader, toUint8Array } from "../binary/index.js";
-import { parseVmdMetadata } from "./VmdMetadataParser.js";
 import type {
   MmdAnimation,
-  VmdBoneFrame,
+  VmdBoneTrack,
   VmdBoneInterpolation,
   VmdCameraFrame,
   VmdCameraInterpolation,
   VmdIkState,
   VmdLightFrame,
   VmdMetadata,
-  VmdMorphFrame,
+  VmdMorphTrack,
   VmdPropertyFrame,
   VmdSelfShadowFrame
 } from "../model/modelTypes.js";
@@ -24,175 +23,6 @@ const shiftJisDecoder = new TextDecoder("shift-jis");
 const maxVmdSectionCount = 10_000_000;
 
 export function parseVmd(input: Uint8Array | ArrayBuffer): MmdAnimation {
-  const bytes = toUint8Array(input);
-  const metadataInventory = parseVmdMetadata(bytes);
-  const reader = new BinaryReader(bytes);
-  const signature = readFixedText(reader, 30, asciiDecoder);
-  if (!signature.startsWith("Vocaloid Motion Data")) {
-    throw new Error(`Invalid VMD signature: ${JSON.stringify(signature)}`);
-  }
-  const modelName = readFixedText(reader, 20, shiftJisDecoder);
-
-  const boneTracks: Record<string, VmdBoneFrame[]> = {};
-  const morphTracks: Record<string, VmdMorphFrame[]> = {};
-  const cameraFrames: VmdCameraFrame[] = [];
-  const lightFrames: VmdLightFrame[] = [];
-  const selfShadowFrames: VmdSelfShadowFrame[] = [];
-  const propertyFrames: VmdPropertyFrame[] = [];
-  let maxFrame = 0;
-
-  const boneCount = readCount(reader, "bone");
-  for (let index = 0; index < boneCount; index += 1) {
-    const name = readFixedText(reader, 15, shiftJisDecoder);
-    const frame = reader.u32();
-    const translation = readVec3(reader);
-    const rotation = readVec4(reader);
-    const interpolationBytes = reader.bytes(64);
-    const physicsToggle = readBonePhysicsToggle(interpolationBytes);
-    const boneFrame: VmdBoneFrame = {
-      frame,
-      translation,
-      rotation,
-      interpolation: readBoneInterpolation(interpolationBytes)
-    };
-    if (physicsToggle !== undefined) {
-      boneFrame.physicsToggle = physicsToggle;
-    }
-    pushTrackFrame(boneTracks, name, boneFrame);
-    maxFrame = Math.max(maxFrame, frame);
-  }
-
-  const morphCount = readCount(reader, "morph");
-  for (let index = 0; index < morphCount; index += 1) {
-    const name = readFixedText(reader, 15, shiftJisDecoder);
-    const frame = reader.u32();
-    const morphFrame: VmdMorphFrame = {
-      frame,
-      weight: reader.f32()
-    };
-    pushTrackFrame(morphTracks, name, morphFrame);
-    maxFrame = Math.max(maxFrame, frame);
-  }
-
-  // Old-format / morph-only (lip-sync) VMDs end after the morph section and
-  // omit camera onward entirely, so every trailing count is optional.
-  const cameraCount = readOptionalCount(reader, "camera");
-  for (let index = 0; index < cameraCount; index += 1) {
-    const frame = reader.u32();
-    const cameraFrame: VmdCameraFrame = {
-      frame,
-      distance: reader.f32(),
-      position: readVec3(reader),
-      rotation: readVec3(reader),
-      interpolation: readCameraInterpolation(reader.bytes(24)),
-      fov: reader.u32(),
-      perspective: reader.u8() === 0
-    };
-    cameraFrames.push(cameraFrame);
-    maxFrame = Math.max(maxFrame, frame);
-  }
-
-  const lightCount = readOptionalCount(reader, "light");
-  for (let index = 0; index < lightCount; index += 1) {
-    const frame = reader.u32();
-    lightFrames.push({
-      frame,
-      color: readVec3(reader),
-      direction: readVec3(reader)
-    });
-    maxFrame = Math.max(maxFrame, frame);
-  }
-
-  const selfShadowCount = readOptionalTailCount(reader, "self-shadow");
-  for (let index = 0; index < selfShadowCount; index += 1) {
-    const frame = reader.u32();
-    selfShadowFrames.push({
-      frame,
-      mode: reader.u8(),
-      distance: reader.f32()
-    });
-    maxFrame = Math.max(maxFrame, frame);
-  }
-
-  const propertyCount = readOptionalTailCount(reader, "property");
-  const propertyLayout = selectPropertyFrameLayout(reader, propertyCount);
-  for (let index = 0; index < propertyCount; index += 1) {
-    const frame = reader.u32();
-    const visible = reader.u8() !== 0;
-    const physicsSimulation =
-      propertyLayout === "extendedPhysics" ? reader.u8() !== 0 : true;
-    const ikCount = readCount(reader, "property IK state");
-    const ikStates: VmdIkState[] = [];
-    for (let ikIndex = 0; ikIndex < ikCount; ikIndex += 1) {
-      ikStates.push({
-        boneName: readFixedText(reader, 20, shiftJisDecoder),
-        enabled: reader.u8() !== 0
-      });
-    }
-    propertyFrames.push({
-      frame,
-      visible,
-      physicsSimulation,
-      ikStates
-    });
-    maxFrame = Math.max(maxFrame, frame);
-  }
-
-  sortTrackFrames(boneTracks);
-  sortTrackFrames(morphTracks);
-  sortFrames(cameraFrames);
-  sortFrames(lightFrames);
-  sortFrames(selfShadowFrames);
-  sortFrames(propertyFrames);
-
-  const metadata: MutableVmdMetadata = {
-    format: "vmd",
-    name: modelName,
-    modelName,
-    counts: {
-      bones: boneCount,
-      morphs: morphCount,
-      cameras: cameraCount,
-      lights: lightCount,
-      selfShadows: selfShadowCount,
-      properties: propertyCount
-    },
-    maxFrame
-  };
-
-  if (metadataInventory.modelName !== modelName) {
-    throw new Error("VMD metadata model name mismatch");
-  }
-
-  return {
-    kind: "vmd",
-    bytes,
-    metadata,
-    boneTracks,
-    morphTracks,
-    cameraFrames,
-    lightFrames,
-    selfShadowFrames,
-    propertyFrames
-  };
-}
-
-export interface PackedVmdBoneTrack {
-  readonly packed: "bone";
-  readonly frames: Uint32Array;
-  readonly translations: Float32Array;
-  readonly rotations: Float32Array;
-  readonly interpolations: Float32Array;
-  readonly physicsToggles: Int8Array;
-}
-
-export interface PackedVmdMorphTrack {
-  readonly packed: "morph";
-  readonly frames: Uint32Array;
-  readonly weights: Float32Array;
-}
-
-export function parseVmdCompact(input: Uint8Array | ArrayBuffer): MmdAnimation {
   const bytes = toUint8Array(input);
   const firstPass = readVmdCompactLayout(bytes);
   const boneTracks = createPackedBoneTracks(firstPass.boneTrackCounts);
@@ -215,8 +45,8 @@ export function parseVmdCompact(input: Uint8Array | ArrayBuffer): MmdAnimation {
       },
       maxFrame: Math.max(firstPass.maxFrame, parsedTail.maxFrame)
     } as MutableVmdMetadata,
-    boneTracks: boneTracks as unknown as MmdAnimation["boneTracks"],
-    morphTracks: morphTracks as unknown as MmdAnimation["morphTracks"],
+    boneTracks,
+    morphTracks,
     cameraFrames: parsedTail.cameraFrames,
     lightFrames: parsedTail.lightFrames,
     selfShadowFrames: parsedTail.selfShadowFrames,
@@ -262,8 +92,8 @@ function readVmdCompactLayout(bytes: Uint8Array): {
 
 function fillPackedVmdTracks(
   bytes: Uint8Array,
-  boneTracks: Record<string, PackedVmdBoneTrack>,
-  morphTracks: Record<string, PackedVmdMorphTrack>
+  boneTracks: Record<string, VmdBoneTrack>,
+  morphTracks: Record<string, VmdMorphTrack>
 ): {
   readonly cameraFrames: VmdCameraFrame[];
   readonly lightFrames: VmdLightFrame[];
@@ -325,8 +155,8 @@ function incrementMapCount(map: Map<string, number>, key: string): void {
   map.set(key, (map.get(key) ?? 0) + 1);
 }
 
-function createPackedBoneTracks(counts: ReadonlyMap<string, number>): Record<string, PackedVmdBoneTrack> {
-  const tracks: Record<string, PackedVmdBoneTrack> = {};
+function createPackedBoneTracks(counts: ReadonlyMap<string, number>): Record<string, VmdBoneTrack> {
+  const tracks: Record<string, VmdBoneTrack> = {};
   for (const [name, count] of counts) {
     const physicsToggles = new Int8Array(count);
     physicsToggles.fill(-1);
@@ -342,8 +172,8 @@ function createPackedBoneTracks(counts: ReadonlyMap<string, number>): Record<str
   return tracks;
 }
 
-function createPackedMorphTracks(counts: ReadonlyMap<string, number>): Record<string, PackedVmdMorphTrack> {
-  const tracks: Record<string, PackedVmdMorphTrack> = {};
+function createPackedMorphTracks(counts: ReadonlyMap<string, number>): Record<string, VmdMorphTrack> {
+  const tracks: Record<string, VmdMorphTrack> = {};
   for (const [name, count] of counts) {
     tracks[name] = {
       packed: "morph",
@@ -360,7 +190,7 @@ function createWriteIndexMap<T extends { readonly frames: Uint32Array }>(
   return new Map(Object.keys(tracks).map((name) => [name, 0]));
 }
 
-function sortPackedBoneTrack(track: PackedVmdBoneTrack): void {
+function sortPackedBoneTrack(track: VmdBoneTrack): void {
   const order = packedSortOrder(track.frames);
   if (!order) {
     return;
@@ -372,7 +202,7 @@ function sortPackedBoneTrack(track: PackedVmdBoneTrack): void {
   reorderInt8(track.physicsToggles, order);
 }
 
-function sortPackedMorphTrack(track: PackedVmdMorphTrack): void {
+function sortPackedMorphTrack(track: VmdMorphTrack): void {
   const order = packedSortOrder(track.frames);
   if (!order) {
     return;
@@ -597,10 +427,6 @@ function readVec3(reader: BinaryReader): [number, number, number] {
   return [reader.f32(), reader.f32(), reader.f32()];
 }
 
-function readVec4(reader: BinaryReader): [number, number, number, number] {
-  return [reader.f32(), reader.f32(), reader.f32(), reader.f32()];
-}
-
 function readBoneInterpolation(bytes: Uint8Array): VmdBoneInterpolation {
   return {
     translationX: normalizeInterpolationCurve([bytes[0] ?? 0, bytes[4] ?? 0, bytes[8] ?? 0, bytes[12] ?? 0]),
@@ -643,18 +469,6 @@ function readCameraInterpolationCurve(bytes: Uint8Array, channel: number): [numb
 
 function normalizeInterpolationCurve(values: [number, number, number, number]): [number, number, number, number] {
   return values.map((value) => Math.min(Math.max(value / 127, 0), 1)) as [number, number, number, number];
-}
-
-function pushTrackFrame<T extends { readonly frame: number }>(
-  tracks: Record<string, T[]>,
-  name: string,
-  frame: T
-): void {
-  (tracks[name] ??= []).push(frame);
-}
-
-function sortTrackFrames<T extends { readonly frame: number }>(tracks: Record<string, T[]>): void {
-  Object.values(tracks).forEach(sortFrames);
 }
 
 function sortFrames<T extends { readonly frame: number }>(frames: T[]): void {

@@ -1,11 +1,10 @@
 import * as THREE from "three";
 
 import { FallbackCore, initCoreWithFallback } from "../parser/wasm/index.js";
-import { parseVmdCompact, parseVpd } from "../parser/index.js";
-import type { MmdCore } from "../parser/model/modelTypes.js";
+import { parseVpd } from "../parser/index.js";
+import type { MmdAnimation, MmdCore, MmdPose, VmdBoneTrack } from "../parser/model/modelTypes.js";
 import { DefaultMmdRuntime } from "../runtime/index.js";
 import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
-import type { MmdAnimation, MmdPose, VmdBoneFrame } from "../parser/model/modelTypes.js";
 import { createThreeBufferGeometry } from "./geometry.js";
 import { createLoaderMmdModelDataFromModel } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
@@ -276,13 +275,26 @@ export class ThreeMmdLoader {
     }
   }
 
+  private loadCoreVmd(core: MmdCore, bytes: Uint8Array): MmdAnimation {
+    try {
+      return core.loadVmd(bytes);
+    } catch (error) {
+      if (this.useExplicitCore) {
+        throw error;
+      }
+      this.fallbackCore ??= new FallbackCore();
+      return this.fallbackCore.loadVmd(bytes);
+    }
+  }
+
   async loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation> {
     validateModelSource(source, "loadAnimation");
     const bytes = await readModelSourceBytes(source);
     if (bytes.byteLength === 0) {
       throw createEmptySourceError("loadAnimation");
     }
-    const animation = parseVmdCompact(bytes);
+    const core = await this.getCore();
+    const animation = this.loadCoreVmd(core, bytes);
     return {
       source,
       name: animation.metadata.modelName,
@@ -575,15 +587,16 @@ function createMorphTargetDictionary(
 }
 
 function createMmdAnimationFromPose(pose: MmdPose, name: string): MmdAnimation {
-  const boneTracks: Record<string, VmdBoneFrame[]> = {};
+  const boneTracks: MmdAnimation["boneTracks"] = {};
   for (const [boneName, bonePose] of Object.entries(pose.bones)) {
-    boneTracks[boneName] = [
-      {
-        frame: 0,
-        translation: bonePose.translation,
-        rotation: bonePose.rotation
-      }
-    ];
+    boneTracks[boneName] = {
+      packed: "bone",
+      frames: new Uint32Array([0]),
+      translations: new Float32Array(bonePose.translation),
+      rotations: new Float32Array(bonePose.rotation),
+      interpolations: new Float32Array(16),
+      physicsToggles: new Int8Array([-1])
+    } satisfies VmdBoneTrack;
   }
   return {
     kind: "vmd",

@@ -1,5 +1,5 @@
 import { toUint8Array } from "../binary/index.js";
-import type { MmdAnimation, MmdPose, VpdBonePose, VpdMetadata } from "../model/modelTypes.js";
+import type { MmdAnimation, MmdPose, VmdBoneTrack, VmdMorphTrack, VpdBonePose, VpdMetadata } from "../model/modelTypes.js";
 
 type MutableVpdMetadata = VpdMetadata & {
   readonly format: "vpd";
@@ -47,16 +47,10 @@ export function vpdPoseToAnimation(pose: MmdPose, name = pose.metadata.modelFile
   const boneTracks: MmdAnimation["boneTracks"] = {};
   const morphTracks: MmdAnimation["morphTracks"] = {};
   for (const bone of Object.values(pose.bones)) {
-    boneTracks[bone.name] = [
-      {
-        frame: 0,
-        translation: bone.translation,
-        rotation: bone.rotation
-      }
-    ];
+    boneTracks[bone.name] = createSingleBoneTrack(bone.translation, bone.rotation);
   }
   for (const [morphName, weight] of Object.entries(pose.morphs)) {
-    morphTracks[morphName] = [{ frame: 0, weight }];
+    morphTracks[morphName] = createSingleMorphTrack(weight);
   }
   return {
     kind: "vmd",
@@ -79,6 +73,28 @@ export function vpdPoseToAnimation(pose: MmdPose, name = pose.metadata.modelFile
     lightFrames: [],
     selfShadowFrames: [],
     propertyFrames: []
+  };
+}
+
+function createSingleBoneTrack(
+  translation: readonly [number, number, number],
+  rotation: readonly [number, number, number, number]
+): VmdBoneTrack {
+  return {
+    packed: "bone",
+    frames: new Uint32Array([0]),
+    translations: new Float32Array(translation),
+    rotations: new Float32Array(rotation),
+    interpolations: new Float32Array(16),
+    physicsToggles: new Int8Array([-1])
+  };
+}
+
+function createSingleMorphTrack(weight: number): VmdMorphTrack {
+  return {
+    packed: "morph",
+    frames: new Uint32Array([0]),
+    weights: new Float32Array([weight])
   };
 }
 

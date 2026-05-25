@@ -81,13 +81,12 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
       },
       maxFrame: 49
     });
-    expect(animation.boneTracks["全ての親"]).toHaveLength(6);
-    expect(animation.boneTracks["全ての親"]?.[0]).toMatchObject({
-      frame: 0,
-      translation: [0, 0, -0],
-      rotation: [-0, -0, 0, 1],
-      physicsToggle: 1
-    });
+    const parentTrack = animation.boneTracks["全ての親"];
+    expect(parentTrack?.frames).toHaveLength(6);
+    expect(parentTrack?.frames[0]).toBe(0);
+    expect(Array.from(parentTrack?.translations.slice(0, 3) ?? [])).toEqual([0, 0, -0]);
+    expect(Array.from(parentTrack?.rotations.slice(0, 4) ?? [])).toEqual([-0, -0, 0, 1]);
+    expect(parentTrack?.physicsToggles[0]).toBe(1);
   });
 
   it("preserves Babylon-MMD VMD bone physics toggle bytes", async () => {
@@ -95,8 +94,8 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
     const disabled = core.loadVmd(createBonePhysicsToggleVmd(0));
     const enabled = core.loadVmd(createBonePhysicsToggleVmd(1));
 
-    expect(disabled.boneTracks.Root?.[0]?.physicsToggle).toBe(0);
-    expect(enabled.boneTracks.Root?.[0]?.physicsToggle).toBe(1);
+    expect(disabled.boneTracks.Root?.physicsToggles[0]).toBe(0);
+    expect(enabled.boneTracks.Root?.physicsToggles[0]).toBe(1);
   });
 
   it("preserves Babylon-MMD public VMD physics-toggle fixtures", async () => {
@@ -119,14 +118,14 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
       counts: { bones: 3, morphs: 0, properties: 0 },
       maxFrame: 21
     });
-    expect(new Set(v2.boneTracks.D4!.map((frame) => frame.physicsToggle))).toEqual(new Set([0, 1]));
+    expect(new Set(Array.from(v2.boneTracks.D4!.physicsToggles))).toEqual(new Set([0, 1]));
 
     expect(v3.metadata).toMatchObject({
       modelName: "YYB式初音ミク_10th_v",
       counts: { bones: 17, morphs: 0, properties: 0 },
       maxFrame: 20
     });
-    expect(v3.boneTracks["右肩P"]?.[0]?.physicsToggle).toBe(1);
+    expect(v3.boneTracks["右肩P"]?.physicsToggles[0]).toBe(1);
 
     expect(full.metadata).toMatchObject({
       modelName: "YYB式初音ミク_10th_v",
@@ -144,7 +143,7 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
         { boneName: "左つま先ＩＫ", enabled: true }
       ]
     });
-    expect(full.boneTracks["操作中心"]?.[0]?.physicsToggle).toBe(1);
+    expect(full.boneTracks["操作中心"]?.physicsToggles[0]).toBe(1);
   });
 
   wavefileCameraIt("parses camera and light frame arrays", async () => {

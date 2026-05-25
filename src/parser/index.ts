@@ -1,6 +1,14 @@
 export { detectModelFormat } from "./formatDetection.js";
 export type { MmdModelFormat } from "./formatDetection.js";
-export type { InitCoreOptions, MmdAnimation, MmdCore, MmdModel, MmdPose } from "./model/modelTypes.js";
+export type {
+  InitCoreOptions,
+  MmdAnimation,
+  MmdCore,
+  MmdModel,
+  MmdPose,
+  VmdBoneTrack,
+  VmdMorphTrack
+} from "./model/modelTypes.js";
 export { FallbackCore, initCore, initCoreWithFallback } from "./wasm/index.js";
 export { parsePmdMetadata, parsePmdSectionInventory } from "./pmd/index.js";
 export type {
@@ -37,8 +45,7 @@ export type {
   PmmScenePlan,
   PmmStaticPreviewPlan
 } from "./pmm/index.js";
-export { parseVmd, parseVmdCompact, parseVmdMetadata, parseVmdSectionInventory } from "./vmd/index.js";
-export type { PackedVmdBoneTrack, PackedVmdMorphTrack } from "./vmd/index.js";
+export { parseVmd, parseVmdMetadata, parseVmdSectionInventory } from "./vmd/index.js";
 export type {
   VmdMetadata,
   VmdSectionCounts,

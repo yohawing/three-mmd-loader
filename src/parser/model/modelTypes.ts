@@ -375,8 +375,8 @@ export interface MmdAnimation {
   readonly kind: "vmd";
   readonly bytes: Uint8Array;
   readonly metadata: VmdMetadata;
-  readonly boneTracks: Record<string, VmdBoneFrame[]>;
-  readonly morphTracks: Record<string, VmdMorphFrame[]>;
+  readonly boneTracks: Record<string, VmdBoneTrack>;
+  readonly morphTracks: Record<string, VmdMorphTrack>;
   readonly cameraFrames: VmdCameraFrame[];
   readonly lightFrames: VmdLightFrame[];
   readonly selfShadowFrames: VmdSelfShadowFrame[];
@@ -432,6 +432,21 @@ export interface VmdBoneFrame {
 export interface VmdMorphFrame {
   frame: number;
   weight: number;
+}
+
+export interface VmdBoneTrack {
+  readonly packed: "bone";
+  readonly frames: Uint32Array;
+  readonly translations: Float32Array;
+  readonly rotations: Float32Array;
+  readonly interpolations: Float32Array;
+  readonly physicsToggles: Int8Array;
+}
+
+export interface VmdMorphTrack {
+  readonly packed: "morph";
+  readonly frames: Uint32Array;
+  readonly weights: Float32Array;
 }
 
 export interface VmdCameraFrame {
