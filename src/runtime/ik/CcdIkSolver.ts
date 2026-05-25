@@ -68,6 +68,7 @@ type LinkLimits = {
 };
 
 const maxIkLoopCount = 256;
+const defaultIkTolerance = 1e-4;
 const matrixElementCount = 16;
 
 export class CcdIkSolver {
@@ -177,7 +178,7 @@ function solveChain(
     (link) => ikRotations[link.boneIndex]?.slice() as [number, number, number, number] | undefined
   );
   const limitAngle = maxAnglePerIteration(chain);
-  const tolerance = chain.tolerance ?? 0;
+  const tolerance = chain.tolerance ?? defaultIkTolerance;
   let bestDistance = Number.POSITIVE_INFINITY;
   let completedIterations = 0;
 

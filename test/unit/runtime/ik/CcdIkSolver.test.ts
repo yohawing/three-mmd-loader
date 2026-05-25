@@ -212,6 +212,58 @@ describe("CcdIkSolver", () => {
     expect(rotations).toEqual([[...IDENTITY], [...IDENTITY], [...IDENTITY]]);
   });
 
+  it("uses a Babylon-compatible default convergence tolerance", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1.00005, 0, 0] }
+    ];
+    const rotations: MutableQuatTuple[] = [[...IDENTITY], [...IDENTITY], [...IDENTITY]];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 2,
+          effectorBoneIndex: 1,
+          links: [{ boneIndex: 0 }],
+          iterationCount: 8
+        }
+      ]
+    });
+
+    expect(result.iterationCount).toBe(0);
+    expect(result.finalDistances[0]).toBeLessThan(1e-4);
+    expect(rotations).toEqual([[...IDENTITY], [...IDENTITY], [...IDENTITY]]);
+  });
+
+  it("allows callers to disable the default convergence tolerance", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1.00005, 0.00005, 0] }
+    ];
+    const rotations: MutableQuatTuple[] = [[...IDENTITY], [...IDENTITY], [...IDENTITY]];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 2,
+          effectorBoneIndex: 1,
+          links: [{ boneIndex: 0 }],
+          iterationCount: 8,
+          tolerance: 0
+        }
+      ]
+    });
+
+    expect(result.iterationCount).toBeGreaterThan(0);
+    expect(result.finalDistances[0]).toBeLessThan(1e-4);
+  });
+
   it("does not classify a one-sided zero endpoint as a fixed single-axis limit", () => {
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },

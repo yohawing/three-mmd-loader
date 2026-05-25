@@ -60,6 +60,7 @@ interface PlaybackSmokeCaseConfig {
   readonly watchBones: readonly string[];
   readonly matrixEpsilon?: number;
   readonly morphEpsilon?: number;
+  readonly skipReason?: string;
 }
 
 const defaultInventoryPath = "test/fixtures/fixtures.local.json";
@@ -101,6 +102,13 @@ export async function loadLocalPlaybackFixtures(
 
   for (const rawCase of rawCases) {
     const resolvedCase = resolvePlaybackCase(rawCase, inventory, basePath);
+    if (rawCase.skipReason !== undefined) {
+      skippedCases.push({
+        name: resolvedCase.name,
+        reason: rawCase.skipReason
+      });
+      continue;
+    }
     const missingPath = await firstMissingPath([
       resolvedCase.modelPath,
       resolvedCase.motionPath,
@@ -237,7 +245,11 @@ function parsePlaybackCaseConfig(raw: unknown, label: string): PlaybackSmokeCase
     morphEpsilon:
       config.morphEpsilon === undefined
         ? undefined
-        : readPositiveNumber(config.morphEpsilon, `${label}.morphEpsilon`)
+        : readPositiveNumber(config.morphEpsilon, `${label}.morphEpsilon`),
+    skipReason:
+      config.skipReason === undefined
+        ? undefined
+        : readString(config.skipReason, `${label}.skipReason`)
   };
 }
 

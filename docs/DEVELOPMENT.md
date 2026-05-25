@@ -217,6 +217,8 @@ Each playback case has these fields:
 - `watchBones`: Bone names that exist in `oracle.model.bones`.
 - `matrixEpsilon` / `morphEpsilon`: Numeric tolerances. Both default to
   `1e-4`.
+- `skipReason`: Optional local-only reason to skip a case while keeping the
+  model, motion, and oracle registration documented in the inventory.
 
 The authoritative schema is
 `test/fixtures/fixtures.schema.json` under `paths.playbackSmoke.cases`.
