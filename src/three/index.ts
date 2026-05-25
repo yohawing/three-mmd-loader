@@ -513,6 +513,7 @@ function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {
         links: bone.ik.links.map((link) => ({
           boneIndex: link.boneIndex,
           enabled: true,
+          fixedAxis: createRuntimeIkLinkFixedAxis(modelData, boneIndex, link.boneIndex),
           limitsKind:
             link.limits === undefined
               ? undefined
@@ -529,6 +530,28 @@ function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {
       };
     })
     .filter((chain): chain is NonNullable<typeof chain> => chain !== null);
+}
+
+function createRuntimeIkLinkFixedAxis(
+  modelData: LoaderMmdModelData,
+  chainBoneIndex: number,
+  boneIndex: number
+): [number, number, number] | undefined {
+  const chainBone = modelData.skeleton.bones[chainBoneIndex];
+  const bone = modelData.skeleton.bones[boneIndex];
+  const fixedAxis = bone?.fixedAxis;
+  if (!bone?.flags?.hasFixedAxis || !fixedAxis) {
+    return undefined;
+  }
+  const sign = isHandTwistIkChain(chainBone) ? -1 : 1;
+  return [fixedAxis[0] * sign, fixedAxis[1] * sign, -fixedAxis[2] * sign];
+}
+
+function isHandTwistIkChain(bone: LoaderMmdModelData["skeleton"]["bones"][number] | undefined): boolean {
+  return (
+    bone?.name.includes("手捩IK") === true ||
+    bone?.englishName.includes("lwr-arm-twistIK") === true
+  );
 }
 
 function createMorphTargetDictionary(

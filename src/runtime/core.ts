@@ -56,8 +56,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.applyCurrentAppendTransforms();
     this.captureDebugStage("appendTransform");
     if (options.ik !== false) {
-      const ikSourceBoneIndices = this.solveIk();
-      this.reapplyCurrentAppendTransformsForSources(ikSourceBoneIndices);
+      this.solveIk();
     }
     this.captureDebugStage("ik");
     if (options.physics === false) {
@@ -206,7 +205,15 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 
   private solveIk(): Set<number> {
-    return solvePreparedIk(this.mesh, this.ikSolver, this.preparedIkChains);
+    const changedBoneIndices = new Set<number>();
+    for (const chain of this.preparedIkChains) {
+      const chainSourceBoneIndices = solvePreparedIk(this.mesh, this.ikSolver, [chain]);
+      for (const index of chainSourceBoneIndices) {
+        changedBoneIndices.add(index);
+      }
+      this.reapplyCurrentAppendTransformsForSources(chainSourceBoneIndices);
+    }
+    return changedBoneIndices;
   }
 
 

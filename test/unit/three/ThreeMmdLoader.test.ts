@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FallbackCore, ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
+  MmdCore,
+  MmdModel,
   ModelSource,
   ThreeMmdLoaderOptions,
   ThreeMmdTextureLoader
@@ -316,6 +318,23 @@ describe("ThreeMmdLoader", () => {
     expect(chains[0].links.length).toBeGreaterThan(0);
   });
 
+  it("keeps PMX IK chains even when the manipulation flag is disabled", async () => {
+    const loader = new ThreeMmdLoader({ core: createIkFlagCore() });
+
+    const model = await loader.loadModel(new Uint8Array([1]));
+
+    expect(model.mesh.userData.mmdIkChains).toEqual([
+      expect.objectContaining({
+        goalBoneIndex: 1,
+        effectorBoneIndex: 0
+      }),
+      expect.objectContaining({
+        goalBoneIndex: 2,
+        effectorBoneIndex: 1
+      })
+    ]);
+  });
+
   it("evaluates a runtime frame for an IK-enabled mesh without throwing", async () => {
     const loader = new ThreeMmdLoader();
     const source: ModelSource = await readFile(resolve("test/fixtures/test_basic_bone.pmx"));
@@ -541,6 +560,118 @@ function createMinimalPmxModelBytes(options: {
     text("");
     i32(options.triangle ? 3 : 0);
   }
+}
+
+function createIkFlagCore(): MmdCore {
+  const model = createIkFlagModel();
+  return {
+    version: () => "test-core",
+    healthCheck: () => true,
+    loadModel: () => model,
+    loadVmd: () => createEmptyMmdAnimation(),
+    loadVpd: () => ({
+      kind: "vpd",
+      bytes: new Uint8Array(),
+      metadata: { modelFile: "", boneCount: 0, morphCount: 0 },
+      bones: {},
+      morphs: {}
+    }),
+    loadVpdAnimation: () => createEmptyMmdAnimation()
+  };
+}
+
+function createIkFlagModel(): MmdModel {
+  return {
+    metadata: () => ({
+      format: "pmx",
+      version: 2,
+      encoding: "utf-8",
+      name: "ik flags",
+      englishName: "IkFlags",
+      comment: "",
+      englishComment: "",
+      counts: {
+        vertices: 0,
+        faces: 0,
+        materials: 0,
+        bones: 3,
+        morphs: 0,
+        displayFrames: 0,
+        rigidBodies: 0,
+        joints: 0,
+        softBodies: 0
+      },
+      indexSizes: { vertex: 1, texture: 1, material: 1, bone: 1, morph: 1, rigidBody: 1 },
+      additionalUvCount: 0,
+      diagnostics: []
+    }),
+    geometry: () => ({
+      positions: new Float32Array(0),
+      normals: new Float32Array(0),
+      uvs: new Float32Array(0),
+      additionalUvs: [],
+      indices: new Uint16Array(0),
+      skinIndices: new Uint16Array(0),
+      skinWeights: new Float32Array(0)
+    }),
+    materials: () => [],
+    skeleton: () => ({
+      bones: [
+        createIkFlagBone("root", -1, true),
+        createIkFlagBone("target", 0, false, {
+          targetIndex: 0,
+          loopCount: 1,
+          limitAngle: 1,
+          links: [{ boneIndex: 0 }]
+        }),
+        createIkFlagBone("enabled IK", 0, true, {
+          targetIndex: 1,
+          loopCount: 1,
+          limitAngle: 1,
+          links: [{ boneIndex: 0 }]
+        })
+      ]
+    }),
+    morphs: () => [],
+    displayFrames: () => [],
+    rigidBodies: () => [],
+    joints: () => [],
+    softBodies: () => [],
+    embeddedTextures: () => []
+  };
+}
+
+function createIkFlagBone(
+  name: string,
+  parentIndex: number,
+  enabled: boolean,
+  ik?: ReturnType<MmdModel["skeleton"]>["bones"][number]["ik"]
+): ReturnType<MmdModel["skeleton"]>["bones"][number] {
+  return {
+    name,
+    englishName: name,
+    parentIndex,
+    layer: 0,
+    position: [0, 0, 0],
+    tailIndex: -1,
+    tailPosition: undefined,
+    flags: {
+      indexedTail: false,
+      rotatable: true,
+      translatable: false,
+      visible: enabled,
+      enabled,
+      ik: ik !== undefined,
+      appendLocal: false,
+      appendRotate: false,
+      appendTranslate: false,
+      fixedAxis: false,
+      localAxis: false,
+      transformAfterPhysics: false,
+      externalParentTransform: false
+    },
+    ik
+  };
 }
 
 function createReadableAlphaDataTexture(): THREE.DataTexture {

@@ -10,6 +10,7 @@ export interface CcdIkBone {
 export interface CcdIkLink {
   readonly boneIndex: number;
   readonly enabled?: boolean;
+  readonly fixedAxis?: Vec3Tuple;
   readonly angleLimit?: CcdIkLinkAngleLimit;
   readonly limitsKind?: "pmdKnee" | "pmxLinkLimit";
 }
@@ -236,12 +237,16 @@ function solveChain(
         )
       );
       const dot = clamp(dotVectors(chainTargetVector, chainIkVector), -1, 1);
-      let angle = Math.acos(dot);
-      if (angle < 1e-3 * (Math.PI / 180)) {
+      let angle = link.fixedAxis
+        ? signedProjectedAngle(chainTargetVector, chainIkVector, link.fixedAxis)
+        : Math.acos(dot);
+      if (Math.abs(angle) < 1e-3 * (Math.PI / 180)) {
         continue;
       }
-      angle = Math.min(angle, limitAngle);
-      let axis = normalizeVector(crossVectors(chainTargetVector, chainIkVector));
+      angle = clamp(angle, -limitAngle, limitAngle);
+      let axis = link.fixedAxis
+        ? normalizeVector([link.fixedAxis[0], link.fixedAxis[1], link.fixedAxis[2]])
+        : normalizeVector(crossVectors(chainTargetVector, chainIkVector));
       if (vectorLength(axis) < 1e-5) {
         if (dot > -1 + 1e-5) {
           continue;
@@ -802,6 +807,35 @@ function normalizeVector(value: [number, number, number]): [number, number, numb
     return [0, 0, 0];
   }
   return [value[0] / length, value[1] / length, value[2] / length];
+}
+
+function signedProjectedAngle(
+  from: [number, number, number],
+  to: [number, number, number],
+  axisValue: Vec3Tuple
+): number {
+  const axis = normalizeVector([axisValue[0], axisValue[1], axisValue[2]]);
+  const projectedFrom = normalizeVector(projectVectorOnPlane(from, axis));
+  const projectedTo = normalizeVector(projectVectorOnPlane(to, axis));
+  if (vectorLength(projectedFrom) < 1e-5 || vectorLength(projectedTo) < 1e-5) {
+    return 0;
+  }
+  const angle = Math.acos(clamp(dotVectors(projectedFrom, projectedTo), -1, 1));
+  const positive = rotateVectorByQuaternion(projectedFrom, axisAngleQuaternion(axis, angle));
+  const negative = rotateVectorByQuaternion(projectedFrom, axisAngleQuaternion(axis, -angle));
+  return dotVectors(positive, projectedTo) >= dotVectors(negative, projectedTo) ? angle : -angle;
+}
+
+function projectVectorOnPlane(
+  vector: [number, number, number],
+  normal: [number, number, number]
+): [number, number, number] {
+  const scale = dotVectors(vector, normal);
+  return [
+    vector[0] - normal[0] * scale,
+    vector[1] - normal[1] * scale,
+    vector[2] - normal[2] * scale
+  ];
 }
 
 function stablePerpendicularAxis(vector: [number, number, number]): [number, number, number] {

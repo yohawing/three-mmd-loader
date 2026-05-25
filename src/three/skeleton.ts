@@ -29,6 +29,7 @@ export interface ThreeMmdSkeletonBone {
     readonly transformAfterPhysics?: boolean;
     readonly hasLocalAxis?: boolean;
     readonly hasFixedAxis?: boolean;
+    readonly enabled?: boolean;
   };
   readonly localAxis?: {
     readonly x: [number, number, number];
