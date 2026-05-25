@@ -555,11 +555,14 @@ function createRuntimeIkLinkFixedAxis(
   const chainBone = modelData.skeleton.bones[chainBoneIndex];
   const bone = modelData.skeleton.bones[boneIndex];
   const fixedAxis = bone?.fixedAxis;
-  if (!bone?.flags?.hasFixedAxis || !fixedAxis) {
+  if (!isHandTwistIkChain(chainBone) || !bone?.flags?.hasFixedAxis || !fixedAxis) {
     return undefined;
   }
-  const sign = isHandTwistIkChain(chainBone) ? -1 : 1;
-  return [fixedAxis[0] * sign, fixedAxis[1] * sign, -fixedAxis[2] * sign];
+  return [normalizeSignedZero(-fixedAxis[0]), normalizeSignedZero(-fixedAxis[1]), normalizeSignedZero(fixedAxis[2])];
+}
+
+function normalizeSignedZero(value: number): number {
+  return Object.is(value, -0) ? 0 : value;
 }
 
 function isHandTwistIkChain(bone: LoaderMmdModelData["skeleton"]["bones"][number] | undefined): boolean {

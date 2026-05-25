@@ -205,6 +205,11 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 
   private solveIk(): Set<number> {
+    if (!this.hasHandTwistIkChain()) {
+      const sourceBoneIndices = solvePreparedIk(this.mesh, this.ikSolver, this.preparedIkChains);
+      this.reapplyCurrentAppendTransformsForSources(sourceBoneIndices);
+      return sourceBoneIndices;
+    }
     const changedBoneIndices = new Set<number>();
     for (const chain of this.preparedIkChains) {
       const chainSourceBoneIndices = solvePreparedIk(this.mesh, this.ikSolver, [chain]);
@@ -214,6 +219,24 @@ export class DefaultMmdRuntime implements MmdRuntime {
       this.reapplyCurrentAppendTransformsForSources(chainSourceBoneIndices);
     }
     return changedBoneIndices;
+  }
+
+  private hasHandTwistIkChain(): boolean {
+    const bones = this.mesh?.skeleton.bones;
+    if (!bones) {
+      return false;
+    }
+    for (const chain of this.preparedIkChains) {
+      const bone = bones[chain.goalBoneIndex];
+      if (
+        bone?.name.includes("手捩IK") === true ||
+        (typeof bone?.userData.mmdEnglishName === "string" &&
+          bone.userData.mmdEnglishName.includes("lwr-arm-twistIK"))
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
 

@@ -352,6 +352,16 @@ describe("ThreeMmdLoader", () => {
     ]);
   });
 
+  it("passes PMX fixed-axis links only for hand-twist IK chains", async () => {
+    const loader = new ThreeMmdLoader({ core: createFixedAxisIkCore() });
+
+    const model = await loader.loadModel(new Uint8Array([1]));
+    const chains = model.mesh.userData.mmdIkChains;
+
+    expect(chains[0]?.links[0]?.fixedAxis).toBeUndefined();
+    expect(chains[1]?.links[0]?.fixedAxis).toEqual([-1, 0, 0]);
+  });
+
   it("evaluates a runtime frame for an IK-enabled mesh without throwing", async () => {
     const loader = new ThreeMmdLoader();
     const source: ModelSource = await readFile(resolve("test/fixtures/test_basic_bone.pmx"));
@@ -684,11 +694,52 @@ function createIkFlagModel(): MmdModel {
   };
 }
 
+function createFixedAxisIkCore(): MmdCore {
+  const model: MmdModel = {
+    ...createIkFlagModel(),
+    metadata: () => ({
+      ...createIkFlagModel().metadata(),
+      name: "fixed axis ik",
+      englishName: "FixedAxisIk",
+      counts: {
+        ...createIkFlagModel().metadata().counts,
+        bones: 5
+      }
+    }),
+    skeleton: () => ({
+      bones: [
+        createIkFlagBone("root", -1, true),
+        createIkFlagBone("ordinary link", 0, true, undefined, { fixedAxis: [0, 1, 0] }),
+        createIkFlagBone("ordinary IK", 0, true, {
+          targetIndex: 1,
+          loopCount: 1,
+          limitAngle: 1,
+          links: [{ boneIndex: 1 }]
+        }),
+        createIkFlagBone("hand twist link", 0, true, undefined, { fixedAxis: [1, 0, 0] }),
+        createIkFlagBone("右手捩IK", 0, true, {
+          targetIndex: 3,
+          loopCount: 1,
+          limitAngle: 1,
+          links: [{ boneIndex: 3 }]
+        })
+      ]
+    })
+  };
+  return {
+    ...createIkFlagCore(),
+    loadModel: () => model
+  };
+}
+
 function createIkFlagBone(
   name: string,
   parentIndex: number,
   enabled: boolean,
-  ik?: ReturnType<MmdModel["skeleton"]>["bones"][number]["ik"]
+  ik?: ReturnType<MmdModel["skeleton"]>["bones"][number]["ik"],
+  options: {
+    readonly fixedAxis?: [number, number, number];
+  } = {}
 ): ReturnType<MmdModel["skeleton"]>["bones"][number] {
   return {
     name,
@@ -708,11 +759,12 @@ function createIkFlagBone(
       appendLocal: false,
       appendRotate: false,
       appendTranslate: false,
-      fixedAxis: false,
+      fixedAxis: options.fixedAxis !== undefined,
       localAxis: false,
       transformAfterPhysics: false,
       externalParentTransform: false
     },
+    fixedAxis: options.fixedAxis,
     ik
   };
 }
