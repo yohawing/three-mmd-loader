@@ -7,7 +7,7 @@ import {
   createThreeMmdMaterials,
   getDefaultToonGradientMap
 } from "../../../src/three/index.js";
-import type { MaterialInfo } from "../../../src/parser/model/modelTypes.js";
+import type { MaterialInfo, MorphData } from "../../../src/parser/model/modelTypes.js";
 import type { ThreeMmdTextureLoader } from "../../../src/three/index.js";
 import * as Textures from "../../../src/three/textures.js";
 
@@ -558,6 +558,50 @@ describe("Three.js MMD materials", () => {
 
     expect(materials[0]?.transparent).toBe(true);
     expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+  });
+
+  it("does not force transparent sorting just because a material morph can change alpha", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/skin.png" })];
+    const morphs: MorphData[] = [
+      {
+        name: "hide skin",
+        englishName: "hide_skin",
+        type: "material",
+        vertexOffsets: [],
+        groupOffsets: [],
+        boneOffsets: [],
+        uvOffsets: [],
+        additionalUvOffsets: [],
+        materialOffsets: [
+          {
+            materialIndex: 0,
+            operation: "add",
+            diffuse: [0, 0, 0, -1],
+            specular: [0, 0, 0],
+            specularPower: 0,
+            ambient: [0, 0, 0],
+            edgeColor: [0, 0, 0, -1],
+            edgeSize: 0,
+            textureFactor: [0, 0, 0, 0],
+            sphereTextureFactor: [0, 0, 0, 0],
+            toonTextureFactor: [0, 0, 0, 0]
+          }
+        ],
+        flipOffsets: [],
+        impulseOffsets: []
+      }
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureLoader: createTextureLoaderMock(),
+      geometry: createAlphaEvaluationGeometry(),
+      morphs
+    });
+
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.morphAlphaTransparent).toBe(true);
   });
 
   it("keeps geometry-aware texture alpha evaluation available as an opt-in", async () => {

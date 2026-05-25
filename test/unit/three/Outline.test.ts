@@ -147,11 +147,38 @@ describe("MMD outline meshes", () => {
       ]
     });
     expect(materialMeshes.map((proxy) => proxy.renderOrder)).toEqual([0, 1]);
-    expect(materialMeshes.every((proxy) => !Array.isArray(proxy.material) && proxy.material.transparent)).toBe(true);
+    expect(materialMeshes.map((proxy) => !Array.isArray(proxy.material) && proxy.material.transparent)).toEqual([
+      false,
+      false
+    ]);
     expect(outlines.map((outline) => outline.renderOrder)).toEqual([2, 3]);
     expect(Math.max(...materialMeshes.map((proxy) => proxy.renderOrder))).toBeLessThan(
       Math.min(...outlines.map((outline) => outline.renderOrder))
     );
+  });
+
+  it("does not force opaque source materials into transparent sorting for render-order proxies", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
+    geometry.setIndex([0, 1, 2]);
+    geometry.addGroup(0, 3, 0);
+    const material = new THREE.MeshToonMaterial({ transparent: false, opacity: 1 });
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const bone = new THREE.Bone();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const [proxy] = createMmdMaterialRenderOrderMeshes({
+      mesh,
+      materials: [createMaterialInfo({ name: "opaque skin", edgeSize: 0.4 })]
+    });
+
+    expect(proxy?.material).toBe(material);
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
   });
 
   it("keeps PMX material definition order even when transparency buckets differ", () => {

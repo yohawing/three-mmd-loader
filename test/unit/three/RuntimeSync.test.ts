@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   mmdWorldMatrixToThree,
+  syncMmdMaterialStates,
   syncThreeMmdRuntimeToModel,
   type MmdRuntimeMeshSyncSource,
   type MmdWorldMatrixColumnMajorTuple
@@ -144,6 +145,41 @@ describe("syncThreeMmdRuntimeToModel", () => {
   });
 });
 
+describe("syncMmdMaterialStates", () => {
+  it("only enables transparent sorting for alpha-morph materials while their current alpha is below opaque", () => {
+    const material = new THREE.MeshToonMaterial({ transparent: false, opacity: 1 });
+    material.userData.mmdMaterial = {
+      transparencyMode: "opaque",
+      morphAlphaTransparent: true,
+      flags: {}
+    };
+
+    syncMmdMaterialStates(material, [
+      createMaterialRuntimeState({
+        diffuse: [1, 1, 1, 1]
+      })
+    ]);
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
+
+    syncMmdMaterialStates(material, [
+      createMaterialRuntimeState({
+        diffuse: [1, 1, 1, 0.25]
+      })
+    ]);
+    expect(material.transparent).toBe(true);
+    expect(material.opacity).toBeCloseTo(0.25);
+
+    syncMmdMaterialStates(material, [
+      createMaterialRuntimeState({
+        diffuse: [1, 1, 1, 1]
+      })
+    ]);
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
+  });
+});
+
 function createSkinnedMesh(material: THREE.Material): THREE.SkinnedMesh {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3));
@@ -184,7 +220,9 @@ function createRuntimeSyncSource(
   };
 }
 
-function createMaterialRuntimeState(): MaterialRuntimeState {
+function createMaterialRuntimeState(
+  overrides: Partial<MaterialRuntimeState> = {}
+): MaterialRuntimeState {
   return {
     diffuse: [1, 1, 1, 1],
     specular: [0, 0, 0],
@@ -194,6 +232,7 @@ function createMaterialRuntimeState(): MaterialRuntimeState {
     edgeSize: 1,
     textureFactor: [1, 1, 1, 1],
     sphereTextureFactor: [1, 1, 1, 1],
-    toonTextureFactor: [1, 1, 1, 1]
+    toonTextureFactor: [1, 1, 1, 1],
+    ...overrides
   };
 }

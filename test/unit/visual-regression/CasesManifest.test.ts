@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const manifestPath = path.resolve("scripts/visual-regression/cases.manifest.json");
 const realModelsManifestPath = path.resolve("scripts/visual-regression/real-models.manifest.json");
+const generatedPmxManifestPath = path.resolve("scripts/visual-regression/generated-pmx.manifest.json");
 
 interface VisualCase {
   id: string;
@@ -55,6 +56,10 @@ function readManifest(): VisualManifest {
 
 function readRealModelsManifest(): RealModelVisualManifest {
   return JSON.parse(readFileSync(realModelsManifestPath, "utf8")) as RealModelVisualManifest;
+}
+
+function readGeneratedPmxManifest(): RealModelVisualManifest {
+  return JSON.parse(readFileSync(generatedPmxManifestPath, "utf8")) as RealModelVisualManifest;
 }
 
 describe("visual regression cases manifest", () => {
@@ -163,6 +168,35 @@ describe("local real-model visual regression manifest", () => {
       if (visualCase.restPoseThresholdDegrees !== undefined) {
         expect(visualCase.restPoseThresholdDegrees).toBeGreaterThan(0);
       }
+    }
+  });
+});
+
+describe("generated PMX visual regression manifest", () => {
+  it("includes the inactive alpha material morph case", () => {
+    const manifest = readGeneratedPmxManifest();
+    const names = manifest.cases.map(visualCase => visualCase.name);
+
+    expect(names).toContain("mmd-material-morph-alpha-opaque-depth");
+  });
+
+  it("keeps generated PMX cases portable and explicit", () => {
+    const manifest = readGeneratedPmxManifest();
+    const names = new Set<string>();
+
+    expect(manifest.render.resolution).toEqual({ width: 512, height: 512 });
+    expect(manifest.render.pixelRatio).toBe(1);
+    for (const visualCase of manifest.cases) {
+      expect(visualCase.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+      expect(names.has(visualCase.name)).toBe(false);
+      names.add(visualCase.name);
+      expect(visualCase.model).toMatch(/^test\/fixtures\/generated\/visual\/.+\.pmx$/);
+      expect(path.isAbsolute(visualCase.model)).toBe(false);
+      expect(visualCase.motion).toBeUndefined();
+      expect(visualCase.timeSeconds ?? 0).toBe(0);
+      expect(visualCase.camera).not.toBe("front-fit");
+      expect(visualCase.thresholds?.mean).toBeGreaterThan(0);
+      expect(visualCase.thresholds?.p95).toBeGreaterThan(visualCase.thresholds?.mean ?? 0);
     }
   });
 });
