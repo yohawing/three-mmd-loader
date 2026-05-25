@@ -1,11 +1,10 @@
 import * as THREE from "three";
 
 import { FallbackCore, initCoreWithFallback } from "../parser/wasm/index.js";
-import { parseVmd, parseVpd } from "../parser/index.js";
-import type { MmdCore } from "../parser/model/modelTypes.js";
+import { parseVpd } from "../parser/index.js";
+import type { MmdAnimation, MmdCore, MmdPose, VmdBoneTrack } from "../parser/model/modelTypes.js";
 import { DefaultMmdRuntime } from "../runtime/index.js";
 import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
-import type { MmdAnimation, MmdPose, VmdBoneFrame } from "../parser/model/modelTypes.js";
 import { createThreeBufferGeometry } from "./geometry.js";
 import { createLoaderMmdModelDataFromModel } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
@@ -131,6 +130,7 @@ export interface ThreeMmdLoaderOptions {
 export interface ThreeMmdLoadModelOptions {
   readonly outlines?: boolean;
   readonly frustumCulled?: boolean;
+  readonly renderOrderProxies?: boolean;
 }
 
 export type ThreeMmdModelSourceDescriptor =
@@ -236,7 +236,8 @@ export class ThreeMmdLoader {
           source: createModelSourceDescriptor(source, bytes.byteLength),
           textureDiagnostics,
           materials: modelData.materials,
-          outlines: effectiveOutlines
+          outlines: effectiveOutlines,
+          renderOrderProxies: options.renderOrderProxies ?? true
         });
         profile?.mark("assembled");
         profile?.measure("read-bytes", "start", "bytes");
@@ -274,13 +275,26 @@ export class ThreeMmdLoader {
     }
   }
 
+  private loadCoreVmd(core: MmdCore, bytes: Uint8Array): MmdAnimation {
+    try {
+      return core.loadVmd(bytes);
+    } catch (error) {
+      if (this.useExplicitCore) {
+        throw error;
+      }
+      this.fallbackCore ??= new FallbackCore();
+      return this.fallbackCore.loadVmd(bytes);
+    }
+  }
+
   async loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation> {
     validateModelSource(source, "loadAnimation");
     const bytes = await readModelSourceBytes(source);
     if (bytes.byteLength === 0) {
       throw createEmptySourceError("loadAnimation");
     }
-    const animation = parseVmd(bytes);
+    const core = await this.getCore();
+    const animation = this.loadCoreVmd(core, bytes);
     return {
       source,
       name: animation.metadata.modelName,
@@ -326,6 +340,7 @@ function createThreeMmdModel(options: {
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
   readonly outlines: boolean;
+  readonly renderOrderProxies: boolean;
 }): ThreeMmdModel {
   const outlineMeshes = options.outlines
     ? createMmdOutlineMeshes({
@@ -339,7 +354,7 @@ function createThreeMmdModel(options: {
   });
   // MMD-compatible outlines need body proxies so body/outline draw in PMX
   // material definition order: body0, outline0, body1, outline1.
-  const renderOrderMeshes = options.outlines
+  const renderOrderMeshes = options.outlines && options.renderOrderProxies
     ? createMmdMaterialRenderOrderMeshes({
         mesh: options.mesh,
         materials: options.materials
@@ -513,6 +528,7 @@ function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {
         links: bone.ik.links.map((link) => ({
           boneIndex: link.boneIndex,
           enabled: true,
+          fixedAxis: createRuntimeIkLinkFixedAxis(modelData, boneIndex, link.boneIndex),
           limitsKind:
             link.limits === undefined
               ? undefined
@@ -529,6 +545,31 @@ function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {
       };
     })
     .filter((chain): chain is NonNullable<typeof chain> => chain !== null);
+}
+
+function createRuntimeIkLinkFixedAxis(
+  modelData: LoaderMmdModelData,
+  chainBoneIndex: number,
+  boneIndex: number
+): [number, number, number] | undefined {
+  const chainBone = modelData.skeleton.bones[chainBoneIndex];
+  const bone = modelData.skeleton.bones[boneIndex];
+  const fixedAxis = bone?.fixedAxis;
+  if (!isHandTwistIkChain(chainBone) || !bone?.flags?.hasFixedAxis || !fixedAxis) {
+    return undefined;
+  }
+  return [normalizeSignedZero(-fixedAxis[0]), normalizeSignedZero(-fixedAxis[1]), normalizeSignedZero(fixedAxis[2])];
+}
+
+function normalizeSignedZero(value: number): number {
+  return Object.is(value, -0) ? 0 : value;
+}
+
+function isHandTwistIkChain(bone: LoaderMmdModelData["skeleton"]["bones"][number] | undefined): boolean {
+  return (
+    bone?.name.includes("手捩IK") === true ||
+    bone?.englishName.includes("lwr-arm-twistIK") === true
+  );
 }
 
 function createMorphTargetDictionary(
@@ -549,15 +590,16 @@ function createMorphTargetDictionary(
 }
 
 function createMmdAnimationFromPose(pose: MmdPose, name: string): MmdAnimation {
-  const boneTracks: Record<string, VmdBoneFrame[]> = {};
+  const boneTracks: MmdAnimation["boneTracks"] = {};
   for (const [boneName, bonePose] of Object.entries(pose.bones)) {
-    boneTracks[boneName] = [
-      {
-        frame: 0,
-        translation: bonePose.translation,
-        rotation: bonePose.rotation
-      }
-    ];
+    boneTracks[boneName] = {
+      packed: "bone",
+      frames: new Uint32Array([0]),
+      translations: new Float32Array(bonePose.translation),
+      rotations: new Float32Array(bonePose.rotation),
+      interpolations: new Float32Array(16),
+      physicsToggles: new Int8Array([-1])
+    } satisfies VmdBoneTrack;
   }
   return {
     kind: "vmd",

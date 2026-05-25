@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import { ThreeMmdLoader } from "../../../src/index.js";
-import type { MmdAnimation } from "../../../src/index.js";
+import type { MmdAnimation, VmdBoneFrame, VmdBoneTrack } from "../../../src/index.js";
 
 const execFileAsync = promisify(execFile);
 const generatorPath = resolve("scripts/fixtures/generate-minimal-pmx.mjs");
@@ -147,11 +147,30 @@ function createEmptyMmdAnimation(): MmdAnimation {
 function createIkTargetMotionAnimation(): MmdAnimation {
   const animation = createEmptyMmdAnimation();
   animation.metadata.maxFrame = 1;
-  animation.boneTracks.左足IK = [
+  animation.boneTracks.左足IK = createBoneTrack([
     { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
     { frame: 1, translation: [-0.10358984, 0, 0.2], rotation: [0, 0, 0, 1] }
-  ];
+  ]);
   return animation;
+}
+
+function createBoneTrack(frames: readonly VmdBoneFrame[]): VmdBoneTrack {
+  const track: VmdBoneTrack = {
+    packed: "bone",
+    frames: new Uint32Array(frames.length),
+    translations: new Float32Array(frames.length * 3),
+    rotations: new Float32Array(frames.length * 4),
+    interpolations: new Float32Array(frames.length * 16),
+    physicsToggles: new Int8Array(frames.length)
+  };
+  track.physicsToggles.fill(-1);
+  for (let index = 0; index < frames.length; index += 1) {
+    const frame = frames[index];
+    track.frames[index] = frame?.frame ?? 0;
+    track.translations.set(frame?.translation ?? [0, 0, 0], index * 3);
+    track.rotations.set(frame?.rotation ?? [0, 0, 0, 1], index * 4);
+  }
+  return track;
 }
 
 function createEmptyVmdCounts(): MmdAnimation["metadata"]["counts"] {

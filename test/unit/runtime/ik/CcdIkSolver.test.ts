@@ -87,6 +87,72 @@ describe("CcdIkSolver", () => {
     expect(rotations[1][3]).toBeCloseTo(Math.SQRT1_2, 5);
   });
 
+  it("uses a PMX fixed axis link instead of the free CCD cross axis", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, -1] }
+    ];
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [{ boneIndex: 1, fixedAxis: [0, 1, 0] }],
+          iterationCount: 1,
+          maxAnglePerIteration: Math.PI
+        }
+      ]
+    });
+
+    expect(result.chainCount).toBe(1);
+    expect(Math.abs(rotations[1][0])).toBeLessThan(1e-6);
+    expect(Math.abs(rotations[1][2])).toBeLessThan(1e-6);
+    expect(Math.abs(rotations[1][1])).toBeGreaterThan(0.7);
+  });
+
+  it("keeps negative signed PMX fixed axis angles solvable", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 1] }
+    ];
+    const rotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = new CcdIkSolver().solve({
+      bones,
+      pose: { rotations },
+      chains: [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [{ boneIndex: 1, fixedAxis: [0, 1, 0] }],
+          iterationCount: 1,
+          maxAnglePerIteration: Math.PI
+        }
+      ]
+    });
+
+    expect(result.finalDistances[0]).toBeLessThan(1e-5);
+    expect(rotations[1][1]).toBeLessThan(-0.7);
+  });
+
   it("treats an omitted maxAnglePerIteration as unlimited", () => {
     const bones: CcdIkBone[] = [
       { parentIndex: -1, translation: [0, 0, 0] },

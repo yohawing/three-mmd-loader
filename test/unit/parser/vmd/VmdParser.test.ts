@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseVmd, parseVmdSectionInventory } from "../../../../src/parser/vmd/index.js";
 import { ThreeMmdLoader } from "../../../../src/three/index.js";
-import type { VmdBoneFrame, VmdMorphFrame } from "../../../../src/parser/model/modelTypes.js";
+import type { VmdBoneTrack, VmdMorphTrack } from "../../../../src/parser/model/modelTypes.js";
 
 const fixtures = [
   "test_1bone_cube_motion.vmd",
@@ -23,11 +23,11 @@ describe("parseVmd", () => {
     expect((animation.metadata as { readonly format?: string }).format).toBe("vmd");
     expect(Object.keys(animation.boneTracks).length).toBeGreaterThan(0);
     expect(animation.morphTracks).toBeDefined();
-    for (const frames of Object.values(animation.boneTracks)) {
-      expectSortedFrames(frames);
+    for (const track of Object.values(animation.boneTracks)) {
+      expectSortedFrames(track);
     }
-    for (const frames of Object.values(animation.morphTracks)) {
-      expectSortedFrames(frames);
+    for (const track of Object.values(animation.morphTracks)) {
+      expectSortedFrames(track);
     }
   });
 
@@ -46,8 +46,8 @@ describe("parseVmd", () => {
   it("parses morph-only VMD that ends right after the morph section", () => {
     const animation = parseVmd(createMorphOnlyVmd());
 
-    expect(animation.morphTracks["blink"]).toHaveLength(2);
-    expect(animation.morphTracks["blink"]?.map((frame) => frame.frame)).toEqual([0, 10]);
+    expect(animation.morphTracks["blink"]?.frames).toHaveLength(2);
+    expect(Array.from(animation.morphTracks["blink"]?.frames ?? [])).toEqual([0, 10]);
     expect(Object.keys(animation.boneTracks)).toHaveLength(0);
     expect(animation.cameraFrames).toHaveLength(0);
     expect(animation.lightFrames).toHaveLength(0);
@@ -80,7 +80,7 @@ describe("parseVmd", () => {
       })
     );
 
-    expect(animation.morphTracks["blink"]).toHaveLength(2);
+    expect(animation.morphTracks["blink"]?.frames).toHaveLength(2);
     expect(animation.cameraFrames).toHaveLength(0);
     expect(animation.lightFrames).toHaveLength(0);
     expect(animation.selfShadowFrames).toHaveLength(0);
@@ -138,9 +138,9 @@ describe("parseVmd", () => {
   });
 });
 
-function expectSortedFrames(frames: readonly VmdBoneFrame[] | readonly VmdMorphFrame[]): void {
-  for (let index = 1; index < frames.length; index += 1) {
-    expect(frames[index]?.frame).toBeGreaterThanOrEqual(frames[index - 1]?.frame ?? 0);
+function expectSortedFrames(track: VmdBoneTrack | VmdMorphTrack): void {
+  for (let index = 1; index < track.frames.length; index += 1) {
+    expect(track.frames[index]).toBeGreaterThanOrEqual(track.frames[index - 1] ?? 0);
   }
 }
 

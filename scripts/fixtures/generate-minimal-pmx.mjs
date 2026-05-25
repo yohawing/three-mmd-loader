@@ -228,6 +228,69 @@ const VISUAL_CASES = {
         comment: "opaque PMX material using only opaque texture atlas region"
       })
     ]
+  },
+  "mmd-material-morph-alpha-opaque-depth": {
+    name: "generated visual material morph alpha opaque depth",
+    englishName: "GeneratedVisualMaterialMorphAlphaOpaqueDepth",
+    comment: "redistribution-safe PMX visual fixture for inactive alpha material morphs",
+    englishComment: "Opaque foreground material has an alpha material morph but must render opaque at rest.",
+    geometry: mergeGeometries([
+      transformGeometry(
+        boxGeometry({
+          min: [-0.5, 0.14, -0.12],
+          max: [0.5, 1.04, 0.12],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { rotateY: 0.12, translate: [0.1, 0, -0.08] }
+      ),
+      transformGeometry(
+        boxGeometry({
+          min: [-0.42, 0.28, -0.08],
+          max: [0.42, 0.9, 0.08],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { rotateY: -0.18, translate: [-0.28, 0.03, -0.36] }
+      )
+    ]),
+    materials: [
+      material("mat_depth_back", "DepthBack", {
+        diffuse: [0.08, 0.26, 0.95, 1],
+        specular: [0.02, 0.03, 0.08],
+        ambient: [0.03, 0.08, 0.32],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.8,
+        flags: 0x11,
+        faceVertexCount: 36,
+        comment: "opaque blue background material"
+      }),
+      material("mat_alpha_morph_foreground", "AlphaMorphForeground", {
+        diffuse: [0.62, 0.04, 0.03, 1],
+        specular: [0.04, 0.005, 0.005],
+        ambient: [0.22, 0.015, 0.012],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.8,
+        flags: 0x11,
+        faceVertexCount: 36,
+        comment: "opaque foreground material with inactive alpha material morph"
+      })
+    ],
+    morphs: [
+      {
+        name: "foreground_hide",
+        englishName: "ForegroundHide",
+        panel: 4,
+        type: "material",
+        offsets: [
+          {
+            materialIndex: 1,
+            operation: "add",
+            diffuse: [0, 0, 0, -1]
+          }
+        ]
+      }
+    ]
   }
 };
 
@@ -278,7 +341,7 @@ export function generateVisualPmx(caseId) {
     comment: visualCase.comment,
     englishComment: visualCase.englishComment,
     bones: [bone("center", "center", [0, 0, 0], -1, { tail: [0, 1, 0] })],
-    morphs: false,
+    morphs: visualCase.morphs ?? false,
     geometry: visualCase.geometry,
     materials: visualCase.materials,
     textures: visualCase.textures ?? [],
@@ -754,6 +817,13 @@ function writeBones(writer, bones, indexSizes) {
 }
 
 function writeMorphs(writer, enabled, indexSizes) {
+  if (Array.isArray(enabled)) {
+    writer.i32(enabled.length);
+    for (const morph of enabled) {
+      writeCustomMorph(writer, morph, indexSizes);
+    }
+    return;
+  }
   if (!enabled) {
     writer.i32(0);
     return;
@@ -766,6 +836,33 @@ function writeMorphs(writer, enabled, indexSizes) {
   writer.i32(1);
   writer.index(3, indexSizes.vertex);
   writer.vec3([0, 0.05, 0]);
+}
+
+function writeCustomMorph(writer, morph, indexSizes) {
+  writer.text(morph.name);
+  writer.text(morph.englishName);
+  writer.u8(morph.panel ?? 4);
+  switch (morph.type) {
+    case "material":
+      writer.u8(8);
+      writer.i32(morph.offsets.length);
+      for (const offset of morph.offsets) {
+        writer.index(offset.materialIndex, indexSizes.material);
+        writer.u8(offset.operation === "multiply" ? 0 : 1);
+        writer.vec4(offset.diffuse ?? [0, 0, 0, 0]);
+        writer.vec3(offset.specular ?? [0, 0, 0]);
+        writer.f32(offset.specularPower ?? 0);
+        writer.vec3(offset.ambient ?? [0, 0, 0]);
+        writer.vec4(offset.edgeColor ?? [0, 0, 0, 0]);
+        writer.f32(offset.edgeSize ?? 0);
+        writer.vec4(offset.textureFactor ?? [0, 0, 0, 0]);
+        writer.vec4(offset.sphereTextureFactor ?? [0, 0, 0, 0]);
+        writer.vec4(offset.toonTextureFactor ?? [0, 0, 0, 0]);
+      }
+      return;
+    default:
+      throw new Error(`Unsupported custom PMX morph type: ${morph.type}`);
+  }
 }
 
 function writeDisplayFrames(writer, bones, indexSizes) {

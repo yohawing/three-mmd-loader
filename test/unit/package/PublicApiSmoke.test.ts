@@ -100,11 +100,10 @@ center
       counts: { bones: 1, morphs: 0 },
       maxFrame: 0
     });
-    expect(animation.boneTracks.center?.[0]).toMatchObject({
-      frame: 0,
-      translation: [0, 1, 2],
-      rotation: [0, 0, 0, 1]
-    });
+    const centerTrack = animation.boneTracks.center;
+    expect(centerTrack?.frames[0]).toBe(0);
+    expect(Array.from(centerTrack?.translations.slice(0, 3) ?? [])).toEqual([0, 1, 2]);
+    expect(Array.from(centerTrack?.rotations.slice(0, 4) ?? [])).toEqual([0, 0, 0, 1]);
   });
 
   it("exports lightweight parser inventory APIs from the public parser barrel", () => {

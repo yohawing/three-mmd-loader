@@ -80,7 +80,8 @@ function createThreeMmdSkeletonBone(bone: BoneData): ThreeMmdSkeletonBone {
       appendTranslate: bone.flags.appendTranslate,
       transformAfterPhysics: bone.flags.transformAfterPhysics,
       hasLocalAxis: bone.flags.localAxis,
-      hasFixedAxis: bone.flags.fixedAxis
+      hasFixedAxis: bone.flags.fixedAxis,
+      enabled: bone.flags.enabled
     },
     appendTransform:
       bone.appendTransform === undefined

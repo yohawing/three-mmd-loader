@@ -317,7 +317,6 @@ export function createMmdMaterialRenderOrderMeshes(
       continue;
     }
     const geometry = createMmdMaterialProxyGeometry(model.mesh.geometry, group);
-    material.transparent = true;
     const mesh = new THREE.SkinnedMesh(geometry, material);
     mesh.name = `${model.mesh.name || "mmd"} material ${entry.materialIndex}`;
     mesh.bind(model.mesh.skeleton, model.mesh.bindMatrix);

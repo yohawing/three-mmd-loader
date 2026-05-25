@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
 import { DefaultMmdRuntime } from "../../../src/index.js";
-import type { MmdAnimation } from "../../../src/index.js";
+import type { MmdAnimation, VmdBoneFrame, VmdBoneTrack, VmdMorphFrame, VmdMorphTrack } from "../../../src/index.js";
 import type {
   MmdPhysicsBackend,
   MmdPhysicsStepContext,
@@ -47,10 +47,10 @@ describe("DefaultMmdRuntime", () => {
 
     const animation = createEmptyMmdAnimation();
     animation.metadata.maxFrame = 1;
-    animation.boneTracks.moving = [
+    animation.boneTracks.moving = createBoneTrack([
       { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
       { frame: 1, translation: [1, 2, 3], rotation: [0, 0, 0, 1] }
-    ];
+    ]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -71,10 +71,10 @@ describe("DefaultMmdRuntime", () => {
     const initialBoneMatrix = Array.from(mesh.skeleton.boneMatrices.slice(0, 16));
     const animation = createEmptyMmdAnimation();
     animation.metadata.maxFrame = 1;
-    animation.boneTracks.moving = [
+    animation.boneTracks.moving = createBoneTrack([
       { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
       { frame: 1, translation: [1, 0, 0], rotation: [0, 0, 0, 1] }
-    ];
+    ]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -93,10 +93,10 @@ describe("DefaultMmdRuntime", () => {
 
     const animation = createEmptyMmdAnimation();
     animation.metadata.maxFrame = 1;
-    animation.boneTracks.moving = [
+    animation.boneTracks.moving = createBoneTrack([
       { frame: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
       { frame: 1, translation: [1, 0, 0], rotation: [0, 0, 0, 1] }
-    ];
+    ]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -157,10 +157,10 @@ describe("DefaultMmdRuntime", () => {
     mesh.bind(new THREE.Skeleton([bone]));
     const animation = createEmptyMmdAnimation();
     animation.metadata.maxFrame = 30;
-    animation.boneTracks.moving = [
+    animation.boneTracks.moving = createBoneTrack([
       { frame: 0, translation: [1, 0, 0], rotation: [0, 0, 0, 1] },
       { frame: 30, translation: [2, 0, 0], rotation: [0, 0, 0, 1] }
-    ];
+    ]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -226,7 +226,7 @@ describe("DefaultMmdRuntime", () => {
       }
     ];
     const animation = createEmptyMmdAnimation();
-    animation.morphTracks.group = [{ frame: 0, weight: 0.5 }];
+    animation.morphTracks.group = createMorphTrack([{ frame: 0, weight: 0.5 }]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -257,7 +257,7 @@ describe("DefaultMmdRuntime", () => {
       }
     ];
     const animation = createEmptyMmdAnimation();
-    animation.morphTracks.outer = [{ frame: 0, weight: 1 }];
+    animation.morphTracks.outer = createMorphTrack([{ frame: 0, weight: 1 }]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -292,7 +292,7 @@ describe("DefaultMmdRuntime", () => {
       }
     ];
     const animation = createEmptyMmdAnimation();
-    animation.morphTracks.flip = [{ frame: 0, weight: 1 }];
+    animation.morphTracks.flip = createMorphTrack([{ frame: 0, weight: 1 }]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -352,7 +352,7 @@ describe("DefaultMmdRuntime", () => {
       }
     ];
     const animation = createEmptyMmdAnimation();
-    animation.morphTracks.boneMorph = [{ frame: 0, weight: 0.5 }];
+    animation.morphTracks.boneMorph = createMorphTrack([{ frame: 0, weight: 0.5 }]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -420,9 +420,9 @@ describe("DefaultMmdRuntime", () => {
     mesh.bind(new THREE.Skeleton([source, appendB, appendA]));
     const animation = createEmptyMmdAnimation();
     const halfTurnZ = Math.sin(Math.PI / 4);
-    animation.boneTracks.source = [
+    animation.boneTracks.source = createBoneTrack([
       { frame: 0, translation: [0, 0, 0], rotation: [0, 0, halfTurnZ, halfTurnZ] }
-    ];
+    ]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -445,10 +445,10 @@ describe("DefaultMmdRuntime", () => {
     mesh.add(source, append);
     mesh.bind(new THREE.Skeleton([source, append]));
     const animation = createEmptyMmdAnimation();
-    animation.boneTracks.source = [
+    animation.boneTracks.source = createBoneTrack([
       { frame: 0, translation: [2, 0, 0], rotation: [0, 0, 0, 1] },
       { frame: 1, translation: [0, 0, 0], rotation: [0, 0, 0, 1] }
-    ];
+    ]);
 
     const runtime = new DefaultMmdRuntime();
     runtime.setAnimation(animation, mesh);
@@ -860,13 +860,53 @@ function createEmptyMmdAnimation(): MmdAnimation {
   };
 }
 
+function createBoneTrack(frames: readonly VmdBoneFrame[]): VmdBoneTrack {
+  const track: VmdBoneTrack = {
+    packed: "bone",
+    frames: new Uint32Array(frames.length),
+    translations: new Float32Array(frames.length * 3),
+    rotations: new Float32Array(frames.length * 4),
+    interpolations: new Float32Array(frames.length * 16),
+    physicsToggles: new Int8Array(frames.length)
+  };
+  track.physicsToggles.fill(-1);
+  for (let index = 0; index < frames.length; index += 1) {
+    const frame = frames[index];
+    const translationOffset = index * 3;
+    const rotationOffset = index * 4;
+    const interpolationOffset = index * 16;
+    track.frames[index] = frame?.frame ?? 0;
+    track.translations.set(frame?.translation ?? [0, 0, 0], translationOffset);
+    track.rotations.set(frame?.rotation ?? [0, 0, 0, 1], rotationOffset);
+    track.physicsToggles[index] = frame?.physicsToggle ?? -1;
+    const curves = [
+      frame?.interpolation?.translationX,
+      frame?.interpolation?.translationY,
+      frame?.interpolation?.translationZ,
+      frame?.interpolation?.rotation
+    ];
+    for (let curve = 0; curve < curves.length; curve += 1) {
+      track.interpolations.set(curves[curve] ?? [0, 0, 0, 0], interpolationOffset + curve * 4);
+    }
+  }
+  return track;
+}
+
+function createMorphTrack(frames: readonly VmdMorphFrame[]): VmdMorphTrack {
+  return {
+    packed: "morph",
+    frames: new Uint32Array(frames.map((frame) => frame.frame)),
+    weights: new Float32Array(frames.map((frame) => frame.weight))
+  };
+}
+
 function createBezierTranslationAnimation(): MmdAnimation {
   const easeIn = [20 / 127, 0, 107 / 127, 0] as [number, number, number, number];
   return {
     ...createEmptyMmdAnimation(),
     metadata: { format: "vmd", modelName: "", counts: createEmptyVmdCounts(), maxFrame: 30 },
     boneTracks: {
-      センター: [
+      センター: createBoneTrack([
         {
           frame: 0,
           translation: [0, 0, 0],
@@ -883,20 +923,20 @@ function createBezierTranslationAnimation(): MmdAnimation {
             rotation: [0, 0, 1, 1]
           }
         }
-      ]
+      ])
     }
   };
 }
 
 function createGoalTranslationAnimation(translation: [number, number, number]): MmdAnimation {
   const animation = createEmptyMmdAnimation();
-  animation.boneTracks.goal = [
+  animation.boneTracks.goal = createBoneTrack([
     {
       frame: 0,
       translation,
       rotation: [0, 0, 0, 1]
     }
-  ];
+  ]);
   return animation;
 }
 

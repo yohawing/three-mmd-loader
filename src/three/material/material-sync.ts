@@ -29,10 +29,9 @@ export function syncMmdMaterialStates(
     const suppressColor = mmdMaterialSuppressesColorAtAlpha(material.opacity, flags);
     const transparencyMode = material.userData.mmdMaterial?.transparencyMode;
     const usesAlphaBlend = transparencyMode === "alphaBlend";
-    const morphAlphaTransparent = !!material.userData.mmdMaterial?.morphAlphaTransparent;
     material.visible = material.opacity > 0 || suppressColor;
     material.colorWrite = !suppressColor;
-    material.transparent = usesAlphaBlend || material.opacity < 1 || morphAlphaTransparent;
+    material.transparent = usesAlphaBlend || material.opacity < 1;
     material.depthWrite = transparencyMode
       ? mmdMaterialDepthWrite(transparencyMode)
       : !material.transparent;

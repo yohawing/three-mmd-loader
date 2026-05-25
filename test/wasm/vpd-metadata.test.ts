@@ -238,10 +238,9 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(animation.metadata.counts.bones).toBe(2);
     expect(animation.metadata.counts.morphs).toBe(0);
     expect(animation.metadata.maxFrame).toBe(0);
-    expect(animation.boneTracks["センター"]?.[0]).toMatchObject({
-      frame: 0,
-      translation: [0, 0, 3]
-    });
+    const centerTrack = animation.boneTracks["センター"];
+    expect(centerTrack?.frames[0]).toBe(0);
+    expect(Array.from(centerTrack?.translations.slice(0, 3) ?? [])).toEqual([0, 0, 3]);
   });
 
   luminePmxIt("converts VPD morph pose data into one-frame morph animation tracks", async () => {
@@ -272,8 +271,10 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(animation.metadata.counts.bones).toBe(0);
     expect(animation.metadata.counts.morphs).toBe(2);
     expect(animation.metadata.maxFrame).toBe(0);
-    expect(animation.morphTracks.smile).toEqual([{ frame: 0, weight: 0.75 }]);
-    expect(animation.morphTracks["irtB L B03"]).toEqual([{ frame: 0, weight: 0.5 }]);
+    expect(animation.morphTracks.smile?.frames[0]).toBe(0);
+    expect(animation.morphTracks.smile?.weights[0]).toBeCloseTo(0.75);
+    expect(animation.morphTracks["irtB L B03"]?.frames[0]).toBe(0);
+    expect(animation.morphTracks["irtB L B03"]?.weights[0]).toBeCloseTo(0.5);
   });
 
   it("rejects broken VPD data", async () => {

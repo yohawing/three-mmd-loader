@@ -118,7 +118,7 @@ export function evaluateMmdDefaultMaterialTransparency(
         ? textureTransparencyMode
         : "opaque";
   return {
-    transparencyMode: morphAlphaTransparent ? "alphaBlend" : transparencyMode,
+    transparencyMode,
     textureTransparencyMode,
     morphAlphaTransparent
   };

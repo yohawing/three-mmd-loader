@@ -26,9 +26,10 @@ import type {
   SkeletonData,
   SoftBodyData,
   VmdBoneInterpolation,
-  VmdBoneFrame,
+  VmdBoneTrack,
   VmdCameraInterpolation,
-  VmdInterpolationCurve
+  VmdInterpolationCurve,
+  VmdMorphTrack
 } from "../model/modelTypes.js";
 import { parseVmd } from "../vmd/index.js";
 import { parseVpd, vpdPoseToAnimation } from "../vpd/index.js";
@@ -772,7 +773,7 @@ export class WasmBackedCore implements MmdCore {
     const parsed = parseVmd(input);
     return {
       ...parsed,
-      bytes: input.slice(),
+      bytes: input.slice()
     };
   }
 
@@ -902,37 +903,69 @@ export class WasmBackedCore implements MmdCore {
       wasm._yw_mmd_motion_model_constraint_enabled_table_ptr?.(),
       totalConstraintCount
     );
-    const boneTracks: MmdAnimation["boneTracks"] = {};
-    const bonePhysicsToggles = readVmdBonePhysicsToggleQueues(input);
+    const boneNames = new Array<string>(counts.bones);
+    const boneTrackCounts = new Map<string, number>();
     for (let i = 0; i < counts.bones; i++) {
       const name = boneNamePtrs
         ? readString(boneNamePtrs[i])
         : readString(wasm._yw_mmd_motion_bone_name!(i));
+      boneNames[i] = name;
+      incrementWasmTrackCount(boneTrackCounts, name);
+    }
+    const boneTracks = createWasmBoneTracks(boneTrackCounts);
+    const boneWriteIndices = createWasmWriteIndexMap(boneTracks);
+    const bonePhysicsToggles = readVmdBonePhysicsToggleQueues(input);
+    for (let i = 0; i < counts.bones; i++) {
+      const name = boneNames[i] ?? "";
+      const track = boneTracks[name];
+      if (!track) {
+        continue;
+      }
+      const writeIndex = boneWriteIndices.get(name) ?? 0;
+      boneWriteIndices.set(name, writeIndex + 1);
       const frame = boneI32Table?.[i * 2] ?? wasm._yw_mmd_motion_bone_i32!(i, 0);
       const f = (field: number) =>
         boneF32Table?.[i * 7 + field] ?? wasm._yw_mmd_motion_bone_f32!(i, field);
-      const boneFrame: VmdBoneFrame = {
-        frame,
-        translation: [f(0), f(1), f(2)] as [number, number, number],
-        rotation: [f(3), f(4), f(5), f(6)] as [number, number, number, number],
-        interpolation: readWasmBoneInterpolation(wasm, i, boneInterpolationTable)
-      };
+      track.frames[writeIndex] = frame;
+      const translationOffset = writeIndex * 3;
+      track.translations[translationOffset] = f(0);
+      track.translations[translationOffset + 1] = f(1);
+      track.translations[translationOffset + 2] = f(2);
+      const rotationOffset = writeIndex * 4;
+      track.rotations[rotationOffset] = f(3);
+      track.rotations[rotationOffset + 1] = f(4);
+      track.rotations[rotationOffset + 2] = f(5);
+      track.rotations[rotationOffset + 3] = f(6);
+      writeWasmBoneInterpolation(
+        track.interpolations,
+        writeIndex,
+        readWasmBoneInterpolation(wasm, i, boneInterpolationTable)
+      );
       const physicsToggle = consumeVmdBonePhysicsToggle(bonePhysicsToggles, name, frame);
-      if (physicsToggle !== undefined) {
-        boneFrame.physicsToggle = physicsToggle;
-      }
-      (boneTracks[name] ??= []).push(boneFrame);
+      track.physicsToggles[writeIndex] = physicsToggle ?? -1;
     }
 
-    const morphTracks: MmdAnimation["morphTracks"] = {};
+    const morphNames = new Array<string>(counts.morphs);
+    const morphTrackCounts = new Map<string, number>();
     for (let i = 0; i < counts.morphs; i++) {
       const name = morphNamePtrs
         ? readString(morphNamePtrs[i])
         : readString(wasm._yw_mmd_motion_morph_name!(i));
-      (morphTracks[name] ??= []).push({
-        frame: morphI32Table?.[i] ?? wasm._yw_mmd_motion_morph_i32!(i, 0),
-        weight: morphF32Table?.[i] ?? wasm._yw_mmd_motion_morph_f32!(i, 0)
-      });
+      morphNames[i] = name;
+      incrementWasmTrackCount(morphTrackCounts, name);
+    }
+    const morphTracks = createWasmMorphTracks(morphTrackCounts);
+    const morphWriteIndices = createWasmWriteIndexMap(morphTracks);
+    for (let i = 0; i < counts.morphs; i++) {
+      const name = morphNames[i] ?? "";
+      const track = morphTracks[name];
+      if (!track) {
+        continue;
+      }
+      const writeIndex = morphWriteIndices.get(name) ?? 0;
+      morphWriteIndices.set(name, writeIndex + 1);
+      track.frames[writeIndex] = morphI32Table?.[i] ?? wasm._yw_mmd_motion_morph_i32!(i, 0);
+      track.weights[writeIndex] = morphF32Table?.[i] ?? wasm._yw_mmd_motion_morph_f32!(i, 0);
     }
 
     const cameraFrames: MmdAnimation["cameraFrames"] = [];
@@ -1001,8 +1034,8 @@ export class WasmBackedCore implements MmdCore {
       });
     }
 
-    sortWasmTracks(boneTracks);
-    sortWasmTracks(morphTracks);
+    Object.values(boneTracks).forEach(sortWasmBoneTrack);
+    Object.values(morphTracks).forEach(sortWasmMorphTrack);
     cameraFrames.sort((a, b) => a.frame - b.frame);
     lightFrames.sort((a, b) => a.frame - b.frame);
     selfShadowFrames.sort((a, b) => a.frame - b.frame);
@@ -1266,10 +1299,132 @@ function normalizeWasmInterpolationCurve(
   return values.map((value) => Math.min(Math.max(value / 127, 0), 1)) as VmdInterpolationCurve;
 }
 
-function sortWasmTracks<T extends { frame: number }>(tracks: Record<string, T[]>): void {
-  Object.values(tracks).forEach((frames) => {
-    frames.sort((a, b) => a.frame - b.frame);
-  });
+function incrementWasmTrackCount(map: Map<string, number>, key: string): void {
+  map.set(key, (map.get(key) ?? 0) + 1);
+}
+
+function createWasmBoneTracks(counts: ReadonlyMap<string, number>): Record<string, VmdBoneTrack> {
+  const tracks: Record<string, VmdBoneTrack> = {};
+  for (const [name, count] of counts) {
+    const physicsToggles = new Int8Array(count);
+    physicsToggles.fill(-1);
+    tracks[name] = {
+      packed: "bone",
+      frames: new Uint32Array(count),
+      translations: new Float32Array(count * 3),
+      rotations: new Float32Array(count * 4),
+      interpolations: new Float32Array(count * 16),
+      physicsToggles
+    };
+  }
+  return tracks;
+}
+
+function createWasmMorphTracks(counts: ReadonlyMap<string, number>): Record<string, VmdMorphTrack> {
+  const tracks: Record<string, VmdMorphTrack> = {};
+  for (const [name, count] of counts) {
+    tracks[name] = {
+      packed: "morph",
+      frames: new Uint32Array(count),
+      weights: new Float32Array(count)
+    };
+  }
+  return tracks;
+}
+
+function createWasmWriteIndexMap<T extends { readonly frames: Uint32Array }>(
+  tracks: Record<string, T>
+): Map<string, number> {
+  return new Map(Object.keys(tracks).map((name) => [name, 0]));
+}
+
+function writeWasmBoneInterpolation(
+  target: Float32Array,
+  frameIndex: number,
+  interpolation: VmdBoneInterpolation
+): void {
+  const offset = frameIndex * 16;
+  writeWasmInterpolationCurve(target, offset, interpolation.translationX);
+  writeWasmInterpolationCurve(target, offset + 4, interpolation.translationY);
+  writeWasmInterpolationCurve(target, offset + 8, interpolation.translationZ);
+  writeWasmInterpolationCurve(target, offset + 12, interpolation.rotation);
+}
+
+function writeWasmInterpolationCurve(
+  target: Float32Array,
+  offset: number,
+  curve: VmdInterpolationCurve
+): void {
+  target[offset] = curve[0];
+  target[offset + 1] = curve[1];
+  target[offset + 2] = curve[2];
+  target[offset + 3] = curve[3];
+}
+
+function sortWasmBoneTrack(track: VmdBoneTrack): void {
+  const order = wasmPackedSortOrder(track.frames);
+  if (!order) {
+    return;
+  }
+  reorderWasmUint32(track.frames, order);
+  reorderWasmFloat32Tuple(track.translations, 3, order);
+  reorderWasmFloat32Tuple(track.rotations, 4, order);
+  reorderWasmFloat32Tuple(track.interpolations, 16, order);
+  reorderWasmInt8(track.physicsToggles, order);
+}
+
+function sortWasmMorphTrack(track: VmdMorphTrack): void {
+  const order = wasmPackedSortOrder(track.frames);
+  if (!order) {
+    return;
+  }
+  reorderWasmUint32(track.frames, order);
+  reorderWasmFloat32Tuple(track.weights, 1, order);
+}
+
+function wasmPackedSortOrder(frames: Uint32Array): Uint32Array | undefined {
+  let sorted = true;
+  for (let index = 1; index < frames.length; index += 1) {
+    if ((frames[index - 1] ?? 0) > (frames[index] ?? 0)) {
+      sorted = false;
+      break;
+    }
+  }
+  if (sorted) {
+    return undefined;
+  }
+  return Uint32Array.from(
+    Array.from(frames.keys()).sort((left, right) => (frames[left] ?? 0) - (frames[right] ?? 0))
+  );
+}
+
+function reorderWasmUint32(values: Uint32Array, order: Uint32Array): void {
+  const copy = values.slice();
+  for (let index = 0; index < order.length; index += 1) {
+    values[index] = copy[order[index] ?? 0] ?? 0;
+  }
+}
+
+function reorderWasmInt8(values: Int8Array, order: Uint32Array): void {
+  const copy = values.slice();
+  for (let index = 0; index < order.length; index += 1) {
+    values[index] = copy[order[index] ?? 0] ?? -1;
+  }
+}
+
+function reorderWasmFloat32Tuple(
+  values: Float32Array,
+  tupleSize: number,
+  order: Uint32Array
+): void {
+  const copy = values.slice();
+  for (let index = 0; index < order.length; index += 1) {
+    const source = (order[index] ?? 0) * tupleSize;
+    const target = index * tupleSize;
+    for (let component = 0; component < tupleSize; component += 1) {
+      values[target + component] = copy[source + component] ?? 0;
+    }
+  }
 }
 
 function readVmdBonePhysicsToggleQueues(bytes: Uint8Array): Map<string, number[]> {
