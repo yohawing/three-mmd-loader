@@ -135,6 +135,23 @@ describe("ThreeMmdLoader", () => {
     expect(model.object.children).toEqual([model.mesh, ...renderOrderMeshes, ...outlineMeshes]);
   });
 
+  it("allows loadModel callers to disable generated render-order proxy meshes explicitly", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        edge: true
+      }),
+      { renderOrderProxies: false }
+    );
+
+    expect(model.renderOrderMeshes).toEqual([]);
+    expect(model.mesh.geometry.drawRange.count).toBe(Number.POSITIVE_INFINITY);
+    expect(model.object.children).toEqual([model.mesh, ...model.outlineMeshes]);
+  });
+
   it("allows loadModel callers to disable generated outline meshes explicitly", async () => {
     const loader = new ThreeMmdLoader();
 

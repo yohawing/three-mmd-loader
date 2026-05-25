@@ -1,4 +1,5 @@
-export { parseVmd } from "./VmdParser.js";
+export { parseVmd, parseVmdCompact } from "./VmdParser.js";
+export type { PackedVmdBoneTrack, PackedVmdMorphTrack } from "./VmdParser.js";
 export { parseVmdMetadata, parseVmdSectionInventory } from "./VmdMetadataParser.js";
 export type {
   VmdMetadata,

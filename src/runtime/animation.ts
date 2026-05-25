@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { CameraState, LightState, MmdAnimation, VmdBoneFrame, VmdCameraFrame, VmdLightFrame, VmdMorphFrame } from "../parser/model/modelTypes.js";
+import type { PackedVmdBoneTrack, PackedVmdMorphTrack } from "../parser/vmd/index.js";
 import { interpolateBezier, lerp, mmdQuaternionToThree, slerp, weightedThreeQuaternion } from "./math.js";
 import type { RuntimeMorph, RuntimeRestTransform } from "./types.js";
 export function applyMmdAnimation(mesh: THREE.SkinnedMesh | undefined, animation: MmdAnimation | undefined, restTransforms: readonly RuntimeRestTransform[], frame: number): { readonly bonePhysicsToggles: Record<string, number>; readonly preAppendTransforms: RuntimeRestTransform[]; } | undefined {
@@ -61,7 +62,10 @@ function isMmdAnimation(value: unknown): value is MmdAnimation {
   );
 }
 
-function findBoneTrack(animation: MmdAnimation, bone: THREE.Bone): VmdBoneFrame[] | undefined {
+function findBoneTrack(
+  animation: MmdAnimation,
+  bone: THREE.Bone
+): VmdBoneFrame[] | PackedVmdBoneTrack | undefined {
   const names = [bone.userData.mmdBoneName, bone.userData.mmdEnglishBoneName, bone.name].filter(
     (name): name is string => typeof name === "string" && name.length > 0
   );
@@ -75,10 +79,16 @@ function findBoneTrack(animation: MmdAnimation, bone: THREE.Bone): VmdBoneFrame[
 }
 
 function sampleBoneTrack(
-  frames: readonly VmdBoneFrame[] | undefined,
+  frames: readonly VmdBoneFrame[] | PackedVmdBoneTrack | undefined,
   frame: number
 ): VmdBoneFrame | undefined {
-  if (!frames || frames.length === 0) {
+  if (!frames) {
+    return undefined;
+  }
+  if (isPackedBoneTrack(frames)) {
+    return samplePackedBoneTrack(frames, frame);
+  }
+  if (frames.length === 0) {
     return undefined;
   }
   if (frame < frames[0].frame) {
@@ -125,7 +135,10 @@ function sampleBoneTrack(
   return previous;
 }
 
-function sampleMorphTrack(frames: readonly VmdMorphFrame[], frame: number): number {
+function sampleMorphTrack(frames: readonly VmdMorphFrame[] | PackedVmdMorphTrack, frame: number): number {
+  if (isPackedMorphTrack(frames)) {
+    return samplePackedMorphTrack(frames, frame);
+  }
   if (frames.length === 0) {
     return 0;
   }
@@ -307,6 +320,119 @@ function applyBoneMorphs(
       );
     }
   }
+}
+
+function isPackedBoneTrack(value: unknown): value is PackedVmdBoneTrack {
+  return typeof value === "object" && value !== null && (value as { packed?: unknown }).packed === "bone";
+}
+
+function isPackedMorphTrack(value: unknown): value is PackedVmdMorphTrack {
+  return typeof value === "object" && value !== null && (value as { packed?: unknown }).packed === "morph";
+}
+
+function samplePackedBoneTrack(track: PackedVmdBoneTrack, frame: number): VmdBoneFrame | undefined {
+  const frames = track.frames;
+  if (frames.length === 0) {
+    return undefined;
+  }
+  if (frame < (frames[0] ?? 0)) {
+    return readPackedBoneFrame(track, 0, frames[0] ?? 0);
+  }
+  let previousIndex = 0;
+  for (let index = 1; index < frames.length; index += 1) {
+    const nextFrame = frames[index] ?? 0;
+    if (frame === nextFrame) {
+      previousIndex = index;
+      continue;
+    }
+    if (frame < nextFrame) {
+      const previousFrame = frames[previousIndex] ?? 0;
+      const t = (frame - previousFrame) / Math.max(nextFrame - previousFrame, 1);
+      const interpolation = readPackedBoneInterpolation(track, index);
+      const previous = readPackedBoneFrame(track, previousIndex, previousFrame);
+      const next = readPackedBoneFrame(track, index, nextFrame);
+      return {
+        frame,
+        translation: [
+          lerp(previous.translation[0], next.translation[0], interpolateBezier(interpolation.translationX, t)),
+          lerp(previous.translation[1], next.translation[1], interpolateBezier(interpolation.translationY, t)),
+          lerp(previous.translation[2], next.translation[2], interpolateBezier(interpolation.translationZ, t))
+        ],
+        rotation: slerp(previous.rotation, next.rotation, interpolateBezier(interpolation.rotation, t)),
+        physicsToggle: previous.physicsToggle
+      };
+    }
+    previousIndex = index;
+  }
+  return readPackedBoneFrame(track, previousIndex, frames[previousIndex] ?? 0);
+}
+
+function samplePackedMorphTrack(track: PackedVmdMorphTrack, frame: number): number {
+  const frames = track.frames;
+  if (frames.length === 0) {
+    return 0;
+  }
+  if (frame < (frames[0] ?? 0)) {
+    return track.weights[0] ?? 0;
+  }
+  let previousIndex = 0;
+  for (let index = 1; index < frames.length; index += 1) {
+    const nextFrame = frames[index] ?? 0;
+    if (frame === nextFrame) {
+      return track.weights[index] ?? 0;
+    }
+    if (frame < nextFrame) {
+      const previousFrame = frames[previousIndex] ?? 0;
+      const t = (frame - previousFrame) / Math.max(nextFrame - previousFrame, 1);
+      return lerp(track.weights[previousIndex] ?? 0, track.weights[index] ?? 0, t);
+    }
+    previousIndex = index;
+  }
+  return track.weights[previousIndex] ?? 0;
+}
+
+function readPackedBoneFrame(track: PackedVmdBoneTrack, index: number, frame: number): VmdBoneFrame {
+  const translationOffset = index * 3;
+  const rotationOffset = index * 4;
+  const physicsToggle = track.physicsToggles[index] ?? -1;
+  const result: VmdBoneFrame = {
+    frame,
+    translation: [
+      track.translations[translationOffset] ?? 0,
+      track.translations[translationOffset + 1] ?? 0,
+      track.translations[translationOffset + 2] ?? 0
+    ],
+    rotation: [
+      track.rotations[rotationOffset] ?? 0,
+      track.rotations[rotationOffset + 1] ?? 0,
+      track.rotations[rotationOffset + 2] ?? 0,
+      track.rotations[rotationOffset + 3] ?? 1
+    ],
+    interpolation: readPackedBoneInterpolation(track, index)
+  };
+  if (physicsToggle >= 0) {
+    result.physicsToggle = physicsToggle;
+  }
+  return result;
+}
+
+function readPackedBoneInterpolation(track: PackedVmdBoneTrack, index: number) {
+  const offset = index * 16;
+  return {
+    translationX: readPackedCurve(track.interpolations, offset),
+    translationY: readPackedCurve(track.interpolations, offset + 4),
+    translationZ: readPackedCurve(track.interpolations, offset + 8),
+    rotation: readPackedCurve(track.interpolations, offset + 12)
+  };
+}
+
+function readPackedCurve(values: Float32Array, offset: number): [number, number, number, number] {
+  return [
+    values[offset] ?? 0,
+    values[offset + 1] ?? 0,
+    values[offset + 2] ?? 0,
+    values[offset + 3] ?? 0
+  ];
 }
 
 export { findBoneTrack, isMmdAnimation, sampleBoneTrack, sampleFramePair, sampleMorphTrack };

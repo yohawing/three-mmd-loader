@@ -37,7 +37,8 @@ export type {
   PmmScenePlan,
   PmmStaticPreviewPlan
 } from "./pmm/index.js";
-export { parseVmd, parseVmdMetadata, parseVmdSectionInventory } from "./vmd/index.js";
+export { parseVmd, parseVmdCompact, parseVmdMetadata, parseVmdSectionInventory } from "./vmd/index.js";
+export type { PackedVmdBoneTrack, PackedVmdMorphTrack } from "./vmd/index.js";
 export type {
   VmdMetadata,
   VmdSectionCounts,

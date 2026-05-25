@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 import { FallbackCore, initCoreWithFallback } from "../parser/wasm/index.js";
-import { parseVmd, parseVpd } from "../parser/index.js";
+import { parseVmdCompact, parseVpd } from "../parser/index.js";
 import type { MmdCore } from "../parser/model/modelTypes.js";
 import { DefaultMmdRuntime } from "../runtime/index.js";
 import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
@@ -131,6 +131,7 @@ export interface ThreeMmdLoaderOptions {
 export interface ThreeMmdLoadModelOptions {
   readonly outlines?: boolean;
   readonly frustumCulled?: boolean;
+  readonly renderOrderProxies?: boolean;
 }
 
 export type ThreeMmdModelSourceDescriptor =
@@ -236,7 +237,8 @@ export class ThreeMmdLoader {
           source: createModelSourceDescriptor(source, bytes.byteLength),
           textureDiagnostics,
           materials: modelData.materials,
-          outlines: effectiveOutlines
+          outlines: effectiveOutlines,
+          renderOrderProxies: options.renderOrderProxies ?? true
         });
         profile?.mark("assembled");
         profile?.measure("read-bytes", "start", "bytes");
@@ -280,7 +282,7 @@ export class ThreeMmdLoader {
     if (bytes.byteLength === 0) {
       throw createEmptySourceError("loadAnimation");
     }
-    const animation = parseVmd(bytes);
+    const animation = parseVmdCompact(bytes);
     return {
       source,
       name: animation.metadata.modelName,
@@ -326,6 +328,7 @@ function createThreeMmdModel(options: {
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
   readonly outlines: boolean;
+  readonly renderOrderProxies: boolean;
 }): ThreeMmdModel {
   const outlineMeshes = options.outlines
     ? createMmdOutlineMeshes({
@@ -339,7 +342,7 @@ function createThreeMmdModel(options: {
   });
   // MMD-compatible outlines need body proxies so body/outline draw in PMX
   // material definition order: body0, outline0, body1, outline1.
-  const renderOrderMeshes = options.outlines
+  const renderOrderMeshes = options.outlines && options.renderOrderProxies
     ? createMmdMaterialRenderOrderMeshes({
         mesh: options.mesh,
         materials: options.materials

@@ -148,25 +148,29 @@ export function createThreeBufferGeometry(
   if (morphs.length > 0) {
     const morphAttributes = geometry.morphAttributes as Record<string, THREE.BufferAttribute[]>;
     geometry.morphTargetsRelative = true;
-    geometry.morphAttributes.position = morphs.map(
-      (morph) =>
-        new THREE.Float32BufferAttribute(
-          createThreeMorphPositionOffsets(buffers.positions.length, morph),
-          3
-        )
+    geometry.morphAttributes.position = createMorphAttributes(
+      morphs,
+      buffers.positions.length,
+      3,
+      (morph, length) => createThreeMorphPositionOffsets(length, morph)
     );
-    morphAttributes.uv = morphs.map(
-      (morph) =>
-        new THREE.Float32BufferAttribute(createThreeMorphUvOffsets(buffers.uvs.length, morph), 2)
-    );
-    additionalUvs.forEach((additionalUv, index) => {
-      morphAttributes[`uv${index + 1}`] = morphs.map(
-        (morph) =>
-          new THREE.Float32BufferAttribute(
-            createThreeAdditionalMorphUvOffsets(additionalUv.length, index, morph),
-            4
-          )
+    if (morphs.some(hasUvMorphOffsets)) {
+      morphAttributes.uv = createMorphAttributes(
+        morphs,
+        buffers.uvs.length,
+        2,
+        (morph, length) => createThreeMorphUvOffsets(length, morph)
       );
+    }
+    additionalUvs.forEach((additionalUv, index) => {
+      if (morphs.some((morph) => hasAdditionalUvMorphOffsets(morph, index))) {
+        morphAttributes[`uv${index + 1}`] = createMorphAttributes(
+          morphs,
+          additionalUv.length,
+          4,
+          (morph, length) => createThreeAdditionalMorphUvOffsets(length, index, morph)
+        );
+      }
     });
   }
 
@@ -482,16 +486,43 @@ function createThreeVec3Buffer(values: Float32Array): Float32Array {
   return converted;
 }
 
+function createMorphAttributes(
+  morphs: readonly ThreeMmdGeometryMorph[],
+  length: number,
+  itemSize: number,
+  createOffsets: (morph: ThreeMmdGeometryMorph, length: number) => Float32Array | undefined
+): THREE.BufferAttribute[] {
+  const zeroAttribute = new THREE.Float32BufferAttribute(new Float32Array(length), itemSize);
+  return morphs.map((morph) => {
+    const offsets = createOffsets(morph, length);
+    return offsets ? new THREE.Float32BufferAttribute(offsets, itemSize) : zeroAttribute;
+  });
+}
+
+function hasUvMorphOffsets(morph: ThreeMmdGeometryMorph): boolean {
+  return !!morph.uvOffsets?.length || !!morph.denseUvOffsets;
+}
+
+function hasAdditionalUvMorphOffsets(morph: ThreeMmdGeometryMorph, uvIndex: number): boolean {
+  return (
+    !!morph.denseAdditionalUvOffsets?.[uvIndex] ||
+    !!morph.additionalUvOffsets?.some((offset) => offset.uvIndex === uvIndex)
+  );
+}
+
 function createThreeMorphPositionOffsets(
   positionLength: number,
   morph: ThreeMmdGeometryMorph
-): Float32Array {
+): Float32Array | undefined {
   const providerOffsets = getDenseMorphProvider(morph)?.createPositionOffsets(positionLength / 3);
   if (providerOffsets) {
     return providerOffsets;
   }
   if (morph.densePositionOffsets) {
     return morph.densePositionOffsets.slice();
+  }
+  if (!morph.vertexOffsets?.length) {
+    return undefined;
   }
   const offsets = new Float32Array(positionLength);
   for (const offset of morph.vertexOffsets ?? []) {
@@ -503,13 +534,19 @@ function createThreeMorphPositionOffsets(
   return offsets;
 }
 
-function createThreeMorphUvOffsets(uvLength: number, morph: ThreeMmdGeometryMorph): Float32Array {
+function createThreeMorphUvOffsets(
+  uvLength: number,
+  morph: ThreeMmdGeometryMorph
+): Float32Array | undefined {
   const providerOffsets = getDenseMorphProvider(morph)?.createUvOffsets(uvLength / 2);
   if (providerOffsets) {
     return providerOffsets;
   }
   if (morph.denseUvOffsets) {
     return morph.denseUvOffsets.slice();
+  }
+  if (!morph.uvOffsets?.length) {
+    return undefined;
   }
   const offsets = new Float32Array(uvLength);
   for (const offset of morph.uvOffsets ?? []) {
@@ -524,7 +561,7 @@ function createThreeAdditionalMorphUvOffsets(
   uvLength: number,
   uvIndex: number,
   morph: ThreeMmdGeometryMorph
-): Float32Array {
+): Float32Array | undefined {
   const providerOffsets = getDenseMorphProvider(morph)?.createAdditionalUvOffsets(
     uvIndex,
     uvLength / 4
@@ -535,6 +572,9 @@ function createThreeAdditionalMorphUvOffsets(
   const denseOffsets = morph.denseAdditionalUvOffsets?.[uvIndex];
   if (denseOffsets) {
     return denseOffsets.slice();
+  }
+  if (!morph.additionalUvOffsets?.some((offset) => offset.uvIndex === uvIndex)) {
+    return undefined;
   }
   const offsets = new Float32Array(uvLength);
   for (const offset of morph.additionalUvOffsets ?? []) {

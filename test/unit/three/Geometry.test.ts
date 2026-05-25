@@ -146,6 +146,25 @@ describe("createThreeBufferGeometry", () => {
     );
   });
 
+  it("reuses zero morph attributes for morphs without geometry offsets", () => {
+    const morphs: ThreeMmdGeometryMorph[] = [
+      { groupOffsets: [{ morphIndex: 1, weight: 0.5 }] },
+      { vertexOffsets: [{ vertexIndex: 2, position: [0.25, -0.5, 1.5] }] },
+      { boneOffsets: [{ boneIndex: 0, translation: [0, 0, 0], rotation: [0, 0, 0, 1] }] }
+    ];
+    const geometry = createThreeBufferGeometry(createQuadBuffers(), [], morphs);
+
+    const positions = geometry.morphAttributes.position ?? [];
+    expect(positions).toHaveLength(3);
+    expect(geometry.morphAttributes.uv).toBeUndefined();
+    expect(positions[0]).toBe(positions[2]);
+    expect(positions[1]).not.toBe(positions[0]);
+    expect(Array.from(positions[0]?.array ?? [])).toEqual(new Array(12).fill(0));
+    expect(Array.from(positions[1]?.array ?? [])).toEqual([
+      0, 0, 0, 0, 0, 0, 0.25, -0.5, -1.5, 0, 0, 0
+    ]);
+  });
+
   it("uses precomputed dense morph offsets when provided", () => {
     const morphs: ThreeMmdGeometryMorph[] = [
       {
