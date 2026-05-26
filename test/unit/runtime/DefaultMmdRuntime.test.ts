@@ -736,6 +736,19 @@ describe("DefaultMmdRuntime", () => {
       ],
       joints: [
         {
+          name: "filtered",
+          rigidBodyIndexA: 0,
+          rigidBodyIndexB: 1,
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          translationLowerLimit: [0, 0, 0],
+          translationUpperLimit: [0, 0, 0],
+          rotationLowerLimit: [0, 0, 0],
+          rotationUpperLimit: [0, 0, 0],
+          springTranslationFactor: [0, 0, 0],
+          springRotationFactor: [0, 0, 0]
+        },
+        {
           name: "kept",
           rigidBodyIndexA: 0,
           rigidBodyIndexB: 2,
@@ -775,6 +788,7 @@ describe("DefaultMmdRuntime", () => {
     runtime.evaluate(1 / 30);
 
     expect(backend.lastContext?.rigidBodies).toHaveLength(2);
+    expect(backend.lastContext?.joints?.[0]?.index).toBe(0);
     expect(backend.lastContext?.joints?.[0]?.rigidBodyIndexA).toBe(0);
     expect(backend.lastContext?.joints?.[0]?.rigidBodyIndexB).toBe(1);
     expect(backend.lastContext?.morphImpulses?.[0]?.rigidBodyIndex).toBe(1);

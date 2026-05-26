@@ -90,8 +90,8 @@ export function legacyMmdEulerToQuaternion(
   return [
     sx * cy * cz + cx * sy * sz,
     cx * sy * cz - sx * cy * sz,
-    cx * cy * sz + sx * sy * cz,
-    cx * cy * cz - sx * sy * sz
+    cx * cy * sz - sx * sy * cz,
+    cx * cy * cz + sx * sy * sz
   ];
 }
 
