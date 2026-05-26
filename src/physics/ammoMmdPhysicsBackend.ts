@@ -1956,15 +1956,11 @@ class PhysicsWorldTransformCache {
 
   private hasCachedAncestor(boneIndex: number): boolean {
     let current = boneIndex;
-    const visited = new Set<number>();
-    while (current >= 0 && current < this.context.skeleton.bones.length) {
+    const boneCount = this.context.skeleton.bones.length;
+    for (let checked = 0; checked < boneCount && current >= 0 && current < boneCount; checked += 1) {
       if (this.cache.has(current)) {
         return true;
       }
-      if (visited.has(current)) {
-        return false;
-      }
-      visited.add(current);
       current = this.context.skeleton.bones[current]?.parentIndex ?? -1;
     }
     return false;
