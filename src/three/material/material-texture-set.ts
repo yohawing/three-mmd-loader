@@ -92,18 +92,30 @@ export function evaluateMmdDefaultMaterialTransparency(
   const textureMetadataTransparencyMode = texture?.userData.mmdTextureAlphaMode as
     | MmdMaterialTransparencyMode
     | undefined;
+  const textureAlphaSource = texture?.userData.mmdTextureAlphaSource as string | undefined;
   const pmxTransparencyMode = mmdMaterialTransparencyMode(material, !!texture);
-  const pmxOpaque = pmxTransparencyMode === "opaque" && !morphAlphaTransparent;
+  const pmxOpaque = pmxTransparencyMode === "opaque";
+  const canUseTextureAlphaForOpaqueMaterial =
+    textureAlphaSource !== "tga" || isLikelyMmdAlphaOverlayMaterial(material);
+  const shouldUseTextureMetadata =
+    textureMetadataTransparencyMode !== undefined &&
+    (!pmxOpaque || textureAlphaSource !== "tga");
   const needsTextureTransparencyScan =
-    textureMetadataTransparencyMode === undefined &&
-    (options.geometryAwareAlpha ? pmxOpaque : !pmxOpaque);
-  const textureTransparencyMode =
-    textureMetadataTransparencyMode ??
+    !shouldUseTextureMetadata &&
+    (options.geometryAwareAlpha
+      ? pmxOpaque && canUseTextureAlphaForOpaqueMaterial
+      : pmxTransparencyMode !== "opaque");
+  const rawTextureTransparencyMode =
+    (shouldUseTextureMetadata ? textureMetadataTransparencyMode : undefined) ??
     (texture && needsTextureTransparencyScan
       ? (options.geometryAwareAlpha
         ? evaluateCachedMmdTextureAlphaGeometry(texture, geometry, materialIndex)
         : textureAlpha.evaluateMmdTextureAlphaTexture(texture))
       : undefined);
+  const textureTransparencyMode =
+    rawTextureTransparencyMode === "alphaTest" && isLikelyMmdSoftAlphaOverlayMaterial(material)
+      ? "alphaBlend"
+      : rawTextureTransparencyMode;
   const baseTransparencyMode = mmdMaterialTransparencyMode(
     material,
     !!texture,
@@ -122,6 +134,26 @@ export function evaluateMmdDefaultMaterialTransparency(
     textureTransparencyMode,
     morphAlphaTransparent
   };
+}
+
+function isLikelyMmdAlphaOverlayMaterial(material: MaterialInfo): boolean {
+  const materialName = `${material.name} ${material.englishName}`.toLowerCase();
+  if (/(hair\s*shadow|hairshadow|shadow|shade|髪影|髪の影|影)/u.test(materialName)) {
+    return true;
+  }
+  return (
+    !material.flags.groundShadow &&
+    !material.flags.selfShadowMap &&
+    !material.flags.selfShadow &&
+    !material.flags.edge
+  );
+}
+
+function isLikelyMmdSoftAlphaOverlayMaterial(material: MaterialInfo): boolean {
+  const materialName = `${material.name} ${material.englishName}`.toLowerCase();
+  return /(hair\s*shadow|hairshadow|shadow|shade|cheek|blush|髪影|髪の影|影|頬|ほほ|チーク)/u.test(
+    materialName
+  );
 }
 
 function evaluateCachedMmdTextureAlphaGeometry(

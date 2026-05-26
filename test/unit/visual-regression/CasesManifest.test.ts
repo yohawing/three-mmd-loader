@@ -134,7 +134,7 @@ describe("local real-model visual regression manifest", () => {
     const manifest = readRealModelsManifest();
 
     expect(manifest.note).toContain("Local manual");
-    expect(manifest.note).toContain("MMD_VIEWER_DATA_ROOT");
+    expect(manifest.note).toContain("MMD_DATA_ROOT");
     expect(manifest.render.resolution).toEqual({ width: 512, height: 512 });
     expect(manifest.render.pixelRatio).toBe(1);
     expect(manifest.cases.length).toBeGreaterThan(0);
@@ -178,6 +178,17 @@ describe("generated PMX visual regression manifest", () => {
     const names = manifest.cases.map(visualCase => visualCase.name);
 
     expect(names).toContain("mmd-material-morph-alpha-opaque-depth");
+  });
+
+  it("includes texture alpha hair shadow regression cases", () => {
+    const manifest = readGeneratedPmxManifest();
+    const names = manifest.cases.map(visualCase => visualCase.name);
+
+    expect(names).toEqual(expect.arrayContaining([
+      "mmd-png-hair-shadow-alpha-morph-blend",
+      "mmd-tga-regular-hair-alpha-opaque",
+      "mmd-tga-hair-shadow-overlay-alpha-blend"
+    ]));
   });
 
   it("keeps generated PMX cases portable and explicit", () => {

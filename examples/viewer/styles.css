@@ -5,7 +5,7 @@
   --surface-border: rgb(202 211 219 / 75%);
   --text: #1a1d20;
   --text-muted: #5e6974;
-  --accent: #256f9f;
+  --accent: #4b5563;
   --danger: #b42323;
   --warning: #9a5b00;
   --radius: 8px;
@@ -43,14 +43,22 @@ summary {
 }
 
 button,
-.loaded-files select,
-.load-menu summary {
+.asset-load-row select,
+.loaded-file-control select,
+.clear-loaded-file,
+.load-menu > summary {
   min-height: 30px;
   border: 1px solid var(--surface-border);
   border-radius: 6px;
   background: rgb(255 255 255 / 92%);
   color: var(--text);
   cursor: pointer;
+}
+
+.asset-load-row select,
+.loaded-file-control select {
+  background: rgb(255 255 255 / 92%);
+  color: var(--text);
 }
 
 .material-symbols-rounded {
@@ -67,8 +75,8 @@ button,
 }
 
 button:hover,
-.load-menu summary:hover {
-  background: rgb(232 240 247 / 96%);
+.load-menu > summary:hover {
+  background: rgb(246 247 248 / 98%);
 }
 
 button:focus-visible,
@@ -185,7 +193,7 @@ select:focus-visible {
   position: relative;
 }
 
-.load-menu summary {
+.load-menu > summary {
   display: grid;
   place-items: center;
   width: 32px;
@@ -193,7 +201,7 @@ select:focus-visible {
   list-style: none;
 }
 
-.load-menu summary::-webkit-details-marker {
+.load-menu > summary::-webkit-details-marker {
   display: none;
 }
 
@@ -211,6 +219,10 @@ select:focus-visible {
   box-shadow: 0 16px 34px rgb(30 44 58 / 16%);
 }
 
+.load-menu[open] > summary {
+  background: rgb(255 255 255 / 98%);
+}
+
 .load-section {
   display: grid;
   gap: 4px;
@@ -223,11 +235,53 @@ select:focus-visible {
   border-bottom: 0;
 }
 
+.load-category {
+  display: grid;
+  gap: 4px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid rgb(202 211 219 / 48%);
+}
+
+.load-category:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.load-category > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 3px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.load-category > summary::-webkit-details-marker {
+  display: none;
+}
+
+.load-category > summary::after {
+  color: var(--text-muted);
+  font-family: "Material Symbols Rounded";
+  font-size: 17px;
+  font-weight: normal;
+  line-height: 1;
+  content: "expand_more";
+}
+
+.load-category[open] > summary::after {
+  content: "expand_less";
+}
+
 .load-section h2 {
   margin: 0;
   padding: 0 3px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
   line-height: 1.4;
 }
@@ -235,13 +289,53 @@ select:focus-visible {
 .load-menu-panel button {
   justify-content: start;
   width: 100%;
+  margin: 3px 0;
   border-color: transparent;
   background: transparent;
   text-align: left;
 }
 
 .load-menu-panel button:hover {
-  background: rgb(37 111 159 / 10%);
+  background: rgb(246 247 248 / 98%);
+}
+
+.asset-load-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 5px;
+  align-items: center;
+  padding-left: 8px;
+}
+
+.asset-load-row label {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-load-row select {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 24px 0 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.asset-load-row-note {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-load-row select[hidden],
+.asset-load-row button[hidden] {
+  display: none;
 }
 
 .top-bar input[type="file"] {
@@ -250,40 +344,47 @@ select:focus-visible {
 
 .loaded-files {
   display: flex;
-  gap: 7px;
+  gap: 6px;
   align-items: center;
   width: auto;
   max-width: min(56vw, 620px);
   min-width: 0;
 }
 
-.loaded-files > span,
-.loaded-files > select {
-  display: block;
+.loaded-file-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 3px;
+  align-items: center;
   max-width: min(19vw, 220px);
   min-width: 0;
-  color: var(--text);
-  font-size: 12px;
 }
 
-.loaded-files > span[hidden],
-.loaded-files > select[hidden] {
+.loaded-file-control[hidden] {
   display: none;
 }
 
-.loaded-files > span + span:not([hidden])::before,
-.loaded-files > select + span:not([hidden])::before {
-  color: var(--text-muted);
-  content: "/";
-}
-
-.loaded-files > select {
-  max-width: min(26vw, 260px);
+.loaded-file-control select {
+  width: 100%;
+  min-width: 0;
   height: 30px;
   padding: 0 24px 0 8px;
   background: rgb(255 255 255 / 92%);
   color: var(--text);
   font-size: 12px;
+}
+
+.clear-loaded-file {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  min-height: 30px;
+  padding: 0;
+  color: var(--text);
+}
+
+.clear-loaded-file .material-symbols-rounded {
+  font-size: 18px;
 }
 
 .transport {
@@ -366,7 +467,7 @@ select:focus-visible {
   z-index: 3;
   border: 1px dashed var(--accent);
   border-radius: var(--radius);
-  background: rgb(239 247 252 / 86%);
+  background: rgb(255 255 255 / 88%);
   color: var(--text);
 }
 
@@ -396,6 +497,52 @@ select:focus-visible {
 
 .physics-error[hidden] {
   display: none;
+}
+
+.loading-indicator {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  display: inline-grid;
+  grid-template-columns: 18px auto;
+  gap: 9px;
+  align-items: center;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 10px 13px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius);
+  background: rgb(255 255 255 / 96%);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: 0 16px 34px rgb(30 44 58 / 18%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.loading-indicator[hidden] {
+  display: none;
+}
+
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgb(75 85 99 / 20%);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: loading-spin 0.8s linear infinite;
+}
+
+#loading-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 920px) {
@@ -430,8 +577,7 @@ select:focus-visible {
     max-width: min(62vw, 280px);
   }
 
-  .loaded-files > span,
-  .loaded-files > select {
+  .loaded-file-control {
     max-width: min(30vw, 132px);
   }
 

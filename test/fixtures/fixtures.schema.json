@@ -48,9 +48,33 @@
                   "$ref": "#/$defs/fixtureMap",
                   "description": "VMD fixture paths keyed by arbitrary names such as vmd001 or walkMotion."
                 },
+                "cameraVmd": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional camera-only VMD paths for viewer camera import, kept out of motion smoke checks."
+                },
+                "backgroundPmx": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional PMX background or stage paths for viewer background import, kept out of model smoke checks."
+                },
+                "backgroundPmd": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional PMD background or stage paths for viewer background import, kept out of model smoke checks."
+                },
                 "vpd": {
                   "$ref": "#/$defs/fixtureMap",
                   "description": "VPD fixture paths keyed by arbitrary names such as vpd001."
+                },
+                "wav": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional WAV audio paths keyed by arbitrary names such as wav001."
+                },
+                "mp3": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional MP3 audio paths keyed by arbitrary names such as mp3001."
+                },
+                "ogg": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional OGG audio paths keyed by arbitrary names such as ogg001."
                 }
               }
             }

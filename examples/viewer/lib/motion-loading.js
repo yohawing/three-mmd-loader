@@ -4,6 +4,7 @@ import { findMmdMotionFiles, normalizeMmdRelativePath } from "../../../dist/thre
 import { dom, setStatus, updateChromeHeights, updatePlaybackDisplay, updateTransportState } from "./dom.js";
 import { animationDurationSeconds, state } from "./state.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
+import { labelFromUrl } from "./url-label.js";
 
 async function fetchBytes(url) {
   const response = await fetch(url);
@@ -14,10 +15,10 @@ async function fetchBytes(url) {
 export async function loadMotionFromUrl(url) {
   try {
     setStatus(`Loading ${url}`, "loading");
-    const bytes = await fetchBytes(url);
-    await loadMotion(bytes, url.split("/").at(-1) ?? url);
+    return await loadMotion(url, labelFromUrl(url));
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
+    return false;
   }
 }
 
@@ -39,12 +40,13 @@ async function readAnimationSourceBytes(source) {
 
 export async function loadMotion(source, label = source.name ?? "motion") {
   try {
+    const switcherEntry = createMotionSwitcherEntry(source, label);
     if (!state.currentModel) {
       state.pendingMotionSource = source;
       state.pendingMotionLabel = label;
-      updateMotionSwitcherSelection(source);
+      updateMotionSwitcherSelection(switcherEntry);
       setStatus("Motion queued", "ready");
-      return;
+      return true;
     }
     setStatus(`Loading motion: ${label}`, "loading");
     state.pendingMotionSource = source;
@@ -58,18 +60,20 @@ export async function loadMotion(source, label = source.name ?? "motion") {
       durationSeconds: animationDurationSeconds(animation)
     };
     state.currentModel.runtime?.setAnimation(animation, state.currentModel.mesh);
-    dom.timeline.max = String(Math.max(animationDurationSeconds(animation), 0.001));
+    dom.timeline.max = String(Math.max(animationDurationSeconds(animation), state.currentCameraMotion?.durationSeconds ?? 0, 0.001));
     state.elapsedSeconds = 0;
     dom.timeline.value = "0";
     syncAudioToMotionTime();
-    updateMotionSwitcherSelection(source);
+    updateMotionSwitcherSelection(switcherEntry);
     updatePlaybackDisplay();
     updateTransportState();
     syncPlaybackToCurrentAudioState();
     setStatus("", "ready");
     renderStillFrame();
+    return true;
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
+    return false;
   }
 }
 
@@ -102,12 +106,37 @@ export async function loadPose(source, label = source.name ?? "pose") {
 export const findVmdFiles = findMmdMotionFiles;
 
 export function motionFileKey(file) {
+  if (typeof file.id === "string") {
+    return file.id;
+  }
+  if (typeof file.source === "string") {
+    return `url:${file.source}`;
+  }
   return normalizeMmdRelativePath(file.webkitRelativePath || file.name);
 }
 
 export async function switchMotion(file) {
   setStatus(`Switching motion to ${file.name}`, "loading");
-  await loadMotion(file);
+  await loadMotion(file.source ?? file, file.name);
+}
+
+export function clearMotion() {
+  state.currentMotion = undefined;
+  state.pendingMotionSource = undefined;
+  state.pendingMotionLabel = undefined;
+  if (state.currentModel) {
+    state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
+  }
+  if (dom.timeline) {
+    dom.timeline.max = String(Math.max(state.currentCameraMotion?.durationSeconds ?? 0, 0.001));
+    dom.timeline.value = "0";
+  }
+  state.elapsedSeconds = 0;
+  resetMotionSwitcherState();
+  updatePlaybackDisplay();
+  updateTransportState();
+  setStatus("", "ready");
+  renderStillFrame();
 }
 
 export function updateMotionSwitcher(selectedFile) {
@@ -118,33 +147,56 @@ export function updateMotionSwitcher(selectedFile) {
   dom.motionSwitcher.replaceChildren(
     ...state.currentMotionVmdFiles.map((file) => {
       const option = document.createElement("option");
-      option.value = file.name;
+      option.value = motionFileKey(file);
       option.textContent = file.name;
       return option;
     })
   );
-  dom.motionSwitcher.value = selectedFile?.name ?? "";
-  dom.motionSwitcher.hidden = state.currentMotionVmdFiles.length === 0;
+  dom.motionSwitcher.value = selectedFile ? motionFileKey(selectedFile) : "";
+  dom.motionSwitcher.hidden = false;
+  if (dom.motionControl) {
+    dom.motionControl.hidden = state.currentMotionVmdFiles.length === 0;
+  }
   updateChromeHeights();
 }
 
-export function updateMotionSwitcherSelection(source) {
-  if (!(source instanceof window.File)) {
+export function updateMotionSwitcherSelection(entry) {
+  if (!entry) {
     return;
   }
   const selectedFile = state.currentMotionVmdFiles.find(
-    (file) => file === source || file.name === source.name
+    (file) => file === entry || motionFileKey(file) === motionFileKey(entry)
   );
   if (selectedFile) {
     updateMotionSwitcher(selectedFile);
+    return;
   }
+  state.currentMotionVmdFiles = [entry];
+  updateMotionSwitcher(entry);
+}
+
+function createMotionSwitcherEntry(source, label) {
+  if (source instanceof window.File) {
+    return source;
+  }
+  if (typeof source === "string") {
+    return {
+      id: `url:${source}`,
+      name: label,
+      source
+    };
+  }
+  return undefined;
 }
 
 export function resetMotionSwitcherState() {
   state.currentMotionVmdFiles = [];
   if (dom.motionSwitcher instanceof window.HTMLSelectElement) {
     dom.motionSwitcher.replaceChildren();
-    dom.motionSwitcher.hidden = true;
+    dom.motionSwitcher.hidden = false;
+  }
+  if (dom.motionControl) {
+    dom.motionControl.hidden = true;
   }
   updateChromeHeights();
 }

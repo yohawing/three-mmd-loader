@@ -120,12 +120,12 @@ describe("legacy MMD physics bridge helpers", () => {
     expect(joint.rotation?.map((value) => Number(value.toFixed(6)))).toEqual([1, 0, 0, 0]);
   });
 
-  it("uses XYZ Euler order for multi-axis rotations", () => {
+  it("uses nanoem's YXZ Euler order for multi-axis rigid body rotations", () => {
     expect(
       legacyMmdEulerToQuaternion([Math.PI / 2, Math.PI / 2, 0]).map((value) =>
         Number(value.toFixed(6))
       )
-    ).toEqual([0.5, 0.5, 0.5, 0.5]);
+    ).toEqual([0.5, 0.5, -0.5, 0.5]);
   });
 
   it("writes tuple arrays into flat buffers", () => {

@@ -13,7 +13,7 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const manifestPath = path.join(__dirname, "real-models.manifest.json");
 const visualRoot = path.join(repoRoot, "test-results", "visual", "real-models");
 const supportedModes = new Set(["current", "baseline"]);
-const dataRootEnvName = "MMD_VIEWER_DATA_ROOT";
+const dataRootEnvName = "MMD_DATA_ROOT";
 
 const mimeTypes = new Map([
   [".js", "text/javascript; charset=utf-8"],

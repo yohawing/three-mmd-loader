@@ -85,6 +85,38 @@ function createAlphaEvaluationGeometry(materialIndex = 0): THREE.BufferGeometry 
   return geometry;
 }
 
+function createAlphaMaterialMorph(materialIndex = 0): MorphData[] {
+  return [
+    {
+      name: "hide material",
+      englishName: "hide_material",
+      type: "material",
+      vertexOffsets: [],
+      groupOffsets: [],
+      boneOffsets: [],
+      uvOffsets: [],
+      additionalUvOffsets: [],
+      materialOffsets: [
+        {
+          materialIndex,
+          operation: "add",
+          diffuse: [0, 0, 0, -1],
+          specular: [0, 0, 0],
+          specularPower: 0,
+          ambient: [0, 0, 0],
+          edgeColor: [0, 0, 0, -1],
+          edgeSize: 0,
+          textureFactor: [0, 0, 0, 0],
+          sphereTextureFactor: [0, 0, 0, 0],
+          toonTextureFactor: [0, 0, 0, 0]
+        }
+      ],
+      flipOffsets: [],
+      impulseOffsets: []
+    }
+  ];
+}
+
 describe("Three.js MMD materials", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -562,46 +594,198 @@ describe("Three.js MMD materials", () => {
 
   it("does not force transparent sorting just because a material morph can change alpha", async () => {
     const mmdMaterials = [createMaterialInfo({ texturePath: "textures/skin.png" })];
-    const morphs: MorphData[] = [
-      {
-        name: "hide skin",
-        englishName: "hide_skin",
-        type: "material",
-        vertexOffsets: [],
-        groupOffsets: [],
-        boneOffsets: [],
-        uvOffsets: [],
-        additionalUvOffsets: [],
-        materialOffsets: [
-          {
-            materialIndex: 0,
-            operation: "add",
-            diffuse: [0, 0, 0, -1],
-            specular: [0, 0, 0],
-            specularPower: 0,
-            ambient: [0, 0, 0],
-            edgeColor: [0, 0, 0, -1],
-            edgeSize: 0,
-            textureFactor: [0, 0, 0, 0],
-            sphereTextureFactor: [0, 0, 0, 0],
-            toonTextureFactor: [0, 0, 0, 0]
-          }
-        ],
-        flipOffsets: [],
-        impulseOffsets: []
-      }
-    ];
     const materials = createThreeMmdMaterials(mmdMaterials);
 
     await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
       textureLoader: createTextureLoaderMock(),
       geometry: createAlphaEvaluationGeometry(),
-      morphs
+      morphs: createAlphaMaterialMorph()
     });
 
     expect(materials[0]?.transparent).toBe(false);
     expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
     expect(materials[0]?.userData.mmdMaterial.morphAlphaTransparent).toBe(true);
+  });
+
+  it("still runs geometry-aware texture alpha scans when a PNG material has an alpha morph", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/hair-shadow.png" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/hair-shadow.png": "resolved/hair-shadow.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true,
+      morphs: createAlphaMaterialMorph()
+    });
+
+    expect(geometryAlphaSpy).toHaveBeenCalledTimes(1);
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+    expect(materials[0]?.userData.mmdMaterial.morphAlphaTransparent).toBe(true);
+  });
+
+  it("does not promote regular TGA material alpha metadata to transparency", async () => {
+    const texture = createReadableAlphaDataTexture();
+    texture.userData.mmdTextureAlphaSource = "tga";
+    texture.userData.mmdTextureAlphaMode = "alphaBlend";
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const mmdMaterials = [
+      createMaterialInfo({
+        texturePath: "textures/hair.tga",
+        flags: {
+          doubleSided: false,
+          groundShadow: true,
+          selfShadowMap: true,
+          selfShadow: true,
+          edge: true,
+          vertexColor: false,
+          pointDraw: false,
+          lineDraw: false
+        }
+      })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/hair.tga": "resolved/hair.tga" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    expect(geometryAlphaSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
+  it("does not promote regular TGA material alpha metadata without geometry-aware evaluation", async () => {
+    const texture = createReadableAlphaDataTexture();
+    texture.userData.mmdTextureAlphaSource = "tga";
+    texture.userData.mmdTextureAlphaMode = "alphaBlend";
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const mmdMaterials = [
+      createMaterialInfo({
+        texturePath: "textures/body.tga",
+        flags: {
+          doubleSided: false,
+          groundShadow: true,
+          selfShadowMap: true,
+          selfShadow: true,
+          edge: true,
+          vertexColor: false,
+          pointDraw: false,
+          lineDraw: false
+        }
+      })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/body.tga": "resolved/body.tga" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry()
+    });
+
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
+  it("runs geometry-aware TGA alpha scans for hair shadow overlay materials", async () => {
+    const texture = createReadableAlphaDataTexture();
+    texture.userData.mmdTextureAlphaSource = "tga";
+    texture.userData.mmdTextureAlphaMode = "alphaBlend";
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi
+      .spyOn(Textures, "evaluateMmdTextureAlphaGeometry")
+      .mockReturnValue("alphaTest");
+    const mmdMaterials = [
+      createMaterialInfo({
+        name: "hairshadow",
+        englishName: "hairshadow",
+        texturePath: "textures/face.tga"
+      })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/face.tga": "resolved/face.tga" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true,
+      morphs: createAlphaMaterialMorph()
+    });
+
+    expect(geometryAlphaSpy).toHaveBeenCalledTimes(1);
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
+  });
+
+  it("treats Japanese hair shadow overlay names as soft alpha blend materials", async () => {
+    const texture = createReadableAlphaDataTexture();
+    texture.userData.mmdTextureAlphaSource = "tga";
+    texture.userData.mmdTextureAlphaMode = "alphaTest";
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi
+      .spyOn(Textures, "evaluateMmdTextureAlphaGeometry")
+      .mockReturnValue("alphaTest");
+    const mmdMaterials = [
+      createMaterialInfo({
+        name: "髪影",
+        englishName: "",
+        texturePath: "textures/face.tga"
+      })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/face.tga": "resolved/face.tga" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    expect(geometryAlphaSpy).toHaveBeenCalledTimes(1);
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
   });
 
   it("keeps geometry-aware texture alpha evaluation available as an opt-in", async () => {
