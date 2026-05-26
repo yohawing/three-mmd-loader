@@ -48,11 +48,49 @@
                   "$ref": "#/$defs/fixtureMap",
                   "description": "VMD fixture paths keyed by arbitrary names such as vmd001 or walkMotion."
                 },
+                "cameraVmd": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional camera-only VMD paths for viewer camera import, kept out of motion smoke checks."
+                },
+                "backgroundPmx": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional PMX background or stage paths for viewer background import, kept out of model smoke checks."
+                },
+                "backgroundPmd": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional PMD background or stage paths for viewer background import, kept out of model smoke checks."
+                },
                 "vpd": {
                   "$ref": "#/$defs/fixtureMap",
                   "description": "VPD fixture paths keyed by arbitrary names such as vpd001."
+                },
+                "wav": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional WAV audio paths keyed by arbitrary names such as wav001."
+                },
+                "mp3": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional MP3 audio paths keyed by arbitrary names such as mp3001."
+                },
+                "ogg": {
+                  "$ref": "#/$defs/fixtureMap",
+                  "description": "Optional OGG audio paths keyed by arbitrary names such as ogg001."
                 }
               }
+            }
+          }
+        },
+        "playbackSmoke": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cases"],
+          "properties": {
+            "cases": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/playbackSmokeCase"
+              },
+              "description": "Optional local runtime playback comparisons against native nanoem oracle dumps."
             }
           }
         }
@@ -81,6 +119,99 @@
         }
       },
       "additionalProperties": false
+    },
+    "playbackSmokeCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "model",
+        "motion",
+        "oracle",
+        "oracleKind",
+        "frames",
+        "watchBones"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "$ref": "#/$defs/playbackSmokeModelRef"
+        },
+        "motion": {
+          "$ref": "#/$defs/playbackSmokeMotionRef"
+        },
+        "oracle": {
+          "$ref": "#/$defs/relativeFilePath",
+          "description": "Path to a gitignored native nanoem oracle JSON, resolved from basePath."
+        },
+        "oracleKind": {
+          "type": "string",
+          "const": "native-nanoem-runtime-dump"
+        },
+        "stage": {
+          "type": "string",
+          "enum": ["vmdInterpolation", "appendTransform", "ik", "physics"],
+          "default": "physics"
+        },
+        "frames": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "number"
+          }
+        },
+        "watchBones": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "matrixEpsilon": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.0001
+        },
+        "morphEpsilon": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.0001
+        },
+        "skipReason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional local-only reason to skip a playback case while keeping it documented in the inventory."
+        }
+      }
+    },
+    "playbackSmokeModelRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extension", "key"],
+      "properties": {
+        "extension": {
+          "type": "string",
+          "enum": ["pmx", "pmd"]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "playbackSmokeMotionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

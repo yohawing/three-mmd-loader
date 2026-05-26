@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import type { MmdModel, MmdRuntime } from "../parser/model/modelTypes.js";
+import type { MaterialRuntimeState, MmdModel } from "../parser/model/modelTypes.js";
 import { syncMmdMaterialStates } from "./material/material-sync.js";
 import { syncMmdOutlineMaterialStates } from "./outline.js";
 
@@ -28,6 +28,19 @@ export type MmdWorldMatrixBuffer =
   | Float32Array
   | Float64Array
   | MmdWorldMatrixColumnMajorTuple;
+
+export interface MmdRuntimeMeshSyncSource {
+  boneMatrices(): Float32Array;
+  morphWeights(): Float32Array;
+  propertyState(): { readonly visible: boolean };
+  materialStates(): readonly MaterialRuntimeState[];
+}
+
+export interface ThreeMmdRuntimeSyncTarget {
+  readonly mesh: THREE.SkinnedMesh;
+  readonly outlineMeshes?: readonly THREE.SkinnedMesh[];
+  readonly renderOrderMeshes?: readonly THREE.SkinnedMesh[];
+}
 
 export function mmdWorldMatrixToThree(matrices: MmdWorldMatrixBuffer, index = 0): THREE.Matrix4 {
   if (matrices === null || matrices === undefined || typeof matrices.length !== "number") {
@@ -72,21 +85,60 @@ export function mmdWorldMatrixToThree(matrices: MmdWorldMatrixBuffer, index = 0)
 export function syncThreeMmdRuntimeToMesh(
   model: Pick<MmdModel, "skeleton">,
   mesh: THREE.SkinnedMesh,
-  runtime: Pick<
-    MmdRuntime,
-    "boneMatrices" | "morphWeights" | "propertyState" | "materialStates"
-  >
+  runtime: MmdRuntimeMeshSyncSource,
+  outlineMeshes?: readonly THREE.SkinnedMesh[],
+  renderOrderMeshes?: readonly THREE.SkinnedMesh[]
+): void {
+  syncThreeMmdRuntimeToMeshInternal(model, mesh, runtime, outlineMeshes, renderOrderMeshes);
+}
+
+export function syncThreeMmdRuntimeToModel(
+  model: Pick<MmdModel, "skeleton">,
+  target: ThreeMmdRuntimeSyncTarget,
+  runtime: MmdRuntimeMeshSyncSource
+): void {
+  syncThreeMmdRuntimeToMeshInternal(
+    model,
+    target.mesh,
+    runtime,
+    target.outlineMeshes,
+    target.renderOrderMeshes
+  );
+}
+
+function syncThreeMmdRuntimeToMeshInternal(
+  model: Pick<MmdModel, "skeleton">,
+  mesh: THREE.SkinnedMesh,
+  runtime: MmdRuntimeMeshSyncSource,
+  outlineMeshes: readonly THREE.SkinnedMesh[] | undefined,
+  renderOrderMeshes: readonly THREE.SkinnedMesh[] | undefined
 ): void {
   syncRuntimeBoneTransforms(model, mesh, runtime.boneMatrices());
   syncRuntimeMorphWeights(mesh, runtime.morphWeights());
-  mesh.visible = runtime.propertyState().visible;
+  const visible = runtime.propertyState().visible;
+  mesh.visible = visible;
   const materialStates = runtime.materialStates();
   syncMmdMaterialStates(mesh.material, materialStates);
-  mesh.children.forEach((child) => {
+  if (renderOrderMeshes) {
+    for (let index = 0; index < renderOrderMeshes.length; index += 1) {
+      renderOrderMeshes[index].visible = visible;
+    }
+  }
+  if (outlineMeshes) {
+    for (let index = 0; index < outlineMeshes.length; index += 1) {
+      const outlineMesh = outlineMeshes[index];
+      outlineMesh.visible = visible;
+      syncMmdOutlineMaterialStates(outlineMesh.material, materialStates);
+    }
+    return;
+  }
+  for (let index = 0; index < mesh.children.length; index += 1) {
+    const child = mesh.children[index];
     if (child instanceof THREE.SkinnedMesh && child.userData.mmdOutlineProxy) {
+      child.visible = visible;
       syncMmdOutlineMaterialStates(child.material, materialStates);
     }
-  });
+  }
 }
 
 function syncRuntimeMorphWeights(mesh: THREE.SkinnedMesh, weights: Float32Array): void {

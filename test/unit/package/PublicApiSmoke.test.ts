@@ -6,11 +6,14 @@ import { describe, expect, it } from "vitest";
 import {
   detectModelFormat,
   parsePmdSectionInventory,
+  parsePmmManifest,
   parsePmxMetadata,
   parsePmxSectionInventory,
   parseVmdSectionInventory,
+  parseVpd,
   parseVpdPose,
-  parseVpdPoseInventory
+  parseVpdPoseInventory,
+  vpdPoseToAnimation
 } from "../../../src/parser/index.js";
 import {
   DefaultMmdRuntime,
@@ -79,12 +82,39 @@ center
     ]);
   });
 
+  it("converts a parsed VPD pose through the public parser barrel", () => {
+    const pose = parseVpd(`Vocaloid Pose Data file
+sample.pmx;
+1;
+Bone0{
+center
+0,1,2;
+0,0,0,1;
+}
+`);
+
+    const animation = vpdPoseToAnimation(pose, "pose");
+
+    expect(animation.metadata).toMatchObject({
+      modelName: "pose",
+      counts: { bones: 1, morphs: 0 },
+      maxFrame: 0
+    });
+    const centerTrack = animation.boneTracks.center;
+    expect(centerTrack?.frames[0]).toBe(0);
+    expect(Array.from(centerTrack?.translations.slice(0, 3) ?? [])).toEqual([0, 1, 2]);
+    expect(Array.from(centerTrack?.rotations.slice(0, 4) ?? [])).toEqual([0, 0, 0, 1]);
+  });
+
   it("exports lightweight parser inventory APIs from the public parser barrel", () => {
     expect(parsePmdSectionInventory).toBeTypeOf("function");
+    expect(parsePmmManifest).toBeTypeOf("function");
     expect(parsePmxSectionInventory).toBeTypeOf("function");
     expect(parseVmdSectionInventory).toBeTypeOf("function");
+    expect(parseVpd).toBeTypeOf("function");
     expect(parseVpdPose).toBeTypeOf("function");
     expect(parseVpdPoseInventory).toBeTypeOf("function");
+    expect(vpdPoseToAnimation).toBeTypeOf("function");
   });
 
   it("exports Three.js adapter geometry helpers from the public barrel", () => {

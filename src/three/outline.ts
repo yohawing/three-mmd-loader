@@ -12,9 +12,6 @@ import type {
 import type { MmdMaterialTransparencyMode } from "./textures.js";
 import { clampColor } from "./utils.js";
 
-const MMD_OUTLINE_MODEL_SPACE_SCALE = 30;
-const MMD_OUTLINE_SCREEN_SPACE_SCALE = 300;
-
 export interface MmdOutlineOptions {
   readonly scale?: number;
   readonly alphaTest?: number;
@@ -35,39 +32,6 @@ export interface MmdOutlineRenderOrderOptions {
   readonly renderOrderBase?: number;
 }
 
-export function createMmdOutlineMesh(
-  model: MmdOutlineModelSource,
-  options: MmdOutlineOptions = {}
-): THREE.SkinnedMesh | undefined {
-  const materialInfos = model.materials;
-  if (
-    !options.forceFallback &&
-    !materialInfos.some((material) => material.flags.edge && material.edgeSize > 0)
-  ) {
-    return undefined;
-  }
-
-  const sourceMaterials = Array.isArray(model.mesh.material)
-    ? model.mesh.material
-    : [model.mesh.material];
-  const hasVertexEdgeScale = !!model.mesh.geometry.getAttribute("mmdEdgeScale");
-  const outlineMaterials = materialInfos.map((material, index) =>
-    createMmdOutlineMaterial(material, index, sourceMaterials, options, hasVertexEdgeScale)
-  );
-
-  const outline = new THREE.SkinnedMesh(
-    model.mesh.geometry,
-    outlineMaterials.length === 1 ? outlineMaterials[0] : outlineMaterials
-  );
-  outline.name = `${model.mesh.name || "mmd"} outline`;
-  const scale = options.scale ?? computeMmdOutlineScale(materialInfos);
-  outline.scale.setScalar(scale === 1 && options.forceFallback ? 1.005 : scale);
-  outline.bind(model.mesh.skeleton, model.mesh.bindMatrix);
-  outline.renderOrder = model.mesh.renderOrder - 1;
-  outline.userData.mmdOutlineProxy = { source: "combined" };
-  return outline;
-}
-
 export function createMmdOutlineMeshes(
   model: MmdOutlineModelSource,
   options: MmdOutlineOptions & MmdOutlineRenderOrderOptions = {}
@@ -83,7 +47,9 @@ export function createMmdOutlineMeshes(
     ? model.mesh.material
     : [model.mesh.material];
   const hasVertexEdgeScale = !!model.mesh.geometry.getAttribute("mmdEdgeScale");
-  const renderOrderByMaterial = mmdMaterialRenderOrderMap(model);
+  const renderOrder = mmdMaterialRenderOrderEntries(model);
+  const renderOrderByMaterial = mmdMaterialRenderOrderMap(renderOrder);
+  const outlineRenderOrderOffset = renderOrder.length;
   const renderOrderBase = options.renderOrderBase ?? model.mesh.renderOrder;
   const meshes: THREE.SkinnedMesh[] = [];
   for (let materialIndex = 0; materialIndex < materialInfos.length; materialIndex += 1) {
@@ -111,13 +77,16 @@ export function createMmdOutlineMeshes(
     outline.morphTargetDictionary = model.mesh.morphTargetDictionary;
     outline.morphTargetInfluences = model.mesh.morphTargetInfluences;
     outline.renderOrder =
-      renderOrderBase + (renderOrderByMaterial.get(materialIndex) ?? materialIndex) * 2 + 1;
+      renderOrderBase +
+      outlineRenderOrderOffset +
+      (renderOrderByMaterial.get(materialIndex) ?? materialIndex);
     outline.frustumCulled = model.mesh.frustumCulled;
     outline.userData.mmdOutlineProxy = {
       sourceMaterialIndex: materialIndex,
       edgeSize: materialInfo.edgeSize,
       fallback: !hasEdge && !!options.forceFallback
     };
+    attachMmdOutlineViewportUpdate(outline);
     meshes.push(outline);
   }
   return meshes;
@@ -138,6 +107,8 @@ function createMmdOutlineMaterial(
   const hasEdge = material.flags.edge && material.edgeSize > 0;
   const suppressColor = mmdMaterialSuppressesColorAtAlpha(material.diffuse[3], material.flags);
   const visible = !suppressColor && (hasEdge || !!options.forceFallback);
+  // The outline reuses the body map so Three.js MeshBasicMaterial can discard
+  // cutout pixels through its built-in alphatest_fragment shader chunk.
   const alphaTest = sourceMap ? mmdOutlineAlphaTest(sourceMaterial, options) : 0;
   const parameters: THREE.MeshBasicMaterialParameters = {
     color: hasEdge
@@ -146,7 +117,7 @@ function createMmdOutlineMaterial(
     opacity: visible ? clampColor(hasEdge ? material.edgeColor[3] : 1) : 0,
     transparent: true,
     side: THREE.BackSide,
-    depthWrite: false,
+    depthWrite: true,
     depthTest: true,
     polygonOffset: true,
     polygonOffsetFactor: 1,
@@ -159,7 +130,7 @@ function createMmdOutlineMaterial(
   }
   const outlineMaterial = new THREE.MeshBasicMaterial(parameters);
   const outlineWidth = mmdOutlineExpansionWidth(material, options, hasEdge);
-  attachMmdOutlineExpansion(outlineMaterial, outlineWidth, hasVertexEdgeScale);
+  attachMmdPmxOutlineExpansion(outlineMaterial, outlineWidth, hasVertexEdgeScale);
   outlineMaterial.visible = visible;
   outlineMaterial.userData.mmdOutlineMaterial = {
     edgeColor: [...material.edgeColor],
@@ -231,13 +202,101 @@ export function attachMmdOutlineExpansion(
   material.needsUpdate = true;
 }
 
+function attachMmdPmxOutlineExpansion(
+  material: THREE.Material,
+  outlineWidth: number,
+  hasVertexEdgeScale: boolean
+): void {
+  const previousOnBeforeCompile = material.onBeforeCompile.bind(material);
+  const previousProgramCacheKey = material.customProgramCacheKey.bind(material);
+  material.onBeforeCompile = (shader, renderer) => {
+    previousOnBeforeCompile(shader, renderer);
+    shader.uniforms.mmdOutlineWidth = { value: outlineWidth };
+    material.userData.mmdOutlineShader = shader;
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <common>",
+      [
+        "#include <common>",
+        "uniform float mmdOutlineWidth;",
+        "uniform vec2 mmdOutlineViewport;",
+        hasVertexEdgeScale ? "attribute float mmdEdgeScale;" : ""
+      ]
+        .filter(Boolean)
+        .join("\n")
+    );
+    const outlineViewport = new THREE.Vector2();
+    const currentViewport = new THREE.Vector4();
+    updateMmdOutlineViewport(renderer, outlineViewport, currentViewport);
+    shader.uniforms.mmdOutlineViewport = { value: outlineViewport };
+    material.userData.mmdOutlineUpdateViewport = (activeRenderer: THREE.WebGLRenderer) => {
+      updateMmdOutlineViewport(activeRenderer, outlineViewport, currentViewport);
+    };
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <project_vertex>",
+      [
+        "#include <project_vertex>",
+        "vec3 mmdOutlineViewNormal = mat3( modelViewMatrix ) * objectNormal;",
+        "vec2 mmdOutlineScreenNormal = mmdOutlineViewNormal.xy;",
+        "float mmdOutlineScreenNormalLength = length( mmdOutlineScreenNormal );",
+        "mmdOutlineScreenNormal = mmdOutlineScreenNormalLength > 0.0 ? mmdOutlineScreenNormal / mmdOutlineScreenNormalLength : vec2( 0.0 );",
+        hasVertexEdgeScale
+          ? "gl_Position.xy += mmdOutlineScreenNormal / ( mmdOutlineViewport * 0.25 ) * mmdOutlineWidth * gl_Position.w * mmdEdgeScale;"
+          : "gl_Position.xy += mmdOutlineScreenNormal / ( mmdOutlineViewport * 0.25 ) * mmdOutlineWidth * gl_Position.w;"
+      ].join("\n")
+    );
+  };
+  material.customProgramCacheKey = () =>
+    `${previousProgramCacheKey()}-yw-mmd-pmx-outline-expansion${
+      hasVertexEdgeScale ? "-edge-scale" : ""
+    }`;
+  material.needsUpdate = true;
+}
+
+function attachMmdOutlineViewportUpdate(outline: THREE.SkinnedMesh): void {
+  outline.onBeforeRender = (renderer) => {
+    syncMmdOutlineViewport(outline.material, renderer);
+  };
+}
+
+function syncMmdOutlineViewport(
+  materials: THREE.Material | THREE.Material[],
+  renderer: THREE.WebGLRenderer
+): void {
+  if (Array.isArray(materials)) {
+    for (const material of materials) {
+      syncMmdOutlineMaterialViewport(material, renderer);
+    }
+    return;
+  }
+  syncMmdOutlineMaterialViewport(materials, renderer);
+}
+
+function syncMmdOutlineMaterialViewport(
+  material: THREE.Material,
+  renderer: THREE.WebGLRenderer
+): void {
+  const updateViewport = material.userData.mmdOutlineUpdateViewport as
+    | ((activeRenderer: THREE.WebGLRenderer) => void)
+    | undefined;
+  updateViewport?.(renderer);
+}
+
+function updateMmdOutlineViewport(
+  renderer: THREE.WebGLRenderer,
+  target: THREE.Vector2,
+  currentViewport: THREE.Vector4
+): void {
+  renderer.getCurrentViewport(currentViewport);
+  target.set(currentViewport.z, currentViewport.w);
+}
+
 function mmdOutlineExpansionWidth(
   material: MaterialInfo,
   options: MmdOutlineOptions,
   hasEdge: boolean
 ): number {
   const edgeSize = hasEdge ? material.edgeSize : options.forceFallback ? 0.5 : 0;
-  return Math.min(Math.max(edgeSize, 0), 3) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
+  return Math.max(edgeSize, 0);
 }
 
 export function createMmdMaterialRenderOrderMeshes(
@@ -247,16 +306,7 @@ export function createMmdMaterialRenderOrderMeshes(
   const sourceMaterials = Array.isArray(model.mesh.material)
     ? model.mesh.material
     : [model.mesh.material];
-  const renderOrder =
-    (model.mesh.userData.mmdMaterialRenderOrder as MmdMaterialRenderOrderEntry[] | undefined) ??
-    computeMmdMaterialRenderOrder(
-      sourceMaterials.map((material, materialIndex) => ({
-        materialIndex,
-        transparencyMode:
-          (material.userData.mmdMaterial?.transparencyMode as MmdMaterialTransparencyMode) ??
-          "opaque"
-      }))
-    );
+  const renderOrder = mmdMaterialRenderOrderEntries(model);
   const groups = model.mesh.geometry.groups;
   const renderOrderBase = options.renderOrderBase ?? model.mesh.renderOrder;
   const meshes: THREE.SkinnedMesh[] = [];
@@ -267,13 +317,12 @@ export function createMmdMaterialRenderOrderMeshes(
       continue;
     }
     const geometry = createMmdMaterialProxyGeometry(model.mesh.geometry, group);
-    material.transparent = true;
     const mesh = new THREE.SkinnedMesh(geometry, material);
     mesh.name = `${model.mesh.name || "mmd"} material ${entry.materialIndex}`;
     mesh.bind(model.mesh.skeleton, model.mesh.bindMatrix);
     mesh.morphTargetDictionary = model.mesh.morphTargetDictionary;
     mesh.morphTargetInfluences = model.mesh.morphTargetInfluences;
-    mesh.renderOrder = renderOrderBase + entry.renderOrder * 2;
+    mesh.renderOrder = renderOrderBase + entry.renderOrder;
     mesh.frustumCulled = model.mesh.frustumCulled;
     const materialInfo = model.materials[entry.materialIndex];
     mesh.castShadow = !!materialInfo && mmdMaterialCastsShadow(materialInfo.flags);
@@ -284,11 +333,13 @@ export function createMmdMaterialRenderOrderMeshes(
   return meshes;
 }
 
-function mmdMaterialRenderOrderMap(model: MmdOutlineModelSource): Map<number, number> {
+function mmdMaterialRenderOrderEntries(
+  model: MmdOutlineModelSource
+): readonly MmdMaterialRenderOrderEntry[] {
   const sourceMaterials = Array.isArray(model.mesh.material)
     ? model.mesh.material
     : [model.mesh.material];
-  const renderOrder =
+  return (
     (model.mesh.userData.mmdMaterialRenderOrder as MmdMaterialRenderOrderEntry[] | undefined) ??
     computeMmdMaterialRenderOrder(
       sourceMaterials.map((material, materialIndex) => ({
@@ -297,7 +348,13 @@ function mmdMaterialRenderOrderMap(model: MmdOutlineModelSource): Map<number, nu
           (material.userData.mmdMaterial?.transparencyMode as MmdMaterialTransparencyMode) ??
           "opaque"
       }))
-    );
+    )
+  );
+}
+
+function mmdMaterialRenderOrderMap(
+  renderOrder: readonly MmdMaterialRenderOrderEntry[]
+): Map<number, number> {
   return new Map(renderOrder.map((entry) => [entry.materialIndex, entry.renderOrder]));
 }
 
@@ -326,17 +383,6 @@ function createMmdMaterialProxyGeometry(
   geometry.addGroup(group.start, group.count, 0);
   geometry.setDrawRange(group.start, group.count);
   return geometry;
-}
-
-export function computeMmdOutlineScale(materials: readonly MaterialInfo[]): number {
-  const maxEdgeSize = Math.max(
-    ...materials.map((material) => (material.flags.edge ? material.edgeSize : 0)),
-    0
-  );
-  if (maxEdgeSize <= 0) {
-    return 1;
-  }
-  return 1 + Math.min(Math.max(maxEdgeSize, 0.5), 3) / MMD_OUTLINE_MODEL_SPACE_SCALE;
 }
 
 export function syncMmdOutlineMaterialStates(
@@ -374,7 +420,7 @@ export function syncMmdOutlineMaterialStates(
     material.opacity = metadata?.fallback ? material.opacity : alpha;
     material.transparent = true;
     material.visible = !suppressColor && (!!metadata?.fallback || (state.edgeSize > 0 && alpha > 0));
-    material.depthWrite = false;
+    material.depthWrite = true;
     material.userData.mmdOutlineMaterial = {
       ...(metadata ?? {}),
       edgeColor: [...state.edgeColor],
@@ -394,7 +440,7 @@ export function syncMmdOutlineMaterialStates(
 
 function mmdOutlineRuntimeWidth(edgeSize: number, fallback: boolean): number {
   if (fallback && edgeSize <= 0) {
-    return 0.5 / MMD_OUTLINE_SCREEN_SPACE_SCALE;
+    return 0.5;
   }
-  return Math.min(Math.max(edgeSize, 0), 3) / MMD_OUTLINE_SCREEN_SPACE_SCALE;
+  return Math.max(edgeSize, 0);
 }

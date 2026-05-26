@@ -1,4 +1,4 @@
-import { dom, setDisplayedText, setStatus } from "./dom.js";
+import { dom, setStatus } from "./dom.js";
 import { hasCurrentMotion, state } from "./state.js";
 
 export function loadAudioFile(file) {
@@ -8,7 +8,39 @@ export function loadAudioFile(file) {
   }
   const objectUrl = URL.createObjectURL(file);
   setAudioSource(objectUrl, { objectUrl });
-  setDisplayedText(dom.audioNameText, file.name);
+  updateAudioSwitcher({
+    id: `file:${file.name}:${file.lastModified}`,
+    name: file.name,
+    src: objectUrl
+  });
+  setStatus("", "ready");
+}
+
+export function loadAudioFromUrl(url, label = url.split("/").at(-1) ?? url) {
+  setAudioSource(url);
+  try {
+    updateAudioSwitcher({
+      id: `url:${url}`,
+      name: decodeURIComponent(label),
+      src: url
+    });
+  } catch {
+    updateAudioSwitcher({
+      id: `url:${url}`,
+      name: label,
+      src: url
+    });
+  }
+  setStatus("", "ready");
+  return true;
+}
+
+export function switchAudioEntry(entry) {
+  if (!entry) {
+    return;
+  }
+  setAudioSource(entry.src, { preserveEntries: true });
+  updateAudioSwitcher(entry);
   setStatus("", "ready");
 }
 
@@ -16,7 +48,7 @@ export function setAudioSource(src, options = {}) {
   if (!isAudioElement(dom.bgmAudio)) {
     return;
   }
-  clearAudioSource();
+  clearAudioSource({ preserveEntries: options.preserveEntries });
   dom.bgmAudio.src = src;
   dom.bgmAudio.loop = hasCurrentMotion();
   dom.bgmAudio.load();
@@ -25,7 +57,7 @@ export function setAudioSource(src, options = {}) {
   }
 }
 
-export function clearAudioSource() {
+export function clearAudioSource(options = {}) {
   if (isAudioElement(dom.bgmAudio)) {
     dom.bgmAudio.pause();
     dom.bgmAudio.removeAttribute("src");
@@ -35,7 +67,10 @@ export function clearAudioSource() {
     URL.revokeObjectURL(state.audioObjectUrl);
     state.audioObjectUrl = undefined;
   }
-  setDisplayedText(dom.audioNameText, "");
+  if (!options.preserveEntries) {
+    state.currentAudioEntries = [];
+    updateAudioSwitcher();
+  }
 }
 
 export function isAudioFile(file) {
@@ -48,4 +83,27 @@ export function isAudioElement(element) {
 
 export function hasActiveAudioSource() {
   return isAudioElement(dom.bgmAudio) && dom.bgmAudio.currentSrc.length > 0;
+}
+
+function updateAudioSwitcher(selectedEntry) {
+  if (!(dom.audioSwitcher instanceof window.HTMLSelectElement)) {
+    return;
+  }
+  if (selectedEntry) {
+    state.currentAudioEntries = [selectedEntry];
+  }
+  dom.audioSwitcher.replaceChildren(
+    ...state.currentAudioEntries.map((entry) => {
+      const option = document.createElement("option");
+      option.value = entry.id;
+      option.textContent = entry.name;
+      return option;
+    })
+  );
+  if (selectedEntry) {
+    dom.audioSwitcher.value = selectedEntry.id;
+  }
+  if (dom.audioControl) {
+    dom.audioControl.hidden = state.currentAudioEntries.length === 0;
+  }
 }

@@ -77,14 +77,22 @@ export function parseVmdSectionInventory(input: ArrayBuffer | Uint8Array): VmdSe
   const morphs = readCount(reader, "morph");
   readFixedSizeSection(reader, sections, "morph", morphs, vmdMorphFrameBytes);
 
-  const cameras = readCount(reader, "camera");
-  readFixedSizeSection(reader, sections, "camera", cameras, vmdCameraFrameBytes);
+  // Old-format / morph-only (lip-sync) VMDs end after the morph section and
+  // omit camera onward entirely, so every trailing count is optional.
+  const cameraCountOffset = reader.offset;
+  const cameras = readOptionalCount(reader, "camera");
+  if (reader.offset !== cameraCountOffset) {
+    readFixedSizeSection(reader, sections, "camera", cameras, vmdCameraFrameBytes, cameraCountOffset);
+  }
 
-  const lights = readCount(reader, "light");
-  readFixedSizeSection(reader, sections, "light", lights, vmdLightFrameBytes);
+  const lightCountOffset = reader.offset;
+  const lights = readOptionalCount(reader, "light");
+  if (reader.offset !== lightCountOffset) {
+    readFixedSizeSection(reader, sections, "light", lights, vmdLightFrameBytes, lightCountOffset);
+  }
 
   const selfShadowCountOffset = reader.offset;
-  const selfShadows = readOptionalCount(reader, "self-shadow");
+  const selfShadows = readOptionalTailCount(reader, "self-shadow");
   if (reader.offset !== selfShadowCountOffset) {
     readFixedSizeSection(
       reader,
@@ -97,7 +105,7 @@ export function parseVmdSectionInventory(input: ArrayBuffer | Uint8Array): VmdSe
   }
 
   const propertyCountOffset = reader.offset;
-  const properties = readOptionalCount(reader, "property");
+  const properties = readOptionalTailCount(reader, "property");
   if (reader.offset !== propertyCountOffset) {
     readPropertySection(reader, sections, properties, propertyCountOffset);
   }
@@ -214,6 +222,22 @@ function readOptionalCount(reader: BinaryReader, label: string): number {
     return 0;
   }
   return readCount(reader, label);
+}
+
+function readOptionalTailCount(reader: BinaryReader, label: string): number {
+  if (reader.remaining === 0) {
+    return 0;
+  }
+  if (reader.remaining < 4) {
+    return readCount(reader, label);
+  }
+  const offset = reader.offset;
+  const count = reader.u32();
+  if (count > maxVmdSectionCount) {
+    reader.offset = offset;
+    return 0;
+  }
+  return count;
 }
 
 function readCount(reader: BinaryReader, label: string): number {

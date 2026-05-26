@@ -17,6 +17,9 @@
         },
         "vpd": {}
       }
+    },
+    "playbackSmoke": {
+      "cases": []
     }
   },
   "description": "Small in-repository fixture inventory for parser and Three.js loader smoke checks."

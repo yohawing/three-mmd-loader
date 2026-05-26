@@ -7,7 +7,7 @@ import {
   createThreeMmdMaterials,
   getDefaultToonGradientMap
 } from "../../../src/three/index.js";
-import type { MaterialInfo } from "../../../src/parser/model/modelTypes.js";
+import type { MaterialInfo, MorphData } from "../../../src/parser/model/modelTypes.js";
 import type { ThreeMmdTextureLoader } from "../../../src/three/index.js";
 import * as Textures from "../../../src/three/textures.js";
 
@@ -83,6 +83,38 @@ function createAlphaEvaluationGeometry(materialIndex = 0): THREE.BufferGeometry 
   geometry.setIndex([0, 1, 2]);
   geometry.addGroup(0, 3, materialIndex);
   return geometry;
+}
+
+function createAlphaMaterialMorph(materialIndex = 0): MorphData[] {
+  return [
+    {
+      name: "hide material",
+      englishName: "hide_material",
+      type: "material",
+      vertexOffsets: [],
+      groupOffsets: [],
+      boneOffsets: [],
+      uvOffsets: [],
+      additionalUvOffsets: [],
+      materialOffsets: [
+        {
+          materialIndex,
+          operation: "add",
+          diffuse: [0, 0, 0, -1],
+          specular: [0, 0, 0],
+          specularPower: 0,
+          ambient: [0, 0, 0],
+          edgeColor: [0, 0, 0, -1],
+          edgeSize: 0,
+          textureFactor: [0, 0, 0, 0],
+          sphereTextureFactor: [0, 0, 0, 0],
+          toonTextureFactor: [0, 0, 0, 0]
+        }
+      ],
+      flipOffsets: [],
+      impulseOffsets: []
+    }
+  ];
 }
 
 describe("Three.js MMD materials", () => {
@@ -454,6 +486,63 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
   });
 
+  it("does not run geometry-aware scans when PMX material data already makes the body transparent", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const textureAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaTexture");
+    const mmdMaterials = [
+      createMaterialInfo({ diffuse: [0.5, 0.6, 0.7, 0.5], texturePath: "textures/hair.png" })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/hair.png": "resolved/hair.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    expect(geometryAlphaSpy).not.toHaveBeenCalled();
+    expect(textureAlphaSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
+  it("does not fall back to full texture alpha scans when geometry-aware evaluation is inconclusive", async () => {
+    const texture = new THREE.Texture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const textureAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaTexture");
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/atlas.png" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/atlas.png": "resolved/atlas.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    expect(geometryAlphaSpy).toHaveBeenCalledTimes(1);
+    expect(textureAlphaSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
   it("preserves alpha blending when PMX diffuse alpha requests transparency", async () => {
     const texture = createTransparentDataTexture("opaque");
     const textureLoader: ThreeMmdTextureLoader = {
@@ -501,6 +590,202 @@ describe("Three.js MMD materials", () => {
 
     expect(materials[0]?.transparent).toBe(true);
     expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+  });
+
+  it("does not force transparent sorting just because a material morph can change alpha", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/skin.png" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureLoader: createTextureLoaderMock(),
+      geometry: createAlphaEvaluationGeometry(),
+      morphs: createAlphaMaterialMorph()
+    });
+
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.morphAlphaTransparent).toBe(true);
+  });
+
+  it("still runs geometry-aware texture alpha scans when a PNG material has an alpha morph", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/hair-shadow.png" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/hair-shadow.png": "resolved/hair-shadow.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true,
+      morphs: createAlphaMaterialMorph()
+    });
+
+    expect(geometryAlphaSpy).toHaveBeenCalledTimes(1);
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+    expect(materials[0]?.userData.mmdMaterial.morphAlphaTransparent).toBe(true);
+  });
+
+  it("does not promote regular TGA material alpha metadata to transparency", async () => {
+    const texture = createReadableAlphaDataTexture();
+    texture.userData.mmdTextureAlphaSource = "tga";
+    texture.userData.mmdTextureAlphaMode = "alphaBlend";
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const mmdMaterials = [
+      createMaterialInfo({
+        texturePath: "textures/hair.tga",
+        flags: {
+          doubleSided: false,
+          groundShadow: true,
+          selfShadowMap: true,
+          selfShadow: true,
+          edge: true,
+          vertexColor: false,
+          pointDraw: false,
+          lineDraw: false
+        }
+      })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/hair.tga": "resolved/hair.tga" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    expect(geometryAlphaSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
+  it("does not promote regular TGA material alpha metadata without geometry-aware evaluation", async () => {
+    const texture = createReadableAlphaDataTexture();
+    texture.userData.mmdTextureAlphaSource = "tga";
+    texture.userData.mmdTextureAlphaMode = "alphaBlend";
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const mmdMaterials = [
+      createMaterialInfo({
+        texturePath: "textures/body.tga",
+        flags: {
+          doubleSided: false,
+          groundShadow: true,
+          selfShadowMap: true,
+          selfShadow: true,
+          edge: true,
+          vertexColor: false,
+          pointDraw: false,
+          lineDraw: false
+        }
+      })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/body.tga": "resolved/body.tga" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry()
+    });
+
+    expect(materials[0]?.transparent).toBe(false);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+  });
+
+  it("runs geometry-aware TGA alpha scans for hair shadow overlay materials", async () => {
+    const texture = createReadableAlphaDataTexture();
+    texture.userData.mmdTextureAlphaSource = "tga";
+    texture.userData.mmdTextureAlphaMode = "alphaBlend";
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi
+      .spyOn(Textures, "evaluateMmdTextureAlphaGeometry")
+      .mockReturnValue("alphaTest");
+    const mmdMaterials = [
+      createMaterialInfo({
+        name: "hairshadow",
+        englishName: "hairshadow",
+        texturePath: "textures/face.tga"
+      })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/face.tga": "resolved/face.tga" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true,
+      morphs: createAlphaMaterialMorph()
+    });
+
+    expect(geometryAlphaSpy).toHaveBeenCalledTimes(1);
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
+  });
+
+  it("treats Japanese hair shadow overlay names as soft alpha blend materials", async () => {
+    const texture = createReadableAlphaDataTexture();
+    texture.userData.mmdTextureAlphaSource = "tga";
+    texture.userData.mmdTextureAlphaMode = "alphaTest";
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const geometryAlphaSpy = vi
+      .spyOn(Textures, "evaluateMmdTextureAlphaGeometry")
+      .mockReturnValue("alphaTest");
+    const mmdMaterials = [
+      createMaterialInfo({
+        name: "髪影",
+        englishName: "",
+        texturePath: "textures/face.tga"
+      })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/face.tga": "resolved/face.tga" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    expect(geometryAlphaSpy).toHaveBeenCalledTimes(1);
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
+    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
   });
 
   it("keeps geometry-aware texture alpha evaluation available as an opt-in", async () => {
@@ -594,5 +879,192 @@ describe("Three.js MMD materials", () => {
         path: "missing/body.png"
       }
     ]);
+  });
+
+  it("reports unsupported DDS diffuse textures when no DDS loader is supplied", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "skin.dds": "resolved/skin.dds" },
+      textureLoader: createTextureLoaderMock()
+    });
+
+    expect(materials[0]?.map).toBeNull();
+    expect(diagnostics).toContainEqual({
+      level: "warning",
+      code: "TEXTURE_FORMAT_UNSUPPORTED",
+      materialIndex: 0,
+      textureKind: "diffuse",
+      path: "skin.dds"
+    });
+  });
+
+  it("allows texture maps to replace DDS references with supported texture files", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const textureLoader = createTextureLoaderMock();
+    const loadSpy = vi.spyOn(textureLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "skin.dds": "resolved/skin.png" },
+      textureLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(loadSpy).toHaveBeenCalledWith(
+      "resolved/skin.png",
+      expect.any(Function),
+      undefined,
+      expect.any(Function)
+    );
+    expect(materials[0]?.map?.name).toBe("resolved/skin.png");
+  });
+
+  it("allows texture maps to replace DDS references with typed PNG Blob textures", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const textureLoader = createTextureLoaderMock();
+    const ddsLoader = createTextureLoaderMock();
+    const textureLoadSpy = vi.spyOn(textureLoader, "load");
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: {
+        "skin.dds": new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" })
+      },
+      textureLoader,
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(textureLoadSpy).toHaveBeenCalledOnce();
+    expect(ddsLoadSpy).not.toHaveBeenCalled();
+    expect(materials[0]?.map?.name).toMatch(/^blob:/);
+  });
+
+  it("loads DDS diffuse textures through the supplied DDS loader", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const ddsLoader = createTextureLoaderMock();
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "skin.dds": "resolved/skin.dds" },
+      textureLoader: createTextureLoaderMock(),
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(ddsLoadSpy).toHaveBeenCalledWith(
+      "resolved/skin.dds",
+      expect.any(Function),
+      undefined,
+      expect.any(Function)
+    );
+    expect(materials[0]?.map?.name).toBe("resolved/skin.dds");
+  });
+
+  it("loads local DDS File textures through the supplied DDS loader even without a MIME type", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const textureLoader = createTextureLoaderMock();
+    const ddsLoader = createTextureLoaderMock();
+    const textureLoadSpy = vi.spyOn(textureLoader, "load");
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "skin.dds": new File([new Uint8Array([1, 2, 3])], "skin.dds") },
+      textureLoader,
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(textureLoadSpy).not.toHaveBeenCalled();
+    expect(ddsLoadSpy).toHaveBeenCalledOnce();
+    expect(materials[0]?.map?.name).toMatch(/^blob:/);
+  });
+
+  it("uses the DDS loader for extensionless resolver URLs when the original texture is DDS", async () => {
+    const mmdMaterials = [createMaterialInfo({ texturePath: "skin.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const textureLoader = createTextureLoaderMock();
+    const ddsLoader = createTextureLoaderMock();
+    const textureLoadSpy = vi.spyOn(textureLoader, "load");
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureResolver: {
+        resolve: async () => "https://cdn.example.com/signed-texture"
+      },
+      textureLoader,
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(textureLoadSpy).not.toHaveBeenCalled();
+    expect(ddsLoadSpy).toHaveBeenCalledWith(
+      "https://cdn.example.com/signed-texture",
+      expect.any(Function),
+      undefined,
+      expect.any(Function)
+    );
+    expect(materials[0]?.map?.name).toBe("https://cdn.example.com/signed-texture");
+  });
+
+  it("loads explicit DDS toon textures through the supplied DDS loader", async () => {
+    const mmdMaterials = [createMaterialInfo({ toonTexturePath: "toon.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+    const ddsLoader = createTextureLoaderMock();
+    const ddsLoadSpy = vi.spyOn(ddsLoader, "load");
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "toon.dds": "resolved/toon.dds" },
+      textureLoader: createTextureLoaderMock(),
+      ddsLoader
+    });
+
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_FORMAT_UNSUPPORTED" })
+    );
+    expect(ddsLoadSpy).toHaveBeenCalledWith(
+      "resolved/toon.dds",
+      expect.any(Function),
+      undefined,
+      expect.any(Function)
+    );
+    expect(materials[0]?.gradientMap?.name).toBe("resolved/toon.dds");
+  });
+
+  it("reports unsupported DDS toon textures when no DDS loader is supplied", async () => {
+    const mmdMaterials = [createMaterialInfo({ toonTexturePath: "toon.dds" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    const diagnostics = await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "toon.dds": "resolved/toon.dds" },
+      textureLoader: createTextureLoaderMock()
+    });
+
+    expect(materials[0]?.gradientMap).toBeDefined();
+    expect(diagnostics).toContainEqual({
+      level: "warning",
+      code: "TEXTURE_FORMAT_UNSUPPORTED",
+      materialIndex: 0,
+      textureKind: "toon",
+      path: "toon.dds"
+    });
+    expect(diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "TEXTURE_RESOLVE_FAILED" })
+    );
   });
 });

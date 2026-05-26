@@ -18,7 +18,10 @@ import type { TextureMap, TextureResolver } from "./textures.js";
 
 export interface TextureLoadDiagnostic {
   readonly level: "warning";
-  readonly code: "TEXTURE_RESOLVE_FAILED" | "SPHERE_MAP_NOT_SUPPORTED";
+  readonly code:
+    | "TEXTURE_FORMAT_UNSUPPORTED"
+    | "TEXTURE_RESOLVE_FAILED"
+    | "SPHERE_MAP_NOT_SUPPORTED";
   readonly materialIndex: number;
   readonly textureKind: "diffuse" | "sphere" | "toon";
   readonly path: string;
@@ -38,6 +41,7 @@ export interface ThreeMmdMaterialTextureOptions {
   readonly textureResolver?: TextureResolver;
   readonly textureMap?: TextureMap;
   readonly textureLoader?: ThreeMmdTextureLoader;
+  readonly ddsLoader?: ThreeMmdTextureLoader;
   readonly textureCache?: Map<string, Promise<THREE.Texture | undefined>>;
   readonly modelUrl?: string;
   readonly geometry?: THREE.BufferGeometry;
@@ -105,7 +109,8 @@ export async function applyThreeMmdMaterialTextures(
         resolver,
         diagnostics,
         textureLoader,
-        options.textureCache
+        options.textureCache,
+        options.ddsLoader
       );
       if (texture) {
         material.map = texture;

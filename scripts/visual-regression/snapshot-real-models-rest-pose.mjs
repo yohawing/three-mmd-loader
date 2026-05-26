@@ -10,7 +10,7 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const manifestPath = path.join(__dirname, "real-models.manifest.json");
 const outputRoot = path.join(repoRoot, "test-results", "visual", "real-models-rest-pose");
 const supportedModes = new Set(["current", "baseline"]);
-const dataRootEnvName = "MMD_VIEWER_DATA_ROOT";
+const dataRootEnvName = "MMD_DATA_ROOT";
 const defaultWatchBones = ["センター", "腰", "下半身", "上半身", "左ひざ", "右ひざ", "左足", "右足"];
 
 async function main() {

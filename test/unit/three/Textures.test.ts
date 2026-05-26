@@ -6,22 +6,42 @@ import {
   createTextureResolver,
   defaultSharedToonTexturePath,
   getDefaultToonGradientMap,
+  isMmdDdsTexturePath,
   normalizeMmdTexturePath,
   resolveMappedTexture,
   resolveMmdToonTextureReference
 } from "../../../src/three/index.js";
 import {
   configureMmdTexture,
+  evaluateMmdTextureAlphaGeometry,
   evaluateMmdTextureAlphaRgba,
   evaluateMmdTextureTransparencySamples,
   rotateMmdToonTexture
 } from "../../../src/three/textures.js";
+
+function createAlphaEvaluationGeometry(materialIndex = 0): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 0.25, 0, 0, 0.25], 2));
+  geometry.setIndex([0, 1, 2]);
+  geometry.addGroup(0, 3, materialIndex);
+  return geometry;
+}
+
+function createRgbaTexture(data: Uint8Array, width: number, height: number): THREE.DataTexture {
+  return new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+}
 
 describe("MMD texture path utilities", () => {
   it("normalizes Windows separators and leading current-directory segments", () => {
     expect(normalizeMmdTexturePath("textures\\body.bmp")).toBe("textures/body.bmp");
     expect(normalizeMmdTexturePath("./textures\\face.bmp")).toBe("textures/face.bmp");
     expect(normalizeMmdTexturePath(".//textures\\toon\\toon01.bmp")).toBe("textures/toon/toon01.bmp");
+  });
+
+  it("detects DDS texture paths case-insensitively", () => {
+    expect(isMmdDdsTexturePath("skin.DDS")).toBe(true);
+    expect(isMmdDdsTexturePath("skin.dds")).toBe(true);
+    expect(isMmdDdsTexturePath("skin.png")).toBe(false);
   });
 
   it("resolves texture maps with normalized case-insensitive paths", () => {
@@ -144,6 +164,58 @@ describe("MMD texture path utilities", () => {
     ]);
 
     expect(evaluateMmdTextureAlphaRgba(rgba)).toBe("opaque");
+  });
+
+  it("keeps RGBA and geometry-aware alpha evaluation in the same alpha direction", () => {
+    const rgba = new Uint8Array(4 * 4 * 4);
+    for (let index = 0; index < 4 * 4; index += 1) {
+      rgba[index * 4] = 255;
+      rgba[index * 4 + 1] = 255;
+      rgba[index * 4 + 2] = 255;
+      rgba[index * 4 + 3] = 100;
+    }
+    const texture = createRgbaTexture(rgba, 4, 4);
+
+    expect(evaluateMmdTextureAlphaRgba(rgba)).toBe("alphaBlend");
+    expect(evaluateMmdTextureAlphaGeometry(texture, createAlphaEvaluationGeometry(), 0)).toBe(
+      "alphaBlend"
+    );
+  });
+
+  it("does not classify transparent UV samples as opaque in geometry-aware alpha evaluation", () => {
+    const rgba = new Uint8Array(4 * 4 * 4);
+    for (let index = 0; index < 4 * 4; index += 1) {
+      rgba[index * 4] = 255;
+      rgba[index * 4 + 1] = 255;
+      rgba[index * 4 + 2] = 255;
+      rgba[index * 4 + 3] = 255;
+    }
+    rgba[3] = 0;
+    rgba[7] = 0;
+    rgba[19] = 0;
+    rgba[23] = 0;
+    const texture = createRgbaTexture(rgba, 4, 4);
+
+    expect(evaluateMmdTextureAlphaGeometry(texture, createAlphaEvaluationGeometry(), 0)).not.toBe(
+      "opaque"
+    );
+  });
+
+  it("ignores transparent atlas padding outside rasterized material UVs", () => {
+    const rgba = new Uint8Array(4 * 4 * 4);
+    for (let index = 0; index < 4 * 4; index += 1) {
+      rgba[index * 4] = 255;
+      rgba[index * 4 + 1] = 255;
+      rgba[index * 4 + 2] = 255;
+      rgba[index * 4 + 3] = 255;
+    }
+    rgba[(3 * 4 + 3) * 4 + 3] = 0;
+    const texture = createRgbaTexture(rgba, 4, 4);
+
+    expect(evaluateMmdTextureAlphaRgba(rgba)).toBe("alphaTest");
+    expect(evaluateMmdTextureAlphaGeometry(texture, createAlphaEvaluationGeometry(), 0)).toBe(
+      "opaque"
+    );
   });
 
   it("classifies soft transparency ramps as alpha blending", () => {

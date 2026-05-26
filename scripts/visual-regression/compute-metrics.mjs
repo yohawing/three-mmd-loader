@@ -19,6 +19,11 @@ const profiles = {
     manifestPath: path.join(__dirname, "real-models.manifest.json"),
     root: path.join(visualRoot, "real-models"),
     caseKey: "name"
+  },
+  "generated-pmx": {
+    manifestPath: path.join(__dirname, "generated-pmx.manifest.json"),
+    root: path.join(visualRoot, "generated-pmx"),
+    caseKey: "name"
   }
 };
 const defaultThresholds = { mean: 0.03, p95: 0.12 };

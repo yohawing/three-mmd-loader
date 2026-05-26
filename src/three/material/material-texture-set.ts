@@ -19,6 +19,11 @@ export interface MmdDefaultMaterialTransparencyOptions {
   readonly geometryAwareAlpha?: boolean;
 }
 
+const geometryAlphaCache = new WeakMap<
+  THREE.Texture,
+  WeakMap<THREE.BufferGeometry, Map<number, MmdMaterialTransparencyMode | undefined>>
+>();
+
 export async function loadMmdDefaultMaterialTextureSet(
   material: MaterialInfo,
   materialIndex: number,
@@ -26,7 +31,8 @@ export async function loadMmdDefaultMaterialTextureSet(
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
   textureLoader?: ThreeMmdTextureLoader,
-  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  ddsLoader?: ThreeMmdTextureLoader
 ): Promise<MmdDefaultMaterialTextureSet> {
   const shouldLoadSphereTexture = material.sphereMode !== "none";
   const [texture, gradientMap, sphereTexture] = await Promise.all([
@@ -39,7 +45,8 @@ export async function loadMmdDefaultMaterialTextureSet(
       textureResolver,
       textureDiagnostics,
       textureLoader,
-      textureCache
+      textureCache,
+      ddsLoader
     ),
     textureAlpha.loadToonTexture(
       material,
@@ -48,7 +55,8 @@ export async function loadMmdDefaultMaterialTextureSet(
       textureResolver,
       textureDiagnostics,
       textureLoader,
-      textureCache
+      textureCache,
+      ddsLoader
     ),
     shouldLoadSphereTexture
       ? textureAlpha.loadMaterialTextureWithDiagnostics(
@@ -60,7 +68,8 @@ export async function loadMmdDefaultMaterialTextureSet(
           textureResolver,
           textureDiagnostics,
           textureLoader,
-          textureCache
+          textureCache,
+          ddsLoader
         )
       : undefined
   ]);
@@ -83,20 +92,30 @@ export function evaluateMmdDefaultMaterialTransparency(
   const textureMetadataTransparencyMode = texture?.userData.mmdTextureAlphaMode as
     | MmdMaterialTransparencyMode
     | undefined;
+  const textureAlphaSource = texture?.userData.mmdTextureAlphaSource as string | undefined;
+  const pmxTransparencyMode = mmdMaterialTransparencyMode(material, !!texture);
+  const pmxOpaque = pmxTransparencyMode === "opaque";
+  const canUseTextureAlphaForOpaqueMaterial =
+    textureAlphaSource !== "tga" || isLikelyMmdAlphaOverlayMaterial(material);
+  const shouldUseTextureMetadata =
+    textureMetadataTransparencyMode !== undefined &&
+    (!pmxOpaque || textureAlphaSource !== "tga");
   const needsTextureTransparencyScan =
-    textureMetadataTransparencyMode === undefined &&
-    (!!options.geometryAwareAlpha ||
-      material.diffuse[3] < 1 ||
-      (material.flags as { alphaTest?: boolean }).alphaTest === true ||
-      morphAlphaTransparent);
-  const textureTransparencyMode =
-    textureMetadataTransparencyMode ??
+    !shouldUseTextureMetadata &&
+    (options.geometryAwareAlpha
+      ? pmxOpaque && canUseTextureAlphaForOpaqueMaterial
+      : pmxTransparencyMode !== "opaque");
+  const rawTextureTransparencyMode =
+    (shouldUseTextureMetadata ? textureMetadataTransparencyMode : undefined) ??
     (texture && needsTextureTransparencyScan
       ? (options.geometryAwareAlpha
-        ? (textureAlpha.evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex) ??
-          textureAlpha.evaluateMmdTextureAlphaTexture(texture))
+        ? evaluateCachedMmdTextureAlphaGeometry(texture, geometry, materialIndex)
         : textureAlpha.evaluateMmdTextureAlphaTexture(texture))
       : undefined);
+  const textureTransparencyMode =
+    rawTextureTransparencyMode === "alphaTest" && isLikelyMmdSoftAlphaOverlayMaterial(material)
+      ? "alphaBlend"
+      : rawTextureTransparencyMode;
   const baseTransparencyMode = mmdMaterialTransparencyMode(
     material,
     !!texture,
@@ -111,8 +130,51 @@ export function evaluateMmdDefaultMaterialTransparency(
         ? textureTransparencyMode
         : "opaque";
   return {
-    transparencyMode: morphAlphaTransparent ? "alphaBlend" : transparencyMode,
+    transparencyMode,
     textureTransparencyMode,
     morphAlphaTransparent
   };
+}
+
+function isLikelyMmdAlphaOverlayMaterial(material: MaterialInfo): boolean {
+  const materialName = `${material.name} ${material.englishName}`.toLowerCase();
+  if (/(hair\s*shadow|hairshadow|shadow|shade|髪影|髪の影|影)/u.test(materialName)) {
+    return true;
+  }
+  return (
+    !material.flags.groundShadow &&
+    !material.flags.selfShadowMap &&
+    !material.flags.selfShadow &&
+    !material.flags.edge
+  );
+}
+
+function isLikelyMmdSoftAlphaOverlayMaterial(material: MaterialInfo): boolean {
+  const materialName = `${material.name} ${material.englishName}`.toLowerCase();
+  return /(hair\s*shadow|hairshadow|shadow|shade|cheek|blush|髪影|髪の影|影|頬|ほほ|チーク)/u.test(
+    materialName
+  );
+}
+
+function evaluateCachedMmdTextureAlphaGeometry(
+  texture: THREE.Texture,
+  geometry: THREE.BufferGeometry,
+  materialIndex: number
+): MmdMaterialTransparencyMode | undefined {
+  let geometryCache = geometryAlphaCache.get(texture);
+  if (!geometryCache) {
+    geometryCache = new WeakMap();
+    geometryAlphaCache.set(texture, geometryCache);
+  }
+  let materialCache = geometryCache.get(geometry);
+  if (!materialCache) {
+    materialCache = new Map();
+    geometryCache.set(geometry, materialCache);
+  }
+  if (materialCache.has(materialIndex)) {
+    return materialCache.get(materialIndex);
+  }
+  const alphaMode = textureAlpha.evaluateMmdTextureAlphaGeometry(texture, geometry, materialIndex);
+  materialCache.set(materialIndex, alphaMode);
+  return alphaMode;
 }

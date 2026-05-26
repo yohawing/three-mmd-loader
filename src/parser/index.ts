@@ -1,6 +1,15 @@
 export { detectModelFormat } from "./formatDetection.js";
 export type { MmdModelFormat } from "./formatDetection.js";
-export type { MmdAnimation, MmdPose } from "./model/modelTypes.js";
+export type {
+  InitCoreOptions,
+  MmdAnimation,
+  MmdCore,
+  MmdModel,
+  MmdPose,
+  VmdBoneTrack,
+  VmdMorphTrack
+} from "./model/modelTypes.js";
+export { FallbackCore, initCore, initCoreWithFallback } from "./wasm/index.js";
 export { parsePmdMetadata, parsePmdSectionInventory } from "./pmd/index.js";
 export type {
   PmdHeader,
@@ -21,6 +30,21 @@ export type {
   PmxSectionCounts,
   PmxTextEncoding
 } from "./pmx/index.js";
+export {
+  createPmmScenePlan,
+  createPmmStaticPreviewPlan,
+  parsePmmManifest,
+  resolvePmmAssetPath,
+  resolvePmmAssetReference
+} from "./pmm/index.js";
+export type {
+  PmmAssetReference,
+  PmmAssetResolution,
+  PmmAssetResolutionOptions,
+  PmmManifest,
+  PmmScenePlan,
+  PmmStaticPreviewPlan
+} from "./pmm/index.js";
 export { parseVmd, parseVmdMetadata, parseVmdSectionInventory } from "./vmd/index.js";
 export type {
   VmdMetadata,
@@ -29,7 +53,13 @@ export type {
   VmdSectionName,
   VmdSectionRecord
 } from "./vmd/index.js";
-export { parseVpd, parseVpdMetadata, parseVpdPose, parseVpdPoseInventory } from "./vpd/index.js";
+export {
+  parseVpd,
+  parseVpdMetadata,
+  parseVpdPose,
+  parseVpdPoseInventory,
+  vpdPoseToAnimation
+} from "./vpd/index.js";
 export type {
   VpdBoneBlockInventory,
   VpdBoneCountMismatch,

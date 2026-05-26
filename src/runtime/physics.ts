@@ -207,31 +207,35 @@ function readRuntimeExternalPhysics(mesh: THREE.SkinnedMesh): RuntimeExternalPhy
       );
     });
   const joints = Array.isArray(raw?.joints)
-    ? raw.joints.filter(isRuntimeExternalJoint).flatMap((joint, index) => {
-        const rigidBodyIndexA = rigidBodyIndexMap.get(joint.rigidBodyIndexA);
-        const rigidBodyIndexB = rigidBodyIndexMap.get(joint.rigidBodyIndexB);
-        if (rigidBodyIndexA === undefined || rigidBodyIndexB === undefined) {
-          return [];
-        }
-        return [
-          mapLegacyMmdJointToPhysicsJoint(
-            {
-              ...joint,
-              rigidBodyIndexA,
-              rigidBodyIndexB,
-              position: [...joint.position],
-              rotation: [...joint.rotation],
-              translationLowerLimit: [...joint.translationLowerLimit],
-              translationUpperLimit: [...joint.translationUpperLimit],
-              rotationLowerLimit: [...joint.rotationLowerLimit],
-              rotationUpperLimit: [...joint.rotationUpperLimit],
-              springTranslationFactor: [...joint.springTranslationFactor],
-              springRotationFactor: [...joint.springRotationFactor]
-            },
-            index
-          )
-        ];
-      })
+    ? raw.joints.filter(isRuntimeExternalJoint).reduce<ReturnType<typeof mapLegacyMmdJointToPhysicsJoint>[]>(
+        (mappedJoints, joint) => {
+          const rigidBodyIndexA = rigidBodyIndexMap.get(joint.rigidBodyIndexA);
+          const rigidBodyIndexB = rigidBodyIndexMap.get(joint.rigidBodyIndexB);
+          if (rigidBodyIndexA === undefined || rigidBodyIndexB === undefined) {
+            return mappedJoints;
+          }
+          mappedJoints.push(
+            mapLegacyMmdJointToPhysicsJoint(
+              {
+                ...joint,
+                rigidBodyIndexA,
+                rigidBodyIndexB,
+                position: [...joint.position],
+                rotation: [...joint.rotation],
+                translationLowerLimit: [...joint.translationLowerLimit],
+                translationUpperLimit: [...joint.translationUpperLimit],
+                rotationLowerLimit: [...joint.rotationLowerLimit],
+                rotationUpperLimit: [...joint.rotationUpperLimit],
+                springTranslationFactor: [...joint.springTranslationFactor],
+                springRotationFactor: [...joint.springRotationFactor]
+              },
+              mappedJoints.length
+            )
+          );
+          return mappedJoints;
+        },
+        []
+      )
     : [];
   return {
     bones,

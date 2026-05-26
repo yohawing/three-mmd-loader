@@ -96,6 +96,28 @@ describe("parseVmdMetadata", () => {
     expect(() => parseVmdMetadata(broken)).toThrow("Unexpected end of buffer");
   });
 
+  it("keeps non-count tail bytes as trailing data after optional VMD sections", () => {
+    const metadata = parseVmdMetadata(
+      createVmdMetadataFixture({
+        counts: {
+          bones: 0,
+          morphs: 0,
+          cameras: 0,
+          lights: 0
+        },
+        includeSelfShadowCount: false,
+        includePropertyCount: false,
+        trailingBytes: createCameraFramePayloadWithoutCount()
+      })
+    );
+
+    expect(metadata.counts.selfShadows).toBe(0);
+    expect(metadata.counts.properties).toBe(0);
+    // The leading u32(0) is a valid self-shadow count and is consumed; the
+    // remaining non-count bytes are preserved as trailing data.
+    expect(metadata.trailingBytes).toBe(49);
+  });
+
   it.each([
     ["bone", 50],
     ["morph", 54],
@@ -283,6 +305,7 @@ interface VmdMetadataFixtureOptions {
   modelName?: string;
   includeSelfShadowCount?: boolean;
   includePropertyCount?: boolean;
+  trailingBytes?: Uint8Array;
   counts?: Partial<{
     bones: number;
     morphs: number;
@@ -333,6 +356,36 @@ function createVmdMetadataFixture(options: VmdMetadataFixtureOptions): Uint8Arra
       zeros(ikCount * 21);
     }
   }
+
+  if (options.trailingBytes) {
+    bytes.push(...options.trailingBytes);
+  }
+
+  return new Uint8Array(bytes);
+}
+
+function createCameraFramePayloadWithoutCount(): Uint8Array {
+  const bytes: number[] = [];
+  const u32 = (value: number) => {
+    const buffer = new ArrayBuffer(4);
+    new DataView(buffer).setUint32(0, value, true);
+    bytes.push(...new Uint8Array(buffer));
+  };
+  const f32 = (value: number) => {
+    const buffer = new ArrayBuffer(4);
+    new DataView(buffer).setFloat32(0, value, true);
+    bytes.push(...new Uint8Array(buffer));
+  };
+
+  u32(0);
+  f32(-35);
+  f32(0);
+  f32(8.8);
+  f32(5.1);
+  f32(-0.28);
+  bytes.push(...Array.from({ length: 24 }, () => 0x14));
+  u32(45);
+  bytes.push(0);
 
   return new Uint8Array(bytes);
 }

@@ -1,0 +1,3 @@
+[submodule "nanoem"]
+	path = native/third_party/nanoem
+	url = https://github.com/yohawing/nanoem.git

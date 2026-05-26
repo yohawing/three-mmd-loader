@@ -320,14 +320,17 @@ export function evaluateMmdTextureAlphaGeometry(
       const a = Number(indexArray?.[offset] ?? offset);
       const b = Number(indexArray?.[offset + 1] ?? offset + 1);
       const c = Number(indexArray?.[offset + 2] ?? offset + 2);
-      recordRasterizedUvTriangleTransparency(
+      recordRasterizedUvTriangleAlpha(
         stats,
         rgba.data,
         rgba.width,
         rgba.height,
-        [uvAttribute.getX(a), uvAttribute.getY(a)],
-        [uvAttribute.getX(b), uvAttribute.getY(b)],
-        [uvAttribute.getX(c), uvAttribute.getY(c)],
+        uvAttribute.getX(a),
+        uvAttribute.getY(a),
+        uvAttribute.getX(b),
+        uvAttribute.getY(b),
+        uvAttribute.getX(c),
+        uvAttribute.getY(c),
         resolution
       );
     }
@@ -345,7 +348,8 @@ export async function loadToonTexture(
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
   textureLoader?: ThreeMmdTextureLoader,
-  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  ddsLoader?: ThreeMmdTextureLoader
 ): Promise<THREE.Texture | undefined> {
   if (!material.toonTexturePath && material.sharedToonIndex === undefined) {
     return getDefaultToonGradientMap();
@@ -357,33 +361,51 @@ export async function loadToonTexture(
   const bundledSharedToonTexture = toonTexture.shared
     ? resolveBundledSharedToonTexture(toonTexture.path)
     : undefined;
-  const texture = bundledSharedToonTexture
-    ? await loadResolvedTexture(
-        bundledSharedToonTexture,
-        toonTexture.path,
-        undefined,
-        textureLoader,
-        textureCache,
-        "toon",
-        modelUrl
-      )
-    : await loadMaterialTexture(
-        toonTexture.path,
-        toonTexture.textureInfo,
-        modelUrl,
-        textureResolver,
-        textureLoader,
-        textureCache,
-        "toon"
-      );
-  if (!texture && material.toonTexturePath) {
+  let unsupportedFormat = false;
+  let texture: THREE.Texture | undefined;
+  if (bundledSharedToonTexture) {
+    texture = await loadResolvedTexture(
+      bundledSharedToonTexture,
+      toonTexture.path,
+      undefined,
+      textureLoader,
+      textureCache,
+      "toon",
+      modelUrl
+    );
+  } else {
+    const result = await loadMaterialTexture(
+      toonTexture.path,
+      toonTexture.textureInfo,
+      modelUrl,
+      textureResolver,
+      textureLoader,
+      textureCache,
+      "toon",
+      ddsLoader
+    );
+    texture = result.texture;
+    unsupportedFormat = result.unsupportedFormat === true;
+  }
+  if (unsupportedFormat && material.toonTexturePath) {
     textureDiagnostics.push({
       level: "warning",
-      code: "TEXTURE_RESOLVE_FAILED",
+      code: "TEXTURE_FORMAT_UNSUPPORTED",
       materialIndex,
       textureKind: "toon",
       path: material.toonTexturePath
     });
+  }
+  if (!texture && material.toonTexturePath) {
+    if (!unsupportedFormat) {
+      textureDiagnostics.push({
+        level: "warning",
+        code: "TEXTURE_RESOLVE_FAILED",
+        materialIndex,
+        textureKind: "toon",
+        path: material.toonTexturePath
+      });
+    }
   }
   if (
     !texture &&
@@ -476,17 +498,30 @@ export async function loadMaterialTextureWithDiagnostics(
   textureResolver: TextureResolver | undefined,
   textureDiagnostics: TextureLoadDiagnostic[],
   textureLoader?: ThreeMmdTextureLoader,
-  textureCache?: Map<string, Promise<THREE.Texture | undefined>>
+  textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
+  ddsLoader?: ThreeMmdTextureLoader
 ): Promise<THREE.Texture | undefined> {
-  const texture = await loadMaterialTexture(
+  const result = await loadMaterialTexture(
     texturePath,
     textureInfo,
     modelUrl,
     textureResolver,
     textureLoader,
     textureCache,
-    textureKind
+    textureKind,
+    ddsLoader
   );
+  const texture = result.texture;
+  if (result.unsupportedFormat && texturePath) {
+    textureDiagnostics.push({
+      level: "warning",
+      code: "TEXTURE_FORMAT_UNSUPPORTED",
+      materialIndex,
+      textureKind,
+      path: texturePath
+    });
+    return undefined;
+  }
   if (!texture && texturePath) {
     textureDiagnostics.push({
       level: "warning",
@@ -613,6 +648,10 @@ export function isMmdBmpLikeTexturePath(texturePath: string): boolean {
 
 export function isMmdTgaLikeTexturePath(texturePath: string): boolean {
   return /\.tga$/i.test(texturePath);
+}
+
+export function isMmdDdsTexturePath(texturePath: string): boolean {
+  return /\.dds(?:[?#].*)?$/i.test(texturePath);
 }
 
 export function createTextureResolver(
@@ -743,32 +782,69 @@ async function loadMaterialTexture(
   textureResolver: TextureResolver | undefined,
   textureLoader?: ThreeMmdTextureLoader,
   textureCache?: Map<string, Promise<THREE.Texture | undefined>>,
-  cacheNamespace = "material"
-): Promise<THREE.Texture | undefined> {
+  cacheNamespace = "material",
+  ddsLoader?: ThreeMmdTextureLoader
+): Promise<{ texture?: THREE.Texture; unsupportedFormat?: boolean }> {
   if (!texturePath) {
-    return undefined;
+    return {};
   }
   const resolved = textureResolver
     ? await textureResolver.resolve(texturePath, modelUrl)
     : resolveAdjacentTexture(texturePath, modelUrl);
   if (!resolved) {
-    return undefined;
+    return {};
+  }
+  const resolvedIsDds = isResolvedMmdDdsTexture(texturePath, resolved);
+  if (resolvedIsDds && !ddsLoader) {
+    return { unsupportedFormat: true };
   }
   if (isMmdTgaLikeTexturePath(texturePath)) {
     const tgaTexture = await loadMmdTgaTexture(resolved, textureInfo);
     if (tgaTexture) {
-      return tgaTexture;
+      return { texture: tgaTexture };
     }
   }
-  return loadResolvedTexture(
+  const texture = await loadResolvedTexture(
     resolved,
     texturePath,
     textureInfo,
-    textureLoader,
+    resolvedIsDds ? ddsLoader : textureLoader,
     textureCache,
     cacheNamespace,
     modelUrl
   );
+  return { texture };
+}
+
+function isResolvedMmdDdsTexture(texturePath: string, resolved: string | URL | Blob): boolean {
+  if (typeof resolved === "string") {
+    return isResolvedPathDds(texturePath, resolved);
+  }
+  if (typeof Blob !== "undefined" && resolved instanceof Blob) {
+    const fileName =
+      typeof File !== "undefined" && resolved instanceof File ? resolved.name : undefined;
+    if (fileName) {
+      return isMmdDdsTexturePath(fileName);
+    }
+    if (resolved.type) {
+      return /dds/i.test(resolved.type);
+    }
+    return isMmdDdsTexturePath(texturePath);
+  }
+  if (resolved instanceof URL) {
+    return isResolvedPathDds(texturePath, resolved.pathname);
+  }
+  return false;
+}
+
+function isResolvedPathDds(texturePath: string, resolvedPath: string): boolean {
+  if (isMmdDdsTexturePath(resolvedPath)) {
+    return true;
+  }
+  if (/\.(?:bmp|gif|jpe?g|png|tga|webp)(?:[?#].*)?$/i.test(resolvedPath)) {
+    return false;
+  }
+  return isMmdDdsTexturePath(texturePath);
 }
 
 async function loadResolvedTexture(
@@ -868,6 +944,7 @@ async function loadMmdTgaTexture(
     }
     const texture = new THREE.DataTexture(image.data, image.width, image.height, THREE.RGBAFormat);
     texture.type = THREE.UnsignedByteType;
+    texture.userData.mmdTextureAlphaSource = "tga";
     texture.userData.mmdTextureAlphaMode = image.hasAlpha
       ? evaluateMmdTextureAlphaRgba(image.data)
       : "opaque";
@@ -1108,28 +1185,30 @@ function sampleRgbaAlphaByUv(
   return rgba[(y * width + x) * 4 + 3] ?? 255;
 }
 
-function recordRasterizedUvTriangleTransparency(
+function recordRasterizedUvTriangleAlpha(
   stats: AlphaStats,
   rgba: ArrayLike<number>,
   width: number,
   height: number,
-  uvA: readonly [number, number],
-  uvB: readonly [number, number],
-  uvC: readonly [number, number],
+  uvAX: number,
+  uvAY: number,
+  uvBX: number,
+  uvBY: number,
+  uvCX: number,
+  uvCY: number,
   resolution: number
 ): void {
-  const toPoint = (uv: readonly [number, number]): [number, number] => [
-    wrapUnit(uv[0]) * resolution,
-    wrapUnit(uv[1]) * resolution
-  ];
-  const a = toPoint(uvA);
-  const b = toPoint(uvB);
-  const c = toPoint(uvC);
-  const minX = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])));
-  const maxX = Math.min(resolution - 1, Math.ceil(Math.max(a[0], b[0], c[0])));
-  const minY = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1])));
-  const maxY = Math.min(resolution - 1, Math.ceil(Math.max(a[1], b[1], c[1])));
-  const denominator = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+  const ax = wrapUnit(uvAX) * resolution;
+  const ay = wrapUnit(uvAY) * resolution;
+  const bx = wrapUnit(uvBX) * resolution;
+  const by = wrapUnit(uvBY) * resolution;
+  const cx = wrapUnit(uvCX) * resolution;
+  const cy = wrapUnit(uvCY) * resolution;
+  const minX = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
+  const maxX = Math.min(resolution - 1, Math.ceil(Math.max(ax, bx, cx)));
+  const minY = Math.max(0, Math.floor(Math.min(ay, by, cy)));
+  const maxY = Math.min(resolution - 1, Math.ceil(Math.max(ay, by, cy)));
+  const denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
   if (Math.abs(denominator) < 1e-9) {
     return;
   }
@@ -1137,14 +1216,11 @@ function recordRasterizedUvTriangleTransparency(
     for (let x = minX; x <= maxX; x += 1) {
       const px = x + 0.5;
       const py = y + 0.5;
-      const wA = ((b[1] - c[1]) * (px - c[0]) + (c[0] - b[0]) * (py - c[1])) / denominator;
-      const wB = ((c[1] - a[1]) * (px - c[0]) + (a[0] - c[0]) * (py - c[1])) / denominator;
+      const wA = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / denominator;
+      const wB = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / denominator;
       const wC = 1 - wA - wB;
       if (wA >= 0 && wB >= 0 && wC >= 0) {
-        recordAlphaSample(
-          stats,
-          255 - sampleRgbaAlphaByUv(rgba, width, height, px / resolution, py / resolution)
-        );
+        recordAlphaSample(stats, sampleRgbaAlphaByUv(rgba, width, height, px / resolution, py / resolution));
       }
     }
   }

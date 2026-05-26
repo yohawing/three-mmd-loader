@@ -16,6 +16,7 @@
 //   node scripts/check-fixtures.mjs --limit 20 ../data/fixtures.json
 //   FIXTURES_JSON=path/to/fixtures.json node ...    # override fixture index
 
+import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { resolve, dirname, relative, basename } from "node:path";
@@ -92,6 +93,12 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const fixturesPath = args.fixturesPath
     ?? (process.env.FIXTURES_JSON ? resolve(process.env.FIXTURES_JSON) : defaultFixturesPath);
+  // Local corpus inventories are gitignored and absent on fresh clones / CI;
+  // treat a missing inventory as an opt-in skip rather than an error.
+  if (!existsSync(fixturesPath)) {
+    console.log(`Inventory not found, skipping: ${relative(projectRoot, fixturesPath)}`);
+    return;
+  }
   const fixtures = JSON.parse(await readFile(fixturesPath, "utf8"));
   const fixturesRoot = typeof fixtures.basePath === "string"
     ? resolve(dirname(fixturesPath), fixtures.basePath)
@@ -140,6 +147,18 @@ async function main() {
           }
         }
         record.summary = summarizeParsed(category, parsed);
+        if (THREE_MODEL_CATEGORIES.has(category)) {
+          const invariantViolations = checkModelInvariants(parsed);
+          if (invariantViolations.length > 0) {
+            record.diagnostics = [
+              ...(Array.isArray(record.diagnostics) ? record.diagnostics : []),
+              ...invariantViolations
+            ];
+            if (record.status !== "fail") {
+              record.status = "warn-errors";
+            }
+          }
+        }
         let modelData;
         if (args.three && THREE_MODEL_CATEGORIES.has(category)) {
           const textureReferences = collectMaterialTextureReferences(parsed);
@@ -542,6 +561,44 @@ function eulerXyzToQuaternion(euler) {
     rotation[2] / length,
     rotation[3] / length
   ];
+}
+
+// Cross-check parsed PMX/PMD array lengths against the metadata counts. A
+// consistent parser must keep typed-array sizes in lock-step with the reported
+// counts; a mismatch on a real-world model is a parser regression, so surface
+// it as an error-level diagnostic (visible, but does not abort the run).
+function checkModelInvariants(parsed) {
+  const counts = parsed?.metadata?.counts;
+  const geometry = parsed?.geometry;
+  if (!counts || !geometry) {
+    return [];
+  }
+
+  const violations = [];
+  const expect = (label, actual, expected) => {
+    if (typeof actual === "number" && actual !== expected) {
+      violations.push({
+        level: "error",
+        code: "GEOMETRY_COUNT_MISMATCH",
+        message: `${label}: expected ${expected}, got ${actual}`
+      });
+    }
+  };
+  const vertices = counts.vertices ?? 0;
+
+  expect("positions", geometry.positions?.length, vertices * 3);
+  expect("normals", geometry.normals?.length, vertices * 3);
+  expect("uvs", geometry.uvs?.length, vertices * 2);
+  expect("skinIndices", geometry.skinIndices?.length, vertices * 4);
+  expect("skinWeights", geometry.skinWeights?.length, vertices * 4);
+  expect("indices", geometry.indices?.length, (counts.faces ?? 0) * 3);
+  expect("materials", parsed?.materials?.length, counts.materials ?? 0);
+  expect("bones", parsed?.skeleton?.bones?.length, counts.bones ?? 0);
+  expect("morphs", parsed?.morphs?.length, counts.morphs ?? 0);
+  expect("rigidBodies", parsed?.rigidBodies?.length, counts.rigidBodies ?? 0);
+  expect("joints", parsed?.joints?.length, counts.joints ?? 0);
+
+  return violations;
 }
 
 function summarizeParsed(category, parsed) {

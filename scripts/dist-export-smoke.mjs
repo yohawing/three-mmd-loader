@@ -286,7 +286,9 @@ for (const loaderInstance of [loader, rootLoader, packageLoader, packageRootLoad
   const loadedPoseAnimation = await loaderInstance.loadPoseAnimation(vpdBytes, "smokePose");
   assert.equal(loadedPoseAnimation.name, "smokePose");
   assert.equal(loadedPoseAnimation.animation.metadata.counts.bones, 1);
-  assert.equal(loadedPoseAnimation.animation.boneTracks.center[0].translation[2], 2);
+  const centerTrack = loadedPoseAnimation.animation.boneTracks.center;
+  assert.equal(centerTrack.frames[0], 0);
+  assert.deepEqual(Array.from(centerTrack.translations.slice(0, 3)), [0, 1, 2]);
   await expectLoaderMethodRejectsEmptySource(loaderInstance, "loadAnimation");
   await expectLoaderMethodRejectsEmptySource(loaderInstance, "loadPose");
   await expectLoaderMethodRejectsEmptySource(loaderInstance, "loadPoseAnimation");

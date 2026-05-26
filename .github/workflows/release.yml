@@ -15,6 +15,9 @@ on:
 permissions:
   contents: read
 
+env:
+  EMSDK_VERSION: "5.0.7"
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -27,14 +30,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Setup Emscripten
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$RUNNER_TEMP/emsdk/emsdk" activate "$EMSDK_VERSION"
+          echo "EMSDK=$RUNNER_TEMP/emsdk" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/emsdk" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
+
+      - name: Build WASM wrapper
+        run: npm run build:wasm
 
       - name: Lint
         run: npm run lint
@@ -44,6 +62,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Check fixtures
+        run: npm run check:fixtures
 
       - name: Smoke dist exports
         run: npm run smoke:dist
@@ -113,6 +134,7 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - name: Download package artifact
         uses: actions/download-artifact@v4

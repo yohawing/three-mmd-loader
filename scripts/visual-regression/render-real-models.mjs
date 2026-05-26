@@ -13,7 +13,7 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const manifestPath = path.join(__dirname, "real-models.manifest.json");
 const visualRoot = path.join(repoRoot, "test-results", "visual", "real-models");
 const supportedModes = new Set(["current", "baseline"]);
-const dataRootEnvName = "MMD_VIEWER_DATA_ROOT";
+const dataRootEnvName = "MMD_DATA_ROOT";
 
 const mimeTypes = new Map([
   [".js", "text/javascript; charset=utf-8"],
@@ -36,9 +36,9 @@ const mimeTypes = new Map([
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const dataRoot = process.env[dataRootEnvName];
+  const dataRoot = options.dataRoot ?? process.env[dataRootEnvName];
   if (!dataRoot) {
-    console.log(`Local real-model profile skipped: ${dataRootEnvName} is not set.`);
+    console.log(`Local real-model profile skipped: ${dataRootEnvName} is not set and --data-root was not provided.`);
     return;
   }
 
@@ -114,7 +114,7 @@ async function main() {
 }
 
 function parseArgs(args) {
-  const options = { mode: "current", caseName: undefined, outputDir: undefined, manifestPath };
+  const options = { mode: "current", caseName: undefined, outputDir: undefined, manifestPath, dataRoot: undefined };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -136,6 +136,11 @@ function parseArgs(args) {
 
     if (arg === "--manifest") {
       options.manifestPath = path.resolve(requireRawValue(args, (index += 1), arg));
+      continue;
+    }
+
+    if (arg === "--data-root") {
+      options.dataRoot = path.resolve(requireRawValue(args, (index += 1), arg));
       continue;
     }
 
@@ -380,7 +385,7 @@ function rendererHtml() {
               console.warn("Real-model texture diagnostic " + visualCase.name + ": " + diagnostic.code + " " + diagnostic.path);
             }
           }
-          scene.add(model.mesh);
+          scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes);
 
           if (visualCase.motionUrl !== undefined) {
             const { animation } = await loader.loadAnimation(await fetchBytes(visualCase.motionUrl));

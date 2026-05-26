@@ -1,7 +1,17 @@
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import { mmdWorldMatrixToThree } from "../../../src/three/index.js";
-import type { MmdWorldMatrixColumnMajorTuple } from "../../../src/three/index.js";
+import {
+  mmdWorldMatrixToThree,
+  syncMmdMaterialStates,
+  syncThreeMmdRuntimeToModel,
+  type MmdRuntimeMeshSyncSource,
+  type MmdWorldMatrixColumnMajorTuple
+} from "../../../src/three/index.js";
+import type {
+  MaterialRuntimeState,
+  MmdModel
+} from "../../../src/parser/model/modelTypes.js";
 
 describe("mmdWorldMatrixToThree", () => {
   it("converts a column-major MMD world matrix into Three.js coordinate space", () => {
@@ -63,3 +73,166 @@ describe("mmdWorldMatrixToThree", () => {
     );
   });
 });
+
+describe("syncThreeMmdRuntimeToModel", () => {
+  it("syncs sibling outline proxy materials returned by ThreeMmdModel", () => {
+    const mesh = createSkinnedMesh(new THREE.MeshBasicMaterial());
+    const outlineMaterial = new THREE.MeshBasicMaterial();
+    outlineMaterial.userData.mmdOutlineMaterial = {
+      sourceMaterialIndex: 0,
+      fallback: false
+    };
+    const outlineMesh = createSkinnedMesh(outlineMaterial);
+    const renderOrderMesh = createSkinnedMesh(new THREE.MeshBasicMaterial());
+    const runtime = createRuntimeSyncSource({
+      diffuse: [1, 1, 1, 1],
+      specular: [0, 0, 0],
+      specularPower: 1,
+      ambient: [0, 0, 0],
+      edgeColor: [0.25, 0.5, 0.75, 0.4],
+      edgeSize: 2.5,
+      textureFactor: [1, 1, 1, 1],
+      sphereTextureFactor: [1, 1, 1, 1],
+      toonTextureFactor: [1, 1, 1, 1]
+    });
+
+    syncThreeMmdRuntimeToModel(
+      createModelSkeleton(),
+      { mesh, outlineMeshes: [outlineMesh], renderOrderMeshes: [renderOrderMesh] },
+      runtime
+    );
+
+    expect(outlineMaterial.color).toEqual(new THREE.Color(0.25, 0.5, 0.75));
+    expect(outlineMaterial.opacity).toBeCloseTo(0.4);
+    expect(outlineMaterial.visible).toBe(true);
+    expect(outlineMaterial.userData.mmdOutlineMaterial.outlineWidth).toBeCloseTo(2.5);
+    expect(outlineMesh.visible).toBe(true);
+    expect(renderOrderMesh.visible).toBe(true);
+  });
+
+  it("applies runtime visibility to sibling proxy meshes", () => {
+    const mesh = createSkinnedMesh(new THREE.MeshBasicMaterial());
+    const outlineMaterial = new THREE.MeshBasicMaterial();
+    outlineMaterial.userData.mmdOutlineMaterial = {
+      sourceMaterialIndex: 0,
+      fallback: false
+    };
+    const outlineMesh = createSkinnedMesh(outlineMaterial);
+    const renderOrderMesh = createSkinnedMesh(new THREE.MeshBasicMaterial());
+
+    syncThreeMmdRuntimeToModel(
+      createModelSkeleton(),
+      { mesh, outlineMeshes: [outlineMesh], renderOrderMeshes: [renderOrderMesh] },
+      createRuntimeSyncSource(createMaterialRuntimeState(), false)
+    );
+
+    expect(mesh.visible).toBe(false);
+    expect(outlineMesh.visible).toBe(false);
+    expect(renderOrderMesh.visible).toBe(false);
+  });
+
+  it("syncs render-order proxy visibility without outline proxies", () => {
+    const mesh = createSkinnedMesh(new THREE.MeshBasicMaterial());
+    const renderOrderMesh = createSkinnedMesh(new THREE.MeshBasicMaterial());
+
+    syncThreeMmdRuntimeToModel(
+      createModelSkeleton(),
+      { mesh, renderOrderMeshes: [renderOrderMesh] },
+      createRuntimeSyncSource(createMaterialRuntimeState(), false)
+    );
+
+    expect(renderOrderMesh.visible).toBe(false);
+  });
+});
+
+describe("syncMmdMaterialStates", () => {
+  it("only enables transparent sorting for alpha-morph materials while their current alpha is below opaque", () => {
+    const material = new THREE.MeshToonMaterial({ transparent: false, opacity: 1 });
+    material.userData.mmdMaterial = {
+      transparencyMode: "opaque",
+      morphAlphaTransparent: true,
+      flags: {}
+    };
+
+    syncMmdMaterialStates(material, [
+      createMaterialRuntimeState({
+        diffuse: [1, 1, 1, 1]
+      })
+    ]);
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
+
+    syncMmdMaterialStates(material, [
+      createMaterialRuntimeState({
+        diffuse: [1, 1, 1, 0.25]
+      })
+    ]);
+    expect(material.transparent).toBe(true);
+    expect(material.opacity).toBeCloseTo(0.25);
+
+    syncMmdMaterialStates(material, [
+      createMaterialRuntimeState({
+        diffuse: [1, 1, 1, 1]
+      })
+    ]);
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
+  });
+});
+
+function createSkinnedMesh(material: THREE.Material): THREE.SkinnedMesh {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3));
+  const mesh = new THREE.SkinnedMesh(geometry, material);
+  const bone = new THREE.Bone();
+  mesh.add(bone);
+  mesh.bind(new THREE.Skeleton([bone]));
+  return mesh;
+}
+
+function createModelSkeleton(): Pick<MmdModel, "skeleton"> {
+  return {
+    skeleton: () => ({
+      bones: [
+        {
+          parentIndex: -1
+        }
+      ]
+    })
+  } as Pick<MmdModel, "skeleton">;
+}
+
+function createRuntimeSyncSource(
+  state: MaterialRuntimeState,
+  visible = true
+): MmdRuntimeMeshSyncSource {
+  return {
+    boneMatrices: () =>
+      new Float32Array([
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+      ]),
+    morphWeights: () => new Float32Array(),
+    propertyState: () => ({ visible }),
+    materialStates: () => [state]
+  };
+}
+
+function createMaterialRuntimeState(
+  overrides: Partial<MaterialRuntimeState> = {}
+): MaterialRuntimeState {
+  return {
+    diffuse: [1, 1, 1, 1],
+    specular: [0, 0, 0],
+    specularPower: 1,
+    ambient: [0, 0, 0],
+    edgeColor: [0, 0, 0, 1],
+    edgeSize: 1,
+    textureFactor: [1, 1, 1, 1],
+    sphereTextureFactor: [1, 1, 1, 1],
+    toonTextureFactor: [1, 1, 1, 1],
+    ...overrides
+  };
+}

@@ -43,7 +43,7 @@ export function findMmdMotionFiles(files: readonly File[]): File[] {
 }
 
 export function isMmdTextureFile(file: File): boolean {
-  return /\.(bmp|gif|jpe?g|png|tga|webp)$/i.test(file.name);
+  return /\.(bmp|dds|gif|jpe?g|png|tga|webp)$/i.test(file.name);
 }
 
 export function normalizeMmdRelativePath(path: string): string {

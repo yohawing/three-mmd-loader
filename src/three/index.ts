@@ -1,11 +1,12 @@
 import * as THREE from "three";
 
-import { parseVmd, parseVpd } from "../parser/index.js";
+import { FallbackCore, initCoreWithFallback } from "../parser/wasm/index.js";
+import { parseVpd } from "../parser/index.js";
+import type { MmdAnimation, MmdCore, MmdPose, VmdBoneTrack } from "../parser/model/modelTypes.js";
 import { DefaultMmdRuntime } from "../runtime/index.js";
 import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
-import type { MmdAnimation, MmdPose, VmdBoneFrame } from "../parser/model/modelTypes.js";
 import { createThreeBufferGeometry } from "./geometry.js";
-import { parseLoaderMmdModelData } from "./modelAssembly.js";
+import { createLoaderMmdModelDataFromModel } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
 import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 import {
@@ -18,9 +19,9 @@ import { isModelSource } from "./modelSource.js";
 import { readModelSourceBytes } from "./modelSource.js";
 import {
   createMmdMaterialRenderOrderMeshes,
-  createMmdOutlineMesh,
   createMmdOutlineMeshes
 } from "./outline.js";
+import { createLoaderPerformanceProfile } from "./performance.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
@@ -35,7 +36,11 @@ export {
 } from "./folder.js";
 export { isModelSource } from "./modelSource.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
-export { mmdWorldMatrixToThree, syncThreeMmdRuntimeToMesh } from "./runtime-sync.js";
+export {
+  mmdWorldMatrixToThree,
+  syncThreeMmdRuntimeToMesh,
+  syncThreeMmdRuntimeToModel
+} from "./runtime-sync.js";
 export { createThreeSkeleton } from "./skeleton.js";
 export {
   attachMmdMaterialMetadata,
@@ -58,9 +63,7 @@ export {
 export { syncMmdMaterialStates, syncMmdSpecularDirection } from "./material/material-sync.js";
 export {
   attachMmdOutlineExpansion,
-  computeMmdOutlineScale,
   createMmdMaterialRenderOrderMeshes,
-  createMmdOutlineMesh,
   createMmdOutlineMeshes,
   syncMmdOutlineMaterialStates
 } from "./outline.js";
@@ -74,6 +77,7 @@ export {
   createTextureResolver,
   defaultSharedToonTexturePath,
   getDefaultToonGradientMap,
+  isMmdDdsTexturePath,
   normalizeMmdTexturePath,
   resolveMappedTexture,
   resolveMmdToonTextureReference
@@ -98,7 +102,12 @@ export type {
   MmdOutlineOptions
 } from "./outline.js";
 export type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
-export type { MmdWorldMatrixBuffer, MmdWorldMatrixColumnMajorTuple } from "./runtime-sync.js";
+export type {
+  MmdRuntimeMeshSyncSource,
+  MmdWorldMatrixBuffer,
+  MmdWorldMatrixColumnMajorTuple,
+  ThreeMmdRuntimeSyncTarget
+} from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
 export type {
   MmdToonTextureMaterial,
@@ -112,13 +121,14 @@ export interface ThreeMmdLoaderOptions {
   readonly textureResolver?: TextureResolver;
   readonly textureMap?: TextureMap;
   readonly textureLoader?: ThreeMmdTextureLoader;
+  readonly ddsLoader?: ThreeMmdTextureLoader;
   readonly geometryAwareAlpha?: boolean;
   readonly runtime?: DefaultMmdRuntimeOptions;
+  readonly core?: MmdCore | Promise<MmdCore>;
 }
 
 export interface ThreeMmdLoadModelOptions {
   readonly outlines?: boolean;
-  readonly outlineMode?: "postOutline" | "mmdCompat";
   readonly frustumCulled?: boolean;
   readonly renderOrderProxies?: boolean;
 }
@@ -140,6 +150,7 @@ export type ThreeMmdModelSourceDescriptor =
     };
 
 export interface ThreeMmdModel {
+  readonly object: THREE.Group;
   readonly mesh: THREE.SkinnedMesh;
   readonly outlineMeshes: readonly THREE.SkinnedMesh[];
   readonly renderOrderMeshes: readonly THREE.SkinnedMesh[];
@@ -161,9 +172,16 @@ export interface ThreeMmdPose {
 
 export class ThreeMmdLoader {
   private readonly textureCache = new Map<string, Promise<THREE.Texture | undefined>>();
+  private corePromise: Promise<MmdCore> | undefined;
+  private fallbackCore: FallbackCore | undefined;
+  private readonly useExplicitCore: boolean;
 
   constructor(readonly options: ThreeMmdLoaderOptions = {}) {
     validateLoaderOptions(options);
+    this.useExplicitCore = options.core !== undefined;
+    if (options.core) {
+      this.corePromise = Promise.resolve(options.core);
+    }
   }
 
   async loadModel(
@@ -171,41 +189,102 @@ export class ThreeMmdLoader {
     options: ThreeMmdLoadModelOptions = {}
   ): Promise<ThreeMmdModel> {
     validateModelSource(source, "loadModel");
-    const bytes = await readModelSourceBytes(source);
-    const modelData = parseLoaderMmdModelData(bytes);
-    const mesh = createThreeMmdMesh(modelData);
-    const materials = normalizeMeshMaterials(mesh.material);
-    const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
-      textureResolver: this.options.textureResolver,
-      textureMap: this.options.textureMap,
-      textureLoader: this.options.textureLoader,
-      modelUrl: typeof source === "string" ? source : undefined,
-      geometry: mesh.geometry,
-      morphs: modelData.morphs,
-      geometryAwareAlpha: this.options.geometryAwareAlpha,
-      textureCache: this.textureCache
-    });
-    const renderOrder = computeMmdMaterialRenderOrder(
-      materials.map((material, materialIndex) => ({
-        materialIndex,
-        transparencyMode: material.userData.mmdMaterial?.transparencyMode ?? "opaque"
-      }))
-    );
-    mesh.userData.mmdMaterialRenderOrder = renderOrder;
-    syncMmdModelShadowFlags(mesh, modelData.materials);
-    if (options.frustumCulled !== undefined) {
-      mesh.frustumCulled = options.frustumCulled;
+    const profile = createLoaderPerformanceProfile(describeModelSourceForPerformance(source));
+    profile?.mark("start");
+    try {
+      const bytes = await readModelSourceBytes(source);
+      profile?.mark("bytes");
+      const core = await this.getCore();
+      const parsedModel = this.loadCoreModel(core, bytes);
+      const modelData = createLoaderMmdModelDataFromModel(parsedModel);
+      let parsedModelDisposed = false;
+      try {
+        profile?.mark("parsed");
+        const mesh = createThreeMmdMesh(modelData);
+        parsedModel.dispose?.();
+        parsedModelDisposed = true;
+        profile?.mark("mesh");
+        const materials = normalizeMeshMaterials(mesh.material);
+        const effectiveOutlines = options.outlines ?? true;
+        const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
+          textureResolver: this.options.textureResolver,
+          textureMap: this.options.textureMap,
+          textureLoader: this.options.textureLoader,
+          ddsLoader: this.options.ddsLoader,
+          modelUrl: typeof source === "string" ? source : undefined,
+          geometry: mesh.geometry,
+          morphs: modelData.morphs,
+          geometryAwareAlpha: this.options.geometryAwareAlpha || effectiveOutlines,
+          textureCache: this.textureCache
+        });
+        profile?.mark("textures");
+        const renderOrder = computeMmdMaterialRenderOrder(
+          materials.map((material, materialIndex) => ({
+            materialIndex,
+            transparencyMode: material.userData.mmdMaterial?.transparencyMode ?? "opaque"
+          }))
+        );
+        mesh.userData.mmdMaterialRenderOrder = renderOrder;
+        syncMmdModelShadowFlags(mesh, modelData.materials);
+        if (options.frustumCulled !== undefined) {
+          mesh.frustumCulled = options.frustumCulled;
+        }
+        profile?.mark("materials");
+        const model = createThreeMmdModel({
+          mesh,
+          runtime: new DefaultMmdRuntime(this.options.runtime),
+          source: createModelSourceDescriptor(source, bytes.byteLength),
+          textureDiagnostics,
+          materials: modelData.materials,
+          outlines: effectiveOutlines,
+          renderOrderProxies: options.renderOrderProxies ?? true
+        });
+        profile?.mark("assembled");
+        profile?.measure("read-bytes", "start", "bytes");
+        profile?.measure("parse-model", "bytes", "parsed");
+        profile?.measure("create-mesh", "parsed", "mesh");
+        profile?.measure("load-textures", "mesh", "textures");
+        profile?.measure("material-metadata", "textures", "materials");
+        profile?.measure("assemble-model", "materials", "assembled");
+        profile?.measure("total", "start", "assembled");
+        return model;
+      } finally {
+        if (!parsedModelDisposed) {
+          parsedModel.dispose?.();
+        }
+      }
+    } finally {
+      profile?.clear();
     }
-    return createThreeMmdModel({
-      mesh,
-      runtime: new DefaultMmdRuntime(this.options.runtime),
-      source: createModelSourceDescriptor(source, bytes.byteLength),
-      textureDiagnostics,
-      materials: modelData.materials,
-      outlines: options.outlines ?? true,
-      outlineMode: options.outlineMode ?? "postOutline",
-      renderOrderProxies: options.renderOrderProxies ?? false
-    });
+  }
+
+  private getCore(): Promise<MmdCore> {
+    this.corePromise ??= initCoreWithFallback();
+    return this.corePromise;
+  }
+
+  private loadCoreModel(core: MmdCore, bytes: Uint8Array) {
+    try {
+      return core.loadModel(bytes);
+    } catch (error) {
+      if (this.useExplicitCore) {
+        throw error;
+      }
+      this.fallbackCore ??= new FallbackCore();
+      return this.fallbackCore.loadModel(bytes);
+    }
+  }
+
+  private loadCoreVmd(core: MmdCore, bytes: Uint8Array): MmdAnimation {
+    try {
+      return core.loadVmd(bytes);
+    } catch (error) {
+      if (this.useExplicitCore) {
+        throw error;
+      }
+      this.fallbackCore ??= new FallbackCore();
+      return this.fallbackCore.loadVmd(bytes);
+    }
   }
 
   async loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation> {
@@ -214,7 +293,8 @@ export class ThreeMmdLoader {
     if (bytes.byteLength === 0) {
       throw createEmptySourceError("loadAnimation");
     }
-    const animation = parseVmd(bytes);
+    const core = await this.getCore();
+    const animation = this.loadCoreVmd(core, bytes);
     return {
       source,
       name: animation.metadata.modelName,
@@ -260,19 +340,9 @@ function createThreeMmdModel(options: {
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
   readonly outlines: boolean;
-  readonly outlineMode: "postOutline" | "mmdCompat";
   readonly renderOrderProxies: boolean;
 }): ThreeMmdModel {
-  const postOutlineMesh =
-    options.outlines && options.outlineMode === "postOutline"
-      ? createMmdOutlineMesh({
-          mesh: options.mesh,
-          materials: options.materials
-        })
-      : undefined;
-  const outlineMeshes = postOutlineMesh
-    ? [postOutlineMesh]
-    : options.outlines && options.outlineMode === "mmdCompat"
+  const outlineMeshes = options.outlines
     ? createMmdOutlineMeshes({
         mesh: options.mesh,
         materials: options.materials
@@ -282,17 +352,22 @@ function createThreeMmdModel(options: {
     syncMmdModelShadowFlags(outline, options.materials);
     outline.frustumCulled = options.mesh.frustumCulled;
   });
-  const renderOrderMeshes =
-    options.renderOrderProxies || (options.outlines && options.outlineMode === "mmdCompat")
-      ? createMmdMaterialRenderOrderMeshes({
-          mesh: options.mesh,
-          materials: options.materials
-        })
-      : [];
+  // MMD-compatible outlines need body proxies so body/outline draw in PMX
+  // material definition order: body0, outline0, body1, outline1.
+  const renderOrderMeshes = options.outlines && options.renderOrderProxies
+    ? createMmdMaterialRenderOrderMeshes({
+        mesh: options.mesh,
+        materials: options.materials
+      })
+    : [];
   if (renderOrderMeshes.length > 0) {
     options.mesh.geometry.setDrawRange(0, 0);
   }
+  const object = new THREE.Group();
+  object.name = options.mesh.name;
+  object.add(options.mesh, ...renderOrderMeshes, ...outlineMeshes);
   return {
+    object,
     mesh: options.mesh,
     outlineMeshes,
     renderOrderMeshes,
@@ -324,6 +399,22 @@ function createModelSourceDescriptor(
     kind: "bytes",
     byteLength
   };
+}
+
+function describeModelSourceForPerformance(source: ModelSource): string {
+  if (typeof source === "string") {
+    return `url:${source.split(/[\\/]/).at(-1) ?? "model"}`;
+  }
+  if (typeof File !== "undefined" && source instanceof File) {
+    return `file:${source.name || "model"}`;
+  }
+  if (source instanceof Uint8Array) {
+    return `bytes:${source.byteLength}`;
+  }
+  if (source instanceof ArrayBuffer) {
+    return `array-buffer:${source.byteLength}`;
+  }
+  return "model";
 }
 
 function createEmptySourceError(method: string): Error {
@@ -437,6 +528,7 @@ function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {
         links: bone.ik.links.map((link) => ({
           boneIndex: link.boneIndex,
           enabled: true,
+          fixedAxis: createRuntimeIkLinkFixedAxis(modelData, boneIndex, link.boneIndex),
           limitsKind:
             link.limits === undefined
               ? undefined
@@ -453,6 +545,31 @@ function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {
       };
     })
     .filter((chain): chain is NonNullable<typeof chain> => chain !== null);
+}
+
+function createRuntimeIkLinkFixedAxis(
+  modelData: LoaderMmdModelData,
+  chainBoneIndex: number,
+  boneIndex: number
+): [number, number, number] | undefined {
+  const chainBone = modelData.skeleton.bones[chainBoneIndex];
+  const bone = modelData.skeleton.bones[boneIndex];
+  const fixedAxis = bone?.fixedAxis;
+  if (!isHandTwistIkChain(chainBone) || !bone?.flags?.hasFixedAxis || !fixedAxis) {
+    return undefined;
+  }
+  return [normalizeSignedZero(-fixedAxis[0]), normalizeSignedZero(-fixedAxis[1]), normalizeSignedZero(fixedAxis[2])];
+}
+
+function normalizeSignedZero(value: number): number {
+  return Object.is(value, -0) ? 0 : value;
+}
+
+function isHandTwistIkChain(bone: LoaderMmdModelData["skeleton"]["bones"][number] | undefined): boolean {
+  return (
+    bone?.name.includes("手捩IK") === true ||
+    bone?.englishName.includes("lwr-arm-twistIK") === true
+  );
 }
 
 function createMorphTargetDictionary(
@@ -473,15 +590,16 @@ function createMorphTargetDictionary(
 }
 
 function createMmdAnimationFromPose(pose: MmdPose, name: string): MmdAnimation {
-  const boneTracks: Record<string, VmdBoneFrame[]> = {};
+  const boneTracks: MmdAnimation["boneTracks"] = {};
   for (const [boneName, bonePose] of Object.entries(pose.bones)) {
-    boneTracks[boneName] = [
-      {
-        frame: 0,
-        translation: bonePose.translation,
-        rotation: bonePose.rotation
-      }
-    ];
+    boneTracks[boneName] = {
+      packed: "bone",
+      frames: new Uint32Array([0]),
+      translations: new Float32Array(bonePose.translation),
+      rotations: new Float32Array(bonePose.rotation),
+      interpolations: new Float32Array(16),
+      physicsToggles: new Int8Array([-1])
+    } satisfies VmdBoneTrack;
   }
   return {
     kind: "vmd",
@@ -557,11 +675,27 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
     }
   }
 
+  if (options.ddsLoader !== undefined) {
+    if (typeof options.ddsLoader !== "object" || options.ddsLoader === null) {
+      throw new TypeError("ThreeMmdLoader ddsLoader must be an object");
+    }
+    if (typeof options.ddsLoader.load !== "function") {
+      throw new TypeError("ThreeMmdLoader ddsLoader.load must be a function");
+    }
+  }
+
   if (
     options.runtime !== undefined &&
     (typeof options.runtime !== "object" || options.runtime === null)
   ) {
     throw new TypeError("ThreeMmdLoader runtime options must be an object");
+  }
+
+  if (
+    options.core !== undefined &&
+    (typeof options.core !== "object" || options.core === null || Array.isArray(options.core))
+  ) {
+    throw new TypeError("ThreeMmdLoader core must be an object or Promise-like object");
   }
 }
 

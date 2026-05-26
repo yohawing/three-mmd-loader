@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**"]
+    ignores: ["dist/**", "native/third_party/**", "src/parser/wasm/generated/**"]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -24,13 +24,32 @@ export default tseslint.config(
     }
   },
   {
-    files: ["scripts/**/*.mjs"],
+    files: ["*.mjs", "scripts/**/*.mjs"],
     languageOptions: {
       globals: {
         URL: "readonly",
         console: "readonly",
+        performance: "readonly",
         process: "readonly"
       }
+    }
+  },
+  {
+    files: ["scripts/expose-memory.js"],
+    languageOptions: {
+      globals: {
+        HEAP32: "readonly",
+        HEAPF32: "readonly",
+        HEAPU8: "readonly",
+        HEAPU16: "readonly",
+        Module: "readonly"
+      }
+    }
+  },
+  {
+    files: ["src/parser/wasm/**/*.ts", "test/wasm/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-non-null-assertion": "off"
     }
   },
   {

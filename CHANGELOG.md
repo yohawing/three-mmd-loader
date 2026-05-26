@@ -2,6 +2,89 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-05-26
+
+### Added
+
+- Add viewer asset presets and expanded loader controls for local playback
+  verification.
+- Add local Ammo playback stability coverage for dynamic bone anchoring and
+  hierarchy behavior.
+- Add generated visual regression fixtures for material morph alpha and hair
+  shadow transparency cases.
+
+### Changed
+
+- Pack VMD tracks into compact runtime storage by default to reduce animation
+  memory overhead.
+- Improve PMX twist IK solving and default IK convergence tolerance behavior.
+- Avoid per-frame cached ancestor allocation in the physics path.
+- Expand viewer loading helpers for model, motion, camera, audio, and
+  background assets.
+
+### Fixed
+
+- Guard MMD texture alpha transparency so stale morph alpha state does not leak
+  into material transparency.
+- Align dynamic-with-bone hierarchy handling in Ammo physics.
+- Gate fixed-axis IK behavior to hand twist chains.
+- Align dist export smoke coverage with packed VMD tracks.
+
+## [0.2.0] - 2026-05-25
+
+### Added
+
+- Add the nanoem-backed WASM parser core and route viewer model loading through
+  the WASM-backed path when available.
+- Add DDS texture loading support, including viewer `DDSLoader` integration and
+  diagnostics for unsupported texture formats.
+- Add PMM parser entry points and tests for PMM project metadata parsing.
+- Add generated-PMX visual regression cases and committed baselines for outline,
+  material ordering, and texture-alpha behavior.
+- Add local native-nanoem playback oracle tooling for motion/runtime parity
+  checks.
+- Add `ThreeMmdModel.object` as the scene-ready root containing the base mesh
+  and generated proxy meshes.
+- Add a release checklist under `docs/RELEASE.md`.
+
+### Changed
+
+- Move WASM support under the parser module pipeline and build the generated
+  WASM wrapper in CI/release packaging instead of committing generated binaries.
+- Default the Three.js loader to the `mmdCompat` draw path with PMX-order
+  two-pass outline rendering.
+- Remove the earlier `outlineMode` and `renderOrderProxies` options in favor of
+  the `mmdCompat` compatibility path.
+- Improve outline screen-space width matching and runtime proxy mesh
+  synchronization.
+- Decouple local corpus smoke tests from the local asset database and document
+  the local corpus/playback oracle workflows.
+- Link the release checklist from the README and development documentation.
+
+### Fixed
+
+- Parse morph-only VMD files that omit the camera section.
+- Treat oversized optional VMD tail counts as trailing data instead of failing
+  the parse.
+- Harden WASM parser loading and texture handling review issues.
+- Keep third-party submodules out of the lint target and generate minimal PMX
+  fixtures for WASM metadata tests when needed.
+
+## [0.1.2] - 2026-05-20
+
+### Changed
+
+- Relax the Three.js peer dependency range to allow newer 0.x releases.
+- Verify the development toolchain against Three.js 0.184.x.
+
+## [0.1.1] - 2026-05-20
+
+### Changed
+
+- Harden the GitHub Actions release workflow for npm trusted publishing.
+- Add fixture parsing to the release gate before packaging.
+- Use the HTTPS GitHub repository URL in package metadata.
+
 ## [0.1.0] - 2026-05-19
 
 Initial public release candidate for `@yohawing/three-mmd-loader`.

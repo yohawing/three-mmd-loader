@@ -6,6 +6,7 @@ import type {
   MmdPhysicsVector3Tuple
 } from "../../src/physics/index.js";
 import { validateConcreteMmdPhysicsStepContext } from "../../src/physics/index.js";
+import { legacyMmdEulerToQuaternion } from "../../src/physics/legacyPhysicsBridge.js";
 import type { LoaderMmdModelData } from "../../src/three/internalModelData.js";
 
 export async function initAmmo(): Promise<AmmoNamespace> {
@@ -64,7 +65,7 @@ export function createMinimalStepContext(
           size: rigidBody.size
         },
         localTranslation: rigidBody.position,
-        localRotation: eulerXyzToQuaternion(rigidBody.rotation),
+        localRotation: legacyMmdEulerToQuaternion(rigidBody.rotation),
         mass: rigidBody.mass,
         linearDamping: rigidBody.linearDamping,
         angularDamping: rigidBody.angularDamping,
@@ -79,7 +80,7 @@ export function createMinimalStepContext(
       rigidBodyIndexA: joint.rigidBodyIndexA,
       rigidBodyIndexB: joint.rigidBodyIndexB,
       translation: joint.position,
-      rotation: eulerXyzToQuaternion(joint.rotation),
+      rotation: legacyMmdEulerToQuaternion(joint.rotation),
       linearLimit: {
         lower: joint.translationLowerLimit,
         upper: joint.translationUpperLimit
@@ -129,29 +130,4 @@ function writeIdentityMatrix(
   buffer[offset + 13] = translation[1];
   buffer[offset + 14] = translation[2];
   buffer[offset + 15] = 1;
-}
-
-function eulerXyzToQuaternion(euler: readonly [number, number, number]): [number, number, number, number] {
-  const halfX = euler[0] * 0.5;
-  const halfY = euler[1] * 0.5;
-  const halfZ = euler[2] * 0.5;
-  const sx = Math.sin(halfX);
-  const cx = Math.cos(halfX);
-  const sy = Math.sin(halfY);
-  const cy = Math.cos(halfY);
-  const sz = Math.sin(halfZ);
-  const cz = Math.cos(halfZ);
-  const rotation: [number, number, number, number] = [
-    sx * cy * cz + cx * sy * sz,
-    cx * sy * cz - sx * cy * sz,
-    cx * cy * sz + sx * sy * cz,
-    cx * cy * cz - sx * sy * sz
-  ];
-  const length = Math.hypot(...rotation) || 1;
-  return [
-    rotation[0] / length,
-    rotation[1] / length,
-    rotation[2] / length,
-    rotation[3] / length
-  ];
 }

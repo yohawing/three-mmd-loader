@@ -41,7 +41,7 @@ const textDecoders = {
 };
 const maxPmxSectionCount = 10_000_000;
 
-export function parsePmx(bytes: Uint8Array): ParsedPmx {
+export function parsePmx(bytes: Uint8Array, options: { skipGeometry?: boolean } = {}): ParsedPmx {
   const reader = new BinaryReader(bytes);
   const signature = textDecoders["utf-8"].decode(reader.bytes(4));
   if (signature !== "PMX ") {
@@ -90,6 +90,7 @@ export function parsePmx(bytes: Uint8Array): ParsedPmx {
   const vertexCount = readCount(reader, "vertex", {
     remainingBytesPerEntry: minimumPmxVertexByteLength(additionalUvCount, indexSizes.bone)
   });
+  const skipGeometry = options.skipGeometry === true;
   const {
     positions,
     normals,
@@ -100,14 +101,24 @@ export function parsePmx(bytes: Uint8Array): ParsedPmx {
     edgeScale,
     sdef,
     sdefVertexCount
-  } = readVerticesWithBoneIndexSizeFallback(reader, vertexCount, additionalUvCount, indexSizes);
+  } = skipGeometry
+    ? skipVerticesWithBoneIndexSizeFallback(reader, vertexCount, additionalUvCount, indexSizes)
+    : readVerticesWithBoneIndexSizeFallback(reader, vertexCount, additionalUvCount, indexSizes);
 
   const indexCount = readCount(reader, "vertex index", {
     remainingBytesPerEntry: indexSizes.vertex
   });
-  const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
-  for (let i = 0; i < indexCount; i++) {
-    indices[i] = readVertexIndex(reader, indexSizes.vertex);
+  const indices = skipGeometry
+    ? new Uint16Array(0)
+    : vertexCount > 65535
+      ? new Uint32Array(indexCount)
+      : new Uint16Array(indexCount);
+  if (skipGeometry) {
+    reader.skip(indexCount * indexSizes.vertex);
+  } else {
+    for (let i = 0; i < indexCount; i++) {
+      indices[i] = readVertexIndex(reader, indexSizes.vertex);
+    }
   }
 
   const textureCount = readCount(reader, "texture", { remainingBytesPerEntry: 4 });
@@ -188,7 +199,9 @@ export function parsePmx(bytes: Uint8Array): ParsedPmx {
       message: `${reader.remaining} trailing PMX bytes were left unparsed.`
     });
   }
-  sanitizeNonFiniteModelNormals(positions, normals, indices, diagnostics);
+  if (!skipGeometry) {
+    sanitizeNonFiniteModelNormals(positions, normals, indices, diagnostics);
+  }
 
   return {
     metadata: {
@@ -299,6 +312,41 @@ function readVerticesWithBoneIndexSizeFallback(
   throw new Error("Unable to read PMX vertex payload");
 }
 
+function skipVerticesWithBoneIndexSizeFallback(
+  reader: BinaryReader,
+  vertexCount: number,
+  additionalUvCount: number,
+  indexSizes: PmxIndexSizes
+): PmxVertexBuffers {
+  const startOffset = reader.offset;
+  const candidateBoneIndexSizes = uniqueNumbers([indexSizes.bone, 1, 2, 4]);
+  let lastError: unknown;
+
+  for (const boneIndexSize of candidateBoneIndexSizes) {
+    reader.offset = startOffset;
+    const candidateIndexSizes = { ...indexSizes, bone: boneIndexSize };
+    try {
+      for (let i = 0; i < vertexCount; i++) {
+        skipVertex(reader, additionalUvCount, candidateIndexSizes);
+      }
+      if (isPostVertexSectionPlausible(reader, indexSizes)) {
+        return createSkippedPmxVertexBuffers();
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Invalid PMX ")) {
+        throw error;
+      }
+      lastError = error;
+    }
+  }
+
+  reader.offset = startOffset;
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error("Unable to read PMX vertex payload");
+}
+
 function readCount(
   reader: BinaryReader,
   label: string,
@@ -356,6 +404,54 @@ function createPmxVertexBuffers(
     },
     sdefVertexCount: 0
   };
+}
+
+function createSkippedPmxVertexBuffers(): PmxVertexBuffers {
+  return {
+    positions: new Float32Array(0),
+    normals: new Float32Array(0),
+    uvs: new Float32Array(0),
+    additionalUvs: [],
+    skinIndices: new Uint16Array(0),
+    skinWeights: new Float32Array(0),
+    edgeScale: new Float32Array(0),
+    sdef: {
+      enabled: new Float32Array(0),
+      c: new Float32Array(0),
+      r0: new Float32Array(0),
+      r1: new Float32Array(0),
+      rw0: new Float32Array(0),
+      rw1: new Float32Array(0)
+    },
+    sdefVertexCount: 0
+  };
+}
+
+function skipVertex(
+  reader: BinaryReader,
+  additionalUvCount: number,
+  sizes: PmxIndexSizes
+): void {
+  reader.skip(3 * 4 + 3 * 4 + 2 * 4 + additionalUvCount * 4 * 4);
+  const weightType = reader.u8();
+  switch (weightType) {
+    case 0:
+      reader.skip(sizes.bone);
+      break;
+    case 1:
+      reader.skip(sizes.bone * 2 + 4);
+      break;
+    case 2:
+    case 4:
+      reader.skip(sizes.bone * 4 + 4 * 4);
+      break;
+    case 3:
+      reader.skip(sizes.bone * 2 + 4 + 3 * 4 + 3 * 4 + 3 * 4);
+      break;
+    default:
+      throw new Error(`Unsupported PMX vertex weight type: ${weightType}`);
+  }
+  reader.skip(4);
 }
 
 function readVertex(

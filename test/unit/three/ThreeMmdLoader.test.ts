@@ -4,13 +4,16 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ThreeMmdLoader } from "../../../src/index.js";
+import { FallbackCore, ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
+  MmdCore,
+  MmdModel,
   ModelSource,
   ThreeMmdLoaderOptions,
   ThreeMmdTextureLoader
 } from "../../../src/index.js";
+import * as Textures from "../../../src/three/textures.js";
 
 describe("ThreeMmdLoader", () => {
   afterEach(() => {
@@ -62,11 +65,28 @@ describe("ThreeMmdLoader", () => {
 
     expect(model.mesh.name).toBe("TestModel");
     expect(model.mesh.isSkinnedMesh).toBe(true);
+    expect(model.object).toBeInstanceOf(THREE.Group);
+    expect(model.object.children).toEqual([
+      model.mesh,
+      ...model.renderOrderMeshes,
+      ...model.outlineMeshes
+    ]);
     expect(model.mesh.skeleton.bones).toHaveLength(1);
     expect(model.mesh.geometry.getAttribute("position").count).toBe(14);
     expect(model.mesh.geometry.index?.count).toBe(36);
     expect(model.source).toEqual({ kind: "bytes", byteLength: source.byteLength });
     expect(model.textureDiagnostics).toEqual([]);
+  });
+
+  it("uses the configured core for model loading", async () => {
+    const core = new FallbackCore();
+    const loadModel = vi.spyOn(core, "loadModel");
+    const loader = new ThreeMmdLoader({ core });
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    await loader.loadModel(source);
+
+    expect(loadModel).toHaveBeenCalledOnce();
   });
 
   it("loads a PMX model from a string URL source", async () => {
@@ -88,7 +108,7 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.isSkinnedMesh).toBe(true);
   });
 
-  it("eagerly exposes outline meshes and a stable render-order mesh array without added-event side effects", async () => {
+  it("defaults to MMD-compatible outline and render-order proxies without added-event side effects", async () => {
     const loader = new ThreeMmdLoader();
     const source: ModelSource = createMinimalPmxModelBytes({
       materialCount: 1,
@@ -100,64 +120,36 @@ describe("ThreeMmdLoader", () => {
     const scene = new THREE.Scene();
 
     expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
-    scene.add(model.mesh);
+    scene.add(model.object);
     expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
     const outlineMeshes = model.outlineMeshes;
     expect(model.outlineMeshes).toBe(outlineMeshes);
     expect(outlineMeshes).toHaveLength(1);
     expect(outlineMeshes.every((mesh) => !!mesh.userData.mmdOutlineProxy)).toBe(true);
+    expect(outlineMeshes[0]?.userData.mmdOutlineProxy.sourceMaterialIndex).toBe(0);
     const renderOrderMeshes = model.renderOrderMeshes;
     expect(model.renderOrderMeshes).toBe(renderOrderMeshes);
-    expect(renderOrderMeshes).toEqual([]);
-    expect(model.mesh.geometry.drawRange.count).not.toBe(0);
+    expect(renderOrderMeshes).toHaveLength(1);
+    expect(renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
+    expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
+    expect(model.object.children).toEqual([model.mesh, ...renderOrderMeshes, ...outlineMeshes]);
   });
 
-  it("can use MMD-compatible material outline proxies explicitly", async () => {
+  it("allows loadModel callers to disable generated render-order proxy meshes explicitly", async () => {
     const loader = new ThreeMmdLoader();
+
     const model = await loader.loadModel(
       createMinimalPmxModelBytes({
         materialCount: 1,
         triangle: true,
         edge: true
       }),
-      { outlineMode: "mmdCompat" }
-    );
-
-    expect(model.outlineMeshes).toHaveLength(1);
-    expect(model.outlineMeshes[0]?.userData.mmdOutlineProxy.sourceMaterialIndex).toBe(0);
-    expect(model.renderOrderMeshes).toHaveLength(1);
-    expect(model.renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
-    expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
-  });
-
-  it("does not create render-order proxy meshes by default", async () => {
-    const loader = new ThreeMmdLoader();
-
-    const model = await loader.loadModel(
-      createMinimalPmxModelBytes({
-        materialCount: 1,
-        triangle: true
-      })
+      { renderOrderProxies: false }
     );
 
     expect(model.renderOrderMeshes).toEqual([]);
-  });
-
-  it("creates render-order proxy meshes when explicitly requested", async () => {
-    const loader = new ThreeMmdLoader();
-
-    const model = await loader.loadModel(
-      createMinimalPmxModelBytes({
-        materialCount: 1,
-        triangle: true
-      }),
-      { renderOrderProxies: true }
-    );
-
-    expect(model.renderOrderMeshes).toHaveLength(1);
-    expect(model.renderOrderMeshes.every((mesh) => !!mesh.userData.mmdMaterialRenderProxy)).toBe(
-      true
-    );
+    expect(model.mesh.geometry.drawRange.count).toBe(Number.POSITIVE_INFINITY);
+    expect(model.object.children).toEqual([model.mesh, ...model.outlineMeshes]);
   });
 
   it("allows loadModel callers to disable generated outline meshes explicitly", async () => {
@@ -174,6 +166,7 @@ describe("ThreeMmdLoader", () => {
 
     expect(model.outlineMeshes).toEqual([]);
     expect(model.renderOrderMeshes).toEqual([]);
+    expect(model.object.children).toEqual([model.mesh]);
   });
 
   it("applies load-time frustum culling to the mesh and generated proxy meshes", async () => {
@@ -185,12 +178,40 @@ describe("ThreeMmdLoader", () => {
         triangle: true,
         edge: true
       }),
-      { frustumCulled: false, renderOrderProxies: true }
+      { frustumCulled: false }
     );
 
     expect(model.mesh.frustumCulled).toBe(false);
     expect(model.outlineMeshes.every((mesh) => mesh.frustumCulled === false)).toBe(true);
     expect(model.renderOrderMeshes.every((mesh) => mesh.frustumCulled === false)).toBe(true);
+  });
+
+  it("applies root object transforms to the base mesh and generated proxy meshes", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        edge: true
+      })
+    );
+
+    model.object.position.set(1, 2, 3);
+    model.object.rotation.set(0, Math.PI / 2, 0);
+    model.object.scale.set(2, 2, 2);
+    model.object.updateMatrixWorld(true);
+
+    const basePosition = new THREE.Vector3();
+    model.mesh.getWorldPosition(basePosition);
+    expect(basePosition.toArray()).toEqual([1, 2, 3]);
+
+    for (const proxy of [...model.renderOrderMeshes, ...model.outlineMeshes]) {
+      const proxyPosition = new THREE.Vector3();
+      proxy.getWorldPosition(proxyPosition);
+      expect(proxy.parent).toBe(model.object);
+      expect(proxyPosition.toArray()).toEqual(basePosition.toArray());
+      expect(proxy.matrixWorld.elements).toEqual(model.mesh.matrixWorld.elements);
+    }
   });
 
   it("keeps imported PMX vertex normals on the loaded Three.js geometry", async () => {
@@ -234,6 +255,69 @@ describe("ThreeMmdLoader", () => {
     expect(material.map?.wrapT).toBe(THREE.RepeatWrapping);
   });
 
+  it("enables geometry-aware alpha internally for default MMD-compatible outlines", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader = createDataTextureLoader(texture);
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const loader = new ThreeMmdLoader({
+      textureMap: { "tex.png": "resolved/tex.png" },
+      textureLoader
+    });
+
+    await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        texturePath: "tex.png"
+      })
+    );
+
+    expect(geometryAlphaSpy).toHaveBeenCalledOnce();
+  });
+
+  it("does not enable internal geometry-aware alpha when outlines are disabled", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader = createDataTextureLoader(texture);
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const loader = new ThreeMmdLoader({
+      textureMap: { "tex.png": "resolved/tex.png" },
+      textureLoader
+    });
+
+    await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        texturePath: "tex.png"
+      }),
+      { outlines: false }
+    );
+
+    expect(geometryAlphaSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps explicit geometry-aware alpha opt-in active when outlines are disabled", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader = createDataTextureLoader(texture);
+    const geometryAlphaSpy = vi.spyOn(Textures, "evaluateMmdTextureAlphaGeometry");
+    const loader = new ThreeMmdLoader({
+      geometryAwareAlpha: true,
+      textureMap: { "tex.png": "resolved/tex.png" },
+      textureLoader
+    });
+
+    await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        texturePath: "tex.png"
+      }),
+      { outlines: false }
+    );
+
+    expect(geometryAlphaSpy).toHaveBeenCalledOnce();
+  });
+
 
   it("exposes PMX IK chains on mesh userData when the fixture contains IK", async () => {
     const loader = new ThreeMmdLoader();
@@ -249,6 +333,33 @@ describe("ThreeMmdLoader", () => {
       links: expect.any(Array)
     });
     expect(chains[0].links.length).toBeGreaterThan(0);
+  });
+
+  it("keeps PMX IK chains even when the manipulation flag is disabled", async () => {
+    const loader = new ThreeMmdLoader({ core: createIkFlagCore() });
+
+    const model = await loader.loadModel(new Uint8Array([1]));
+
+    expect(model.mesh.userData.mmdIkChains).toEqual([
+      expect.objectContaining({
+        goalBoneIndex: 1,
+        effectorBoneIndex: 0
+      }),
+      expect.objectContaining({
+        goalBoneIndex: 2,
+        effectorBoneIndex: 1
+      })
+    ]);
+  });
+
+  it("passes PMX fixed-axis links only for hand-twist IK chains", async () => {
+    const loader = new ThreeMmdLoader({ core: createFixedAxisIkCore() });
+
+    const model = await loader.loadModel(new Uint8Array([1]));
+    const chains = model.mesh.userData.mmdIkChains;
+
+    expect(chains[0]?.links[0]?.fixedAxis).toBeUndefined();
+    expect(chains[1]?.links[0]?.fixedAxis).toEqual([-1, 0, 0]);
   });
 
   it("evaluates a runtime frame for an IK-enabled mesh without throwing", async () => {
@@ -336,6 +447,32 @@ describe("ThreeMmdLoader", () => {
     await expect(loader.loadPoseAnimation(new Uint8Array(), "pose")).rejects.toThrow(
       "ThreeMmdLoader.loadPoseAnimation source must not be empty"
     );
+  });
+
+  it("loads VMD animations through the configured core", async () => {
+    const animation: MmdAnimation = {
+      ...createEmptyMmdAnimation(),
+      metadata: {
+        ...createEmptyMmdAnimation().metadata,
+        modelName: "core-motion"
+      }
+    };
+    const loadVmd = vi.fn(() => animation);
+    const core: MmdCore = {
+      ...createIkFlagCore(),
+      loadVmd
+    };
+    const loader = new ThreeMmdLoader({ core });
+    const bytes = new Uint8Array([1, 2, 3]);
+
+    const loaded = await loader.loadAnimation(bytes);
+
+    expect(loadVmd).toHaveBeenCalledWith(bytes);
+    expect(loaded).toEqual({
+      source: bytes,
+      name: "core-motion",
+      animation
+    });
   });
 
   it("rejects loadModel bytes before model assembly when the model format is unknown", async () => {
@@ -476,6 +613,181 @@ function createMinimalPmxModelBytes(options: {
     text("");
     i32(options.triangle ? 3 : 0);
   }
+}
+
+function createIkFlagCore(): MmdCore {
+  const model = createIkFlagModel();
+  return {
+    version: () => "test-core",
+    healthCheck: () => true,
+    loadModel: () => model,
+    loadVmd: () => createEmptyMmdAnimation(),
+    loadVpd: () => ({
+      kind: "vpd",
+      bytes: new Uint8Array(),
+      metadata: { modelFile: "", boneCount: 0, morphCount: 0 },
+      bones: {},
+      morphs: {}
+    }),
+    loadVpdAnimation: () => createEmptyMmdAnimation()
+  };
+}
+
+function createIkFlagModel(): MmdModel {
+  return {
+    metadata: () => ({
+      format: "pmx",
+      version: 2,
+      encoding: "utf-8",
+      name: "ik flags",
+      englishName: "IkFlags",
+      comment: "",
+      englishComment: "",
+      counts: {
+        vertices: 0,
+        faces: 0,
+        materials: 0,
+        bones: 3,
+        morphs: 0,
+        displayFrames: 0,
+        rigidBodies: 0,
+        joints: 0,
+        softBodies: 0
+      },
+      indexSizes: { vertex: 1, texture: 1, material: 1, bone: 1, morph: 1, rigidBody: 1 },
+      additionalUvCount: 0,
+      diagnostics: []
+    }),
+    geometry: () => ({
+      positions: new Float32Array(0),
+      normals: new Float32Array(0),
+      uvs: new Float32Array(0),
+      additionalUvs: [],
+      indices: new Uint16Array(0),
+      skinIndices: new Uint16Array(0),
+      skinWeights: new Float32Array(0)
+    }),
+    materials: () => [],
+    skeleton: () => ({
+      bones: [
+        createIkFlagBone("root", -1, true),
+        createIkFlagBone("target", 0, false, {
+          targetIndex: 0,
+          loopCount: 1,
+          limitAngle: 1,
+          links: [{ boneIndex: 0 }]
+        }),
+        createIkFlagBone("enabled IK", 0, true, {
+          targetIndex: 1,
+          loopCount: 1,
+          limitAngle: 1,
+          links: [{ boneIndex: 0 }]
+        })
+      ]
+    }),
+    morphs: () => [],
+    displayFrames: () => [],
+    rigidBodies: () => [],
+    joints: () => [],
+    softBodies: () => [],
+    embeddedTextures: () => []
+  };
+}
+
+function createFixedAxisIkCore(): MmdCore {
+  const model: MmdModel = {
+    ...createIkFlagModel(),
+    metadata: () => ({
+      ...createIkFlagModel().metadata(),
+      name: "fixed axis ik",
+      englishName: "FixedAxisIk",
+      counts: {
+        ...createIkFlagModel().metadata().counts,
+        bones: 5
+      }
+    }),
+    skeleton: () => ({
+      bones: [
+        createIkFlagBone("root", -1, true),
+        createIkFlagBone("ordinary link", 0, true, undefined, { fixedAxis: [0, 1, 0] }),
+        createIkFlagBone("ordinary IK", 0, true, {
+          targetIndex: 1,
+          loopCount: 1,
+          limitAngle: 1,
+          links: [{ boneIndex: 1 }]
+        }),
+        createIkFlagBone("hand twist link", 0, true, undefined, { fixedAxis: [1, 0, 0] }),
+        createIkFlagBone("右手捩IK", 0, true, {
+          targetIndex: 3,
+          loopCount: 1,
+          limitAngle: 1,
+          links: [{ boneIndex: 3 }]
+        })
+      ]
+    })
+  };
+  return {
+    ...createIkFlagCore(),
+    loadModel: () => model
+  };
+}
+
+function createIkFlagBone(
+  name: string,
+  parentIndex: number,
+  enabled: boolean,
+  ik?: ReturnType<MmdModel["skeleton"]>["bones"][number]["ik"],
+  options: {
+    readonly fixedAxis?: [number, number, number];
+  } = {}
+): ReturnType<MmdModel["skeleton"]>["bones"][number] {
+  return {
+    name,
+    englishName: name,
+    parentIndex,
+    layer: 0,
+    position: [0, 0, 0],
+    tailIndex: -1,
+    tailPosition: undefined,
+    flags: {
+      indexedTail: false,
+      rotatable: true,
+      translatable: false,
+      visible: enabled,
+      enabled,
+      ik: ik !== undefined,
+      appendLocal: false,
+      appendRotate: false,
+      appendTranslate: false,
+      fixedAxis: options.fixedAxis !== undefined,
+      localAxis: false,
+      transformAfterPhysics: false,
+      externalParentTransform: false
+    },
+    fixedAxis: options.fixedAxis,
+    ik
+  };
+}
+
+function createReadableAlphaDataTexture(): THREE.DataTexture {
+  const data = new Uint8Array(4 * 4 * 4);
+  for (let index = 0; index < 4 * 4; index += 1) {
+    data[index * 4] = 255;
+    data[index * 4 + 1] = 255;
+    data[index * 4 + 2] = 255;
+    data[index * 4 + 3] = index === 0 ? 100 : 255;
+  }
+  return new THREE.DataTexture(data, 4, 4, THREE.RGBAFormat);
+}
+
+function createDataTextureLoader(texture: THREE.Texture): ThreeMmdTextureLoader {
+  return {
+    load(url, onLoad) {
+      texture.name = url;
+      onLoad?.(texture);
+      return texture;
+    }
+  };
 }
 
 function createEmptyMmdAnimation(): MmdAnimation {

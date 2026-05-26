@@ -17,10 +17,31 @@ export const state = {
   controls: undefined,
   keyLight: undefined,
   currentModel: undefined,
+  currentBackground: undefined,
   currentMotion: undefined,
+  currentCameraMotion: undefined,
   currentFolderTextureMap: undefined,
   currentFolderPmxFiles: [],
   currentMotionVmdFiles: [],
+  currentAudioEntries: [],
+  currentBackgroundEntries: [],
+  currentCameraEntries: [],
+  assetLibrary: {
+    presets: [],
+    models: [],
+    motions: [],
+    poses: [],
+    backgrounds: [],
+    audios: [],
+    cameras: [],
+    recent: {
+      models: [],
+      motions: [],
+      backgrounds: [],
+      audios: [],
+      cameras: []
+    }
+  },
   pendingMotionSource: undefined,
   pendingMotionLabel: undefined,
   elapsedSeconds: 0,
@@ -28,7 +49,12 @@ export const state = {
   isSeeking: false,
   audioObjectUrl: undefined,
   isSyncingAudioState: false,
+  isSyncingAudioTime: false,
+  audioSeekSyncTimer: undefined,
   viewerDisposed: false,
+  cameraTargetScratch: new THREE.Vector3(),
+  cameraOffsetScratch: new THREE.Vector3(),
+  cameraEulerScratch: new THREE.Euler(),
   debugMaterialState: new Map(),
   restPoseAnimation: {
     kind: "vmd",
@@ -52,7 +78,8 @@ export function hasCurrentMotion() {
 }
 
 export function currentMotionDurationSeconds() {
-  return state.currentMotion?.durationSeconds ?? (state.currentMotion ? animationDurationSeconds(state.currentMotion.animation) : 0);
+  const motionDuration = state.currentMotion?.durationSeconds ?? (state.currentMotion ? animationDurationSeconds(state.currentMotion.animation) : 0);
+  return Math.max(motionDuration, state.currentCameraMotion?.durationSeconds ?? 0);
 }
 
 export function animationDurationSeconds(animation) {
