@@ -180,6 +180,17 @@ describe("generated PMX visual regression manifest", () => {
     expect(names).toContain("mmd-material-morph-alpha-opaque-depth");
   });
 
+  it("includes texture alpha hair shadow regression cases", () => {
+    const manifest = readGeneratedPmxManifest();
+    const names = manifest.cases.map(visualCase => visualCase.name);
+
+    expect(names).toEqual(expect.arrayContaining([
+      "mmd-png-hair-shadow-alpha-morph-blend",
+      "mmd-tga-regular-hair-alpha-opaque",
+      "mmd-tga-hair-shadow-overlay-alpha-blend"
+    ]));
+  });
+
   it("keeps generated PMX cases portable and explicit", () => {
     const manifest = readGeneratedPmxManifest();
     const names = new Set<string>();

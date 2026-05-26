@@ -74,6 +74,45 @@
         "far": 20
       },
       "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-png-hair-shadow-alpha-morph-blend",
+      "model": "test/fixtures/generated/visual/mmd-png-hair-shadow-alpha-morph-blend.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.04, 0.6, 3.3],
+        "target": [0.04, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-tga-regular-hair-alpha-opaque",
+      "model": "test/fixtures/generated/visual/mmd-tga-regular-hair-alpha-opaque.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.04, 0.6, 3.3],
+        "target": [0.04, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-tga-hair-shadow-overlay-alpha-blend",
+      "model": "test/fixtures/generated/visual/mmd-tga-hair-shadow-overlay-alpha-blend.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.04, 0.6, 3.3],
+        "target": [0.04, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     }
   ]
 }

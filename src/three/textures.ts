@@ -944,6 +944,7 @@ async function loadMmdTgaTexture(
     }
     const texture = new THREE.DataTexture(image.data, image.width, image.height, THREE.RGBAFormat);
     texture.type = THREE.UnsignedByteType;
+    texture.userData.mmdTextureAlphaSource = "tga";
     texture.userData.mmdTextureAlphaMode = image.hasAlpha
       ? evaluateMmdTextureAlphaRgba(image.data)
       : "opaque";

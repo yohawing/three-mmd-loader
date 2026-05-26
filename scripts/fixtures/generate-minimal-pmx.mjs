@@ -291,6 +291,168 @@ const VISUAL_CASES = {
         ]
       }
     ]
+  },
+  "mmd-png-hair-shadow-alpha-morph-blend": {
+    name: "generated visual png hair shadow alpha morph blend",
+    englishName: "GeneratedVisualPngHairShadowAlphaMorphBlend",
+    comment: "redistribution-safe PMX visual fixture for PNG hair shadow alpha with alpha morphs",
+    englishComment: "A PNG hair shadow overlay has an inactive alpha material morph and must render alpha-blended at rest.",
+    geometry: mergeGeometries([
+      transformGeometry(
+        boxGeometry({
+          min: [-0.48, 0.16, -0.1],
+          max: [0.48, 1.02, 0.1],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { rotateY: 0.08, translate: [0.02, 0, -0.22] }
+      ),
+      transformGeometry(
+        boxGeometry({
+          min: [-0.42, 0.34, -0.06],
+          max: [0.42, 0.9, 0.06],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { rotateY: -0.1, translate: [-0.04, 0.02, -0.36] }
+      )
+    ]),
+    textures: ["png-hair-shadow-alpha.png"],
+    assets: [
+      {
+        path: "png-hair-shadow-alpha.png",
+        bytes: () => softAlphaOverlayPng([184, 70, 88])
+      }
+    ],
+    materials: [
+      material("mat_hair_base_png", "PngHairBase", {
+        diffuse: [0.95, 0.82, 0.28, 1],
+        specular: [0.05, 0.04, 0.02],
+        ambient: [0.32, 0.24, 0.08],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.8,
+        flags: 0x11,
+        faceVertexCount: 36,
+        comment: "opaque hair-colored background material"
+      }),
+      material("mat_png_hairshadow", "PngHairshadow", {
+        diffuse: [1, 1, 1, 1],
+        specular: [0.02, 0.01, 0.01],
+        ambient: [0.28, 0.1, 0.12],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 0,
+        flags: 0x00,
+        textureIndex: 0,
+        faceVertexCount: 36,
+        comment: "PNG hairshadow overlay with inactive alpha material morph"
+      })
+    ],
+    morphs: [
+      {
+        name: "png_hairshadow_hide",
+        englishName: "PngHairshadowHide",
+        panel: 4,
+        type: "material",
+        offsets: [
+          {
+            materialIndex: 1,
+            operation: "add",
+            diffuse: [0, 0, 0, -1]
+          }
+        ]
+      }
+    ]
+  },
+  "mmd-tga-regular-hair-alpha-opaque": {
+    name: "generated visual tga regular hair alpha opaque",
+    englishName: "GeneratedVisualTgaRegularHairAlphaOpaque",
+    comment: "redistribution-safe PMX visual fixture for regular TGA material alpha metadata",
+    englishComment: "A regular shadow-casting TGA hair material has texture alpha but must stay opaque.",
+    geometry: transformGeometry(
+      boxGeometry({
+        min: [-0.48, 0.16, -0.1],
+        max: [0.48, 1.02, 0.1],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      { rotateY: -0.16, translate: [0.02, 0, -0.18] }
+    ),
+    textures: ["tga-regular-hair-alpha.tga"],
+    assets: [
+      {
+        path: "tga-regular-hair-alpha.tga",
+        bytes: () => softAlphaOverlayTga([72, 148, 84])
+      }
+    ],
+    materials: [
+      material("mat_tga_regular_hair", "TgaRegularHair", {
+        diffuse: [1, 1, 1, 1],
+        specular: [0.03, 0.04, 0.02],
+        ambient: [0.12, 0.3, 0.13],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.8,
+        flags: 0x1f,
+        textureIndex: 0,
+        faceVertexCount: 36,
+        comment: "regular shadow-casting TGA material should ignore texture alpha at rest"
+      })
+    ]
+  },
+  "mmd-tga-hair-shadow-overlay-alpha-blend": {
+    name: "generated visual tga hair shadow overlay alpha blend",
+    englishName: "GeneratedVisualTgaHairShadowOverlayAlphaBlend",
+    comment: "redistribution-safe PMX visual fixture for TGA hair shadow overlay alpha",
+    englishComment: "A TGA hairshadow overlay must use geometry-aware alpha and render alpha-blended.",
+    geometry: mergeGeometries([
+      transformGeometry(
+        boxGeometry({
+          min: [-0.48, 0.16, -0.1],
+          max: [0.48, 1.02, 0.1],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { rotateY: 0.12, translate: [0.02, 0, -0.22] }
+      ),
+      transformGeometry(
+        boxGeometry({
+          min: [-0.42, 0.34, -0.06],
+          max: [0.42, 0.9, 0.06],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { rotateY: -0.08, translate: [-0.04, 0.02, -0.36] }
+      )
+    ]),
+    textures: ["tga-hair-shadow-alpha.tga"],
+    assets: [
+      {
+        path: "tga-hair-shadow-alpha.tga",
+        bytes: () => softAlphaOverlayTga([68, 58, 116])
+      }
+    ],
+    materials: [
+      material("mat_hair_base_tga", "TgaHairBase", {
+        diffuse: [0.94, 0.78, 0.24, 1],
+        specular: [0.05, 0.04, 0.02],
+        ambient: [0.32, 0.23, 0.08],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.8,
+        flags: 0x11,
+        faceVertexCount: 36,
+        comment: "opaque hair-colored background material"
+      }),
+      material("mat_tga_hairshadow", "TgaHairshadow", {
+        diffuse: [1, 1, 1, 1],
+        specular: [0.01, 0.01, 0.02],
+        ambient: [0.1, 0.09, 0.18],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 0,
+        flags: 0x00,
+        textureIndex: 0,
+        faceVertexCount: 36,
+        comment: "TGA hairshadow overlay should alpha blend"
+      })
+    ]
   }
 };
 
@@ -697,6 +859,56 @@ function atlasPaddingPng() {
     }
   }
   return PNG.sync.write(png);
+}
+
+function softAlphaOverlayPng(color) {
+  const size = 96;
+  const png = new PNG({ width: size, height: size });
+  writeSoftAlphaPixels(png.data, size, size, color);
+  return PNG.sync.write(png);
+}
+
+function softAlphaOverlayTga(color) {
+  const width = 96;
+  const height = 96;
+  const header = new Uint8Array(18);
+  header[2] = 2;
+  header[12] = width & 0xff;
+  header[13] = (width >> 8) & 0xff;
+  header[14] = height & 0xff;
+  header[15] = (height >> 8) & 0xff;
+  header[16] = 32;
+  header[17] = 0x28;
+  const rgba = new Uint8Array(width * height * 4);
+  writeSoftAlphaPixels(rgba, width, height, color);
+  const bytes = new Uint8Array(header.length + rgba.length);
+  bytes.set(header, 0);
+  for (let index = 0; index < width * height; index += 1) {
+    const source = index * 4;
+    const target = header.length + source;
+    bytes[target] = rgba[source + 2];
+    bytes[target + 1] = rgba[source + 1];
+    bytes[target + 2] = rgba[source];
+    bytes[target + 3] = rgba[source + 3];
+  }
+  return bytes;
+}
+
+function writeSoftAlphaPixels(data, width, height, color) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      const u = x / (width - 1);
+      const v = y / (height - 1);
+      const band = Math.exp(-Math.pow((v - (0.28 + u * 0.38)) / 0.13, 2));
+      const fade = Math.max(0, 1 - Math.abs(u - 0.5) * 1.35);
+      const alpha = Math.round(205 * band * fade);
+      data[index] = color[0];
+      data[index + 1] = color[1];
+      data[index + 2] = color[2];
+      data[index + 3] = alpha;
+    }
+  }
 }
 
 function writeVertices(writer, vertices, indexSizes) {
