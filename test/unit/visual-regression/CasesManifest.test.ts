@@ -134,7 +134,7 @@ describe("local real-model visual regression manifest", () => {
     const manifest = readRealModelsManifest();
 
     expect(manifest.note).toContain("Local manual");
-    expect(manifest.note).toContain("MMD_VIEWER_DATA_ROOT");
+    expect(manifest.note).toContain("MMD_DATA_ROOT");
     expect(manifest.render.resolution).toEqual({ width: 512, height: 512 });
     expect(manifest.render.pixelRatio).toBe(1);
     expect(manifest.cases.length).toBeGreaterThan(0);

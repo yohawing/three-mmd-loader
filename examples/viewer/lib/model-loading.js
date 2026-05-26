@@ -18,21 +18,28 @@ import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioStat
 import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
 import { currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
 import { fitCameraToObject } from "./scene-setup.js";
+import { labelFromUrl } from "./url-label.js";
 
 export async function loadModelFromUrl(url) {
   const profile = createViewerLoadProfile(`url:${url}`);
   profile?.mark("start");
+  const label = labelFromUrl(url);
   try {
     setStatus(`Loading ${url}`, "loading");
     const bytes = await fetchBytes(url);
     profile?.mark("bytes");
-    await loadModel(bytes, url.split("/").at(-1) ?? url, () => createUrlTextureLoader(url), profile);
+    return await loadModel(bytes, label, () => createUrlTextureLoader(url), profile, {
+      id: `url:${url}`,
+      name: label,
+      source: url
+    });
   } catch (error) {
     profile?.mark("error");
     profile?.measure("source-bytes", "start", "bytes");
     profile?.measure("failed-total", "start", "error");
     profile?.report();
     setStatus(error instanceof Error ? error.message : String(error), "error");
+    return false;
   }
 }
 
@@ -44,7 +51,7 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-export async function loadModel(source, label = source.name ?? "model", modelLoader, profile) {
+export async function loadModel(source, label = source.name ?? "model", modelLoader, profile, switcherEntry) {
   const loadProfile = profile ?? createViewerLoadProfile(describeViewerSource(source, label));
   if (!profile) {
     loadProfile?.mark("start");
@@ -69,10 +76,10 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
     addModelToScene(state.currentModel);
     loadProfile?.mark("scene-ready");
-    state.currentFolderPmxFiles = [createModelSwitcherEntry(source, label)];
+    state.currentFolderPmxFiles = [switcherEntry ?? createModelSwitcherEntry(source, label)];
     updateModelSwitcher(state.currentFolderPmxFiles[0]);
     state.elapsedSeconds = 0;
-    dom.timeline.max = "0.001";
+    dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
     dom.timeline.value = "0";
     updatePlaybackDisplay();
     fitCameraToObject(state.currentModel.mesh);
@@ -93,11 +100,13 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     updateStageState();
     renderStillFrame();
     loadProfile?.mark("first-render");
+    return true;
   } catch (error) {
     loadProfile?.mark("error");
     resetFolderModelState();
     setStatus(error instanceof Error ? error.message : String(error), "error");
     updateStageState();
+    return false;
   } finally {
     measureModelLoadProfile(loadProfile);
   }
@@ -140,7 +149,7 @@ export async function loadModelFolder(files) {
     addModelToScene(state.currentModel);
     profile?.mark("scene-ready");
     state.elapsedSeconds = 0;
-    dom.timeline.max = "0.001";
+    dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
     dom.timeline.value = "0";
     updatePlaybackDisplay();
     fitCameraToObject(state.currentModel.mesh);
@@ -196,7 +205,7 @@ export async function switchFolderModel(modelFile) {
     updateModelSwitcher(modelFile);
     profile?.mark("scene-ready");
     state.elapsedSeconds = 0;
-    dom.timeline.max = "0.001";
+    dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
     dom.timeline.value = "0";
     updatePlaybackDisplay();
     fitCameraToObject(state.currentModel.mesh);
@@ -243,7 +252,7 @@ export function clearModel(options = {}) {
   }
   state.elapsedSeconds = 0;
   if (dom.timeline) {
-    dom.timeline.max = "0.001";
+    dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
     dom.timeline.value = "0";
   }
   updatePlaybackDisplay();
@@ -376,6 +385,12 @@ export function findModelFile(files) {
 export const findModelFiles = findMmdModelFiles;
 
 export function modelFileKey(file) {
+  if (typeof file.id === "string") {
+    return file.id;
+  }
+  if (typeof file.source === "string") {
+    return `url:${file.source}`;
+  }
   return normalizeMmdRelativePath(file.webkitRelativePath || file.name);
 }
 
@@ -400,7 +415,10 @@ export function updateModelSwitcher(selectedFile) {
     })
   );
   dom.modelSwitcher.value = modelFileKey(selectedFile);
-  dom.modelSwitcher.hidden = state.currentFolderPmxFiles.length === 0;
+  dom.modelSwitcher.hidden = false;
+  if (dom.modelControl) {
+    dom.modelControl.hidden = state.currentFolderPmxFiles.length === 0;
+  }
   updateChromeHeights();
 }
 
@@ -409,7 +427,10 @@ export function resetFolderModelState() {
   state.currentFolderPmxFiles = [];
   if (dom.modelSwitcher instanceof window.HTMLSelectElement) {
     dom.modelSwitcher.replaceChildren();
-    dom.modelSwitcher.hidden = true;
+    dom.modelSwitcher.hidden = false;
+  }
+  if (dom.modelControl) {
+    dom.modelControl.hidden = true;
   }
   updateChromeHeights();
 }

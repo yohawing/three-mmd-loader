@@ -1,14 +1,15 @@
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { extname, join, normalize, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, normalize, relative, resolve, sep } from "node:path";
 
 const root = process.cwd();
 const viewerRoot = resolve(root, "examples", "viewer");
-const dataRoot = process.env.MMD_VIEWER_DATA_ROOT === undefined
-  ? undefined
-  : resolve(process.env.MMD_VIEWER_DATA_ROOT);
+const localFixturesPath = resolve(root, "test", "fixtures", "fixtures.local.json");
+const localFixtureInventory = loadLocalFixtureInventory();
+const dataRoot = resolveDataRoot();
 const dataRoute = "/__mmd_data/";
+const localAssetsRoute = "/__mmd_assets__/fixtures-local.json";
 const port = Number.parseInt(process.env.PORT ?? "3939", 10);
 const host = process.env.HOST ?? "127.0.0.1";
 
@@ -43,6 +44,24 @@ const server = createServer(async (request, response) => {
     }
 
     const pathname = url.pathname;
+    if (pathname === localAssetsRoute) {
+      const manifest = createLocalAssetManifest();
+      if (manifest === undefined) {
+        response.writeHead(404, {
+          "Cache-Control": "no-store",
+          "Content-Type": "application/json; charset=utf-8"
+        });
+        response.end(JSON.stringify({ error: "Local fixture inventory is not available." }));
+        return;
+      }
+      response.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json; charset=utf-8"
+      });
+      response.end(`${JSON.stringify(manifest, null, 2)}\n`);
+      return;
+    }
+
     const filePath = resolveRequestPath(pathname);
 
     if (!isAllowedPath(filePath)) {
@@ -70,11 +89,137 @@ const server = createServer(async (request, response) => {
 server.listen(port, host, () => {
   console.log(`MMD viewer example: http://${host}:${port}/`);
   if (dataRoot === undefined) {
-    console.log(`MMD viewer data route disabled. Set MMD_VIEWER_DATA_ROOT to serve local MMD assets.`);
+    console.log(`MMD data route disabled. Set MMD_DATA_ROOT to serve local MMD assets.`);
   } else {
-    console.log(`MMD viewer data route: ${dataRoute} -> ${dataRoot}`);
+    console.log(`MMD data route: ${dataRoute} -> ${dataRoot}`);
+    if (localFixtureInventory !== undefined) {
+      console.log(`MMD local assets: ${localAssetsRoute} from ${localFixturesPath}`);
+    }
   }
 });
+
+function loadLocalFixtureInventory() {
+  if (!existsSync(localFixturesPath)) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(readFileSync(localFixturesPath, "utf8"));
+  } catch (error) {
+    console.warn(
+      `Failed to read local fixture inventory: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return undefined;
+  }
+}
+
+function resolveDataRoot() {
+  if (process.env.MMD_DATA_ROOT !== undefined) {
+    return resolve(process.env.MMD_DATA_ROOT);
+  }
+  if (typeof localFixtureInventory?.basePath === "string") {
+    return resolve(dirname(localFixturesPath), localFixtureInventory.basePath);
+  }
+  return undefined;
+}
+
+function createLocalAssetManifest() {
+  if (localFixtureInventory === undefined || dataRoot === undefined) {
+    return undefined;
+  }
+
+  const byExtension = localFixtureInventory.paths?.releaseSmoke?.byExtension ?? {};
+  const models = [
+    ...createAssetEntries("pmx", byExtension.pmx),
+    ...createAssetEntries("pmd", byExtension.pmd)
+  ];
+  const motions = createAssetEntries("vmd", byExtension.vmd);
+  const poses = createAssetEntries("vpd", byExtension.vpd);
+  const backgrounds = [
+    ...createAssetEntries("backgroundPmx", byExtension.backgroundPmx),
+    ...createAssetEntries("backgroundPmd", byExtension.backgroundPmd)
+  ];
+  const cameraSourceEntries = Object.keys(byExtension.cameraVmd ?? {}).length > 0
+    ? createAssetEntries("cameraVmd", byExtension.cameraVmd)
+    : motions;
+  const cameras = cameraSourceEntries.map((motion) => ({
+    ...motion,
+    id: `camera:${motion.id}`
+  }));
+  const audios = [
+    ...createAssetEntries("wav", byExtension.wav),
+    ...createAssetEntries("mp3", byExtension.mp3),
+    ...createAssetEntries("ogg", byExtension.ogg)
+  ];
+  const presets = createPresetEntries(localFixtureInventory.paths?.playbackSmoke?.cases, byExtension);
+
+  return {
+    schemaVersion: 1,
+    source: "fixtures.local.json",
+    dataRoute,
+    presets,
+    models,
+    motions,
+    poses,
+    backgrounds,
+    audios,
+    cameras
+  };
+}
+
+function createAssetEntries(extension, fixtureMap) {
+  return Object.entries(fixtureMap ?? {}).flatMap(([key, fixturePath]) => {
+    const url = dataUrlForFixturePath(fixturePath);
+    if (url === undefined) {
+      return [];
+    }
+    return [{
+      id: `${extension}:${key}`,
+      key,
+      extension,
+      name: `${key} - ${basename(fixturePath)}`,
+      url
+    }];
+  });
+}
+
+function createPresetEntries(cases, byExtension) {
+  if (!Array.isArray(cases)) {
+    return [];
+  }
+  return cases.flatMap((fixtureCase) => {
+    const modelPath = byExtension?.[fixtureCase.model?.extension]?.[fixtureCase.model?.key];
+    const modelUrl = dataUrlForFixturePath(modelPath);
+    const motionPath = byExtension?.vmd?.[fixtureCase.motion?.key];
+    const motionUrl = dataUrlForFixturePath(motionPath);
+    if (modelUrl === undefined || motionUrl === undefined) {
+      return [];
+    }
+    return [{
+      id: fixtureCase.name,
+      name: fixtureCase.name,
+      modelUrl,
+      motionUrl
+    }];
+  });
+}
+
+function dataUrlForFixturePath(fixturePath) {
+  if (typeof fixturePath !== "string") {
+    return undefined;
+  }
+  const filePath = resolveFixturePath(fixturePath);
+  if (filePath === undefined || !isPathInside(filePath, dataRoot)) {
+    return undefined;
+  }
+  return `${dataRoute}${relative(dataRoot, filePath).split(sep).map(encodeURIComponent).join("/")}`;
+}
+
+function resolveFixturePath(fixturePath) {
+  if (dataRoot === undefined) {
+    return undefined;
+  }
+  return resolve(dataRoot, fixturePath);
+}
 
 function resolveRequestPath(pathname) {
   if (pathname.startsWith(dataRoute)) {

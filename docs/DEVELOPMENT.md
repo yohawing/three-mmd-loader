@@ -337,6 +337,17 @@ npm run example:viewer
 This is an alias for `npm run dev`, which builds the library and starts
 `scripts/serve-example-viewer.mjs`.
 
+If `MMD_DATA_ROOT` is set, the dev server exposes that directory under
+`/__mmd_data/`. If `MMD_DATA_ROOT` is unset but the gitignored
+`test/fixtures/fixtures.local.json` inventory exists, the server uses that
+inventory's `basePath` as the local data root. In that local-only mode the
+viewer also exposes a `Local Assets` menu generated from the inventory at
+`/__mmd_assets__/fixtures-local.json`; the raw inventory and user-owned assets
+are not committed. Local PMX / PMD entries can be loaded either as the active
+model or as a separate background, VMD entries can be loaded either as model
+motion or camera motion, and recent URL-based loads are saved in browser
+storage for quick iteration.
+
 ## Visual Regression Scripts
 
 Visual regression scripts are development tools, not release-blocking CI gates.
@@ -346,7 +357,7 @@ Visual regression scripts are development tools, not release-blocking CI gates.
 | `npm run render:visual` | Renders deterministic material cases to `test-results/visual/current/`. |
 | `npm run render:visual:baseline` | Writes the same cases to `test-results/visual/baseline/`. |
 | `npm run visual:report` | Compares baseline/current images and writes a JSON report plus diffs. |
-| `npm run render:visual:real-models` | Renders local user-owned real-model cases. Skips when `MMD_VIEWER_DATA_ROOT` is unset. |
+| `npm run render:visual:real-models` | Renders local user-owned real-model cases. Skips when `MMD_DATA_ROOT` is unset. |
 | `npm run render:visual:real-models:baseline` | Writes real-model baseline images. |
 | `npm run visual:report:real-models` | Compares real-model baseline/current images. |
 | `npm run snapshot:real-models:rest-pose` | Captures rest-pose quaternion snapshots for real-model cases. |
@@ -356,7 +367,7 @@ Visual regression scripts are development tools, not release-blocking CI gates.
 Real-model scripts expect user-owned assets outside the repository:
 
 ```bash
-MMD_VIEWER_DATA_ROOT=/path/to/local/mmd-assets npm run render:visual:real-models
+MMD_DATA_ROOT=/path/to/local/mmd-assets npm run render:visual:real-models
 ```
 
 Do not commit generated files under `test-results/`.
