@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-05-26
+
+### Added
+
+- Add viewer asset presets and expanded loader controls for local playback
+  verification.
+- Add local Ammo playback stability coverage for dynamic bone anchoring and
+  hierarchy behavior.
+- Add generated visual regression fixtures for material morph alpha and hair
+  shadow transparency cases.
+
+### Changed
+
+- Pack VMD tracks into compact runtime storage by default to reduce animation
+  memory overhead.
+- Improve PMX twist IK solving and default IK convergence tolerance behavior.
+- Avoid per-frame cached ancestor allocation in the physics path.
+- Expand viewer loading helpers for model, motion, camera, audio, and
+  background assets.
+
+### Fixed
+
+- Guard MMD texture alpha transparency so stale morph alpha state does not leak
+  into material transparency.
+- Align dynamic-with-bone hierarchy handling in Ammo physics.
+- Gate fixed-axis IK behavior to hand twist chains.
+- Align dist export smoke coverage with packed VMD tracks.
+
 ## [0.2.0] - 2026-05-25
 
 ### Added

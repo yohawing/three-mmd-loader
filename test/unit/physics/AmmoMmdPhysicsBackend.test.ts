@@ -364,7 +364,10 @@ describe("AmmoMmdPhysicsBackend smoke coverage", () => {
 
 describe("AmmoMmdPhysicsBackend source guards", () => {
   it("keeps MMD-family solver defaults for gravity, substeps, constraints, and damping", async () => {
-    const source = await readFile("src/physics/ammoMmdPhysicsBackend.ts", "utf8");
+    const source = (await readFile("src/physics/ammoMmdPhysicsBackend.ts", "utf8")).replace(
+      /\r\n/g,
+      "\n"
+    );
 
     expect(source).toContain("const DEFAULT_GRAVITY: [number, number, number] = [0, -98, 0];");
     expect(source).toContain("const DEFAULT_FIXED_TIME_STEP = 1 / 65;");
