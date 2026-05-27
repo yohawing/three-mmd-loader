@@ -30,11 +30,20 @@ export interface NativeNanoemOracleIndexedName {
 export interface NativeNanoemOracleFrame {
   readonly frame: number;
   readonly stages: Partial<Record<NativeNanoemOracleStageName, NativeNanoemOracleStage>>;
+  readonly camera: NativeNanoemOracleCamera | null;
 }
 
 export interface NativeNanoemOracleStage {
   readonly worldMatricesColumnMajor: readonly number[];
   readonly morphWeights: readonly number[];
+}
+
+export interface NativeNanoemOracleCamera {
+  readonly distance: number;
+  readonly position: readonly [number, number, number];
+  readonly rotation: readonly [number, number, number];
+  readonly fov: number;
+  readonly perspective: boolean;
 }
 
 export interface MatrixComparisonIssue {
@@ -102,6 +111,13 @@ export function getOracleStage(
     throw new Error(`Native nanoem oracle stage not found: frame=${frameNumber} stage=${stageName}`);
   }
   return stage;
+}
+
+export function getOracleCamera(
+  dump: NativeNanoemOracleDump,
+  frameNumber: number
+): NativeNanoemOracleCamera | null {
+  return findOracleFrame(dump, frameNumber).camera;
 }
 
 export function getOracleBoneMatrix(
@@ -210,7 +226,8 @@ function parseOracleFrame(raw: unknown, label: string): NativeNanoemOracleFrame 
   }
   return {
     frame: frameNumber,
-    stages: parsedStages
+    stages: parsedStages,
+    camera: parseOracleCamera(frame.camera, `${label}.camera`)
   };
 }
 
@@ -241,6 +258,20 @@ function parseOracleModel(raw: unknown, label: string): NativeNanoemOracleModel 
   };
 }
 
+function parseOracleCamera(raw: unknown, label: string): NativeNanoemOracleCamera | null {
+  if (raw === null || raw === undefined) {
+    return null;
+  }
+  const camera = readRecord(raw, label);
+  return {
+    distance: readFiniteNumber(camera.distance, `${label}.distance`),
+    position: readVec3(camera.position, `${label}.position`),
+    rotation: readVec3(camera.rotation, `${label}.rotation`),
+    fov: readFiniteNumber(camera.fov, `${label}.fov`),
+    perspective: readBoolean(camera.perspective, `${label}.perspective`)
+  };
+}
+
 function parseIndexedNames(raw: unknown, label: string): readonly NativeNanoemOracleIndexedName[] {
   return readArray(raw, label).map((entry, index) => {
     const value = readRecord(entry, `${label}[${index}]`);
@@ -249,6 +280,14 @@ function parseIndexedNames(raw: unknown, label: string): readonly NativeNanoemOr
       name: readString(value.name, `${label}[${index}].name`)
     };
   });
+}
+
+function readVec3(raw: unknown, label: string): [number, number, number] {
+  const values = readNumberArray(raw, label);
+  if (values.length !== 3) {
+    throw new Error(`${label} must have 3 components`);
+  }
+  return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0];
 }
 
 function sliceMatrix16(
@@ -301,6 +340,13 @@ function readInteger(raw: unknown, label: string): number {
 function readString(raw: unknown, label: string): string {
   if (typeof raw !== "string" || raw.length === 0) {
     throw new Error(`${label} must be a non-empty string`);
+  }
+  return raw;
+}
+
+function readBoolean(raw: unknown, label: string): boolean {
+  if (typeof raw !== "boolean") {
+    throw new Error(`${label} must be a boolean`);
   }
   return raw;
 }

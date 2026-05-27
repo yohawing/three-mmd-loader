@@ -12,6 +12,7 @@ This checklist is the operator-facing release procedure for
   tag, not only from the final release-prep commit.
 - Confirm `package.json` `version` matches the intended release.
 - Confirm the working tree is clean.
+- Confirm the release branch is based on `develop`.
 - Confirm npm Trusted Publishing is configured for the GitHub `npm`
   environment.
 
@@ -55,19 +56,49 @@ git commit -m "chore(release): vX.Y.Z"
 Adjust the staged files if the release includes additional documentation or
 source changes.
 
-## 4. Tag
+Push the release-prep commit to `develop` before opening the release PR.
+
+```bash
+git push origin develop
+```
+
+## 4. Merge `develop` to `main`
+
+Open a pull request from `develop` to `main` before tagging. Do not publish from
+`develop`; the release tag must be created from the reviewed and merged `main`
+commit.
+
+```bash
+gh pr create --base main --head develop --title "chore(release): vX.Y.Z"
+```
+
+Review the PR, wait for CI, and merge it into `main`. Direct pushes to `main`
+may be blocked by repository rules; use the PR path even when the merge is a
+fast-forward.
+
+After merging, update the local `main` branch and confirm that `package.json`
+still matches the intended version.
+
+```bash
+git fetch origin
+git switch main
+git pull --ff-only origin main
+node -e "const p=require('./package.json'); if (p.version !== 'X.Y.Z') process.exit(1)"
+```
+
+## 5. Tag
 
 The release workflow requires the Git tag to match `package.json` exactly.
+Create the tag on `main` after the release PR has been reviewed and merged.
 
 ```bash
 git tag vX.Y.Z
-git push origin HEAD
 git push origin vX.Y.Z
 ```
 
 For example, `package.json` version `0.2.0` must be tagged as `v0.2.0`.
 
-## 5. GitHub Actions
+## 6. GitHub Actions
 
 The `Release` workflow runs on `v*.*.*` tags. It builds the package, validates
 tag/version consistency, creates the npm tarball, publishes to npm, and creates
@@ -84,7 +115,7 @@ Verify these workflow results:
 Manual dispatch is also available, but use tag-triggered releases for normal
 publishing so the GitHub Release is tied to the version tag.
 
-## 6. Post-release Verification
+## 7. Post-release Verification
 
 Verify the published npm artifact rather than only the local package:
 

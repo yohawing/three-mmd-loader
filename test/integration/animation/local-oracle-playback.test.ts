@@ -2,12 +2,14 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
-import { ThreeMmdLoader } from "../../../src/index.js";
+import { sampleMmdCameraTrackInto, ThreeMmdLoader } from "../../../src/index.js";
+import type { CameraState } from "../../../src/parser/model/modelTypes.js";
 import { loadLocalPlaybackFixtures } from "../../helpers/localPlaybackFixtures.js";
 import {
   compareNumberArrays,
   extractMmdWorldBoneMatrix,
   findOracleBoneIndex,
+  getOracleCamera,
   getOracleBoneMatrix,
   getOracleStage,
   readNativeNanoemOracleDump
@@ -30,6 +32,10 @@ describe("local native nanoem playback oracle", () => {
       const loader = new ThreeMmdLoader({ runtime: { frameRate: 30, physics: "none" } });
       const model = await loader.loadModel(await readFile(playbackCase.modelPath));
       const motion = await loader.loadAnimation(await readFile(playbackCase.motionPath));
+      const cameraMotion =
+        playbackCase.cameraMotionPath === undefined
+          ? undefined
+          : await loader.loadAnimation(await readFile(playbackCase.cameraMotionPath));
       const oracle = await readNativeNanoemOracleDump(playbackCase.oraclePath);
       const runtime = model.runtime;
       if (!runtime) {
@@ -51,6 +57,27 @@ describe("local native nanoem playback oracle", () => {
           expect(comparison.ok, formatMatrixMismatch(playbackCase.name, frame, boneName, comparison)).toBe(
             true
           );
+        }
+
+        const expectedCamera = getOracleCamera(oracle, frame);
+        if (cameraMotion !== undefined && expectedCamera !== null) {
+          const actualCamera = sampleMmdCameraTrackInto(
+            cameraMotion.animation.cameraFrames,
+            frame,
+            createCameraStateScratch()
+          );
+          if (!actualCamera) {
+            throw new Error(`${playbackCase.name} frame=${frame} camera sample not found`);
+          }
+          const cameraComparison = compareNumberArrays(
+            flattenCameraState(actualCamera),
+            flattenCameraState(expectedCamera),
+            playbackCase.cameraEpsilon
+          );
+          expect(
+            cameraComparison.ok,
+            formatCameraMismatch(playbackCase.name, frame, cameraComparison)
+          ).toBe(true);
         }
 
         const expectedMorphWeights = getOracleStage(
@@ -75,6 +102,32 @@ describe("local native nanoem playback oracle", () => {
   }
 });
 
+function createCameraStateScratch(): CameraState {
+  return {
+    distance: 0,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    fov: 1,
+    perspective: true
+  };
+}
+
+function flattenCameraState(camera: {
+  readonly distance: number;
+  readonly position: readonly [number, number, number];
+  readonly rotation: readonly [number, number, number];
+  readonly fov: number;
+  readonly perspective: boolean;
+}): readonly number[] {
+  return [
+    camera.distance,
+    ...camera.position,
+    ...camera.rotation,
+    camera.fov,
+    camera.perspective ? 1 : 0
+  ];
+}
+
 function formatMatrixMismatch(
   caseName: string,
   frame: number,
@@ -84,6 +137,20 @@ function formatMatrixMismatch(
   const worst = comparison.worst;
   return [
     `${caseName} frame=${frame} bone=${boneName} maxAbsError=${comparison.maxAbsError}`,
+    worst
+      ? `worst index=${worst.index} expected=${worst.expected} actual=${worst.actual} error=${worst.error}`
+      : "no worst sample"
+  ].join("; ");
+}
+
+function formatCameraMismatch(
+  caseName: string,
+  frame: number,
+  comparison: ReturnType<typeof compareNumberArrays>
+): string {
+  const worst = comparison.worst;
+  return [
+    `${caseName} frame=${frame} camera maxAbsError=${comparison.maxAbsError}`,
     worst
       ? `worst index=${worst.index} expected=${worst.expected} actual=${worst.actual} error=${worst.error}`
       : "no worst sample"

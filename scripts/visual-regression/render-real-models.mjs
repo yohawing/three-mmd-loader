@@ -385,7 +385,7 @@ function rendererHtml() {
               console.warn("Real-model texture diagnostic " + visualCase.name + ": " + diagnostic.code + " " + diagnostic.path);
             }
           }
-          scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes);
+          scene.add(model.object);
 
           if (visualCase.motionUrl !== undefined) {
             const { animation } = await loader.loadAnimation(await fetchBytes(visualCase.motionUrl));
@@ -395,8 +395,8 @@ function rendererHtml() {
             model.runtime?.evaluate(visualCase.timeSeconds, { physics: false });
           }
 
-          model.mesh.updateMatrixWorld(true);
-          const camera = createCamera(visualCase.camera, model.mesh, config.render.resolution);
+          model.object.updateMatrixWorld(true);
+          const camera = createCamera(visualCase.camera, model.object, config.render.resolution);
           renderer.render(scene, camera);
           await new Promise(requestAnimationFrame);
           results.push({

@@ -30,7 +30,7 @@ English: [README.md](../README.md)
 | 付与変形 (append transform) | ✅ PMX layer 順 |
 | WASM Parser | ✅ PMX / PMD、TypeScript fallback あり |
 | 物理 (Ammo backend) | ✅ Ammo.jsを使用。  |
-| カメラモーション適用 | ❌ |
+| カメラモーション適用 | ✅ Runtime sampling + Three.js helper、perspective/orthographic 切替 |
 | Three.js 視覚回帰ゲート | ⚠️ script はあり / CI gate は未接続 |
 
 ## Acknowledgements
@@ -76,6 +76,46 @@ model.runtime?.setAnimation(animation, model.mesh);
 // 毎フレーム。
 model.runtime?.tick(currentSeconds, model.mesh);
 ```
+
+## 使い方 - カメラモーション
+
+```ts
+import {
+  applyMmdCameraStateToThreeCamera,
+  sampleMmdCameraTrackInto
+} from "@yohawing/three-mmd-loader";
+
+const { animation } = await loader.loadAnimation(cameraVmdSource);
+const mmdFrameRate = 30; // MMD の 60 FPS モードでは 60 を指定。
+const quantizeToMmdFrame = true; // 無制限 / 小数フレーム評価では false。
+const cameraStateScratch = {
+  distance: 0,
+  position: [0, 0, 0] as [number, number, number],
+  rotation: [0, 0, 0] as [number, number, number],
+  fov: 1,
+  perspective: true
+};
+
+// 毎フレーム。選択した MMD フレーム時間を渡す。
+const frame = currentSeconds * mmdFrameRate;
+const cameraState = sampleMmdCameraTrackInto(
+  animation.cameraFrames,
+  quantizeToMmdFrame ? Math.floor(frame + 1e-6) : frame,
+  cameraStateScratch
+);
+if (cameraState) {
+  applyMmdCameraStateToThreeCamera(camera, cameraState);
+}
+```
+
+`applyMmdCameraStateToThreeCamera(...)` は MMD カメラ座標を Three.js 用に
+変換します。MMD カメラの回転規約、距離、roll、FOV、perspective /
+orthographic frame の切替を含みます。example viewer では同じ再生設定を
+URL query で切り替えられます。
+
+- `?mmdFrameRate=60`: MMD フレーム時間を 60 FPS として評価。
+- `?mmdFrameQuantize=false`: 小数フレームを維持して無制限再生寄りに評価。
+- query なしでは 30 FPS、MMD フレームに quantize する再生が既定。
 
 ## 使い方 - ポーズ (VPD)
 

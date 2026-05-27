@@ -236,7 +236,7 @@ export async function switchFolderModel(modelFile) {
 export function clearModel(options = {}) {
   restoreDebugMaterials();
   if (state.currentModel) {
-    state.scene.remove(state.currentModel.mesh);
+    state.scene.remove(state.currentModel.object);
     disposeModelResources(state.currentModel);
   }
   state.currentModel = undefined;
@@ -261,11 +261,7 @@ export function clearModel(options = {}) {
 }
 
 function addModelToScene(model) {
-  state.scene.add(
-    model.mesh,
-    ...(model.outlineMeshes ?? []),
-    ...(model.renderOrderMeshes ?? [])
-  );
+  state.scene.add(model.object);
 }
 
 export function bindDropTarget() {
@@ -473,7 +469,7 @@ export async function createModelLoader(extraOptions = {}) {
     geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
     runtime: {
       ...runtimeOptions,
-      frameRate: 30,
+      frameRate: state.mmdFrameRate,
       physics: "external",
       physicsBackend
     }

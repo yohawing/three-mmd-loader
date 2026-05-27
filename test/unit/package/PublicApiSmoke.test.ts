@@ -18,7 +18,9 @@ import {
 import {
   DefaultMmdRuntime,
   ThreeMmdLoader,
+  sampleMmdCameraTrackInto,
   createAmmoMmdPhysicsBackend,
+  applyMmdCameraStateToThreeCamera,
   createMmdTextureMapFromFiles,
   createThreeBufferGeometry,
   createThreeSkeleton,
@@ -119,6 +121,11 @@ center
 
   it("exports Three.js adapter geometry helpers from the public barrel", () => {
     expect(createThreeBufferGeometry).toBeTypeOf("function");
+  });
+
+  it("exports Three.js adapter camera helpers from the public barrel", () => {
+    expect(applyMmdCameraStateToThreeCamera).toBeTypeOf("function");
+    expect(sampleMmdCameraTrackInto).toBeTypeOf("function");
   });
 
   it("does not expose Three.js AnimationClip creation from the public barrel", () => {

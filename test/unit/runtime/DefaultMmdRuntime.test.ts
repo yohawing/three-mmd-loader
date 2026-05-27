@@ -494,6 +494,64 @@ describe("DefaultMmdRuntime", () => {
     expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
   });
 
+  it("honors VMD property frame IK enable states", () => {
+    const ikSource = new THREE.Bone();
+    ikSource.name = "ikSource";
+    const effector = new THREE.Bone();
+    effector.name = "effector";
+    effector.position.set(1, 0, 0);
+    ikSource.add(effector);
+    const goal = new THREE.Bone();
+    goal.name = "足ＩＫ+";
+    goal.userData.mmdIkStateName = "足ＩＫ";
+    goal.position.set(0, 1, 0);
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(ikSource, goal);
+    mesh.bind(new THREE.Skeleton([ikSource, effector, goal]));
+    mesh.userData.mmdIkChains = [
+      {
+        goalBoneIndex: 2,
+        effectorBoneIndex: 1,
+        iterationCount: 4,
+        maxAnglePerIteration: Math.PI,
+        links: [{ boneIndex: 0 }]
+      }
+    ];
+    const animation: MmdAnimation = {
+      ...createEmptyMmdAnimation(),
+      propertyFrames: [
+        {
+          frame: 0,
+          visible: true,
+          physicsSimulation: true,
+          ikStates: [{ boneName: "足ＩＫ", enabled: false }]
+        },
+        {
+          frame: 1,
+          visible: true,
+          physicsSimulation: true,
+          ikStates: [{ boneName: "足ＩＫ", enabled: true }]
+        }
+      ]
+    };
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0, { physics: false });
+
+    expect(ikSource.quaternion.equals(new THREE.Quaternion())).toBe(true);
+
+    runtime.clearAnimation();
+    runtime.evaluate(0, { physics: false });
+
+    expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
+
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(1 / 30, { physics: false });
+
+    expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
+  });
+
   it("resets bone pose before rebinding motions so IK does not drift across switches", () => {
     const ikSource = new THREE.Bone();
     ikSource.name = "ikSource";

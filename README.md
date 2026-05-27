@@ -30,7 +30,7 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | Append transform | ✅ PMX layer order |
 | WASM Parser | ✅ PMX / PMD with TypeScript fallback |
 | Physics (Ammo backend) | ✅ Uses Ammo.js |
-| Camera motion application | ❌ |
+| Camera motion application | ✅ Runtime sampling + Three.js helper, perspective/orthographic switch |
 | Three.js visual regression gates | ⚠️ Scripts exist; CI gates not wired |
 
 ## Acknowledgements
@@ -80,6 +80,47 @@ model.runtime?.setAnimation(animation, model.mesh);
 // Per frame.
 model.runtime?.tick(currentSeconds, model.mesh);
 ```
+
+## Usage - Camera Motion
+
+```ts
+import {
+  applyMmdCameraStateToThreeCamera,
+  sampleMmdCameraTrackInto
+} from "@yohawing/three-mmd-loader";
+
+const { animation } = await loader.loadAnimation(cameraVmdSource);
+const mmdFrameRate = 30; // Use 60 for MMD 60 FPS mode.
+const quantizeToMmdFrame = true; // Set false for unbounded/fractional-frame playback.
+const cameraStateScratch = {
+  distance: 0,
+  position: [0, 0, 0] as [number, number, number],
+  rotation: [0, 0, 0] as [number, number, number],
+  fov: 1,
+  perspective: true
+};
+
+// Per frame, using the selected MMD frame timeline.
+const frame = currentSeconds * mmdFrameRate;
+const cameraState = sampleMmdCameraTrackInto(
+  animation.cameraFrames,
+  quantizeToMmdFrame ? Math.floor(frame + 1e-6) : frame,
+  cameraStateScratch
+);
+if (cameraState) {
+  applyMmdCameraStateToThreeCamera(camera, cameraState);
+}
+```
+
+`applyMmdCameraStateToThreeCamera(...)` converts MMD camera coordinates for
+Three.js, including the MMD camera rotation convention, camera distance, roll,
+FOV, and perspective/orthographic frames. The example viewer exposes the same
+playback controls through URL query parameters:
+
+- `?mmdFrameRate=60` evaluates the MMD frame timeline at 60 FPS.
+- `?mmdFrameQuantize=false` keeps fractional frames for unbounded playback.
+- With no query parameters, the viewer defaults to 30 FPS and quantized MMD
+  frame playback.
 
 ## Usage - Pose (VPD)
 

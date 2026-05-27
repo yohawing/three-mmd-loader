@@ -95,27 +95,58 @@ export function sampleMmdCameraTrack(
   frames: readonly VmdCameraFrame[],
   frame: number
 ): CameraState | undefined {
-  const pair = sampleFramePair(frames, frame);
-  if (!pair) {
+  return sampleMmdCameraTrackInto(frames, frame, {
+    distance: 0,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    fov: 1,
+    perspective: true
+  });
+}
+
+export function sampleMmdCameraTrackInto(
+  frames: readonly VmdCameraFrame[],
+  frame: number,
+  target: CameraState,
+  hint?: { index: number }
+): CameraState | undefined {
+  if (frames.length === 0) {
     return undefined;
   }
-  const { previous, next, t } = pair;
+  let index = hint?.index ?? 0;
+  if (index >= frames.length || frames[index].frame > frame) {
+    index = 0;
+  }
+  let previous = frames[index] ?? frames[0];
+  let next = previous;
+  let t = 0;
+  if (frame < previous.frame) {
+    previous = frames[0];
+    next = previous;
+    index = 0;
+  } else {
+    while (index + 1 < frames.length && frames[index + 1].frame <= frame) {
+      index += 1;
+    }
+    previous = frames[index] ?? previous;
+    next = frames[index + 1] ?? previous;
+    t = interpolationRatio(previous.frame, next.frame, frame);
+    if (hint) {
+      hint.index = index;
+    }
+  }
   const interpolation = next.interpolation;
-  return {
-    distance: lerp(previous.distance, next.distance, interpolateBezier(interpolation?.distance, t)),
-    position: [
-      lerp(previous.position[0], next.position[0], interpolateBezier(interpolation?.positionX, t)),
-      lerp(previous.position[1], next.position[1], interpolateBezier(interpolation?.positionY, t)),
-      lerp(previous.position[2], next.position[2], interpolateBezier(interpolation?.positionZ, t))
-    ],
-    rotation: [
-      lerp(previous.rotation[0], next.rotation[0], interpolateBezier(interpolation?.rotation, t)),
-      lerp(previous.rotation[1], next.rotation[1], interpolateBezier(interpolation?.rotation, t)),
-      lerp(previous.rotation[2], next.rotation[2], interpolateBezier(interpolation?.rotation, t))
-    ],
-    fov: lerp(previous.fov, next.fov, interpolateBezier(interpolation?.fov, t)),
-    perspective: t < 1 ? previous.perspective : next.perspective
-  };
+  target.distance = lerp(previous.distance, next.distance, interpolateBezier(interpolation?.distance, t));
+  target.position[0] = lerp(previous.position[0], next.position[0], interpolateBezier(interpolation?.positionX, t));
+  target.position[1] = lerp(previous.position[1], next.position[1], interpolateBezier(interpolation?.positionY, t));
+  target.position[2] = lerp(previous.position[2], next.position[2], interpolateBezier(interpolation?.positionZ, t));
+  const rotationT = interpolateBezier(interpolation?.rotation, t);
+  target.rotation[0] = lerp(previous.rotation[0], next.rotation[0], rotationT);
+  target.rotation[1] = lerp(previous.rotation[1], next.rotation[1], rotationT);
+  target.rotation[2] = lerp(previous.rotation[2], next.rotation[2], rotationT);
+  target.fov = lerp(previous.fov, next.fov, interpolateBezier(interpolation?.fov, t));
+  target.perspective = t < 1 ? previous.perspective : next.perspective;
+  return target;
 }
 
 export function sampleMmdLightTrack(
@@ -162,7 +193,7 @@ function sampleFramePair<T extends { readonly frame: number }>(
       return {
         previous,
         next,
-        t: (frame - previous.frame) / Math.max(next.frame - previous.frame, 1)
+          t: interpolationRatio(previous.frame, next.frame, frame)
       };
     }
     previous = next;
@@ -270,7 +301,7 @@ function samplePackedBoneTrack(track: VmdBoneTrack, frame: number): VmdBoneFrame
     }
     if (frame < nextFrame) {
       const previousFrame = frames[previousIndex] ?? 0;
-      const t = (frame - previousFrame) / Math.max(nextFrame - previousFrame, 1);
+      const t = interpolationRatio(previousFrame, nextFrame, frame);
       const interpolation = readPackedBoneInterpolation(track, index);
       const previous = readPackedBoneFrame(track, previousIndex, previousFrame);
       const next = readPackedBoneFrame(track, index, nextFrame);
@@ -306,7 +337,7 @@ function samplePackedMorphTrack(track: VmdMorphTrack, frame: number): number {
     }
     if (frame < nextFrame) {
       const previousFrame = frames[previousIndex] ?? 0;
-      const t = (frame - previousFrame) / Math.max(nextFrame - previousFrame, 1);
+      const t = interpolationRatio(previousFrame, nextFrame, frame);
       return lerp(track.weights[previousIndex] ?? 0, track.weights[index] ?? 0, t);
     }
     previousIndex = index;
@@ -359,3 +390,14 @@ function readPackedCurve(values: Float32Array, offset: number): [number, number,
 }
 
 export { findBoneTrack, isMmdAnimation, sampleBoneTrack, sampleFramePair, sampleMorphTrack };
+
+function interpolationRatio(previousFrame: number, nextFrame: number, frame: number): number {
+  const span = nextFrame - previousFrame;
+  if (span <= 0) {
+    return 0;
+  }
+  if (span <= 1) {
+    return frame >= nextFrame ? 1 : 0;
+  }
+  return (frame - previousFrame) / span;
+}
