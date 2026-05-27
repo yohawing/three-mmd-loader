@@ -4,58 +4,51 @@ import { loadCameraFromUrl } from "./camera-loading.js";
 import { loadModelFromUrl } from "./model-loading.js";
 import { loadMotionFromUrl } from "./motion-loading.js";
 import { labelFromUrl } from "./url-label.js";
-import { dom, setStatus, updateChromeHeights } from "./dom.js";
+import { dom, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js";
 import { state } from "./state.js";
 
 const localAssetsUrl = "/__mmd_assets__/fixtures-local.json";
-const recentStorageKey = "three-mmd-loader.viewer.recentAssets.v2";
-const legacyRecentStorageKey = "three-mmd-loader.viewer.recentAssets.v1";
 const selectionStorageKey = "three-mmd-loader.viewer.assetSelection.v1";
 const customPresetStorageKey = "three-mmd-loader.viewer.customPresets.v1";
-const recentLimit = 12;
+const fixtureOrderStorageKey = "three-mmd-loader.viewer.fixtureOrder.v1";
+const legacyRecentStorageKeys = [
+  "three-mmd-loader.viewer.recentAssets.v2",
+  "three-mmd-loader.viewer.recentAssets.v1"
+];
+const recencyLimit = 24;
 
 const assetCategories = {
   models: {
     select: () => dom.assetModelSelect,
     button: () => dom.assetModelLoadButton,
-    recentSelect: () => dom.recentModelSelect,
-    recentButton: () => dom.recentModelLoadButton,
     load: (asset) => loadModelFromUrl(asset.url)
   },
   motions: {
     select: () => dom.assetMotionSelect,
     button: () => dom.assetMotionLoadButton,
-    recentSelect: () => dom.recentMotionSelect,
-    recentButton: () => dom.recentMotionLoadButton,
     load: (asset) => loadMotionFromUrl(asset.url)
   },
   backgrounds: {
     select: () => dom.assetBackgroundSelect,
     button: () => dom.assetBackgroundLoadButton,
-    recentSelect: () => dom.recentBackgroundSelect,
-    recentButton: () => dom.recentBackgroundLoadButton,
     load: (asset) => loadBackgroundFromUrl(asset.url)
   },
   audios: {
     select: () => dom.assetAudioSelect,
     button: () => dom.assetAudioLoadButton,
-    recentSelect: () => dom.recentAudioSelect,
-    recentButton: () => dom.recentAudioLoadButton,
     load: (asset) => loadAudioFromUrl(asset.url, labelFromUrl(asset.url))
   },
   cameras: {
     select: () => dom.assetCameraSelect,
     button: () => dom.assetCameraLoadButton,
-    recentSelect: () => dom.recentCameraSelect,
-    recentButton: () => dom.recentCameraLoadButton,
     load: (asset) => loadCameraFromUrl(asset.url)
   }
 };
 
 export async function initializeAssetLibrary() {
-  const [manifest, recentAssets, customPresets] = await Promise.all([
+  clearLegacyRecentStorage();
+  const [manifest, customPresets] = await Promise.all([
     fetchLocalAssetManifest(),
-    Promise.resolve(readRecentAssets()),
     Promise.resolve(readCustomPresets())
   ]);
 
@@ -66,8 +59,7 @@ export async function initializeAssetLibrary() {
     poses: manifest?.poses ?? [],
     backgrounds: manifest?.backgrounds ?? [],
     audios: manifest?.audios ?? [],
-    cameras: manifest?.cameras ?? [],
-    recent: recentAssets
+    cameras: manifest?.cameras ?? []
   };
 
   updateAssetLibraryControls();
@@ -80,13 +72,11 @@ export function bindAssetLibraryControls() {
     if (preset) void loadAssetPreset(preset);
   });
   dom.assetPresetSaveButton?.addEventListener("click", saveCurrentAssetPreset);
+  dom.assetPresetDeleteButton?.addEventListener("click", deleteSelectedAssetPreset);
+  dom.assetPresetSelect?.addEventListener("change", updatePresetDeleteButton);
   for (const [category, config] of Object.entries(assetCategories)) {
     config.button()?.addEventListener("click", () => {
       const asset = findSelectedAsset(state.assetLibrary[category], config.select());
-      if (asset) void loadCategoryAsset(category, asset);
-    });
-    config.recentButton()?.addEventListener("click", () => {
-      const asset = findSelectedAsset(state.assetLibrary.recent[category], config.recentSelect());
       if (asset) void loadCategoryAsset(category, asset);
     });
   }
@@ -161,7 +151,26 @@ function saveCurrentAssetPreset() {
   ];
   updatePresetControls();
   setSelectValue(dom.assetPresetSelect, savedPreset.id);
+  updatePresetDeleteButton();
   setStatus(`Saved preset: ${trimmedName}`, "ready");
+}
+
+function deleteSelectedAssetPreset() {
+  const preset = findSelectedAsset(state.assetLibrary.presets, dom.assetPresetSelect);
+  if (!preset || !isCustomPreset(preset)) {
+    return;
+  }
+  if (!window.confirm(`Delete preset "${preset.name}"?`)) {
+    return;
+  }
+  const customPresets = readCustomPresets().filter((entry) => entry.id !== preset.id);
+  writeCustomPresets(customPresets);
+  state.assetLibrary.presets = [
+    ...state.assetLibrary.presets.filter((entry) => !isCustomPreset(entry)),
+    ...customPresets
+  ];
+  updatePresetControls();
+  setStatus(`Deleted preset: ${preset.name}`, "ready");
 }
 
 async function loadCategoryAsset(category, asset) {
@@ -174,17 +183,16 @@ async function loadCategoryAsset(category, asset) {
   if (!await config.load(asset)) {
     return;
   }
-  rememberRecentAsset(category, asset);
+  rememberFixtureUse(category, asset.id);
+  updateAssetLibraryControls();
   setStatus("", "ready");
 }
 
 function updateAssetLibraryControls() {
   updatePresetControls();
   for (const [category, config] of Object.entries(assetCategories)) {
-    updateSelect(config.select(), state.assetLibrary[category]);
-    updateSelect(config.recentSelect(), state.assetLibrary.recent[category]);
+    updateSelect(config.select(), sortByRecency(category, state.assetLibrary[category]));
     setButtonHidden(config.button(), state.assetLibrary[category].length === 0);
-    setButtonHidden(config.recentButton(), state.assetLibrary.recent[category].length === 0);
   }
   updateChromeHeights();
 }
@@ -192,9 +200,13 @@ function updateAssetLibraryControls() {
 function updatePresetControls() {
   updateSelect(dom.assetPresetSelect, state.assetLibrary.presets);
   setButtonHidden(dom.assetPresetLoadButton, state.assetLibrary.presets.length === 0);
-  if (dom.assetPresetSection) {
-    dom.assetPresetSection.hidden = false;
-  }
+  updatePresetDeleteButton();
+  updatePresetSectionVisibility();
+}
+
+function updatePresetDeleteButton() {
+  const preset = findSelectedAsset(state.assetLibrary.presets, dom.assetPresetSelect);
+  setButtonHidden(dom.assetPresetDeleteButton, !preset || !isCustomPreset(preset));
 }
 
 function updateSelect(select, assets) {
@@ -219,6 +231,56 @@ function updateSelect(select, assets) {
   const row = select.closest(".asset-load-row");
   if (row instanceof window.HTMLElement) {
     row.hidden = assets.length === 0;
+  }
+}
+
+function sortByRecency(category, assets) {
+  const order = readFixtureOrder()[category] ?? [];
+  if (order.length === 0) {
+    return assets;
+  }
+  const rank = new Map(order.map((id, index) => [id, index]));
+  return [...assets].sort((a, b) => {
+    const rankA = rank.has(a.id) ? rank.get(a.id) : Number.POSITIVE_INFINITY;
+    const rankB = rank.has(b.id) ? rank.get(b.id) : Number.POSITIVE_INFINITY;
+    return rankA - rankB;
+  });
+}
+
+function rememberFixtureUse(category, assetId) {
+  const order = readFixtureOrder();
+  const existing = Array.isArray(order[category]) ? order[category] : [];
+  order[category] = [assetId, ...existing.filter((id) => id !== assetId)].slice(0, recencyLimit);
+  writeFixtureOrder(order);
+}
+
+function readFixtureOrder() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(fixtureOrderStorageKey) ?? "null");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // Ignore malformed storage.
+  }
+  return {};
+}
+
+function writeFixtureOrder(order) {
+  try {
+    window.localStorage.setItem(fixtureOrderStorageKey, JSON.stringify(order));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clearLegacyRecentStorage() {
+  for (const key of legacyRecentStorageKeys) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Ignore storage failures.
+    }
   }
 }
 
@@ -338,7 +400,12 @@ function selectedEntry(entries, select) {
 }
 
 function defaultPresetName(modelUrl, motionUrl) {
-  return modelUrl ? labelFromUrl(modelUrl) : motionUrl ? labelFromUrl(motionUrl) : "Current preset";
+  const modelLabel = modelUrl ? labelFromUrl(modelUrl) : "";
+  const motionLabel = motionUrl ? labelFromUrl(motionUrl) : "";
+  if (modelLabel && motionLabel) {
+    return `${modelLabel} + ${motionLabel}`;
+  }
+  return modelLabel || motionLabel || "Current preset";
 }
 
 function isCustomPreset(preset) {
@@ -369,87 +436,4 @@ function isCustomPresetAsset(preset) {
     typeof preset.audioUrl === "string" ||
     typeof preset.cameraUrl === "string"
   );
-}
-
-function rememberRecentAsset(category, asset) {
-  const existing = state.assetLibrary.recent[category] ?? [];
-  state.assetLibrary.recent[category] = [
-    {
-      id: asset.id,
-      name: asset.name,
-      url: asset.url
-    },
-    ...existing.filter((entry) => entry.id !== asset.id)
-  ].slice(0, recentLimit);
-  window.localStorage.setItem(recentStorageKey, JSON.stringify(state.assetLibrary.recent));
-  updateAssetLibraryControls();
-}
-
-function readRecentAssets() {
-  const empty = createEmptyRecentAssets();
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(recentStorageKey) ?? "null");
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return normalizeRecentAssets(parsed);
-    }
-    return migrateLegacyRecentAssets(empty);
-  } catch {
-    return migrateLegacyRecentAssets(empty);
-  }
-}
-
-function migrateLegacyRecentAssets(fallback) {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(legacyRecentStorageKey) ?? "[]");
-    if (!Array.isArray(parsed)) {
-      return fallback;
-    }
-    const recent = createEmptyRecentAssets();
-    for (const entry of parsed) {
-      addLegacyRecentEntry(recent.models, entry, "modelUrl");
-      addLegacyRecentEntry(recent.motions, entry, "motionUrl");
-      addLegacyRecentEntry(recent.backgrounds, entry, "backgroundUrl");
-      addLegacyRecentEntry(recent.audios, entry, "audioUrl");
-      addLegacyRecentEntry(recent.cameras, entry, "cameraUrl");
-    }
-    return recent;
-  } catch {
-    return fallback;
-  }
-}
-
-function addLegacyRecentEntry(target, entry, urlKey) {
-  if (!entry || typeof entry[urlKey] !== "string") {
-    return;
-  }
-  const url = entry[urlKey];
-  target.push({
-    id: `${urlKey}:${url}`,
-    name: labelFromUrl(url),
-    url
-  });
-}
-
-function normalizeRecentAssets(value) {
-  const recent = createEmptyRecentAssets();
-  for (const category of Object.keys(assetCategories)) {
-    if (Array.isArray(value[category])) {
-      recent[category] = value[category].filter(isRecentAsset).slice(0, recentLimit);
-    }
-  }
-  return recent;
-}
-
-function createEmptyRecentAssets() {
-  return {
-    models: [],
-    motions: [],
-    backgrounds: [],
-    audios: [],
-    cameras: []
-  };
-}
-
-function isRecentAsset(asset) {
-  return asset && typeof asset.id === "string" && typeof asset.name === "string" && typeof asset.url === "string";
 }

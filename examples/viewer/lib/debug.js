@@ -57,8 +57,8 @@ export function createViewerDebugApi() {
     },
     evaluateAt(seconds, options = {}) {
       state.elapsedSeconds = Number(seconds);
-      if (dom.timeline && state.elapsedSeconds > Number.parseFloat(dom.timeline.max)) {
-        dom.timeline.max = String(state.elapsedSeconds);
+      if (dom.timeline && state.elapsedSeconds > Number(dom.timeline.max)) {
+        dom.timeline.max = state.elapsedSeconds;
       }
       evaluateRuntime(options);
       state.controls.update();

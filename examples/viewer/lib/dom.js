@@ -1,4 +1,4 @@
-import { currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
+import { currentMmdFrame, currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
 
 export const dom = {
   canvas: document.querySelector("#viewer-canvas"),
@@ -27,14 +27,20 @@ export const dom = {
   cameraClearButton: document.querySelector("#clear-camera"),
   frameValueText: document.querySelector("#frame-value"),
   timeline: document.querySelector("#timeline"),
+  volumeControl: document.querySelector("#volume-control"),
+  volumeSlider: document.querySelector("#volume-slider"),
+  volumeToggle: document.querySelector("#volume-toggle"),
   playToggle: document.querySelector("#play-toggle"),
   playToggleIcon: document.querySelector("#play-toggle")?.querySelector(".material-symbols-rounded"),
   loadMenu: document.querySelector("#load-menu"),
   loadMenuIcon: document.querySelector("#load-menu-icon"),
+  languageSelect: document.querySelector("#language-select"),
+  appVersionText: document.querySelector("#app-version"),
   assetPresetSection: document.querySelector("#asset-preset-section"),
   assetPresetSelect: document.querySelector("#asset-preset-select"),
   assetPresetLoadButton: document.querySelector("#load-asset-preset"),
   assetPresetSaveButton: document.querySelector("#save-current-preset"),
+  assetPresetDeleteButton: document.querySelector("#delete-asset-preset"),
   assetModelSelect: document.querySelector("#asset-model-select"),
   assetModelLoadButton: document.querySelector("#load-asset-model"),
   assetMotionSelect: document.querySelector("#asset-motion-select"),
@@ -45,16 +51,6 @@ export const dom = {
   assetAudioLoadButton: document.querySelector("#load-asset-audio"),
   assetCameraSelect: document.querySelector("#asset-camera-select"),
   assetCameraLoadButton: document.querySelector("#load-asset-camera"),
-  recentModelSelect: document.querySelector("#recent-model-select"),
-  recentModelLoadButton: document.querySelector("#load-recent-model"),
-  recentMotionSelect: document.querySelector("#recent-motion-select"),
-  recentMotionLoadButton: document.querySelector("#load-recent-motion"),
-  recentBackgroundSelect: document.querySelector("#recent-background-select"),
-  recentBackgroundLoadButton: document.querySelector("#load-recent-background"),
-  recentAudioSelect: document.querySelector("#recent-audio-select"),
-  recentAudioLoadButton: document.querySelector("#load-recent-audio"),
-  recentCameraSelect: document.querySelector("#recent-camera-select"),
-  recentCameraLoadButton: document.querySelector("#load-recent-camera"),
   modelFileInput: document.querySelector("#model-file"),
   modelFolderInput: document.querySelector("#model-folder"),
   motionFileInput: document.querySelector("#motion-file"),
@@ -110,6 +106,7 @@ function setLoadingIndicator(loading, message) {
 
 export function updateStageState() {
   dom.stage?.classList.toggle("is-empty", !state.currentModel && !state.currentBackground);
+  updatePresetSectionVisibility();
 }
 
 export function updateTransportState() {
@@ -121,6 +118,24 @@ export function updateTransportState() {
     dom.bgmAudio.loop = hasCurrentMotion();
   }
   dom.viewerShell?.classList.toggle("has-motion", hasTimelineSource);
+  updatePresetSectionVisibility();
+}
+
+// The preset section hosts both the fixture preset picker and the "save current
+// assets" control. Without bundled fixtures (e.g. the deployed demo) it is only
+// useful once something is loaded, so keep it hidden until then.
+export function updatePresetSectionVisibility() {
+  if (!dom.assetPresetSection) {
+    return;
+  }
+  const hasPresets = (state.assetLibrary?.presets?.length ?? 0) > 0;
+  const hasLoadedContent =
+    state.currentModel !== undefined ||
+    state.currentMotion !== undefined ||
+    state.currentBackground !== undefined ||
+    state.currentCameraMotion !== undefined ||
+    state.currentAudioEntries.length > 0;
+  dom.assetPresetSection.hidden = !(hasPresets || hasLoadedContent);
 }
 
 export function updateChromeHeights() {
@@ -133,13 +148,6 @@ export function updateChromeHeights() {
   }
 }
 
-export function formatTime(seconds) {
-  const safeSeconds = Math.max(Number.isFinite(seconds) ? seconds : 0, 0);
-  const minutes = Math.floor(safeSeconds / 60);
-  const remainingSeconds = safeSeconds - minutes * 60;
-  return `${String(minutes).padStart(2, "0")}:${remainingSeconds.toFixed(2).padStart(5, "0")}`;
-}
-
 export function updatePlayToggle() {
   if (dom.playToggleIcon) {
     dom.playToggleIcon.textContent = state.isPlaying ? "pause" : "play_arrow";
@@ -148,7 +156,7 @@ export function updatePlayToggle() {
 }
 
 export function updatePlaybackDisplay() {
-  const duration = currentMotionDurationSeconds();
-  const currentTime = Number.isFinite(state.elapsedSeconds) ? state.elapsedSeconds : 0;
-  dom.frameValueText.textContent = formatTime(currentTime) + " / " + formatTime(duration);
+  const totalFrames = Math.round(currentMotionDurationSeconds() * state.mmdFrameRate);
+  const currentFrame = Math.round(currentMmdFrame());
+  dom.frameValueText.textContent = `${currentFrame} / ${totalFrames}`;
 }

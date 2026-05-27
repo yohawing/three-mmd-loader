@@ -60,7 +60,7 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("createModelLoader({ textureMap: state.currentFolderTextureMap })");
     expect(modelSource).toContain("dom.modelControl.hidden = state.currentFolderPmxFiles.length === 0");
     expect(modelSource).toContain("preserveModelSwitcher: true");
-    expect(modelSource).toContain("dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001))");
+    expect(modelSource).toContain("dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001)");
     expect(mainSource).toContain("modelFileKey(file) === dom.modelSwitcher.value");
     expect(styles).toContain(".loaded-file-control select");
 
@@ -136,11 +136,10 @@ describe("example viewer source", () => {
     expect(html).toContain('id="load-asset-background"');
     expect(html).toContain('id="load-asset-audio"');
     expect(html).toContain('id="load-asset-camera"');
-    expect(html).toContain('id="recent-model-select"');
-    expect(html).toContain('id="recent-motion-select"');
-    expect(html).toContain('id="recent-background-select"');
-    expect(html).toContain('id="recent-audio-select"');
-    expect(html).toContain('id="recent-camera-select"');
+    expect(html).toContain('id="delete-asset-preset"');
+    expect(html).not.toContain('id="recent-model-select"');
+    expect(html).not.toContain('id="recent-motion-select"');
+    expect(html).not.toContain('id="recent-camera-select"');
     expect(html).toContain('id="loading-indicator"');
     expect(html).toContain('id="load-menu-icon"');
     expect(html).not.toContain('id="load-selected-assets"');
@@ -148,7 +147,8 @@ describe("example viewer source", () => {
     expect(domSource).toContain('assetPresetSection: document.querySelector("#asset-preset-section")');
     expect(domSource).toContain('assetPresetSaveButton: document.querySelector("#save-current-preset")');
     expect(domSource).toContain('assetModelLoadButton: document.querySelector("#load-asset-model")');
-    expect(domSource).toContain('recentModelSelect: document.querySelector("#recent-model-select")');
+    expect(domSource).toContain('assetPresetDeleteButton: document.querySelector("#delete-asset-preset")');
+    expect(domSource).not.toContain("recentModelSelect");
     expect(domSource).toContain('loadingIndicator: document.querySelector("#loading-indicator")');
     expect(domSource).toContain("function setLoadingIndicator");
     expect(domSource).toContain("export function updateLoadMenuIcon()");
@@ -171,9 +171,13 @@ describe("example viewer source", () => {
     expect(assetLibrarySource).toContain("const assetCategories = {");
     expect(assetLibrarySource).toContain("async function loadCategoryAsset(category, asset)");
     expect(assetLibrarySource).toContain("if (!await config.load(asset))");
-    expect(assetLibrarySource).toContain("rememberRecentAsset(category, asset)");
-    expect(assetLibrarySource).toContain('const recentStorageKey = "three-mmd-loader.viewer.recentAssets.v2"');
-    expect(assetLibrarySource).toContain("migrateLegacyRecentAssets");
+    expect(assetLibrarySource).toContain("rememberFixtureUse(category, asset.id)");
+    expect(assetLibrarySource).toContain('const fixtureOrderStorageKey = "three-mmd-loader.viewer.fixtureOrder.v1"');
+    expect(assetLibrarySource).toContain("function sortByRecency(category, assets)");
+    expect(assetLibrarySource).toContain("function deleteSelectedAssetPreset()");
+    expect(assetLibrarySource).toContain("clearLegacyRecentStorage()");
+    expect(assetLibrarySource).not.toContain("rememberRecentAsset");
+    expect(assetLibrarySource).not.toContain("migrateLegacyRecentAssets");
     expect(assetLibrarySource).not.toContain("Restoring selected assets");
     expect(assetLibrarySource).not.toContain("hasRestorableSelection");
     expect(assetLibrarySource).toContain("loadModelFromUrl(preset.modelUrl)");
@@ -186,7 +190,7 @@ describe("example viewer source", () => {
     expect(assetLibrarySource).toContain("loadCameraFromUrl(asset.url)");
     expect(assetLibrarySource).not.toContain("async function loadSelectedAssets");
     expect(assetLibrarySource).not.toContain('const noneOptionValue = "__none__"');
-    expect(assetLibrarySource).toContain("window.localStorage.setItem(recentStorageKey");
+    expect(assetLibrarySource).toContain("window.localStorage.setItem(fixtureOrderStorageKey");
     expect(html).toContain('id="asset-background-select"');
     expect(html).toContain('id="asset-audio-select"');
     expect(html).toContain('id="asset-camera-select"');

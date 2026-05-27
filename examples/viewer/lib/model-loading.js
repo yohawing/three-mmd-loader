@@ -79,15 +79,15 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     state.currentFolderPmxFiles = [switcherEntry ?? createModelSwitcherEntry(source, label)];
     updateModelSwitcher(state.currentFolderPmxFiles[0]);
     state.elapsedSeconds = 0;
-    dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
-    dom.timeline.value = "0";
+    dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
+    dom.timeline.value = 0;
     updatePlaybackDisplay();
     fitCameraToObject(state.currentModel.mesh);
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
       state.currentModel.runtime?.setAnimation(state.currentMotion.animation, state.currentModel.mesh);
-      dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
+      dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
       updateTransportState();
       syncPlaybackToCurrentAudioState();
@@ -149,15 +149,15 @@ export async function loadModelFolder(files) {
     addModelToScene(state.currentModel);
     profile?.mark("scene-ready");
     state.elapsedSeconds = 0;
-    dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
-    dom.timeline.value = "0";
+    dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
+    dom.timeline.value = 0;
     updatePlaybackDisplay();
     fitCameraToObject(state.currentModel.mesh);
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
       state.currentModel.runtime?.setAnimation(state.currentMotion.animation, state.currentModel.mesh);
-      dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
+      dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
       updateTransportState();
       syncPlaybackToCurrentAudioState();
@@ -205,13 +205,13 @@ export async function switchFolderModel(modelFile) {
     updateModelSwitcher(modelFile);
     profile?.mark("scene-ready");
     state.elapsedSeconds = 0;
-    dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
-    dom.timeline.value = "0";
+    dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
+    dom.timeline.value = 0;
     updatePlaybackDisplay();
     fitCameraToObject(state.currentModel.mesh);
     if (hasCurrentMotion()) {
       state.currentModel.runtime?.setAnimation(state.currentMotion.animation, state.currentModel.mesh);
-      dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
+      dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
       updateTransportState();
       syncPlaybackToCurrentAudioState();
@@ -252,8 +252,8 @@ export function clearModel(options = {}) {
   }
   state.elapsedSeconds = 0;
   if (dom.timeline) {
-    dom.timeline.max = String(Math.max(currentMotionDurationSeconds(), 0.001));
-    dom.timeline.value = "0";
+    dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
+    dom.timeline.value = 0;
   }
   updatePlaybackDisplay();
   updateStageState();

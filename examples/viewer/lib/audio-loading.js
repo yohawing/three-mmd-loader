@@ -1,4 +1,4 @@
-import { dom, setStatus } from "./dom.js";
+import { dom, setStatus, updatePresetSectionVisibility } from "./dom.js";
 import { hasCurrentMotion, state } from "./state.js";
 
 export function loadAudioFile(file) {
@@ -82,7 +82,11 @@ export function isAudioElement(element) {
 }
 
 export function hasActiveAudioSource() {
-  return isAudioElement(dom.bgmAudio) && dom.bgmAudio.currentSrc.length > 0;
+  return (
+    isAudioElement(dom.bgmAudio) &&
+    state.currentAudioEntries.length > 0 &&
+    dom.bgmAudio.currentSrc.length > 0
+  );
 }
 
 function updateAudioSwitcher(selectedEntry) {
@@ -106,4 +110,8 @@ function updateAudioSwitcher(selectedEntry) {
   if (dom.audioControl) {
     dom.audioControl.hidden = state.currentAudioEntries.length === 0;
   }
+  if (dom.volumeControl) {
+    dom.volumeControl.hidden = state.currentAudioEntries.length === 0;
+  }
+  updatePresetSectionVisibility();
 }

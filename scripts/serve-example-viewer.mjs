@@ -71,10 +71,26 @@ const server = createServer(async (request, response) => {
 
     const info = await stat(filePath);
     const resolvedFilePath = info.isDirectory() ? join(filePath, "index.html") : filePath;
+    const resolvedInfo = info.isDirectory() ? await stat(resolvedFilePath) : info;
     const contentType = mimeTypes.get(extname(resolvedFilePath)) ?? "application/octet-stream";
+    const totalSize = resolvedInfo.size;
+    const range = parseRangeHeader(request.headers.range, totalSize);
+    if (range !== undefined) {
+      response.writeHead(206, {
+        "Cache-Control": "no-store",
+        "Content-Type": contentType,
+        "Accept-Ranges": "bytes",
+        "Content-Range": `bytes ${range.start}-${range.end}/${totalSize}`,
+        "Content-Length": range.end - range.start + 1
+      });
+      createReadStream(resolvedFilePath, { start: range.start, end: range.end }).pipe(response);
+      return;
+    }
     response.writeHead(200, {
       "Cache-Control": "no-store",
-      "Content-Type": contentType
+      "Content-Type": contentType,
+      "Accept-Ranges": "bytes",
+      "Content-Length": totalSize
     });
     createReadStream(resolvedFilePath).pipe(response);
   } catch (error) {
@@ -97,6 +113,41 @@ server.listen(port, host, () => {
     }
   }
 });
+
+function parseRangeHeader(headerValue, totalSize) {
+  if (typeof headerValue !== "string" || totalSize <= 0) {
+    return undefined;
+  }
+  const match = /^bytes=(\d*)-(\d*)$/.exec(headerValue.trim());
+  if (match === null) {
+    return undefined;
+  }
+  const [, startRaw, endRaw] = match;
+  let start;
+  let end;
+  if (startRaw === "") {
+    if (endRaw === "") {
+      return undefined;
+    }
+    const suffixLength = Number.parseInt(endRaw, 10);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) {
+      return undefined;
+    }
+    start = Math.max(totalSize - suffixLength, 0);
+    end = totalSize - 1;
+  } else {
+    start = Number.parseInt(startRaw, 10);
+    end = endRaw === "" ? totalSize - 1 : Number.parseInt(endRaw, 10);
+  }
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return undefined;
+  }
+  end = Math.min(end, totalSize - 1);
+  if (start < 0 || start > end) {
+    return undefined;
+  }
+  return { start, end };
+}
 
 function loadLocalFixtureInventory() {
   if (!existsSync(localFixturesPath)) {

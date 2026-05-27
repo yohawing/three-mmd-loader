@@ -60,9 +60,9 @@ export async function loadMotion(source, label = source.name ?? "motion") {
       durationSeconds: animationDurationSeconds(animation)
     };
     state.currentModel.runtime?.setAnimation(animation, state.currentModel.mesh);
-    dom.timeline.max = String(Math.max(animationDurationSeconds(animation), state.currentCameraMotion?.durationSeconds ?? 0, 0.001));
+    dom.timeline.max = Math.max(animationDurationSeconds(animation), state.currentCameraMotion?.durationSeconds ?? 0, 0.001);
     state.elapsedSeconds = 0;
-    dom.timeline.value = "0";
+    dom.timeline.value = 0;
     syncAudioToMotionTime();
     updateMotionSwitcherSelection(switcherEntry);
     updatePlaybackDisplay();
@@ -91,8 +91,8 @@ export async function loadPose(source, label = source.name ?? "pose") {
     };
     state.currentModel.runtime?.setAnimation(poseAnimation.animation, state.currentModel.mesh);
     state.elapsedSeconds = 0;
-    dom.timeline.max = "1";
-    dom.timeline.value = "0";
+    dom.timeline.max = 1;
+    dom.timeline.value = 0;
     resetMotionSwitcherState();
     updatePlaybackDisplay();
     updateTransportState();
@@ -128,8 +128,8 @@ export function clearMotion() {
     state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
   }
   if (dom.timeline) {
-    dom.timeline.max = String(Math.max(state.currentCameraMotion?.durationSeconds ?? 0, 0.001));
-    dom.timeline.value = "0";
+    dom.timeline.max = Math.max(state.currentCameraMotion?.durationSeconds ?? 0, 0.001);
+    dom.timeline.value = 0;
   }
   state.elapsedSeconds = 0;
   resetMotionSwitcherState();

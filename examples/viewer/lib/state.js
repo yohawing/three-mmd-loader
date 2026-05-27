@@ -39,14 +39,7 @@ export const state = {
     poses: [],
     backgrounds: [],
     audios: [],
-    cameras: [],
-    recent: {
-      models: [],
-      motions: [],
-      backgrounds: [],
-      audios: [],
-      cameras: []
-    }
+    cameras: []
   },
   pendingMotionSource: undefined,
   pendingMotionLabel: undefined,
