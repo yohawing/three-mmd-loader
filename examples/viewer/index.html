@@ -8,10 +8,7 @@
     <title>MMD Loader for Three.js · three-mmd-loader</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" />
-    <!-- Shoelace UI spike (no-build, CDN autoloader). Vendor it like three/ammo if adopted. -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2/cdn/themes/light.css" />
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2/cdn/shoelace-autoloader.js"></script>
-    <link rel="stylesheet" href="./styles.css" />
+    <!-- The import map must precede any module load (e.g. the Shoelace autoloader below). -->
     <script type="importmap">
       {
         "imports": {
@@ -20,6 +17,10 @@
         }
       }
     </script>
+    <!-- Shoelace UI spike (no-build, CDN autoloader). Vendor it like three/ammo if adopted. -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2/cdn/themes/light.css" />
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2/cdn/shoelace-autoloader.js"></script>
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="viewer-shell">
