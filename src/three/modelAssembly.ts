@@ -71,6 +71,7 @@ function createThreeMmdSkeletonBone(bone: BoneData): ThreeMmdSkeletonBone {
   return {
     name: bone.name,
     englishName: bone.englishName,
+    ikStateName: bone.ikStateName,
     parentIndex: bone.parentIndex,
     position: [...bone.position],
     layer: bone.layer,

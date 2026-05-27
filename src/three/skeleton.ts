@@ -3,6 +3,7 @@ import * as THREE from "three";
 export interface ThreeMmdSkeletonBone {
   readonly name: string;
   readonly englishName: string;
+  readonly ikStateName?: string;
   readonly parentIndex: number;
   readonly position: readonly [number, number, number];
   readonly ik?: {

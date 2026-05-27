@@ -27,6 +27,10 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private previousEvaluateSeconds: number | undefined;
   private physicsDisabled = false;
   private preparedIkChains: CcdIkPreparedChain[] = [];
+  private readonly activeIkChains: CcdIkPreparedChain[] = [];
+  private currentIkPropertyFrame: MmdAnimation["propertyFrames"][number] | undefined;
+  private currentIkPropertyFrameIndex = -1;
+  private readonly disabledIkBoneNames = new Set<string>();
   private readonly scratchAppendTranslations: THREE.Vector3[] = [];
   private readonly scratchAppendRotations: THREE.Quaternion[] = [];
   private readonly scratchReapplyAppendTranslations: THREE.Vector3[] = [];
@@ -51,6 +55,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.state = createFrameState(seconds, this.frameRate);
     if (this.mmdAnimation && this.mesh) {
       this.applyCurrentMmdAnimation(this.state.frame);
+      this.updateCurrentIkStates(this.state.frame);
       this.captureDebugStage("vmdInterpolation");
     }
     this.applyCurrentAppendTransforms();
@@ -109,6 +114,10 @@ export class DefaultMmdRuntime implements MmdRuntime {
   clearAnimation(): void {
     this.mmdAnimation = undefined;
     this.bonePhysicsToggles = {};
+    this.activeIkChains.length = 0;
+    this.currentIkPropertyFrame = undefined;
+    this.currentIkPropertyFrameIndex = -1;
+    this.disabledIkBoneNames.clear();
   }
 
   /**
@@ -127,6 +136,10 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.externalPhysicsData = undefined;
     this.bonePhysicsToggles = {};
     this.preparedIkChains = [];
+    this.activeIkChains.length = 0;
+    this.currentIkPropertyFrame = undefined;
+    this.currentIkPropertyFrameIndex = -1;
+    this.disabledIkBoneNames.clear();
     this.debugStages = createEmptyDebugStages();
     this.previousEvaluateSeconds = undefined;
     this.physicsDisabled = false;
@@ -146,7 +159,12 @@ export class DefaultMmdRuntime implements MmdRuntime {
       readIkChains(mesh),
       createCcdIkStaticBones(mesh)
     );
+    this.activeIkChains.length = 0;
+    this.currentIkPropertyFrame = undefined;
+    this.currentIkPropertyFrameIndex = -1;
+    this.disabledIkBoneNames.clear();
     this.applyCurrentMmdAnimation(this.state.frame);
+    this.updateCurrentIkStates(this.state.frame);
   }
 
   private prepareAnimationTarget(mesh: THREE.SkinnedMesh): void {
@@ -205,13 +223,14 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 
   private solveIk(): Set<number> {
+    const chains = this.currentEnabledIkChains();
     if (!this.hasHandTwistIkChain()) {
-      const sourceBoneIndices = solvePreparedIk(this.mesh, this.ikSolver, this.preparedIkChains);
+      const sourceBoneIndices = solvePreparedIk(this.mesh, this.ikSolver, chains);
       this.reapplyCurrentAppendTransformsForSources(sourceBoneIndices);
       return sourceBoneIndices;
     }
     const changedBoneIndices = new Set<number>();
-    for (const chain of this.preparedIkChains) {
+    for (const chain of chains) {
       const chainSourceBoneIndices = solvePreparedIk(this.mesh, this.ikSolver, [chain]);
       for (const index of chainSourceBoneIndices) {
         changedBoneIndices.add(index);
@@ -219,6 +238,49 @@ export class DefaultMmdRuntime implements MmdRuntime {
       this.reapplyCurrentAppendTransformsForSources(chainSourceBoneIndices);
     }
     return changedBoneIndices;
+  }
+
+  private currentEnabledIkChains(): readonly CcdIkPreparedChain[] {
+    if (this.disabledIkBoneNames.size === 0) {
+      return this.preparedIkChains;
+    }
+    return this.activeIkChains;
+  }
+
+  private rebuildActiveIkChains(): void {
+    this.activeIkChains.length = 0;
+    const bones = this.mesh?.skeleton.bones;
+    if (!bones) {
+      return;
+    }
+    for (const chain of this.preparedIkChains) {
+      if (this.isIkChainEnabled(chain, bones)) {
+        this.activeIkChains.push(chain);
+      }
+    }
+  }
+
+  private isIkChainEnabled(
+    chain: CcdIkPreparedChain,
+    bones: readonly THREE.Bone[]
+  ): boolean {
+    const bone = bones[chain.goalBoneIndex];
+    if (!bone) {
+      return true;
+    }
+    if (this.disabledIkBoneNames.has(bone.name)) {
+      return false;
+    }
+    const mmdName = bone.userData.mmdBoneName;
+    if (typeof mmdName === "string" && this.disabledIkBoneNames.has(mmdName)) {
+      return false;
+    }
+    const ikStateName = bone.userData.mmdIkStateName;
+    if (typeof ikStateName === "string" && this.disabledIkBoneNames.has(ikStateName)) {
+      return false;
+    }
+    const englishName = bone.userData.mmdEnglishBoneName;
+    return !(typeof englishName === "string" && this.disabledIkBoneNames.has(englishName));
   }
 
   private hasHandTwistIkChain(): boolean {
@@ -245,6 +307,46 @@ export class DefaultMmdRuntime implements MmdRuntime {
     if (!result) return;
     this.bonePhysicsToggles = result.bonePhysicsToggles;
     this.preAppendTransforms = result.preAppendTransforms;
+  }
+
+  private updateCurrentIkStates(frame: number): void {
+    const propertyFrame = this.sampleCurrentPropertyFrame(frame);
+    if (propertyFrame === this.currentIkPropertyFrame) {
+      return;
+    }
+    this.currentIkPropertyFrame = propertyFrame;
+    this.disabledIkBoneNames.clear();
+    this.activeIkChains.length = 0;
+    if (!propertyFrame) {
+      return;
+    }
+    for (const state of propertyFrame.ikStates) {
+      if (!state.enabled) {
+        this.disabledIkBoneNames.add(state.boneName);
+      }
+    }
+    if (this.disabledIkBoneNames.size > 0) {
+      this.rebuildActiveIkChains();
+    }
+  }
+
+  private sampleCurrentPropertyFrame(frame: number): MmdAnimation["propertyFrames"][number] | undefined {
+    const frames = this.mmdAnimation?.propertyFrames;
+    if (!frames || frames.length === 0 || frame < frames[0]!.frame) {
+      this.currentIkPropertyFrameIndex = -1;
+      return undefined;
+    }
+    let index = this.currentIkPropertyFrameIndex;
+    const current = index >= 0 && index < frames.length ? frames[index] : undefined;
+    if (!current || current.frame > frame) {
+      index = findPropertyFrameIndex(frames, frame);
+    } else {
+      while (index + 1 < frames.length && (frames[index + 1]?.frame ?? Number.POSITIVE_INFINITY) <= frame) {
+        index += 1;
+      }
+    }
+    this.currentIkPropertyFrameIndex = index;
+    return frames[index];
   }
 
 
@@ -379,6 +481,24 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 }
 
+
+function findPropertyFrameIndex(
+  frames: readonly MmdAnimation["propertyFrames"][number][],
+  frame: number
+): number {
+  let low = 0;
+  let high = frames.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    const middleFrame = frames[middle]?.frame ?? Number.POSITIVE_INFINITY;
+    if (middleFrame <= frame) {
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return Math.max(0, high);
+}
 
 function syncRuntimeMeshForRender(mesh: THREE.Object3D | undefined): void {
   if (!mesh) {

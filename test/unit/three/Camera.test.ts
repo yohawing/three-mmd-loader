@@ -93,6 +93,83 @@ describe("Three.js MMD camera helpers", () => {
     expect(up.z).toBeCloseTo(0);
   });
 
+  it("preserves VMD camera rotation when distance is zero", () => {
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 1000);
+    applyMmdCameraStateToThreeCamera(camera, {
+      ...createCameraState(),
+      distance: 0,
+      rotation: [0.25, 0.5, 0]
+    });
+
+    expect(camera.position.toArray()).toEqual([1, 2, -3]);
+
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+    expect(direction.x).toBeCloseTo(-0.479425539);
+    expect(direction.y).toBeCloseTo(0.217117401);
+    expect(direction.z).toBeCloseTo(-0.850300645);
+  });
+
+  it("aims positive-distance camera frames back at the MMD camera center", () => {
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 1000);
+    applyMmdCameraStateToThreeCamera(camera, {
+      ...createCameraState(),
+      distance: 10,
+      position: [0, 0, 0],
+      rotation: [0, 0, 0]
+    });
+
+    expect(camera.position.toArray()).toEqual([0, 0, -10]);
+
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+    expect(direction.x).toBeCloseTo(0);
+    expect(direction.y).toBeCloseTo(0);
+    expect(direction.z).toBeCloseTo(1);
+  });
+
+  it("adds an outside parent object world position to the MMD camera center", () => {
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 1000);
+    const parent = new THREE.Object3D();
+    const bone = new THREE.Object3D();
+    parent.position.set(10, 20, 30);
+    bone.position.set(1, 2, 3);
+    parent.add(bone);
+    parent.updateMatrixWorld(true);
+
+    applyMmdCameraStateToThreeCamera(
+      camera,
+      {
+        ...createCameraState(),
+        distance: 0,
+        rotation: [0.25, 0.5, 0]
+      },
+      {
+        outsideParent: bone
+      }
+    );
+
+    expect(camera.position.toArray()).toEqual([12, 24, 30]);
+
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+    expect(direction.x).toBeCloseTo(-0.479425539);
+    expect(direction.y).toBeCloseTo(0.217117401);
+    expect(direction.z).toBeCloseTo(-0.850300645);
+  });
+
+  it("adds a precomputed outside parent world position to the MMD camera center", () => {
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 1000);
+
+    applyMmdCameraStateToThreeCamera(camera, createCameraState(), {
+      outsideParentWorldPosition: new THREE.Vector3(10, 20, 30)
+    });
+
+    expect(camera.position.x).toBeCloseTo(11);
+    expect(camera.position.y).toBeCloseTo(22);
+    expect(camera.position.z).toBeCloseTo(72);
+  });
+
   it("applies MMD camera Y rotation without mirroring the orbit direction", () => {
     const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 1000);
     applyMmdCameraStateToThreeCamera(camera, {

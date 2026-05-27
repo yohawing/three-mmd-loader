@@ -498,6 +498,9 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
       bone.userData.mmdBoneName = boneData.name;
       bone.userData.mmdEnglishBoneName = boneData.englishName;
       bone.userData.mmdRestPosition = [...boneData.position];
+      if (boneData.ikStateName !== undefined) {
+        bone.userData.mmdIkStateName = boneData.ikStateName;
+      }
     }
     if (boneData?.appendTransform) {
       bone.userData.mmdAppendTransform = boneData.appendTransform;

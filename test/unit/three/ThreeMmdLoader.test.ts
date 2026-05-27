@@ -350,6 +350,7 @@ describe("ThreeMmdLoader", () => {
         effectorBoneIndex: 1
       })
     ]);
+    expect(model.mesh.skeleton.bones[2]?.userData.mmdIkStateName).toBe("enabled IK state");
   });
 
   it("passes PMX fixed-axis links only for hand-twist IK chains", async () => {
@@ -677,12 +678,18 @@ function createIkFlagModel(): MmdModel {
           limitAngle: 1,
           links: [{ boneIndex: 0 }]
         }),
-        createIkFlagBone("enabled IK", 0, true, {
-          targetIndex: 1,
-          loopCount: 1,
-          limitAngle: 1,
-          links: [{ boneIndex: 0 }]
-        })
+        createIkFlagBone(
+          "enabled IK",
+          0,
+          true,
+          {
+            targetIndex: 1,
+            loopCount: 1,
+            limitAngle: 1,
+            links: [{ boneIndex: 0 }]
+          },
+          { ikStateName: "enabled IK state" }
+        )
       ]
     }),
     morphs: () => [],
@@ -739,6 +746,7 @@ function createIkFlagBone(
   ik?: ReturnType<MmdModel["skeleton"]>["bones"][number]["ik"],
   options: {
     readonly fixedAxis?: [number, number, number];
+    readonly ikStateName?: string;
   } = {}
 ): ReturnType<MmdModel["skeleton"]>["bones"][number] {
   return {
@@ -765,6 +773,7 @@ function createIkFlagBone(
       externalParentTransform: false
     },
     fixedAxis: options.fixedAxis,
+    ikStateName: options.ikStateName,
     ik
   };
 }
