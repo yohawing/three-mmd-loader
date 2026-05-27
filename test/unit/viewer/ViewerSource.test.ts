@@ -8,9 +8,24 @@ describe("example viewer source", () => {
     const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");
 
     expect(modelSource).toContain("disposeModelResources(state.currentModel)");
+    expect(modelSource).toContain("state.scene.remove(state.currentModel.object)");
     expect(disposeSource).toContain('import { disposeMmdModel } from "../../../dist/three/index.js"');
     expect(disposeSource).toContain("disposeMmdModel(model)");
     expect(disposeSource).not.toContain("function collectMaterialTextures(material)");
+  });
+
+  it("adds loader root objects so split morph body meshes are rendered", async () => {
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
+    const realModelVisualSource = await readFile("scripts/visual-regression/render-real-models.mjs", "utf8");
+
+    expect(modelSource).toContain("state.scene.add(model.object)");
+    expect(modelSource).not.toContain("state.scene.add(\n    model.mesh");
+    expect(backgroundSource).toContain("state.scene.add(background.object)");
+    expect(backgroundSource).toContain("state.scene.remove(state.currentBackground.object)");
+    expect(realModelVisualSource).toContain("scene.add(model.object)");
+    expect(realModelVisualSource).toContain("createCamera(visualCase.camera, model.object");
+    expect(realModelVisualSource).not.toContain("scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes)");
   });
 
   it("surfaces texture diagnostics from loaded models", async () => {

@@ -61,4 +61,42 @@ describe("disposeMmdModel", () => {
     expect(boneTextureDispose).toHaveBeenCalledOnce();
     expect(skeletonDispose).toHaveBeenCalledOnce();
   });
+
+  it("disposes split morph body meshes from the model root object", () => {
+    const geometry = new THREE.BufferGeometry();
+    const bodyGeometry = new THREE.BufferGeometry();
+    const material = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const bodyMesh = new THREE.SkinnedMesh(bodyGeometry, material);
+    const skeleton = new THREE.Skeleton([new THREE.Bone()]);
+    mesh.bind(skeleton);
+    bodyMesh.bind(skeleton);
+    mesh.userData.mmdMorphSplitBodyMeshes = [bodyMesh];
+
+    const object = new THREE.Group();
+    object.add(mesh, bodyMesh);
+    const scene = new THREE.Scene();
+    scene.add(object);
+
+    const geometryDispose = vi.spyOn(geometry, "dispose");
+    const bodyGeometryDispose = vi.spyOn(bodyGeometry, "dispose");
+    const materialDispose = vi.spyOn(material, "dispose");
+    const skeletonDispose = vi.spyOn(skeleton, "dispose");
+
+    disposeMmdModel({
+      object,
+      mesh,
+      outlineMeshes: [],
+      renderOrderMeshes: [],
+      source: { kind: "bytes", byteLength: 0 },
+      textureDiagnostics: []
+    } satisfies ThreeMmdModel);
+
+    expect(scene.children).toHaveLength(0);
+    expect(object.children).toHaveLength(0);
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(bodyGeometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(skeletonDispose).toHaveBeenCalledOnce();
+  });
 });

@@ -43,11 +43,7 @@ async function loadBackground(source, label, loaderFactory, entry) {
     const background = await loader.loadModel(source, { frustumCulled: false });
     state.currentBackground = background;
     syncMmdSpecularDirection(background.mesh.material, state.keyLight);
-    state.scene.add(
-      background.mesh,
-      ...(background.outlineMeshes ?? []),
-      ...(background.renderOrderMeshes ?? [])
-    );
+    state.scene.add(background.object);
     reportTextureDiagnostics(background);
     updateBackgroundSwitcher({
       ...entry,
@@ -70,11 +66,7 @@ export function clearBackground() {
     updateStageState();
     return;
   }
-  state.scene.remove(
-    state.currentBackground.mesh,
-    ...(state.currentBackground.outlineMeshes ?? []),
-    ...(state.currentBackground.renderOrderMeshes ?? [])
-  );
+  state.scene.remove(state.currentBackground.object);
   disposeModelResources(state.currentBackground);
   state.currentBackground = undefined;
   state.currentBackgroundEntries = [];
