@@ -14,7 +14,9 @@ export function setupScene() {
   state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   state.renderer.setClearColor(0xffffff, 1);
   state.scene = new THREE.Scene();
-  state.camera = new THREE.PerspectiveCamera(22, 1, 0.01, 1000);
+  state.perspectiveCamera = new THREE.PerspectiveCamera(22, 1, 0.01, 1000);
+  state.orthographicCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 1000);
+  state.camera = state.perspectiveCamera;
   state.camera.position.set(0, 1.1, 9);
   state.controls = new OrbitControls(state.camera, dom.canvas);
   state.controls.enableDamping = true;
@@ -36,19 +38,23 @@ export function fitCameraToObject(object) {
   const sphere = bounds.getBoundingSphere(new THREE.Sphere());
   const radius = Math.max(sphere.radius, 0.75);
   state.controls.target.copy(sphere.center);
-  state.camera.position.copy(sphere.center).add(new THREE.Vector3(0, radius * 0.15, radius * 5.2));
-  state.camera.near = Math.max(radius / 100, 0.01);
-  state.camera.far = Math.max(radius * 40, 100);
-  state.camera.updateProjectionMatrix();
+  state.camera = state.perspectiveCamera;
+  state.controls.object = state.camera;
+  state.perspectiveCamera.position.copy(sphere.center).add(new THREE.Vector3(0, radius * 0.15, radius * 5.2));
+  state.perspectiveCamera.near = Math.max(radius / 100, 0.01);
+  state.perspectiveCamera.far = Math.max(radius * 40, 100);
+  state.perspectiveCamera.updateProjectionMatrix();
   state.controls.update();
 }
 
 export function setDefaultCameraView() {
   state.controls.target.set(0, 0.9, 0);
-  state.camera.position.set(0, 1.1, 9);
-  state.camera.near = 0.01;
-  state.camera.far = 1000;
-  state.camera.updateProjectionMatrix();
+  state.camera = state.perspectiveCamera;
+  state.controls.object = state.camera;
+  state.perspectiveCamera.position.set(0, 1.1, 9);
+  state.perspectiveCamera.near = 0.01;
+  state.perspectiveCamera.far = 1000;
+  state.perspectiveCamera.updateProjectionMatrix();
   state.controls.update();
 }
 
@@ -56,7 +62,9 @@ export function resize() {
   const width = dom.canvas.clientWidth;
   const height = dom.canvas.clientHeight;
   state.renderer.setSize(width, height, false);
-  state.camera.aspect = width / Math.max(height, 1);
-  state.camera.updateProjectionMatrix();
+  state.cameraAspect = width / Math.max(height, 1);
+  state.perspectiveCamera.aspect = state.cameraAspect;
+  state.perspectiveCamera.updateProjectionMatrix();
+  state.orthographicCamera.updateProjectionMatrix();
   updateChromeHeights();
 }

@@ -473,7 +473,7 @@ export async function createModelLoader(extraOptions = {}) {
     geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
     runtime: {
       ...runtimeOptions,
-      frameRate: 30,
+      frameRate: state.mmdFrameRate,
       physics: "external",
       physicsBackend
     }

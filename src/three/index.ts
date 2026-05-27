@@ -26,6 +26,7 @@ import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry } from "./geometry.js";
+export { applyMmdCameraStateToThreeCamera } from "./camera.js";
 export { disposeMmdModel } from "./dispose.js";
 export {
   createMmdTextureMapFromFiles,
@@ -82,6 +83,9 @@ export {
   resolveMappedTexture,
   resolveMmdToonTextureReference
 } from "./textures.js";
+export type {
+  ApplyMmdCameraStateOptions
+} from "./camera.js";
 export type {
   ThreeMmdAdditionalUvMorphOffset,
   ThreeMmdGeometryBuffers,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { sampleMmdCameraTrack, sampleMmdLightTrack } from "../../../src/index.js";
+import { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack } from "../../../src/index.js";
 import type { VmdCameraFrame, VmdLightFrame } from "../../../src/parser/model/modelTypes.js";
 
 describe("camera and light runtime sampling", () => {
@@ -12,6 +12,75 @@ describe("camera and light runtime sampling", () => {
       position: [5, 10, 15],
       rotation: [0.5, 1, 1.5],
       fov: 52.5,
+      perspective: true
+    });
+  });
+
+  it("samples VMD camera frames into a caller-owned scratch object", () => {
+    const target = {
+      distance: 0,
+      position: [0, 0, 0] as [number, number, number],
+      rotation: [0, 0, 0] as [number, number, number],
+      fov: 1,
+      perspective: true
+    };
+
+    const camera = sampleMmdCameraTrackInto(createCameraFrames(), 5, target);
+
+    expect(camera).toBe(target);
+    expect(target).toEqual({
+      distance: 15,
+      position: [5, 10, 15],
+      rotation: [0.5, 1, 1.5],
+      fov: 52.5,
+      perspective: true
+    });
+  });
+
+  it("advances a caller-owned camera frame index hint during forward sampling", () => {
+    const target = {
+      distance: 0,
+      position: [0, 0, 0] as [number, number, number],
+      rotation: [0, 0, 0] as [number, number, number],
+      fov: 1,
+      perspective: true
+    };
+    const hint = { index: 0 };
+    const frames = [
+      ...createCameraFrames(),
+      {
+        ...createCameraFrames()[1],
+        frame: 20,
+        distance: 30,
+        position: [20, 40, 60] as [number, number, number]
+      }
+    ];
+
+    sampleMmdCameraTrackInto(frames, 15, target, hint);
+
+    expect(hint.index).toBe(1);
+    expect(target.distance).toBe(25);
+    expect(target.position).toEqual([15, 30, 45]);
+  });
+
+  it("holds one-frame camera cuts until the next MMD frame", () => {
+    const frames = createCameraFrames();
+    const camera = sampleMmdCameraTrack(
+      [
+        frames[0],
+        {
+          ...frames[1],
+          frame: 1
+        }
+      ],
+      0.5
+    );
+
+    expect(camera).toMatchObject({
+      distance: 10,
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      fov: 45,
       perspective: true
     });
   });

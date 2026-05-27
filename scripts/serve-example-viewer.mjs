@@ -191,6 +191,13 @@ function createPresetEntries(cases, byExtension) {
     const modelUrl = dataUrlForFixturePath(modelPath);
     const motionPath = byExtension?.vmd?.[fixtureCase.motion?.key];
     const motionUrl = dataUrlForFixturePath(motionPath);
+    const backgroundUrl = dataUrlForFixturePath(
+      byExtension?.[fixtureCase.background?.extension]?.[fixtureCase.background?.key]
+    );
+    const cameraUrl = dataUrlForFixturePath(byExtension?.cameraVmd?.[fixtureCase.camera?.key]);
+    const audioUrl = dataUrlForFixturePath(
+      byExtension?.[fixtureCase.audio?.extension]?.[fixtureCase.audio?.key]
+    );
     if (modelUrl === undefined || motionUrl === undefined) {
       return [];
     }
@@ -198,7 +205,10 @@ function createPresetEntries(cases, byExtension) {
       id: fixtureCase.name,
       name: fixtureCase.name,
       modelUrl,
-      motionUrl
+      motionUrl,
+      ...(backgroundUrl ? { backgroundUrl } : {}),
+      ...(cameraUrl ? { cameraUrl } : {}),
+      ...(audioUrl ? { audioUrl } : {})
     }];
   });
 }

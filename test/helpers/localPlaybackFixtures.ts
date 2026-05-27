@@ -13,12 +13,14 @@ export interface LocalPlaybackCase {
   readonly name: string;
   readonly modelPath: string;
   readonly motionPath: string;
+  readonly cameraMotionPath?: string;
   readonly oraclePath: string;
   readonly stage: NativeNanoemOracleStageName;
   readonly frames: readonly number[];
   readonly watchBones: readonly string[];
   readonly matrixEpsilon: number;
   readonly morphEpsilon: number;
+  readonly cameraEpsilon: number;
 }
 
 export interface LocalPlaybackSkippedCase {
@@ -35,6 +37,7 @@ interface FixtureInventory {
         readonly pmx: Record<string, string>;
         readonly pmd: Record<string, string>;
         readonly vmd: Record<string, string>;
+        readonly cameraVmd?: Record<string, string>;
         readonly vpd: Record<string, string>;
       };
     };
@@ -53,6 +56,9 @@ interface PlaybackSmokeCaseConfig {
   readonly motion: {
     readonly key: string;
   };
+  readonly camera?: {
+    readonly key: string;
+  };
   readonly oracle: string;
   readonly oracleKind: "native-nanoem-runtime-dump";
   readonly stage?: NativeNanoemOracleStageName;
@@ -60,6 +66,7 @@ interface PlaybackSmokeCaseConfig {
   readonly watchBones: readonly string[];
   readonly matrixEpsilon?: number;
   readonly morphEpsilon?: number;
+  readonly cameraEpsilon?: number;
   readonly skipReason?: string;
 }
 
@@ -112,6 +119,7 @@ export async function loadLocalPlaybackFixtures(
     const missingPath = await firstMissingPath([
       resolvedCase.modelPath,
       resolvedCase.motionPath,
+      ...(resolvedCase.cameraMotionPath ? [resolvedCase.cameraMotionPath] : []),
       resolvedCase.oraclePath
     ]);
     if (missingPath) {
@@ -143,6 +151,10 @@ function resolvePlaybackCase(
 ): LocalPlaybackCase {
   const modelPath = inventory.paths.releaseSmoke.byExtension[rawCase.model.extension][rawCase.model.key];
   const motionPath = inventory.paths.releaseSmoke.byExtension.vmd[rawCase.motion.key];
+  const cameraMotionPath =
+    rawCase.camera === undefined
+      ? undefined
+      : inventory.paths.releaseSmoke.byExtension.cameraVmd?.[rawCase.camera.key];
   if (!modelPath) {
     throw new Error(
       `${rawCase.name}: model key not found: ${rawCase.model.extension}.${rawCase.model.key}`
@@ -151,17 +163,22 @@ function resolvePlaybackCase(
   if (!motionPath) {
     throw new Error(`${rawCase.name}: motion key not found: vmd.${rawCase.motion.key}`);
   }
+  if (rawCase.camera !== undefined && !cameraMotionPath) {
+    throw new Error(`${rawCase.name}: camera key not found: cameraVmd.${rawCase.camera.key}`);
+  }
 
   return {
     name: rawCase.name,
     modelPath: resolve(basePath, modelPath),
     motionPath: resolve(basePath, motionPath),
+    cameraMotionPath: cameraMotionPath === undefined ? undefined : resolve(basePath, cameraMotionPath),
     oraclePath: resolve(basePath, rawCase.oracle),
     stage: rawCase.stage ?? "physics",
     frames: rawCase.frames,
     watchBones: rawCase.watchBones,
     matrixEpsilon: rawCase.matrixEpsilon ?? 1e-4,
-    morphEpsilon: rawCase.morphEpsilon ?? 1e-4
+    morphEpsilon: rawCase.morphEpsilon ?? 1e-4,
+    cameraEpsilon: rawCase.cameraEpsilon ?? 1e-4
   };
 }
 
@@ -192,6 +209,10 @@ function parseFixtureInventory(raw: unknown, label: string): FixtureInventory {
           pmx: parseStringMap(byExtension.pmx, `${label}.paths.releaseSmoke.byExtension.pmx`),
           pmd: parseStringMap(byExtension.pmd, `${label}.paths.releaseSmoke.byExtension.pmd`),
           vmd: parseStringMap(byExtension.vmd, `${label}.paths.releaseSmoke.byExtension.vmd`),
+          cameraVmd:
+            byExtension.cameraVmd === undefined
+              ? undefined
+              : parseStringMap(byExtension.cameraVmd, `${label}.paths.releaseSmoke.byExtension.cameraVmd`),
           vpd: parseStringMap(byExtension.vpd, `${label}.paths.releaseSmoke.byExtension.vpd`)
         }
       },
@@ -216,6 +237,8 @@ function parsePlaybackCaseConfig(raw: unknown, label: string): PlaybackSmokeCase
   const config = readRecord(raw, label);
   const model = readRecord(config.model, `${label}.model`);
   const motion = readRecord(config.motion, `${label}.motion`);
+  const camera =
+    config.camera === undefined ? undefined : readRecord(config.camera, `${label}.camera`);
   const extension = readString(model.extension, `${label}.model.extension`);
   const stage = config.stage === undefined ? "physics" : readStage(config.stage, `${label}.stage`);
   if (extension !== "pmx" && extension !== "pmd") {
@@ -233,6 +256,12 @@ function parsePlaybackCaseConfig(raw: unknown, label: string): PlaybackSmokeCase
     motion: {
       key: readString(motion.key, `${label}.motion.key`)
     },
+    camera:
+      camera === undefined
+        ? undefined
+        : {
+            key: readString(camera.key, `${label}.camera.key`)
+          },
     oracle: readString(config.oracle, `${label}.oracle`),
     oracleKind: "native-nanoem-runtime-dump",
     stage,
@@ -246,6 +275,10 @@ function parsePlaybackCaseConfig(raw: unknown, label: string): PlaybackSmokeCase
       config.morphEpsilon === undefined
         ? undefined
         : readPositiveNumber(config.morphEpsilon, `${label}.morphEpsilon`),
+    cameraEpsilon:
+      config.cameraEpsilon === undefined
+        ? undefined
+        : readPositiveNumber(config.cameraEpsilon, `${label}.cameraEpsilon`),
     skipReason:
       config.skipReason === undefined
         ? undefined

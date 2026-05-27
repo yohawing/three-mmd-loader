@@ -143,6 +143,18 @@
         "motion": {
           "$ref": "#/$defs/playbackSmokeMotionRef"
         },
+        "background": {
+          "$ref": "#/$defs/playbackSmokeBackgroundRef",
+          "description": "Optional background fixture to load with the viewer preset."
+        },
+        "camera": {
+          "$ref": "#/$defs/playbackSmokeCameraRef",
+          "description": "Optional camera VMD fixture to load with the viewer preset."
+        },
+        "audio": {
+          "$ref": "#/$defs/playbackSmokeAudioRef",
+          "description": "Optional audio fixture to load with the viewer preset."
+        },
         "oracle": {
           "$ref": "#/$defs/relativeFilePath",
           "description": "Path to a gitignored native nanoem oracle JSON, resolved from basePath."
@@ -207,6 +219,47 @@
       "additionalProperties": false,
       "required": ["key"],
       "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "playbackSmokeBackgroundRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extension", "key"],
+      "properties": {
+        "extension": {
+          "type": "string",
+          "enum": ["backgroundPmx", "backgroundPmd"]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "playbackSmokeCameraRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "playbackSmokeAudioRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extension", "key"],
+      "properties": {
+        "extension": {
+          "type": "string",
+          "enum": ["wav", "mp3", "ogg"]
+        },
         "key": {
           "type": "string",
           "minLength": 1

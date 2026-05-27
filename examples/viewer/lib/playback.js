@@ -1,7 +1,7 @@
 import { dom, setStatus, updatePlayToggle, updatePlaybackDisplay } from "./dom.js";
 import { hasActiveAudioSource, isAudioElement } from "./audio-loading.js";
 import { applyCameraMotion } from "./camera-loading.js";
-import { hasCurrentMotion, state } from "./state.js";
+import { currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
 
 export function render() {
   const delta = state.clock.getDelta();
@@ -30,7 +30,7 @@ export function evaluateRuntime(options = {}) {
     syncAudioToMotionTime();
   }
   if (state.currentModel?.runtime) {
-    state.currentModel.runtime.tick(state.elapsedSeconds, {
+    state.currentModel.runtime.tick(currentMmdSeconds(), {
       mesh: state.currentModel.mesh,
       ik: options.ik ?? hasCurrentMotion(),
       physics: options.physics ?? (!state.isSeeking && state.elapsedSeconds > 0)

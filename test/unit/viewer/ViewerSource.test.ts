@@ -33,9 +33,15 @@ describe("example viewer source", () => {
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const configSource = await readFile("examples/viewer/lib/viewer-config.js", "utf8");
     const html = await readFile("examples/viewer/index.html", "utf8");
     const styles = await readFile("examples/viewer/styles.css", "utf8");
 
+    expect(configSource).toContain('query.get("mmdFrameRate")');
+    expect(configSource).toContain('query.get("mmdFrameQuantize")');
+    expect(stateSource).toContain("frameRate: viewerConfig.mmdFrameRate");
+    expect(stateSource).toContain("mmdFrameRate: viewerConfig.mmdFrameRate");
+    expect(stateSource).toContain("mmdFrameQuantize: viewerConfig.mmdFrameQuantize");
     expect(html).toContain('id="model-switcher"');
     expect(html).not.toContain('id="model-name"');
     expect(html).toContain('aria-label="Selected model"');
@@ -193,6 +199,9 @@ describe("example viewer source", () => {
     expect(serverSource).toContain("backgroundPmd");
     expect(serverSource).toContain("audios");
     expect(serverSource).toContain("cameras");
+    expect(serverSource).toContain("fixtureCase.background?.extension");
+    expect(serverSource).toContain("fixtureCase.camera?.key");
+    expect(serverSource).toContain("fixtureCase.audio?.extension");
     expect(serverSource).toContain("process.env.MMD_DATA_ROOT");
     expect(serverSource).not.toContain("MMD_VIEWER_DATA_ROOT");
     expect(styles).toContain(".asset-load-row");
@@ -238,17 +247,30 @@ describe("example viewer source", () => {
     expect(cameraSource).toContain("syncTimelineRangeToCurrentMotion()");
     expect(cameraSource).toContain("currentMotionDurationSeconds()");
     expect(cameraSource).not.toContain("existingMax");
-    expect(cameraSource).not.toContain("sampleMmdCameraTrack");
-    expect(cameraSource).toContain("function interpolateBezier");
-    expect(cameraSource).toContain("function cubicBezier");
-    expect(cameraSource).toContain("-lerp(previous.position[2], next.position[2]");
-    expect(cameraSource).toContain("-lerp(previous.rotation[0], next.rotation[0]");
-    expect(cameraSource).toContain("offset.set(0, 0, -distance)");
+    expect(cameraSource).toContain("cameraMotion.frameIndexHint");
+    expect(cameraSource).toContain("currentMmdFrame()");
+    expect(cameraSource).toContain("/ state.mmdFrameRate");
+    expect(cameraSource).toContain("applyMmdCameraStateToThreeCamera(");
+    expect(cameraSource).toContain("state.perspectiveCamera");
+    expect(cameraSource).toContain("state.controls.object = activeCamera");
+    expect(cameraSource).not.toContain("function interpolateBezier");
+    expect(cameraSource).not.toContain("function cubicBezier");
     expect(cameraSource).not.toContain("function cameraFrameAt");
     expect(playbackSource).toContain("applyCameraMotion()");
+    expect(playbackSource).toContain("currentMmdSeconds()");
+    expect(modelSource).toContain("frameRate: state.mmdFrameRate");
     expect(stateSource).toContain("currentBackground: undefined");
     expect(stateSource).toContain("currentCameraMotion: undefined");
+    expect(stateSource).toContain("mmdFrameQuantize");
+    expect(stateSource).toContain("export function currentMmdFrame()");
+    expect(stateSource).toContain("state.mmdFrameQuantize ? Math.floor");
     expect(stateSource).toContain("cameraTargetScratch: new THREE.Vector3()");
+    expect(stateSource).toContain("cameraQuaternionScratch: new THREE.Quaternion()");
+    expect(stateSource).toContain("quaternion: state.cameraQuaternionScratch");
+    expect(stateSource).toContain("cameraStateScratch: {");
+    expect(stateSource).toContain("orthographicCamera: undefined");
+    expect(stateSource).toContain("get orthographicCamera()");
+    expect(stateSource).toContain("state.cameraApplyOptions = {");
   });
 
   it("keeps audio playback resume from seeking back to the start", async () => {
