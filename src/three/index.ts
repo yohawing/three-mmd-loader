@@ -129,6 +129,12 @@ export interface ThreeMmdLoaderOptions {
   readonly geometryAwareAlpha?: boolean;
   readonly runtime?: DefaultMmdRuntimeOptions;
   readonly core?: MmdCore | Promise<MmdCore>;
+  readonly onCoreFallback?: (event: ThreeMmdCoreFallbackEvent) => void;
+}
+
+export interface ThreeMmdCoreFallbackEvent {
+  readonly operation: "loadModel" | "loadVmd";
+  readonly error: unknown;
 }
 
 export interface ThreeMmdLoadModelOptions {
@@ -274,6 +280,7 @@ export class ThreeMmdLoader {
       if (this.useExplicitCore) {
         throw error;
       }
+      this.options.onCoreFallback?.({ operation: "loadModel", error });
       this.fallbackCore ??= new FallbackCore();
       return this.fallbackCore.loadModel(bytes);
     }
@@ -286,6 +293,7 @@ export class ThreeMmdLoader {
       if (this.useExplicitCore) {
         throw error;
       }
+      this.options.onCoreFallback?.({ operation: "loadVmd", error });
       this.fallbackCore ??= new FallbackCore();
       return this.fallbackCore.loadVmd(bytes);
     }
@@ -703,6 +711,10 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
     (typeof options.core !== "object" || options.core === null || Array.isArray(options.core))
   ) {
     throw new TypeError("ThreeMmdLoader core must be an object or Promise-like object");
+  }
+
+  if (options.onCoreFallback !== undefined && typeof options.onCoreFallback !== "function") {
+    throw new TypeError("ThreeMmdLoader onCoreFallback must be a function");
   }
 }
 

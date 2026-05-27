@@ -55,6 +55,12 @@ describe("ThreeMmdLoader", () => {
     expect(() => new ThreeMmdLoader({ runtime: 30 as unknown as ThreeMmdLoaderOptions["runtime"] })).toThrow(
       "ThreeMmdLoader runtime options must be an object"
     );
+    expect(
+      () =>
+        new ThreeMmdLoader({
+          onCoreFallback: "warn" as unknown as ThreeMmdLoaderOptions["onCoreFallback"]
+        })
+    ).toThrow("ThreeMmdLoader onCoreFallback must be a function");
   });
 
   it("loads a PMX model into a minimal Three.js skinned mesh", async () => {
@@ -87,6 +93,25 @@ describe("ThreeMmdLoader", () => {
     await loader.loadModel(source);
 
     expect(loadModel).toHaveBeenCalledOnce();
+  });
+
+  it("reports implicit core model fallback without exposing raw console output", async () => {
+    const error = new Error("wasm parser unavailable");
+    const onCoreFallback = vi.fn();
+    const loader = new ThreeMmdLoader({ onCoreFallback });
+    const core: MmdCore = {
+      ...createIkFlagCore(),
+      loadModel: () => {
+        throw error;
+      }
+    };
+    (loader as unknown as { corePromise: Promise<MmdCore> }).corePromise = Promise.resolve(core);
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(model.mesh.name).toBe("TestModel");
+    expect(onCoreFallback).toHaveBeenCalledWith({ operation: "loadModel", error });
   });
 
   it("loads a PMX model from a string URL source", async () => {

@@ -1286,10 +1286,14 @@ function resolveAdjacentTexture(
 
   return new URL(
     normalizeMmdTexturePath(texturePath),
-    new URL(".", new URL(modelUrl, location.href))
+    new URL(".", new URL(modelUrl, browserBaseHref()))
   ).toString();
 }
 
 function isAbsoluteUrl(url: string): boolean {
   return /^[a-z][a-z\d+.-]*:/i.test(url);
+}
+
+function browserBaseHref(): string {
+  return typeof location === "undefined" ? "http://localhost/" : location.href;
 }

@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { legacyMmdEulerToQuaternion, mapLegacyMmdJointToPhysicsJoint, mapLegacyMmdRigidBodyToPhysicsRigidBody } from "../physics/legacyPhysicsBridge.js";
 import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
-import { clamp, clampOffsetVector, isTuple3, mmdQuaternionToThree, readMmdRestPosition, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
+import { clamp, clampOffsetVector, ensureFloat32ArrayLength, isTuple3, prepareQuaternionScratchArray, prepareVector3ScratchArray, readMmdRestPosition, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
 import type { MmdFrameState, MmdRuntimeDebugStageState, MmdRuntimeDebugState, RuntimeExternalJoint, RuntimeExternalMorphImpulse, RuntimeExternalPhysicsBone, RuntimeExternalPhysicsData, RuntimeExternalRigidBody, RuntimeJoint, RuntimeMorph, RuntimePhysicsBone, RuntimePhysicsData, RuntimeRigidBody } from "./types.js";
+import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
 class StatefulSpringPhysicsSimulation {
   private readonly offsets: Float32Array;
   private readonly velocities: Float32Array;
@@ -154,38 +155,46 @@ class StatefulSpringPhysicsSimulation {
 }
 
 function readRuntimePhysics(mesh: THREE.SkinnedMesh): RuntimePhysicsData {
-  const raw = mesh.userData.mmdPhysics as
+  const raw = readMmdMeshRuntimeData(mesh).mmdPhysics as
     | {
         readonly rigidBodies?: unknown;
         readonly joints?: unknown;
       }
     | undefined;
   return {
-    bones: mesh.skeleton.bones.map((bone) => ({
-      name: String(bone.userData.mmdBoneName ?? bone.name),
-      englishName: String(bone.userData.mmdEnglishBoneName ?? "")
-    })),
+    bones: mesh.skeleton.bones.map((bone) => {
+      const userData = readMmdBoneUserData(bone);
+      return {
+        name: typeof userData.mmdBoneName === "string" ? userData.mmdBoneName : bone.name,
+        englishName:
+          typeof userData.mmdEnglishBoneName === "string" ? userData.mmdEnglishBoneName : ""
+      };
+    }),
     rigidBodies: Array.isArray(raw?.rigidBodies) ? raw.rigidBodies.filter(isRuntimeRigidBody) : [],
     joints: Array.isArray(raw?.joints) ? raw.joints.filter(isRuntimeJoint) : []
   };
 }
 
 function readRuntimeExternalPhysics(mesh: THREE.SkinnedMesh): RuntimeExternalPhysicsData {
-  const raw = mesh.userData.mmdPhysics as
+  const meshData = readMmdMeshRuntimeData(mesh);
+  const raw = meshData.mmdPhysics as
     | {
         readonly rigidBodies?: unknown;
         readonly joints?: unknown;
       }
     | undefined;
-  const rawMorphs = mesh.userData.mmdMorphs;
+  const rawMorphs = meshData.mmdMorphs;
   const bones = mesh.skeleton.bones.map(
-    (bone): RuntimeExternalPhysicsBone => ({
-      name: typeof bone.userData.mmdBoneName === "string" ? bone.userData.mmdBoneName : bone.name,
-      englishName:
-        typeof bone.userData.mmdEnglishBoneName === "string"
-          ? bone.userData.mmdEnglishBoneName
-          : undefined
-    })
+    (bone): RuntimeExternalPhysicsBone => {
+      const userData = readMmdBoneUserData(bone);
+      return {
+        name: typeof userData.mmdBoneName === "string" ? userData.mmdBoneName : bone.name,
+        englishName:
+          typeof userData.mmdEnglishBoneName === "string"
+            ? userData.mmdEnglishBoneName
+            : undefined
+      };
+    }
   );
   const rawRigidBodies = Array.isArray(raw?.rigidBodies)
     ? raw.rigidBodies.filter(isRuntimeExternalRigidBody)
@@ -356,7 +365,7 @@ function isRuntimeExternalMorphImpulse(value: unknown): value is RuntimeExternal
 }
 
 function readMmdTransformAfterPhysicsFlag(bone: THREE.Bone): boolean {
-  const flags = bone.userData.mmdFlags;
+  const flags = readMmdBoneUserData(bone).mmdFlags;
   return (
     typeof flags === "object" &&
     flags !== null &&
@@ -391,16 +400,29 @@ function isRuntimeRigidBodyPhysicsEnabled(
 }
 
 function captureRuntimeDebugStage(mesh: THREE.SkinnedMesh): MmdRuntimeDebugStageState {
+  return captureRuntimeDebugStageInto(mesh, createEmptyDebugStage());
+}
+
+function captureRuntimeDebugStageInto(
+  mesh: THREE.SkinnedMesh,
+  target: MmdRuntimeDebugStageState
+): MmdRuntimeDebugStageState {
   mesh.updateWorldMatrix(false, true);
-  return {
-    worldMatricesColumnMajor: extractMmdWorldMatrices(mesh),
-    morphWeights: Array.from(mesh.morphTargetInfluences ?? [])
-  };
+  extractMmdWorldMatricesInto(mesh, mutableNumberArray(target.worldMatricesColumnMajor));
+  copyArrayLikeToNumberArray(
+    mesh.morphTargetInfluences ?? [],
+    mutableNumberArray(target.morphWeights)
+  );
+  return target;
 }
 
 function extractMmdWorldMatrices(mesh: THREE.SkinnedMesh): number[] {
+  return extractMmdWorldMatricesInto(mesh, []);
+}
+
+function extractMmdWorldMatricesInto(mesh: THREE.SkinnedMesh, matrices: number[]): number[] {
   const signs = [1, 1, -1, 1];
-  const matrices: number[] = [];
+  matrices.length = 0;
   for (const bone of mesh.skeleton.bones) {
     const elements = bone.matrixWorld.elements;
     for (let column = 0; column < 4; column += 1) {
@@ -410,6 +432,18 @@ function extractMmdWorldMatrices(mesh: THREE.SkinnedMesh): number[] {
     }
   }
   return matrices;
+}
+
+function copyArrayLikeToNumberArray(values: ArrayLike<number>, target: number[]): number[] {
+  target.length = values.length;
+  for (let index = 0; index < values.length; index += 1) {
+    target[index] = values[index];
+  }
+  return target;
+}
+
+function mutableNumberArray(values: readonly number[]): number[] {
+  return values as number[];
 }
 
 function createEmptyDebugStage(): MmdRuntimeDebugStageState {
@@ -451,17 +485,37 @@ interface PrePhysicsInputBuffers {
   readonly worldMatricesColumnMajor: Float32Array;
 }
 
+interface PrePhysicsScratch {
+  preTranslations: Float32Array;
+  preRotations: Float32Array;
+  preWorldMatricesColumnMajor: Float32Array;
+  readonly composeWorldPositions: THREE.Vector3[];
+  readonly composeWorldRotations: THREE.Quaternion[];
+  readonly composeMatrix: THREE.Matrix4;
+  readonly composeUnitScale: THREE.Vector3;
+  readonly mergeTargetRotation: THREE.Quaternion;
+  readonly mergePreRotation: THREE.Quaternion;
+  readonly mergePhysicsRotation: THREE.Quaternion;
+  readonly localPosition: THREE.Vector3;
+  readonly localRotation: THREE.Quaternion;
+}
+
 function createPrePhysicsInputBuffersIfNeeded(
   skeleton: NonNullable<MmdPhysicsStepContext["skeleton"]>,
   translations: Float32Array,
   rotations: Float32Array,
-  fallbackWorldMatricesColumnMajor: Float32Array
+  fallbackWorldMatricesColumnMajor: Float32Array,
+  scratch: PrePhysicsScratch
 ): PrePhysicsInputBuffers | undefined {
   if (!skeleton.bones.some((bone) => bone.transformAfterPhysics === true)) {
     return undefined;
   }
-  const preTranslations = new Float32Array(translations);
-  const preRotations = new Float32Array(rotations);
+  const preTranslations = ensureFloat32ArrayLength(scratch.preTranslations, translations.length);
+  scratch.preTranslations = preTranslations;
+  preTranslations.set(translations);
+  const preRotations = ensureFloat32ArrayLength(scratch.preRotations, rotations.length);
+  scratch.preRotations = preRotations;
+  preRotations.set(rotations);
   for (const bone of skeleton.bones) {
     if (bone.transformAfterPhysics !== true) {
       continue;
@@ -480,33 +534,46 @@ function createPrePhysicsInputBuffersIfNeeded(
     }
     writeQuaternionToBuffer(preRotations, bone.index, [0, 0, 0, 1]);
   }
+  const preWorldMatricesColumnMajor = ensureFloat32ArrayLength(
+    scratch.preWorldMatricesColumnMajor,
+    fallbackWorldMatricesColumnMajor.length
+  );
+  scratch.preWorldMatricesColumnMajor = preWorldMatricesColumnMajor;
   return {
     translations: preTranslations,
     rotations: preRotations,
     worldMatricesColumnMajor:
-      composeMmdWorldMatricesFromLocalBuffers(skeleton, preTranslations, preRotations) ??
-      new Float32Array(fallbackWorldMatricesColumnMajor)
+      composeMmdWorldMatricesFromLocalBuffers(
+        skeleton,
+        preTranslations,
+        preRotations,
+        preWorldMatricesColumnMajor,
+        scratch
+      ) ?? copyFloat32Array(fallbackWorldMatricesColumnMajor, preWorldMatricesColumnMajor)
   };
 }
 
 function composeMmdWorldMatricesFromLocalBuffers(
   skeleton: NonNullable<MmdPhysicsStepContext["skeleton"]>,
   translations: Float32Array,
-  rotations: Float32Array
+  rotations: Float32Array,
+  matrices: Float32Array,
+  scratch: PrePhysicsScratch
 ): Float32Array | undefined {
   const boneCount = skeleton.bones.length;
-  const worldPositions = Array.from({ length: boneCount }, () => new THREE.Vector3());
-  const worldRotations = Array.from({ length: boneCount }, () => new THREE.Quaternion());
-  const matrices = new Float32Array(boneCount * 16);
-  const matrix = new THREE.Matrix4();
-  const unitScale = new THREE.Vector3(1, 1, 1);
+  prepareVector3ScratchArray(scratch.composeWorldPositions, boneCount);
+  prepareQuaternionScratchArray(scratch.composeWorldRotations, boneCount);
+  const worldPositions = scratch.composeWorldPositions;
+  const worldRotations = scratch.composeWorldRotations;
+  const matrix = scratch.composeMatrix;
+  const unitScale = scratch.composeUnitScale;
   for (const bone of skeleton.bones) {
     const index = bone.index;
     if (index < 0 || index >= boneCount) {
       return undefined;
     }
-    const localPosition = readVector3FromBuffer(translations, index);
-    const localRotation = readQuaternionFromBuffer(rotations, index);
+    const localPosition = readVector3FromBuffer(translations, index, scratch.localPosition);
+    const localRotation = readQuaternionFromBuffer(rotations, index, scratch.localRotation);
     const parentIndex = bone.parentIndex ?? -1;
     if (parentIndex >= 0 && parentIndex < boneCount) {
       worldPositions[index].copy(localPosition).applyQuaternion(worldRotations[parentIndex]);
@@ -526,7 +593,8 @@ function mergePhysicsOutputDeltas(
   context: MmdPhysicsStepContext,
   targetTranslations: Float32Array,
   targetRotations: Float32Array,
-  prePhysics: PrePhysicsInputBuffers
+  prePhysics: PrePhysicsInputBuffers,
+  scratch: PrePhysicsScratch
 ): void {
   const outputTranslations = context.output?.translations;
   const outputRotations = context.output?.rotations;
@@ -548,9 +616,9 @@ function mergePhysicsOutputDeltas(
   }
   if (outputRotations) {
     for (let index = 0; index < boneCount; index += 1) {
-      const target = readQuaternionFromBuffer(targetRotations, index);
-      const pre = readQuaternionFromBuffer(prePhysics.rotations, index).invert();
-      const physics = readQuaternionFromBuffer(outputRotations, index);
+      const target = readQuaternionFromBuffer(targetRotations, index, scratch.mergeTargetRotation);
+      const pre = readQuaternionFromBuffer(prePhysics.rotations, index, scratch.mergePreRotation).invert();
+      const physics = readQuaternionFromBuffer(outputRotations, index, scratch.mergePhysicsRotation);
       physics.multiply(pre).multiply(target).normalize();
       const base = index * 4;
       outputRotations[base] = physics.x;
@@ -561,14 +629,27 @@ function mergePhysicsOutputDeltas(
   }
 }
 
-function readVector3FromBuffer(buffer: ArrayLike<number>, index: number): THREE.Vector3 {
-  const offset = index * 3;
-  return new THREE.Vector3(buffer[offset], buffer[offset + 1], buffer[offset + 2]);
+function copyFloat32Array(source: Float32Array, target: Float32Array): Float32Array {
+  target.set(source);
+  return target;
 }
 
-function readQuaternionFromBuffer(buffer: ArrayLike<number>, index: number): THREE.Quaternion {
+function readVector3FromBuffer(
+  buffer: ArrayLike<number>,
+  index: number,
+  target: THREE.Vector3
+): THREE.Vector3 {
+  const offset = index * 3;
+  return target.set(buffer[offset], buffer[offset + 1], buffer[offset + 2]);
+}
+
+function readQuaternionFromBuffer(
+  buffer: ArrayLike<number>,
+  index: number,
+  target: THREE.Quaternion
+): THREE.Quaternion {
   const offset = index * 4;
-  return new THREE.Quaternion(
+  return target.set(
     buffer[offset],
     buffer[offset + 1],
     buffer[offset + 2],
@@ -585,39 +666,49 @@ function applyPhysicsOutputToSkeleton(
   if (!translations && !rotations) {
     return;
   }
-  const updatedIndices =
-    context.output?.updatedBoneIndices && context.output.updatedBoneIndices.length > 0
-      ? context.output.updatedBoneIndices
-      : mesh.skeleton.bones.map((_, index) => index);
+  const updatedIndices = context.output?.updatedBoneIndices;
+  if (!updatedIndices || updatedIndices.length === 0) {
+    for (let index = 0; index < mesh.skeleton.bones.length; index += 1) {
+      applyPhysicsOutputToBone(mesh.skeleton.bones[index], index, translations, rotations);
+    }
+    return;
+  }
   const applied = new Set<number>();
   for (const index of updatedIndices) {
     if (applied.has(index)) {
       continue;
     }
     applied.add(index);
-    const bone = mesh.skeleton.bones[index];
-    if (!bone) {
-      continue;
-    }
-    if (translations && index * 3 + 2 < translations.length) {
-      bone.position.set(
-        translations[index * 3],
-        translations[index * 3 + 1],
-        -translations[index * 3 + 2]
-      );
-    }
-    if (rotations && index * 4 + 3 < rotations.length) {
-      bone.quaternion.fromArray(
-        mmdQuaternionToThree([
-          rotations[index * 4],
-          rotations[index * 4 + 1],
-          rotations[index * 4 + 2],
-          rotations[index * 4 + 3]
-        ])
-      );
-    }
+    applyPhysicsOutputToBone(mesh.skeleton.bones[index], index, translations, rotations);
+  }
+}
+
+function applyPhysicsOutputToBone(
+  bone: THREE.Bone | undefined,
+  index: number,
+  translations: ArrayLike<number> | undefined,
+  rotations: ArrayLike<number> | undefined
+): void {
+  if (!bone) {
+    return;
+  }
+  if (translations && index * 3 + 2 < translations.length) {
+    bone.position.set(
+      translations[index * 3],
+      translations[index * 3 + 1],
+      -translations[index * 3 + 2]
+    );
+  }
+  if (rotations && index * 4 + 3 < rotations.length) {
+    bone.quaternion.set(
+      -rotations[index * 4],
+      -rotations[index * 4 + 1],
+      rotations[index * 4 + 2],
+      rotations[index * 4 + 3]
+    );
   }
 }
 
 function isRuntimeMorph(value: unknown): value is RuntimeMorph { return typeof value === "object" && value !== null && "type" in value && "groupOffsets" in value; }
-export { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStage, cloneDebugStage, createEmptyDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatrices, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics };
+export { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStage, captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatrices, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics };
+export type { PrePhysicsScratch };
