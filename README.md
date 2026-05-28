@@ -6,6 +6,8 @@ Japanese: [docs/README.ja.md](./docs/README.ja.md)
 
 ![three-mmd-loader viewer screenshot](./docs/assets/screenshots.png)
 
+Live demo: [three.mmd.yohawing.com](https://three.mmd.yohawing.com/)
+
 Screenshot assets: model [Tda式初音ミク V4X by Tda](https://3d.nicovideo.jp/works/td30681),
 motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576784).
 
@@ -21,17 +23,24 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | VPD (pose) | ✅ | ✅ |
 | PMM (project) | ❌ | ❌ |
 | .x / .vac (accessory) | ❌ | ❌ |
+| .emm / .emd (effect project) | ❌ | ❌ |
+| .fx (MME effect) | ❌ | ❌ |
 
 ### Features
 
 | Feature | Status |
 | --- | --- |
-| IK link-local / parent-local clamp | ⚠️ Single-axis fixed; multi-axis partial |
+| WASM Parser | ✅ PMX / PMD / VMD with TypeScript fallback |
+| BDEF1/2/4 skinning | ✅ |
+| SDEF skinning | ⚠️ Shader path exists; verify parity |
+| QDEF skinning | ❌ Dual Quaternion Skinning not implemented |
 | Append transform | ✅ PMX layer order |
-| WASM Parser | ✅ PMX / PMD with TypeScript fallback |
+| IK link-local / parent-local clamp | ⚠️ Single-axis fixed; multi-axis partial |
+| VMD Camera | ✅ Runtime sampling + Three.js helper, perspective/orthographic switch |
+| VMD Light | ⚠️ Parsed; runtime/application parity needs verification |
+| Self Shadow | ❌ Not implemented |
 | Physics (Ammo backend) | ✅ Uses Ammo.js |
-| Camera motion application | ✅ Runtime sampling + Three.js helper, perspective/orthographic switch |
-| Three.js visual regression gates | ⚠️ Scripts exist; CI gates not wired |
+| Soft Body | ⚠️ PMX data parsed; runtime simulation not implemented |
 
 ## Acknowledgements
 
