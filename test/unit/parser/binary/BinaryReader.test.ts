@@ -17,14 +17,14 @@ describe("BinaryReader", () => {
     expect(reader.remaining).toBe(0);
   });
 
-  it("returns byte slices without copying", () => {
+  it("returns byte copies and advances offsets", () => {
     const bytes = new Uint8Array([1, 2, 3, 4]);
     const reader = new BinaryReader(bytes);
     const slice = reader.bytes(2);
 
     expect([...slice]).toEqual([1, 2]);
     slice[0] = 9;
-    expect(bytes[0]).toBe(9);
+    expect(bytes[0]).toBe(1);
     expect(reader.offset).toBe(2);
   });
 
@@ -46,7 +46,9 @@ describe("BinaryReader", () => {
     const reader = new BinaryReader(new Uint8Array([1, 2]));
 
     reader.u8();
-    expect(() => reader.u16()).toThrow("Unexpected end of buffer at 1; need 2 bytes");
+    expect(() => reader.u16()).toThrow(
+      "Unexpected end of buffer at 1; need 2 bytes through 3, have 2"
+    );
   });
 });
 

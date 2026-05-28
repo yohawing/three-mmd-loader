@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { MmdAnimation } from "../parser/model/modelTypes.js";
-import { createBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
+import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
 import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
 import { applyMmdAnimation, isMmdAnimation } from "./animation.js";
 import { applyAppendTransforms, reapplyAppendTransformsForSources } from "./append.js";
@@ -65,6 +65,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     outputRotations: new Float32Array(0),
     outputWorldMatricesColumnMajor: new Float32Array(0),
     updatedBoneIndices: [] as number[],
+    bonePhysicsToggleBuffer: new Uint8Array(0),
     worldMatricesColumnMajorNumbers: [] as number[]
   };
   private readonly scratchPrePhysics: PrePhysicsScratch = {
@@ -511,6 +512,14 @@ export class DefaultMmdRuntime implements MmdRuntime {
     );
     this.scratchExternalPhysicsInput.outputWorldMatricesColumnMajor =
       outputWorldMatricesColumnMajor;
+    if (this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer.length < data.bones.length) {
+      this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer = new Uint8Array(data.bones.length);
+    }
+    const bonePhysicsToggleBuffer = writeBonePhysicsToggleBuffer(
+      data.bones,
+      this.bonePhysicsToggles,
+      this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer
+    );
     const context: MmdPhysicsStepContext = {
       seconds: this.state.seconds,
       deltaSeconds: Math.max(0, this.state.seconds - previousSeconds),
@@ -531,7 +540,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
         worldMatricesColumnMajor: outputWorldMatricesColumnMajor,
         updatedBoneIndices: resetNumberArray(this.scratchExternalPhysicsInput.updatedBoneIndices)
       },
-      bonePhysicsToggles: createBonePhysicsToggleBuffer(data.bones, this.bonePhysicsToggles),
+      bonePhysicsToggles: bonePhysicsToggleBuffer,
       morphImpulses: data.morphImpulses
     };
 

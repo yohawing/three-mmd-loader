@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createBonePhysicsToggleBuffer,
+  writeBonePhysicsToggleBuffer,
   legacyMmdEulerToQuaternion,
   legacyMmdRigidBodyModeToPhysicsMotionType,
   legacyMmdRigidBodyShapeToPhysicsShapeType,
@@ -182,6 +183,21 @@ describe("legacy MMD physics bridge helpers", () => {
     );
 
     expect(Array.from(toggles)).toEqual([0, 0, 1, 1]);
+  });
+
+  it("writes bone physics toggles into a reusable buffer", () => {
+    const buffer = new Uint8Array([9, 9, 9]);
+    const result = writeBonePhysicsToggleBuffer(
+      [
+        { name: "root", englishName: "root" },
+        { name: "hair", englishName: "hair" }
+      ],
+      { root: false, hair: true },
+      buffer
+    );
+
+    expect(result).toBe(buffer);
+    expect(Array.from(buffer)).toEqual([0, 1, 9]);
   });
 
   it("creates bridge output accepted by concrete step context validation", () => {
