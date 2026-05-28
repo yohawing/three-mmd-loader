@@ -4,7 +4,7 @@ import { loadCameraFromUrl } from "./camera-loading.js";
 import { loadModelFromUrl } from "./model-loading.js";
 import { loadMotionFromUrl } from "./motion-loading.js";
 import { labelFromUrl } from "./url-label.js";
-import { dom, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js";
+import { dom, removeFixtureUi, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js";
 import { state } from "./state.js";
 
 const localAssetsUrl = "/__mmd_assets__/fixtures-local.json";
@@ -52,8 +52,14 @@ export async function initializeAssetLibrary() {
     Promise.resolve(readCustomPresets())
   ]);
 
+  state.hasLocalFixtures = manifest !== undefined;
+
+  if (!state.hasLocalFixtures) {
+    removeFixtureUi();
+  }
+
   state.assetLibrary = {
-    presets: [...(manifest?.presets ?? []), ...customPresets],
+    presets: [...(manifest?.presets ?? []), ...(state.hasLocalFixtures ? customPresets : [])],
     models: manifest?.models ?? [],
     motions: manifest?.motions ?? [],
     poses: manifest?.poses ?? [],

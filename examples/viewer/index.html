@@ -52,7 +52,6 @@
 
               <details class="load-category" id="model-load-category" open>
                 <summary data-i18n="menu.model">Model</summary>
-                <button id="choose-model-file" type="button" role="menuitem" data-i18n="action.loadFromFile">Load From File...</button>
                 <button id="choose-model-folder" type="button" role="menuitem" data-i18n="action.loadFromFolder">Load From Folder...</button>
                 <div class="asset-load-row" hidden>
                   <label for="asset-model-select" data-i18n="menu.fixture">Fixture</label>
@@ -84,7 +83,7 @@
 
               <details class="load-category" id="background-load-category">
                 <summary data-i18n="menu.background">Background</summary>
-                <button id="choose-background" type="button" role="menuitem" data-i18n="action.loadFromFile">Load From File...</button>
+                <button id="choose-background" type="button" role="menuitem" data-i18n="action.loadFromFolder">Load From Folder...</button>
                 <div class="asset-load-row" hidden>
                   <label for="asset-background-select" data-i18n="menu.fixture">Fixture</label>
                   <select id="asset-background-select" aria-label="Local background asset" hidden></select>
@@ -140,12 +139,11 @@
 
         <span class="status" id="status"></span>
 
-        <input id="model-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
         <input id="model-folder" type="file" webkitdirectory directory multiple />
         <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
         <input id="pose-file" type="file" accept=".vpd,text/plain" />
         <input id="audio-file" type="file" accept=".wav,.mp3,.ogg,audio/wav,audio/mpeg,audio/ogg" />
-        <input id="background-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
+        <input id="background-folder" type="file" webkitdirectory directory multiple />
         <input id="camera-file" type="file" accept=".vmd,application/octet-stream" />
         <audio id="bgm-audio" hidden></audio>
       </header>

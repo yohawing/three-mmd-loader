@@ -1,6 +1,6 @@
 import { clearAudioSource, isAudioElement, loadAudioFile, switchAudioEntry } from "./lib/audio-loading.js";
 import { bindAssetLibraryControls, initializeAssetLibrary } from "./lib/asset-library.js";
-import { clearBackground, loadBackgroundFile, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
+import { clearBackground, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
 import { clearCameraMotion, loadCameraFile, loadCameraFromUrl, switchCameraEntry } from "./lib/camera-loading.js";
 import { createViewerDebugApi } from "./lib/debug.js";
 import { dom, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updateStageState } from "./lib/dom.js";
@@ -51,18 +51,13 @@ function bindControls() {
     setLocale(dom.languageSelect.value);
     updateChromeHeights();
   });
-  document.querySelector("#choose-model-file")?.addEventListener("click", () => dom.modelFileInput?.click());
   document.querySelector("#choose-model-folder")?.addEventListener("click", () => dom.modelFolderInput?.click());
   document.querySelector("#choose-motion")?.addEventListener("click", () => dom.motionFileInput?.click());
   document.querySelector("#choose-pose")?.addEventListener("click", () => dom.poseFileInput?.click());
   document.querySelector("#choose-audio")?.addEventListener("click", () => dom.audioFileInput?.click());
-  document.querySelector("#choose-background")?.addEventListener("click", () => dom.backgroundFileInput?.click());
+  document.querySelector("#choose-background")?.addEventListener("click", () => dom.backgroundFolderInput?.click());
   document.querySelector("#choose-camera")?.addEventListener("click", () => dom.cameraFileInput?.click());
   bindAssetLibraryControls();
-  dom.modelFileInput?.addEventListener("change", (event) => {
-    const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
-    if (file) void loadModel(file);
-  });
   dom.modelFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
     if (files && files.length > 0) void loadModelFolder(Array.from(files));
@@ -126,9 +121,9 @@ function bindControls() {
     clearCameraMotion();
     renderStillFrame();
   });
-  dom.backgroundFileInput?.addEventListener("change", (event) => {
-    const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
-    if (file) void loadBackgroundFile(file);
+  dom.backgroundFolderInput?.addEventListener("change", (event) => {
+    const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
+    if (files && files.length > 0) void loadBackgroundFolder(Array.from(files));
   });
   dom.cameraFileInput?.addEventListener("change", (event) => {
     const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;

@@ -51,12 +51,11 @@ export const dom = {
   assetAudioLoadButton: document.querySelector("#load-asset-audio"),
   assetCameraSelect: document.querySelector("#asset-camera-select"),
   assetCameraLoadButton: document.querySelector("#load-asset-camera"),
-  modelFileInput: document.querySelector("#model-file"),
   modelFolderInput: document.querySelector("#model-folder"),
   motionFileInput: document.querySelector("#motion-file"),
   poseFileInput: document.querySelector("#pose-file"),
   audioFileInput: document.querySelector("#audio-file"),
-  backgroundFileInput: document.querySelector("#background-file"),
+  backgroundFolderInput: document.querySelector("#background-folder"),
   cameraFileInput: document.querySelector("#camera-file"),
   bgmAudio: document.querySelector("#bgm-audio")
 };
@@ -122,8 +121,31 @@ export function updateTransportState() {
 }
 
 // The preset section hosts both the fixture preset picker and the "save current
-// assets" control. Without bundled fixtures (e.g. the deployed demo) it is only
-// useful once something is loaded, so keep it hidden until then.
+// assets" control. Without local fixture data (e.g. the deployed demo) the
+// entire section along with per-category fixture rows is removed from the DOM.
+export function removeFixtureUi() {
+  dom.assetPresetSection?.remove();
+  dom.assetPresetSection = null;
+  dom.assetPresetSelect = null;
+  dom.assetPresetLoadButton = null;
+  dom.assetPresetSaveButton = null;
+  dom.assetPresetDeleteButton = null;
+
+  for (const ref of ["assetModelSelect", "assetMotionSelect", "assetBackgroundSelect", "assetAudioSelect", "assetCameraSelect"]) {
+    const sel = dom[ref];
+    if (sel) {
+      const row = sel.closest(".asset-load-row");
+      row?.remove();
+    }
+    dom[ref] = null;
+  }
+  dom.assetModelLoadButton = null;
+  dom.assetMotionLoadButton = null;
+  dom.assetBackgroundLoadButton = null;
+  dom.assetAudioLoadButton = null;
+  dom.assetCameraLoadButton = null;
+}
+
 export function updatePresetSectionVisibility() {
   if (!dom.assetPresetSection) {
     return;

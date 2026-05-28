@@ -1,5 +1,7 @@
 import {
   ThreeMmdLoader,
+  createMmdTextureMapFromFiles,
+  findMmdModelFiles,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
@@ -22,6 +24,21 @@ export async function loadBackgroundFile(file) {
   await loadBackground(file, file.name, createBackgroundLoader, {
     id: `file:${file.name}:${file.lastModified}`,
     source: file
+  });
+}
+
+export async function loadBackgroundFolder(files) {
+  const modelFiles = findMmdModelFiles(files);
+  const modelFile = modelFiles[0];
+  if (!modelFile) {
+    setStatus("No PMX or PMD background model found in the selected folder.", "error");
+    return;
+  }
+  const textureMap = createMmdTextureMapFromFiles(files, modelFile);
+  const folderLoader = createBackgroundLoader(undefined, { textureMap });
+  await loadBackground(modelFile, modelFile.name, () => folderLoader, {
+    id: `folder:${modelFile.name}`,
+    source: modelFile
   });
 }
 
@@ -105,10 +122,11 @@ function updateBackgroundSwitcher(selectedEntry) {
   }
 }
 
-function createBackgroundLoader(modelUrl) {
+function createBackgroundLoader(modelUrl, extraOptions = {}) {
   return new ThreeMmdLoader({
     ddsLoader: new DDSLoader(),
     geometryAwareAlpha: true,
+    ...extraOptions,
     ...(modelUrl
       ? {
           textureResolver: {
