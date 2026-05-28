@@ -1,14 +1,30 @@
 import * as THREE from "three";
 import type { CameraState, LightState, MmdAnimation, VmdBoneFrame, VmdBoneTrack, VmdCameraFrame, VmdLightFrame, VmdMorphTrack } from "../parser/model/modelTypes.js";
-import { interpolateBezier, lerp, mmdQuaternionToThree, slerp, weightedThreeQuaternion } from "./math.js";
+import { interpolateBezier, lerp, slerp, weightedThreeQuaternion } from "./math.js";
 import type { RuntimeMorph, RuntimeRestTransform } from "./types.js";
-export function applyMmdAnimation(mesh: THREE.SkinnedMesh | undefined, animation: MmdAnimation | undefined, restTransforms: readonly RuntimeRestTransform[], frame: number): { readonly bonePhysicsToggles: Record<string, number>; readonly preAppendTransforms: RuntimeRestTransform[]; } | undefined {
+import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
+export interface ApplyMmdAnimationScratch {
+  readonly boneMorphQuaternion: THREE.Quaternion;
+  readonly groupMorphDirectWeights: number[];
+  groupMorphVisited: Uint8Array;
+}
+
+export function applyMmdAnimation(
+  mesh: THREE.SkinnedMesh | undefined,
+  animation: MmdAnimation | undefined,
+  restTransforms: readonly RuntimeRestTransform[],
+  preAppendTransforms: RuntimeRestTransform[],
+  scratch: ApplyMmdAnimationScratch,
+  frame: number
+): { readonly bonePhysicsToggles: Record<string, number> } | undefined {
     if (!mesh || !animation) {
       return;
     }
 
     const bonePhysicsToggles: Record<string, number> = {};
-    mesh.skeleton.bones.forEach((bone, index) => {
+    const bones = mesh.skeleton.bones;
+    for (let index = 0; index < bones.length; index += 1) {
+      const bone = bones[index];
       const rest = restTransforms[index];
       if (rest) {
         bone.position.copy(rest.position);
@@ -17,12 +33,15 @@ export function applyMmdAnimation(mesh: THREE.SkinnedMesh | undefined, animation
       const track = findBoneTrack(animation, bone);
       const sampled = sampleBoneTrack(track, frame);
       if (!sampled) {
-        return;
+        continue;
       }
       if (sampled.physicsToggle !== undefined) {
-        bonePhysicsToggles[bone.userData.mmdBoneName ?? bone.name] = sampled.physicsToggle;
-        if (typeof bone.userData.mmdEnglishBoneName === "string") {
-          bonePhysicsToggles[bone.userData.mmdEnglishBoneName] = sampled.physicsToggle;
+        const userData = readMmdBoneUserData(bone);
+        bonePhysicsToggles[
+          typeof userData.mmdBoneName === "string" ? userData.mmdBoneName : bone.name
+        ] = sampled.physicsToggle;
+        if (typeof userData.mmdEnglishBoneName === "string") {
+          bonePhysicsToggles[userData.mmdEnglishBoneName] = sampled.physicsToggle;
         }
       }
       const restPosition = rest?.position ?? bone.position;
@@ -31,28 +50,31 @@ export function applyMmdAnimation(mesh: THREE.SkinnedMesh | undefined, animation
         restPosition.y + sampled.translation[1],
         restPosition.z - sampled.translation[2]
       );
-      bone.quaternion.fromArray(mmdQuaternionToThree(sampled.rotation));
-    });
+      bone.quaternion.set(
+        -sampled.rotation[0],
+        -sampled.rotation[1],
+        sampled.rotation[2],
+        sampled.rotation[3]
+      );
+    }
 
     const morphTargetInfluences = mesh.morphTargetInfluences;
     const morphTargetDictionary = mesh.morphTargetDictionary;
     if (morphTargetInfluences && morphTargetDictionary) {
       morphTargetInfluences.fill(0);
-      for (const [morphName, morphIndex] of Object.entries(morphTargetDictionary)) {
+      for (const morphName in morphTargetDictionary) {
+        const morphIndex = morphTargetDictionary[morphName];
         const track = animation.morphTracks[morphName];
         if (track) {
           morphTargetInfluences[morphIndex] = sampleMorphTrack(track, frame);
         }
       }
       const runtimeMorphs = readRuntimeMorphs(mesh);
-      expandGroupMorphWeights(runtimeMorphs, morphTargetInfluences);
-      applyBoneMorphs(mesh, runtimeMorphs, morphTargetInfluences);
+      expandGroupMorphWeights(runtimeMorphs, morphTargetInfluences, scratch);
+      applyBoneMorphs(mesh, runtimeMorphs, morphTargetInfluences, scratch.boneMorphQuaternion);
     }
-    const preAppendTransforms = mesh.skeleton.bones.map((bone) => ({
-      position: bone.position.clone(),
-      quaternion: bone.quaternion.clone()
-    }));
-    return { bonePhysicsToggles, preAppendTransforms };
+    copyPreAppendTransforms(mesh.skeleton.bones, preAppendTransforms);
+    return { bonePhysicsToggles };
   }
 
 function isMmdAnimation(value: unknown): value is MmdAnimation {
@@ -65,14 +87,19 @@ function findBoneTrack(
   animation: MmdAnimation,
   bone: THREE.Bone
 ): VmdBoneTrack | undefined {
-  const names = [bone.userData.mmdBoneName, bone.userData.mmdEnglishBoneName, bone.name].filter(
-    (name): name is string => typeof name === "string" && name.length > 0
-  );
-  for (const name of names) {
-    const track = animation.boneTracks[name];
-    if (track) {
-      return track;
-    }
+  const userData = readMmdBoneUserData(bone);
+  const mmdName = userData.mmdBoneName;
+  if (typeof mmdName === "string" && mmdName.length > 0) {
+    const track = animation.boneTracks[mmdName];
+    if (track) return track;
+  }
+  const englishName = userData.mmdEnglishBoneName;
+  if (typeof englishName === "string" && englishName.length > 0) {
+    const track = animation.boneTracks[englishName];
+    if (track) return track;
+  }
+  if (bone.name.length > 0) {
+    return animation.boneTracks[bone.name];
   }
   return undefined;
 }
@@ -182,56 +209,80 @@ function sampleFramePair<T extends { readonly frame: number }>(
   if (frame < frames[0].frame) {
     return { previous: frames[0], next: frames[0], t: 0 };
   }
-  let previous = frames[0];
-  for (let index = 1; index < frames.length; index += 1) {
-    const next = frames[index];
-    if (frame === next.frame) {
-      previous = next;
-      continue;
+  let low = 1;
+  let high = frames.length - 1;
+  let nextIndex = frames.length;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    const middleFrame = frames[middle]?.frame ?? Number.POSITIVE_INFINITY;
+    if (frame < middleFrame) {
+      nextIndex = middle;
+      high = middle - 1;
+    } else {
+      low = middle + 1;
     }
-    if (frame < next.frame) {
-      return {
-        previous,
-        next,
-          t: interpolationRatio(previous.frame, next.frame, frame)
-      };
-    }
-    previous = next;
   }
-  return { previous, next: previous, t: 0 };
+  if (nextIndex >= frames.length) {
+    return { previous: frames[frames.length - 1], next: frames[frames.length - 1], t: 0 };
+  }
+  const previous = frames[nextIndex - 1];
+  const next = frames[nextIndex];
+  return {
+    previous,
+    next,
+    t: interpolationRatio(previous.frame, next.frame, frame)
+  };
 }
 
-function readRuntimeMorphs(mesh: THREE.SkinnedMesh): RuntimeMorph[] {
-  const morphs = mesh.userData.mmdMorphs;
-  return Array.isArray(morphs) ? morphs.filter(isRuntimeMorph) : [];
+function readRuntimeMorphs(mesh: THREE.SkinnedMesh): readonly unknown[] {
+  const morphs = readMmdMeshRuntimeData(mesh).mmdMorphs;
+  return Array.isArray(morphs) ? morphs : [];
 }
 
 function isRuntimeMorph(value: unknown): value is RuntimeMorph {
   return typeof value === "object" && value !== null && "type" in value && "groupOffsets" in value;
 }
 
-function expandGroupMorphWeights(morphs: readonly RuntimeMorph[], weights: number[]): void {
+function expandGroupMorphWeights(
+  morphs: readonly unknown[],
+  weights: number[],
+  scratch: ApplyMmdAnimationScratch
+): void {
   if (morphs.length === 0) {
     return;
   }
-  const directWeights = weights.slice();
+  const directWeights = scratch.groupMorphDirectWeights;
+  directWeights.length = weights.length;
+  for (let index = 0; index < weights.length; index += 1) {
+    directWeights[index] = weights[index] ?? 0;
+  }
+  if (scratch.groupMorphVisited.length < weights.length) {
+    scratch.groupMorphVisited = new Uint8Array(weights.length);
+  }
+  const visited = scratch.groupMorphVisited;
+  visited.fill(0, 0, weights.length);
   for (let index = 0; index < morphs.length; index += 1) {
     const weight = directWeights[index] ?? 0;
     if (weight === 0) {
       continue;
     }
-    expandMorphWeight(morphs, weights, index, weight, new Set([index]));
+    visited[index] = 1;
+    expandMorphWeight(morphs, weights, index, weight, visited);
+    visited[index] = 0;
   }
 }
 
 function expandMorphWeight(
-  morphs: readonly RuntimeMorph[],
+  morphs: readonly unknown[],
   weights: number[],
   morphIndex: number,
   weight: number,
-  path: Set<number>
+  visited: Uint8Array
 ): void {
   const morph = morphs[morphIndex];
+  if (!isRuntimeMorph(morph)) {
+    return;
+  }
   if ((morph?.type !== "group" && morph?.type !== "flip") || weight === 0) {
     return;
   }
@@ -243,25 +294,29 @@ function expandMorphWeight(
     }
     const contribution = weight * offset.weight;
     weights[targetIndex] += contribution;
-    if (contribution === 0 || path.has(targetIndex)) {
+    if (contribution === 0 || visited[targetIndex] === 1) {
       continue;
     }
-    path.add(targetIndex);
-    expandMorphWeight(morphs, weights, targetIndex, contribution, path);
-    path.delete(targetIndex);
+    visited[targetIndex] = 1;
+    expandMorphWeight(morphs, weights, targetIndex, contribution, visited);
+    visited[targetIndex] = 0;
   }
 }
 
 function applyBoneMorphs(
   mesh: THREE.SkinnedMesh,
-  morphs: readonly RuntimeMorph[],
-  weights: readonly number[]
+  morphs: readonly unknown[],
+  weights: readonly number[],
+  scratchQuaternion: THREE.Quaternion
 ): void {
   if (morphs.length === 0) {
     return;
   }
   for (let morphIndex = 0; morphIndex < morphs.length; morphIndex += 1) {
     const morph = morphs[morphIndex];
+    if (!isRuntimeMorph(morph)) {
+      continue;
+    }
     const weight = weights[morphIndex] ?? 0;
     if (morph?.type !== "bone" || weight === 0) {
       continue;
@@ -274,13 +329,34 @@ function applyBoneMorphs(
       bone.position.x += offset.translation[0] * weight;
       bone.position.y += offset.translation[1] * weight;
       bone.position.z -= offset.translation[2] * weight;
-      bone.quaternion.premultiply(
-        weightedThreeQuaternion(
-          new THREE.Quaternion().fromArray(mmdQuaternionToThree(offset.rotation)),
-          weight
-        )
+      scratchQuaternion.set(
+        -offset.rotation[0],
+        -offset.rotation[1],
+        offset.rotation[2],
+        offset.rotation[3]
       );
+      bone.quaternion.premultiply(weightedThreeQuaternion(scratchQuaternion, weight, scratchQuaternion));
     }
+  }
+}
+
+function copyPreAppendTransforms(
+  bones: readonly THREE.Bone[],
+  preAppendTransforms: RuntimeRestTransform[]
+): void {
+  preAppendTransforms.length = bones.length;
+  for (let index = 0; index < bones.length; index += 1) {
+    const bone = bones[index];
+    let transform = preAppendTransforms[index];
+    if (!transform) {
+      transform = {
+        position: new THREE.Vector3(),
+        quaternion: new THREE.Quaternion()
+      };
+      preAppendTransforms[index] = transform;
+    }
+    transform.position.copy(bone.position);
+    transform.quaternion.copy(bone.quaternion);
   }
 }
 

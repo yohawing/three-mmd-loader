@@ -43,4 +43,6 @@ Thumbs.db
 AGENTS.md
 CLAUDE.md
 .cursor/
+.claude/
 .aider*
+review-*.md

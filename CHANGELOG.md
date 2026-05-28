@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-05-28
+
+### Added
+
+- Add VMD camera motion playback support in the viewer and Three.js runtime
+  helper path.
+- Add localized viewer UI copy and expanded asset/playback controls for local
+  MMD verification workflows.
+
+### Changed
+
+- Reduce per-frame runtime allocations in animation, append transform, and IK
+  evaluation paths.
+- Simplify the viewer fixture/preset UI when no local fixture inventory is
+  available, including folder-only model/background loading.
+- Clarify the release flow from `develop` to `main` before tag-triggered npm
+  publishing.
+- Refresh README demo and compatibility notes for the current viewer and
+  runtime surface.
+
+### Fixed
+
+- Honor VMD IK enable tracks and camera state when applying motion data.
+- Place the viewer import map before module loads so browser module resolution
+  is initialized before dependent scripts execute.
+- Address parser/runtime review follow-ups from the post-0.2.1 changes.
+
 ## [0.2.1] - 2026-05-26
 
 ### Added

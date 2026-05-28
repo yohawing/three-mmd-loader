@@ -1,17 +1,20 @@
 import { clearAudioSource, isAudioElement, loadAudioFile, switchAudioEntry } from "./lib/audio-loading.js";
 import { bindAssetLibraryControls, initializeAssetLibrary } from "./lib/asset-library.js";
-import { clearBackground, loadBackgroundFile, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
+import { clearBackground, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
 import { clearCameraMotion, loadCameraFile, loadCameraFromUrl, switchCameraEntry } from "./lib/camera-loading.js";
 import { createViewerDebugApi } from "./lib/debug.js";
-import { dom, setStatus, toggleLoadMenu, updatePlaybackDisplay, updateStageState } from "./lib/dom.js";
+import { dom, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updateStageState } from "./lib/dom.js";
+import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/ammo-bootstrap.js";
-import { loadModel, loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
+import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setupScene } from "./lib/scene-setup.js";
 import { debugEnabled, hasCurrentMotion, state } from "./lib/state.js";
 
 setupScene();
+initLocalization();
+initVolumeControls();
 
 const viewerApi = {
   get camera() { return state.camera; },
@@ -43,18 +46,18 @@ function bindControls() {
   window.addEventListener("pagehide", disposeViewerResources, { once: true });
   window.addEventListener("beforeunload", disposeViewerResources, { once: true });
   dom.loadMenu?.querySelector("summary")?.addEventListener("click", toggleLoadMenu);
-  document.querySelector("#choose-model-file")?.addEventListener("click", () => dom.modelFileInput?.click());
+  dom.languageSelect?.addEventListener("sl-change", () => {
+    if (!dom.languageSelect) return;
+    setLocale(dom.languageSelect.value);
+    updateChromeHeights();
+  });
   document.querySelector("#choose-model-folder")?.addEventListener("click", () => dom.modelFolderInput?.click());
   document.querySelector("#choose-motion")?.addEventListener("click", () => dom.motionFileInput?.click());
   document.querySelector("#choose-pose")?.addEventListener("click", () => dom.poseFileInput?.click());
   document.querySelector("#choose-audio")?.addEventListener("click", () => dom.audioFileInput?.click());
-  document.querySelector("#choose-background")?.addEventListener("click", () => dom.backgroundFileInput?.click());
+  document.querySelector("#choose-background")?.addEventListener("click", () => dom.backgroundFolderInput?.click());
   document.querySelector("#choose-camera")?.addEventListener("click", () => dom.cameraFileInput?.click());
   bindAssetLibraryControls();
-  dom.modelFileInput?.addEventListener("change", (event) => {
-    const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
-    if (file) void loadModel(file);
-  });
   dom.modelFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
     if (files && files.length > 0) void loadModelFolder(Array.from(files));
@@ -118,9 +121,9 @@ function bindControls() {
     clearCameraMotion();
     renderStillFrame();
   });
-  dom.backgroundFileInput?.addEventListener("change", (event) => {
-    const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
-    if (file) void loadBackgroundFile(file);
+  dom.backgroundFolderInput?.addEventListener("change", (event) => {
+    const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
+    if (files && files.length > 0) void loadBackgroundFolder(Array.from(files));
   });
   dom.cameraFileInput?.addEventListener("change", (event) => {
     const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
@@ -129,29 +132,57 @@ function bindControls() {
   dom.playToggle?.addEventListener("click", () => {
     void setPlaybackPlaying(!state.isPlaying);
   });
-  dom.timeline?.addEventListener("input", () => {
+  dom.timeline?.addEventListener("sl-input", () => {
     state.isSeeking = true;
-    state.elapsedSeconds = Number.parseFloat(dom.timeline.value);
+    state.elapsedSeconds = Number(dom.timeline.value);
     evaluateRuntime({ physics: false });
     syncAudioToMotionTime();
+    scheduleSeekEnd();
+    window.console?.debug("[mmd-debug] seek", {
+      value: Number(dom.timeline.value),
+      elapsed: state.elapsedSeconds,
+      audioTime: dom.bgmAudio?.currentTime,
+      isSeeking: state.isSeeking
+    });
   });
-  dom.timeline?.addEventListener("change", () => {
-    state.isSeeking = false;
+  dom.timeline?.addEventListener("sl-change", endSeek);
+  dom.volumeSlider?.addEventListener("sl-input", () => {
+    if (!dom.volumeSlider) return;
+    const volume = Number(dom.volumeSlider.value);
+    if (isAudioElement(dom.bgmAudio)) {
+      dom.bgmAudio.volume = volume;
+      dom.bgmAudio.muted = volume === 0;
+    }
+    persistVolume(volume, volume === 0);
+    updateVolumeIcon();
+  });
+  dom.volumeToggle?.addEventListener("click", () => {
+    if (!isAudioElement(dom.bgmAudio)) return;
+    dom.bgmAudio.muted = !dom.bgmAudio.muted;
+    persistVolume(dom.bgmAudio.volume, dom.bgmAudio.muted);
+    updateVolumeIcon();
   });
   if (isAudioElement(dom.bgmAudio)) {
+    dom.bgmAudio.addEventListener("volumechange", () => {
+      window.console?.debug("[mmd-debug] volumechange", { volume: dom.bgmAudio.volume, muted: dom.bgmAudio.muted });
+    });
     dom.bgmAudio.addEventListener("play", () => {
       if (!state.isSyncingAudioState && hasTimelineSource()) setPlaybackState(true);
     });
     dom.bgmAudio.addEventListener("pause", () => {
       if (!state.isSyncingAudioState && hasTimelineSource()) setPlaybackState(false);
     });
-    dom.bgmAudio.addEventListener("seeking", syncMotionToAudioTime);
+    dom.bgmAudio.addEventListener("seeking", () => {
+      if (state.isSeeking) return;
+      syncMotionToAudioTime();
+    });
     dom.bgmAudio.addEventListener("seeked", () => {
+      if (state.isSeeking) return;
       if (finishAudioTimeSync()) return;
       syncMotionToAudioTime();
     });
     dom.bgmAudio.addEventListener("timeupdate", () => {
-      if (!state.isPlaying || !hasTimelineSource()) return;
+      if (!state.isPlaying || state.isSeeking || !hasTimelineSource()) return;
       syncMotionToAudioTime({ evaluate: false });
     });
     dom.bgmAudio.addEventListener("ended", () => {
@@ -167,6 +198,86 @@ function bindControls() {
   bindDropTarget();
   updatePlaybackDisplay();
   updateStageState();
+}
+
+function initLocalization() {
+  const versionMeta = document.querySelector('meta[name="mmd-viewer-version"]');
+  if (dom.appVersionText && versionMeta instanceof window.HTMLMetaElement) {
+    dom.appVersionText.textContent = versionMeta.content;
+  }
+  setLocale(resolveInitialLocale());
+  if (dom.languageSelect) {
+    dom.languageSelect.value = getLocale();
+  }
+}
+
+const volumeStorageKey = "three-mmd-loader.viewer.volume.v1";
+
+let seekEndTimer;
+
+function scheduleSeekEnd() {
+  window.clearTimeout(seekEndTimer);
+  seekEndTimer = window.setTimeout(endSeek, 200);
+}
+
+function endSeek() {
+  window.clearTimeout(seekEndTimer);
+  seekEndTimer = undefined;
+  state.isSeeking = false;
+}
+
+function initVolumeControls() {
+  const { volume, muted } = readStoredVolume();
+  if (isAudioElement(dom.bgmAudio)) {
+    dom.bgmAudio.volume = volume;
+    dom.bgmAudio.muted = muted;
+  }
+  if (dom.volumeSlider) {
+    dom.volumeSlider.setAttribute("value", String(volume));
+    dom.volumeSlider.value = volume;
+  }
+  updateVolumeIcon();
+  window.console?.debug("[mmd-debug] vol-init", { read: { volume, muted }, applied: dom.bgmAudio?.volume });
+  // sl-range may not be upgraded yet on first paint; re-apply the stored value once it is.
+  window.customElements?.whenDefined?.("sl-range").then(() => {
+    if (dom.volumeSlider) {
+      dom.volumeSlider.value = volume;
+    }
+    updateVolumeIcon();
+  });
+}
+
+function updateVolumeIcon() {
+  if (!dom.volumeToggle) return;
+  const audioElement = isAudioElement(dom.bgmAudio) ? dom.bgmAudio : undefined;
+  const volume = audioElement ? audioElement.volume : 1;
+  const muted = audioElement ? audioElement.muted : false;
+  dom.volumeToggle.name = muted || volume === 0 ? "volume-mute" : volume < 0.5 ? "volume-down" : "volume-up";
+}
+
+function readStoredVolume() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(volumeStorageKey) ?? "null");
+    if (parsed && typeof parsed === "object") {
+      const volume = Number(parsed.volume);
+      return {
+        volume: Number.isFinite(volume) ? Math.min(Math.max(volume, 0), 1) : 1,
+        muted: parsed.muted === true
+      };
+    }
+  } catch {
+    // Ignore malformed storage.
+  }
+  return { volume: 1, muted: false };
+}
+
+function persistVolume(volume, muted) {
+  window.console?.debug("[mmd-debug] persist", { volume, muted }, new Error().stack);
+  try {
+    window.localStorage.setItem(volumeStorageKey, JSON.stringify({ volume, muted }));
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function hasTimelineSource() {

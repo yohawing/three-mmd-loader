@@ -40,6 +40,19 @@ const textDecoders = {
   "utf-16-le": new TextDecoder("utf-16le")
 };
 const maxPmxSectionCount = 10_000_000;
+const PMX_BONE_FLAG_INDEXED_TAIL = 0x0001;
+const PMX_BONE_FLAG_ROTATABLE = 0x0002;
+const PMX_BONE_FLAG_TRANSLATABLE = 0x0004;
+const PMX_BONE_FLAG_VISIBLE = 0x0008;
+const PMX_BONE_FLAG_ENABLED = 0x0010;
+const PMX_BONE_FLAG_IK = 0x0020;
+const PMX_BONE_FLAG_APPEND_LOCAL = 0x0080;
+const PMX_BONE_FLAG_APPEND_ROTATE = 0x0100;
+const PMX_BONE_FLAG_APPEND_TRANSLATE = 0x0200;
+const PMX_BONE_FLAG_FIXED_AXIS = 0x0400;
+const PMX_BONE_FLAG_LOCAL_AXIS = 0x0800;
+const PMX_BONE_FLAG_TRANSFORM_AFTER_PHYSICS = 0x1000;
+const PMX_BONE_FLAG_EXTERNAL_PARENT_TRANSFORM = 0x2000;
 
 export function parsePmx(bytes: Uint8Array, options: { skipGeometry?: boolean } = {}): ParsedPmx {
   const reader = new BinaryReader(bytes);
@@ -748,19 +761,19 @@ function readBone(reader: BinaryReader, readText: () => string, sizes: PmxIndexS
 
 function parseBoneFlags(bits: number) {
   return {
-    indexedTail: (bits & 0x0001) !== 0,
-    rotatable: (bits & 0x0002) !== 0,
-    translatable: (bits & 0x0004) !== 0,
-    visible: (bits & 0x0008) !== 0,
-    enabled: (bits & 0x0010) !== 0,
-    ik: (bits & 0x0020) !== 0,
-    appendLocal: (bits & 0x0080) !== 0,
-    appendRotate: (bits & 0x0100) !== 0,
-    appendTranslate: (bits & 0x0200) !== 0,
-    fixedAxis: (bits & 0x0400) !== 0,
-    localAxis: (bits & 0x0800) !== 0,
-    transformAfterPhysics: (bits & 0x1000) !== 0,
-    externalParentTransform: (bits & 0x2000) !== 0
+    indexedTail: (bits & PMX_BONE_FLAG_INDEXED_TAIL) !== 0,
+    rotatable: (bits & PMX_BONE_FLAG_ROTATABLE) !== 0,
+    translatable: (bits & PMX_BONE_FLAG_TRANSLATABLE) !== 0,
+    visible: (bits & PMX_BONE_FLAG_VISIBLE) !== 0,
+    enabled: (bits & PMX_BONE_FLAG_ENABLED) !== 0,
+    ik: (bits & PMX_BONE_FLAG_IK) !== 0,
+    appendLocal: (bits & PMX_BONE_FLAG_APPEND_LOCAL) !== 0,
+    appendRotate: (bits & PMX_BONE_FLAG_APPEND_ROTATE) !== 0,
+    appendTranslate: (bits & PMX_BONE_FLAG_APPEND_TRANSLATE) !== 0,
+    fixedAxis: (bits & PMX_BONE_FLAG_FIXED_AXIS) !== 0,
+    localAxis: (bits & PMX_BONE_FLAG_LOCAL_AXIS) !== 0,
+    transformAfterPhysics: (bits & PMX_BONE_FLAG_TRANSFORM_AFTER_PHYSICS) !== 0,
+    externalParentTransform: (bits & PMX_BONE_FLAG_EXTERNAL_PARENT_TRANSFORM) !== 0
   };
 }
 

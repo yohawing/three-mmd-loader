@@ -6,6 +6,7 @@ import { viewerConfig } from "./viewer-config.js";
 export const debugEnabled = new window.URLSearchParams(location.search).has("debug");
 
 export const state = {
+  hasLocalFixtures: false,
   ammoScriptUrl: "/node_modules/ammo.js/ammo.js",
   activePhysicsBackend: undefined,
   ammoNamespace: undefined,
@@ -39,14 +40,7 @@ export const state = {
     poses: [],
     backgrounds: [],
     audios: [],
-    cameras: [],
-    recent: {
-      models: [],
-      motions: [],
-      backgrounds: [],
-      audios: [],
-      cameras: []
-    }
+    cameras: []
   },
   pendingMotionSource: undefined,
   pendingMotionLabel: undefined,

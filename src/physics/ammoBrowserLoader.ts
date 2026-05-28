@@ -116,10 +116,20 @@ function waitForAmmoGlobalRetry(attempt: number): Promise<void> {
 
 function isAmmoScriptErrorEvent(event: ErrorEvent, scriptUrl: string): boolean {
   const filename = event.filename ?? "";
-  const absoluteAmmoScriptUrl = new URL(scriptUrl, location.href).href;
+  const absoluteAmmoScriptUrl = new URL(scriptUrl, browserBaseHref()).href;
   if (filename === absoluteAmmoScriptUrl || filename.endsWith(scriptUrl)) {
     return true;
   }
   const stack = typeof event.error?.stack === "string" ? event.error.stack : "";
   return stack.includes(absoluteAmmoScriptUrl) || stack.includes(scriptUrl);
+}
+
+function browserBaseHref(): string {
+  const href =
+    typeof location !== "undefined"
+      ? location.href
+      : typeof window !== "undefined"
+        ? window.location?.href
+        : undefined;
+  return href ?? "http://localhost/";
 }

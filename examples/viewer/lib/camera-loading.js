@@ -108,7 +108,7 @@ async function loadCameraAnimation(animation, label, entry) {
     syncTimelineRangeToCurrentMotion();
     if (!hasCurrentMotion()) {
       state.elapsedSeconds = 0;
-      dom.timeline.value = "0";
+      dom.timeline.value = 0;
     }
     updatePlaybackDisplay();
   }
@@ -125,10 +125,10 @@ function syncTimelineRangeToCurrentMotion() {
     return;
   }
   const maxTime = Math.max(currentMotionDurationSeconds(), 0.001);
-  dom.timeline.max = String(maxTime);
+  dom.timeline.max = maxTime;
   if (state.elapsedSeconds > maxTime) {
     state.elapsedSeconds = Math.max(maxTime - 0.001, 0);
-    dom.timeline.value = String(state.elapsedSeconds);
+    dom.timeline.value = state.elapsedSeconds;
   }
   updatePlaybackDisplay();
 }

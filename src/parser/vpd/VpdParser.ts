@@ -136,12 +136,11 @@ function readStatement(
   label: string
 ): { readonly value: string; readonly nextIndex: number } {
   let index = consumeStatementPrefix(text, startIndex);
-  let value = "";
+  const valueStart = index;
   while (index < text.length) {
     if (text[index] === ";") {
-      return { value, nextIndex: index + 1 };
+      return { value: text.slice(valueStart, index), nextIndex: index + 1 };
     }
-    value += text[index] ?? "";
     index += 1;
   }
   throw new Error(`Missing VPD ${label} statement terminator`);

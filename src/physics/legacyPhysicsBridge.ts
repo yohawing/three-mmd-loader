@@ -178,6 +178,19 @@ export function createBonePhysicsToggleBuffer(
   toggles: Readonly<Record<string, number | boolean | undefined>>
 ): Uint8Array {
   const buffer = new Uint8Array(bones.length);
+  return writeBonePhysicsToggleBuffer(bones, toggles, buffer);
+}
+
+export function writeBonePhysicsToggleBuffer(
+  bones: readonly LegacyMmdPhysicsBoneLike[],
+  toggles: Readonly<Record<string, number | boolean | undefined>>,
+  buffer: Uint8Array
+): Uint8Array {
+  if (buffer.length < bones.length) {
+    throw new RangeError(
+      `Bone physics toggle buffer must have at least ${bones.length} values; got ${buffer.length}.`
+    );
+  }
   for (let i = 0; i < bones.length; i += 1) {
     const bone = bones[i];
     const value =

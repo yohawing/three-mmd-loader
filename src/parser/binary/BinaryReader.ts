@@ -12,7 +12,9 @@ export class BinaryReader {
 
   ensure(length: number): void {
     if (this.remaining < length) {
-      throw new Error(`Unexpected end of buffer at ${this.offset}; need ${length} bytes`);
+      throw new Error(
+        `Unexpected end of buffer at ${this.offset}; need ${length} bytes through ${this.offset + length}, have ${this.view.byteLength}`
+      );
     }
   }
 
@@ -20,7 +22,7 @@ export class BinaryReader {
     this.ensure(length);
     const start = this.view.byteOffset + this.offset;
     this.offset += length;
-    return new Uint8Array(this.view.buffer, start, length);
+    return new Uint8Array(this.view.buffer, start, length).slice();
   }
 
   skip(length: number): void {

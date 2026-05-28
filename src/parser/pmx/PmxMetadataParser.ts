@@ -71,6 +71,13 @@ export interface PmxSectionInventory {
 
 const utf8Decoder = new TextDecoder("utf-8");
 const utf16LeDecoder = new TextDecoder("utf-16le");
+const PMX_BONE_FLAG_INDEXED_TAIL = 0x0001;
+const PMX_BONE_FLAG_IK = 0x0020;
+const PMX_BONE_FLAG_APPEND_ROTATE = 0x0100;
+const PMX_BONE_FLAG_APPEND_TRANSLATE = 0x0200;
+const PMX_BONE_FLAG_FIXED_AXIS = 0x0400;
+const PMX_BONE_FLAG_LOCAL_AXIS = 0x0800;
+const PMX_BONE_FLAG_EXTERNAL_PARENT_TRANSFORM = 0x2000;
 
 export function parsePmxMetadata(input: ArrayBuffer | Uint8Array): PmxMetadata {
   return parsePmx(input).metadata;
@@ -416,25 +423,28 @@ function skipBone(reader: BinaryReader, readText: () => string, header: PmxHeade
   skipIndex(reader, header.indexSizes.bone);
   reader.skip(4);
   const flags = reader.u16();
-  if ((flags & 0x0001) !== 0) {
+  if ((flags & PMX_BONE_FLAG_INDEXED_TAIL) !== 0) {
     skipIndex(reader, header.indexSizes.bone);
   } else {
     reader.skip(12);
   }
-  if ((flags & 0x0100) !== 0 || (flags & 0x0200) !== 0) {
+  if (
+    (flags & PMX_BONE_FLAG_APPEND_ROTATE) !== 0 ||
+    (flags & PMX_BONE_FLAG_APPEND_TRANSLATE) !== 0
+  ) {
     skipIndex(reader, header.indexSizes.bone);
     reader.skip(4);
   }
-  if ((flags & 0x0400) !== 0) {
+  if ((flags & PMX_BONE_FLAG_FIXED_AXIS) !== 0) {
     reader.skip(12);
   }
-  if ((flags & 0x0800) !== 0) {
+  if ((flags & PMX_BONE_FLAG_LOCAL_AXIS) !== 0) {
     reader.skip(24);
   }
-  if ((flags & 0x2000) !== 0) {
+  if ((flags & PMX_BONE_FLAG_EXTERNAL_PARENT_TRANSFORM) !== 0) {
     reader.skip(4);
   }
-  if ((flags & 0x0020) !== 0) {
+  if ((flags & PMX_BONE_FLAG_IK) !== 0) {
     skipIndex(reader, header.indexSizes.bone);
     reader.skip(8);
     const linkCount = readCount(reader, "IK link");

@@ -37,6 +37,21 @@ describe("loadAmmoNamespace", () => {
     await rejection;
   });
 
+  it("matches window error events without a global location object", async () => {
+    const dom = installMockDom({ locationHref: undefined });
+    const cause = new Error("ammo init failed");
+    const promise = loadAmmoNamespace("/missing-ammo.js");
+    const rejection = expect(promise).rejects.toThrow(cause);
+
+    dom.window.dispatchError({
+      error: cause,
+      filename: "http://localhost/missing-ammo.js",
+      message: cause.message
+    });
+
+    await rejection;
+  });
+
   it("rejects when the script load times out", async () => {
     vi.useFakeTimers();
     installMockDom();
@@ -133,17 +148,17 @@ function createAmmoNamespace(): AmmoNamespace {
   } as AmmoNamespace;
 }
 
-function installMockDom(): { scripts: MockScript[] } {
+function installMockDom(
+  options: { readonly locationHref?: string | undefined } = {
+    locationHref: "https://example.test/viewer/"
+  }
+): { scripts: MockScript[]; window: MockWindow } {
   const scripts: MockScript[] = [];
-  const windowMock = {
-    setTimeout: globalThis.setTimeout.bind(globalThis),
-    clearTimeout: globalThis.clearTimeout.bind(globalThis),
-    queueMicrotask: globalThis.queueMicrotask.bind(globalThis),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  };
+  const windowMock = new MockWindow(options.locationHref);
   vi.stubGlobal("window", windowMock);
-  vi.stubGlobal("location", { href: "https://example.test/viewer/" });
+  if (options.locationHref !== undefined) {
+    vi.stubGlobal("location", { href: options.locationHref });
+  }
   vi.stubGlobal("document", {
     createElement(tagName: string) {
       expect(tagName).toBe("script");
@@ -151,11 +166,43 @@ function installMockDom(): { scripts: MockScript[] } {
     },
     head: {
       appendChild(script: MockScript) {
-        scripts.push(script);
+      scripts.push(script);
       }
     }
   });
-  return { scripts };
+  return { scripts, window: windowMock };
+}
+
+class MockWindow {
+  readonly setTimeout = globalThis.setTimeout.bind(globalThis);
+  readonly clearTimeout = globalThis.clearTimeout.bind(globalThis);
+  readonly queueMicrotask = globalThis.queueMicrotask.bind(globalThis);
+  readonly location: { href: string } | undefined;
+  private readonly listeners = new Map<string, Set<(event: ErrorEvent) => void>>();
+
+  constructor(locationHref: string | undefined) {
+    this.location = locationHref === undefined ? undefined : { href: locationHref };
+  }
+
+  addEventListener(type: string, listener: (event: ErrorEvent) => void): void {
+    const listeners = this.listeners.get(type) ?? new Set<(event: ErrorEvent) => void>();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type: string, listener: (event: ErrorEvent) => void): void {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  dispatchError(eventInit: { readonly error: Error; readonly filename: string; readonly message: string }): void {
+    const event = {
+      ...eventInit,
+      preventDefault: vi.fn()
+    } as unknown as ErrorEvent;
+    for (const listener of this.listeners.get("error") ?? []) {
+      listener(event);
+    }
+  }
 }
 
 class MockScript {

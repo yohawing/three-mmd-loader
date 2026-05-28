@@ -24,7 +24,7 @@ export function renderStillFrame() {
 }
 
 export function evaluateRuntime(options = {}) {
-  const maxTime = Number.parseFloat(dom.timeline?.max ?? "10");
+  const maxTime = Number(dom.timeline?.max ?? 10);
   if (state.elapsedSeconds > maxTime && maxTime > 0) {
     state.elapsedSeconds %= maxTime;
     syncAudioToMotionTime();
@@ -37,7 +37,7 @@ export function evaluateRuntime(options = {}) {
     });
   }
   if (dom.timeline) {
-    dom.timeline.value = String(state.elapsedSeconds);
+    dom.timeline.value = state.elapsedSeconds;
   }
   updatePlaybackDisplay();
 }
@@ -87,6 +87,7 @@ export function syncMotionToAudioTime(options = {}) {
     return;
   }
   const audioTime = Number.isFinite(dom.bgmAudio.currentTime) ? dom.bgmAudio.currentTime : 0;
+  window.console?.debug("[mmd-debug] sync-m2a override", { audioTime, prevElapsed: state.elapsedSeconds, isSeeking: state.isSeeking });
   state.elapsedSeconds = audioTime;
   if (options.evaluate !== false) {
     evaluateRuntime({ physics: options.physics ?? false });
@@ -98,7 +99,17 @@ function hasTimelineSource() {
 }
 
 export function syncAudioToMotionTime(options = {}) {
-  if (!isAudioElement(dom.bgmAudio) || !hasActiveAudioSource()) {
+  const active = hasActiveAudioSource();
+  window.console?.debug("[mmd-debug] a2m enter", {
+    active,
+    elapsed: state.elapsedSeconds,
+    duration: dom.bgmAudio?.duration,
+    seekable: dom.bgmAudio?.seekable?.length,
+    readyState: dom.bgmAudio?.readyState,
+    curBefore: dom.bgmAudio?.currentTime,
+    onlyIfDrifted: options.onlyIfDrifted
+  });
+  if (!isAudioElement(dom.bgmAudio) || !active) {
     return;
   }
   const duration = Number.isFinite(dom.bgmAudio.duration) ? dom.bgmAudio.duration : undefined;
@@ -112,6 +123,7 @@ export function syncAudioToMotionTime(options = {}) {
       window.clearTimeout(state.audioSeekSyncTimer);
     }
     dom.bgmAudio.currentTime = Math.max(targetTime, 0);
+    window.console?.debug("[mmd-debug] a2m set", { targetTime, curAfter: dom.bgmAudio.currentTime });
     state.audioSeekSyncTimer = window.setTimeout(() => {
       state.isSyncingAudioTime = false;
       state.audioSeekSyncTimer = undefined;

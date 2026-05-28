@@ -2,7 +2,7 @@
 
 Three.js 上で MMD モデルとモーションを読み込み・再生するためのライブラリです。
 
-English: [README.md](../README.md)
+English: [README.md](../README.md)　- [デモサイト](https://three.mmd.yohawing.com/)
 
 ![three-mmd-loader viewer screenshot](./assets/screenshots.png)
 
@@ -21,17 +21,24 @@ English: [README.md](../README.md)
 | VPD (ポーズ) | ✅ | ✅ |
 | PMM (プロジェクト) | ❌ | ❌ |
 | .x / .vac (アクセサリ) | ❌ | ❌ |
+| .emm / .emd (エフェクトプロジェクト) | ❌ | ❌ |
+| .fx (MME エフェクト) | ❌ | ❌ |
 
 ### 機能
 
 | 機能 | 状態 |
 | --- | --- |
-| IK link-local / parent-local clamp | ⚠️ 単軸固定は対応 / 複数軸は部分対応 |
+| WASM Parser | ✅ PMX / PMD / VMD、TypeScript fallback あり |
+| BDEF1/2/4 skinning | ✅ |
+| SDEF skinning | ⚠️ shader path はあり / parity 要検証 |
+| QDEF skinning | ❌ Dual Quaternion Skinning 未実装 |
 | 付与変形 (append transform) | ✅ PMX layer 順 |
-| WASM Parser | ✅ PMX / PMD、TypeScript fallback あり |
+| IK link-local / parent-local clamp | ⚠️ 単軸固定は対応 / 複数軸は部分対応 |
+| VMD Camera | ✅ Runtime sampling + Three.js helper、perspective/orthographic 切替 |
+| VMD Light | ⚠️ 解析は対応 / runtime 適用の parity 要検証 |
+| Self Shadow | ❌ 未実装 |
 | 物理 (Ammo backend) | ✅ Ammo.jsを使用。  |
-| カメラモーション適用 | ✅ Runtime sampling + Three.js helper、perspective/orthographic 切替 |
-| Three.js 視覚回帰ゲート | ⚠️ script はあり / CI gate は未接続 |
+| Soft Body | ⚠️ PMX データは解析 / runtime simulation は未実装 |
 
 ## Acknowledgements
 

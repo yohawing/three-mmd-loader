@@ -42,7 +42,18 @@ export interface ThreeMmdRuntimeSyncTarget {
   readonly renderOrderMeshes?: readonly THREE.SkinnedMesh[];
 }
 
+const scratchWorldMatrices: THREE.Matrix4[] = [];
+const scratchLocalMatrix = new THREE.Matrix4();
+
 export function mmdWorldMatrixToThree(matrices: MmdWorldMatrixBuffer, index = 0): THREE.Matrix4 {
+  return writeMmdWorldMatrixToThree(matrices, index, new THREE.Matrix4());
+}
+
+function writeMmdWorldMatrixToThree(
+  matrices: MmdWorldMatrixBuffer,
+  index: number,
+  target: THREE.Matrix4
+): THREE.Matrix4 {
   if (matrices === null || matrices === undefined || typeof matrices.length !== "number") {
     throw new TypeError("MMD_WORLD_MATRIX_BUFFER_INVALID");
   }
@@ -59,22 +70,20 @@ export function mmdWorldMatrixToThree(matrices: MmdWorldMatrixBuffer, index = 0)
       throw new TypeError(`MMD_WORLD_MATRIX_COMPONENT_NON_FINITE:${index}:${componentIndex}`);
     }
   }
-  const value = (row: number, column: number) => matrices[offset + column * 4 + row];
-  const sign = (axis: number) => (axis === 2 ? -1 : 1);
 
-  return new THREE.Matrix4().set(
-    sign(0) * value(0, 0) * sign(0),
-    sign(0) * value(0, 1) * sign(1),
-    sign(0) * value(0, 2) * sign(2),
-    sign(0) * value(0, 3),
-    sign(1) * value(1, 0) * sign(0),
-    sign(1) * value(1, 1) * sign(1),
-    sign(1) * value(1, 2) * sign(2),
-    sign(1) * value(1, 3),
-    sign(2) * value(2, 0) * sign(0),
-    sign(2) * value(2, 1) * sign(1),
-    sign(2) * value(2, 2) * sign(2),
-    sign(2) * value(2, 3),
+  return target.set(
+    matrices[offset],
+    matrices[offset + 4],
+    -matrices[offset + 8],
+    matrices[offset + 12],
+    matrices[offset + 1],
+    matrices[offset + 5],
+    -matrices[offset + 9],
+    matrices[offset + 13],
+    -matrices[offset + 2],
+    -matrices[offset + 6],
+    matrices[offset + 10],
+    -matrices[offset + 14],
     0,
     0,
     0,
@@ -156,16 +165,16 @@ function syncRuntimeBoneTransforms(
   coreMatrices: Float32Array
 ): void {
   const bones = mesh.skeleton.bones;
-  const worldMatrices = bones.map((_, index) => mmdWorldMatrixToThree(coreMatrices, index));
+  const worldMatrices = ensureScratchMatrixArrayLength(scratchWorldMatrices, bones.length);
+  for (let index = 0; index < bones.length; index += 1) {
+    writeMmdWorldMatrixToThree(coreMatrices, index, worldMatrices[index]);
+  }
   for (let index = 0; index < bones.length; index += 1) {
     const bone = bones[index];
     const parentIndex = model.skeleton().bones[index]?.parentIndex ?? -1;
     const localMatrix =
       parentIndex >= 0
-        ? new THREE.Matrix4()
-            .copy(worldMatrices[parentIndex])
-            .invert()
-            .multiply(worldMatrices[index])
+        ? scratchLocalMatrix.copy(worldMatrices[parentIndex]).invert().multiply(worldMatrices[index])
         : worldMatrices[index];
     localMatrix.decompose(bone.position, bone.quaternion, bone.scale);
     bone.updateMatrix();
@@ -175,4 +184,15 @@ function syncRuntimeBoneTransforms(
   if (mesh.skeleton.boneTexture) {
     mesh.skeleton.boneTexture.needsUpdate = true;
   }
+}
+
+function ensureScratchMatrixArrayLength(
+  matrices: THREE.Matrix4[],
+  length: number
+): THREE.Matrix4[] {
+  for (let index = matrices.length; index < length; index += 1) {
+    matrices.push(new THREE.Matrix4());
+  }
+  matrices.length = length;
+  return matrices;
 }
