@@ -2,11 +2,9 @@
 
 Three.js 上で MMD モデルとモーションを読み込み・再生するためのライブラリです。
 
-English: [README.md](../README.md)
+English: [README.md](../README.md)　- [デモサイト](https://three.mmd.yohawing.com/)
 
 ![three-mmd-loader viewer screenshot](./assets/screenshots.png)
-
-デモ: [three.mmd.yohawing.com](https://three.mmd.yohawing.com/)
 
 スクリーンショット使用アセット: モデル [Tda式初音ミク V4X by Tda](https://3d.nicovideo.jp/works/td30681)、
 モーション [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576784)。

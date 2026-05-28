@@ -2,7 +2,7 @@
 
 A library for loading and playing back MMD models and motions on Three.js.
 
-Japanese: [docs/README.ja.md](./docs/README.ja.md)
+日本語: [docs/README.ja.md](./docs/README.ja.md)
 
 ![three-mmd-loader viewer screenshot](./docs/assets/screenshots.png)
 
