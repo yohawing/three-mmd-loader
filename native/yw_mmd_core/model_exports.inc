@@ -76,6 +76,7 @@ yw_mmd_model_load(const nanoem_u8_t *data, nanoem_rsize_t length, int format)
     g_mld.sdef_r1      = (float *)    malloc((size_t)V * 3 * sizeof(float));
     g_mld.sdef_rw0     = (float *)    malloc((size_t)V * 3 * sizeof(float));
     g_mld.sdef_rw1     = (float *)    malloc((size_t)V * 3 * sizeof(float));
+    g_mld.qdef_enabled = (float *)    malloc((size_t)V     * sizeof(float));
     g_mld.indices      = (uint32_t *) malloc((size_t)I     * sizeof(uint32_t));
     g_mld.additional_uvs = (auv > 0)
         ? (float *) malloc((size_t)V * 4 * (size_t)auv * sizeof(float))
@@ -85,6 +86,7 @@ yw_mmd_model_load(const nanoem_u8_t *data, nanoem_rsize_t length, int format)
         !g_mld.skin_indices || !g_mld.skin_weights || !g_mld.edge_scale ||
         !g_mld.sdef_enabled || !g_mld.sdef_c || !g_mld.sdef_r0 ||
         !g_mld.sdef_r1 || !g_mld.sdef_rw0 || !g_mld.sdef_rw1 ||
+        !g_mld.qdef_enabled ||
         !g_mld.indices || (auv > 0 && !g_mld.additional_uvs)) {
         yw_mmd_clear_mld();
         return 0;
@@ -97,6 +99,7 @@ yw_mmd_model_load(const nanoem_u8_t *data, nanoem_rsize_t length, int format)
     memset(g_mld.sdef_r1, 0, (size_t)V * 3 * sizeof(float));
     memset(g_mld.sdef_rw0, 0, (size_t)V * 3 * sizeof(float));
     memset(g_mld.sdef_rw1, 0, (size_t)V * 3 * sizeof(float));
+    memset(g_mld.qdef_enabled, 0, (size_t)V     * sizeof(float));
 
     for (int i = 0; i < V; i++) {
         const nanoem_model_vertex_t *v = vertices[i];
@@ -153,11 +156,17 @@ yw_mmd_model_load(const nanoem_u8_t *data, nanoem_rsize_t length, int format)
             break;
         }
         case NANOEM_MODEL_VERTEX_TYPE_BDEF4:
+            for (int k = 0; k < 4; k++) {
+                g_mld.skin_indices[s4+k] = (uint16_t)yw_mmd_bone_index(nanoemModelVertexGetBoneObject(v, (nanoem_rsize_t)k));
+                g_mld.skin_weights[s4+k] = nanoemModelVertexGetBoneWeight(v, (nanoem_rsize_t)k);
+            }
+            break;
         case NANOEM_MODEL_VERTEX_TYPE_QDEF:
             for (int k = 0; k < 4; k++) {
                 g_mld.skin_indices[s4+k] = (uint16_t)yw_mmd_bone_index(nanoemModelVertexGetBoneObject(v, (nanoem_rsize_t)k));
                 g_mld.skin_weights[s4+k] = nanoemModelVertexGetBoneWeight(v, (nanoem_rsize_t)k);
             }
+            g_mld.qdef_enabled[i] = 1.0f;
             break;
         default:
             break;
@@ -205,6 +214,7 @@ float    *yw_mmd_model_sdef_r0_ptr(void)      { return g_mld.sdef_r0; }
 float    *yw_mmd_model_sdef_r1_ptr(void)      { return g_mld.sdef_r1; }
 float    *yw_mmd_model_sdef_rw0_ptr(void)     { return g_mld.sdef_rw0; }
 float    *yw_mmd_model_sdef_rw1_ptr(void)     { return g_mld.sdef_rw1; }
+float    *yw_mmd_model_qdef_enabled_ptr(void) { return g_mld.qdef_enabled; }
 uint32_t *yw_mmd_model_indices_ptr(void)      { return g_mld.indices; }
 float    *yw_mmd_model_additional_uvs_ptr(int uv_index) {
     if (!g_mld.valid || !g_mld.additional_uvs ||

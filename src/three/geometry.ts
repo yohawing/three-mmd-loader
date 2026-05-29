@@ -28,6 +28,10 @@ export interface ThreeMmdSdefBuffers {
   readonly rw1: Float32Array;
 }
 
+export interface ThreeMmdQdefBuffers {
+  readonly enabled: Float32Array;
+}
+
 export interface ThreeMmdGeometryBuffers {
   readonly positions: Float32Array;
   readonly normals: Float32Array;
@@ -38,6 +42,7 @@ export interface ThreeMmdGeometryBuffers {
   readonly skinWeights: Float32Array;
   readonly edgeScale?: Float32Array;
   readonly sdef?: ThreeMmdSdefBuffers;
+  readonly qdef?: ThreeMmdQdefBuffers;
   readonly materialGroups?: readonly ThreeMmdMaterialGroup[];
 }
 
@@ -142,6 +147,14 @@ export function createThreeBufferGeometry(
       new THREE.BufferAttribute(createThreeVec3Buffer(buffers.sdef.rw1), 3)
     );
     geometry.userData.mmdSdef = { vertexCount: buffers.sdef.c.length / 3 };
+  }
+
+  if (buffers.qdef) {
+    geometry.setAttribute(
+      "matricesQdefEnabled",
+      new THREE.BufferAttribute(buffers.qdef.enabled.slice(), 1)
+    );
+    geometry.userData.mmdQdef = { vertexCount: buffers.qdef.enabled.length };
   }
 
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
@@ -280,6 +293,11 @@ function validateBaseBuffers(buffers: ThreeMmdGeometryBuffers): number {
     validateFiniteBuffer("SDEF_R1", buffers.sdef.r1);
     validateFiniteBuffer("SDEF_RW0", buffers.sdef.rw0);
     validateFiniteBuffer("SDEF_RW1", buffers.sdef.rw1);
+  }
+
+  if (buffers.qdef) {
+    validateBufferLength("QDEF_ENABLED", buffers.qdef.enabled.length, vertexCount);
+    validateFiniteBuffer("QDEF_ENABLED", buffers.qdef.enabled);
   }
 
   return vertexCount;

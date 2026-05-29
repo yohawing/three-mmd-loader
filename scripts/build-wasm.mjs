@@ -88,6 +88,7 @@ const exportedFunctions = [
   "_yw_mmd_model_sdef_r1_ptr",
   "_yw_mmd_model_sdef_rw0_ptr",
   "_yw_mmd_model_sdef_rw1_ptr",
+  "_yw_mmd_model_qdef_enabled_ptr",
   "_yw_mmd_model_indices_ptr",
   "_yw_mmd_model_additional_uvs_ptr",
   "_yw_mmd_model_free",

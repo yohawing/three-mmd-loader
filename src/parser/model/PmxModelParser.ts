@@ -9,6 +9,7 @@ import type {
   ModelMetadata,
   MorphData,
   JointData,
+  QdefGeometryBuffers,
   RigidBodyData,
   SoftBodyData,
   SkeletonData
@@ -113,7 +114,9 @@ export function parsePmx(bytes: Uint8Array, options: { skipGeometry?: boolean } 
     skinWeights,
     edgeScale,
     sdef,
-    sdefVertexCount
+    sdefVertexCount,
+    qdef,
+    qdefVertexCount
   } = skipGeometry
     ? skipVerticesWithBoneIndexSizeFallback(reader, vertexCount, additionalUvCount, indexSizes)
     : readVerticesWithBoneIndexSizeFallback(reader, vertexCount, additionalUvCount, indexSizes);
@@ -249,7 +252,8 @@ export function parsePmx(bytes: Uint8Array, options: { skipGeometry?: boolean } 
       edgeScale,
       skinIndices,
       skinWeights,
-      sdef: sdefVertexCount > 0 ? sdef : undefined
+      sdef: sdefVertexCount > 0 ? sdef : undefined,
+      qdef: qdefVertexCount > 0 ? qdef : undefined
     },
     materials,
     skeleton,
@@ -271,6 +275,8 @@ interface PmxVertexBuffers {
   edgeScale: Float32Array;
   sdef: NonNullable<GeometryBuffers["sdef"]>;
   sdefVertexCount: number;
+  qdef: QdefGeometryBuffers;
+  qdefVertexCount: number;
 }
 
 function readVerticesWithBoneIndexSizeFallback(
@@ -301,10 +307,14 @@ function readVerticesWithBoneIndexSizeFallback(
           buffers.skinWeights,
           buffers.edgeScale,
           buffers.sdef,
+          buffers.qdef,
           i
         );
         if (weightType === 3) {
           buffers.sdefVertexCount += 1;
+        }
+        if (weightType === 4) {
+          buffers.qdefVertexCount += 1;
         }
       }
       if (isPostVertexSectionPlausible(reader, indexSizes)) {
@@ -415,7 +425,11 @@ function createPmxVertexBuffers(
       rw0: new Float32Array(vertexCount * 3),
       rw1: new Float32Array(vertexCount * 3)
     },
-    sdefVertexCount: 0
+    sdefVertexCount: 0,
+    qdef: {
+      enabled: new Float32Array(vertexCount)
+    },
+    qdefVertexCount: 0
   };
 }
 
@@ -436,7 +450,9 @@ function createSkippedPmxVertexBuffers(): PmxVertexBuffers {
       rw0: new Float32Array(0),
       rw1: new Float32Array(0)
     },
-    sdefVertexCount: 0
+    sdefVertexCount: 0,
+    qdef: { enabled: new Float32Array(0) },
+    qdefVertexCount: 0
   };
 }
 
@@ -479,6 +495,7 @@ function readVertex(
   skinWeights: Float32Array,
   edgeScale: Float32Array,
   sdef: NonNullable<GeometryBuffers["sdef"]>,
+  qdef: QdefGeometryBuffers,
   index: number
 ): number {
   const positionOffset = index * 3;
@@ -519,6 +536,13 @@ function readVertex(
       break;
     }
     case 2:
+      for (let i = 0; i < 4; i++) {
+        skinIndices[skinOffset + i] = normalizeIndex(reader.index(sizes.bone));
+      }
+      for (let i = 0; i < 4; i++) {
+        skinWeights[skinOffset + i] = reader.f32();
+      }
+      break;
     case 4:
       for (let i = 0; i < 4; i++) {
         skinIndices[skinOffset + i] = normalizeIndex(reader.index(sizes.bone));
@@ -526,6 +550,7 @@ function readVertex(
       for (let i = 0; i < 4; i++) {
         skinWeights[skinOffset + i] = reader.f32();
       }
+      qdef.enabled[index] = 1;
       break;
     default:
       throw new Error(`Unsupported PMX vertex weight type: ${weightType}`);

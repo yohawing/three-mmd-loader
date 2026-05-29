@@ -56,6 +56,7 @@ export interface GeometryBuffers {
   skinIndices: Uint16Array;
   skinWeights: Float32Array;
   sdef?: SdefGeometryBuffers;
+  qdef?: QdefGeometryBuffers;
 }
 
 export interface GeometryMaterialGroup {
@@ -71,6 +72,10 @@ export interface SdefGeometryBuffers {
   r1: Float32Array;
   rw0: Float32Array;
   rw1: Float32Array;
+}
+
+export interface QdefGeometryBuffers {
+  enabled: Float32Array;
 }
 
 export interface MaterialInfo {

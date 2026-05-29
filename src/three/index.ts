@@ -74,6 +74,11 @@ export {
   computeMmdSdefSkinnedPosition
 } from "./material/material-sdef.js";
 export {
+  computeQdefSkinnedNormal,
+  computeQdefSkinnedPosition
+} from "./material/material-qdef.js";
+export type { MmdQdefNormalSkinningInput, MmdQdefSkinningInput } from "./material/material-qdef.js";
+export {
   createMmdBuiltInToonTextureMap,
   createTextureResolver,
   defaultSharedToonTexturePath,
@@ -92,6 +97,7 @@ export type {
   ThreeMmdGeometryMaterial,
   ThreeMmdGeometryMorph,
   ThreeMmdMaterialGroup,
+  ThreeMmdQdefBuffers,
   ThreeMmdSdefBuffers,
   ThreeMmdUvMorphOffset,
   ThreeMmdVertexMorphOffset
@@ -440,7 +446,7 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     modelData.morphs
   );
   const materials = createThreeMmdMaterials(modelData.materials);
-  if (geometry.userData.mmdSdef) {
+  if (geometry.userData.mmdSdef || geometry.userData.mmdQdef) {
     materials.forEach((material) => attachMmdSdefSkinning(material));
   }
   const mesh = new THREE.SkinnedMesh(geometry, materials.length === 1 ? materials[0] : materials);

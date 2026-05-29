@@ -89,6 +89,7 @@ export interface YwMmdWasmModule {
   _yw_mmd_model_sdef_r1_ptr(): number;
   _yw_mmd_model_sdef_rw0_ptr(): number;
   _yw_mmd_model_sdef_rw1_ptr(): number;
+  _yw_mmd_model_qdef_enabled_ptr(): number;
   _yw_mmd_model_indices_ptr(): number;
   _yw_mmd_model_additional_uvs_ptr(uvIndex: number): number;
   _yw_mmd_model_free(): void;

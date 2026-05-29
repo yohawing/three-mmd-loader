@@ -102,6 +102,7 @@ static struct {
     float    *sdef_r1;      /* vertex_count * 3 */
     float    *sdef_rw0;     /* vertex_count * 3 (pre-computed) */
     float    *sdef_rw1;     /* vertex_count * 3 (pre-computed) */
+    float    *qdef_enabled; /* vertex_count  (0.0 or 1.0) */
     uint32_t *indices;      /* index_count */
     float    *additional_uvs; /* vertex_count * 4 * additional_uv_count
                                   layout: [uvSet0[v0..vN-1], uvSet1[v0..vN-1], ...] */
@@ -240,6 +241,7 @@ yw_mmd_clear_mld(void)
     free(g_mld.sdef_r1);        g_mld.sdef_r1        = NULL;
     free(g_mld.sdef_rw0);       g_mld.sdef_rw0       = NULL;
     free(g_mld.sdef_rw1);       g_mld.sdef_rw1       = NULL;
+    free(g_mld.qdef_enabled);   g_mld.qdef_enabled   = NULL;
     free(g_mld.indices);        g_mld.indices        = NULL;
     free(g_mld.additional_uvs); g_mld.additional_uvs = NULL;
     if (g_mld.mat_diffuse_tex_path) {

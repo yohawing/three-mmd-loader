@@ -33,7 +33,7 @@ describe("createThreeBufferGeometry", () => {
     expect(Array.from(geometry.index?.array ?? [])).toEqual([0, 2, 1]);
   });
 
-  it("attaches additional UV, skinning, edge scale, and SDEF attributes", () => {
+  it("attaches additional UV, skinning, edge scale, SDEF, and QDEF attributes", () => {
     const geometry = createThreeBufferGeometry({
       ...createQuadBuffers(),
       edgeScale: new Float32Array([1, 0.5, 0.25, 0]),
@@ -45,6 +45,9 @@ describe("createThreeBufferGeometry", () => {
         r1: new Float32Array([0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 4, 0]),
         rw0: new Float32Array([0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5]),
         rw1: new Float32Array([1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6])
+      },
+      qdef: {
+        enabled: new Float32Array([0, 1, 0, 1])
       }
     });
 
@@ -57,6 +60,7 @@ describe("createThreeBufferGeometry", () => {
     );
     expectAttributeArray(geometry, "mmdEdgeScale", [1, 0.5, 0.25, 0]);
     expectAttributeArray(geometry, "matricesSdefEnabled", [1, 0, 1, 0]);
+    expectAttributeArray(geometry, "matricesQdefEnabled", [0, 1, 0, 1]);
     expectAttributeArray(geometry, "matricesSdefC", [1, 2, -3, 4, 5, -6, 7, 8, -9, 10, 11, -12]);
     expectAttributeArray(
       geometry,
@@ -65,6 +69,7 @@ describe("createThreeBufferGeometry", () => {
     );
     expect(geometry.userData.mmdEdgeScale).toEqual({ vertexCount: 4 });
     expect(geometry.userData.mmdSdef).toEqual({ vertexCount: 4 });
+    expect(geometry.userData.mmdQdef).toEqual({ vertexCount: 4 });
   });
 
   it("prefers explicit material groups and can derive groups from material face counts", () => {
@@ -267,6 +272,13 @@ describe("createThreeBufferGeometry", () => {
         additionalUvs: [new Float32Array([0, 0, 0, 1])]
       })
     ).toThrow("THREE_MMD_GEOMETRY_ADDITIONAL_UV_0_LENGTH_INVALID:4:16");
+
+    expect(() =>
+      createThreeBufferGeometry({
+        ...createQuadBuffers(),
+        qdef: { enabled: new Float32Array([0, 1]) }
+      })
+    ).toThrow("THREE_MMD_GEOMETRY_QDEF_ENABLED_LENGTH_INVALID:2:4");
   });
 
   it("rejects invalid material groups and derived material face counts", () => {

@@ -48,6 +48,21 @@ export function attachMmdSdefSkinning(material: THREE.Material): void {
     );
   };
   material.customProgramCacheKey = () => `${previousProgramCacheKey()}-yw-mmd-sdef-skinning`;
+  // Provide zero defaults for attributes that may be absent on geometry that has
+  // only SDEF (no QDEF) or only QDEF (no SDEF), preventing stale GPU attribute state.
+  // THREE.Material.defaultAttributeValues is not in the public type definitions but
+  // is supported at runtime for all material types via WebGLBindingStates.
+  // Merge with any existing defaultAttributeValues rather than overwriting — a
+  // ShaderMaterial may already have custom defaults that must be preserved.
+  const matWithDefaults = material as unknown as { defaultAttributeValues?: Record<string, number[]> };
+  matWithDefaults.defaultAttributeValues = {
+    ...matWithDefaults.defaultAttributeValues,
+    matricesSdefEnabled: [0],
+    matricesQdefEnabled: [0],
+    matricesSdefC: [0, 0, 0],
+    matricesSdefRW0: [0, 0, 0],
+    matricesSdefRW1: [0, 0, 0]
+  };
   material.needsUpdate = true;
 }
 
@@ -126,6 +141,7 @@ attribute vec3 matricesSdefC;
 attribute float matricesSdefEnabled;
 attribute vec3 matricesSdefRW0;
 attribute vec3 matricesSdefRW1;
+attribute float matricesQdefEnabled;
 
 vec4 ywMmdRotationMatrixToQuaternion(mat3 matrix) {
   float trace = matrix[0][0] + matrix[1][1] + matrix[2][2];
@@ -205,6 +221,19 @@ vec4 ywMmdSlerp(vec4 q0, vec4 q1, float t) {
   float w1 = sin(t * theta) / sinTheta;
   return q0 * w0 + q1 * w1;
 }
+
+// Convert a bone matrix to a dual quaternion (real part qr, dual part qd).
+// q_d = 0.5 * [t, 0] * q_r
+void ywMmdMatToDualQuat(mat4 m, out vec4 qr, out vec4 qd) {
+  qr = ywMmdRotationMatrixToQuaternion(mat3(m));
+  vec3 t = m[3].xyz;
+  qd = 0.5 * vec4(
+    t.x * qr.w + t.y * qr.z - t.z * qr.y,
+    t.y * qr.w + t.z * qr.x - t.x * qr.z,
+    t.z * qr.w + t.x * qr.y - t.y * qr.x,
+    -dot(t, qr.xyz)
+  );
+}
 `;
 
 const MMD_SDEF_SKINNING_VERTEX = /* glsl */ `
@@ -236,6 +265,7 @@ const MMD_SDEF_SKINNING_VERTEX = /* glsl */ `
     vec3(ywMmdBoneMatY * vec4(matricesSdefRW1, 1.0)) * skinWeight.y;
   sdefInfluence[3] += vec4(sdefPositionOffset, 0.0);
 
+  // SDEF / linear selection (for non-QDEF vertices)
   float useLinearDeform = 1.0 - step(0.5, matricesSdefEnabled);
   mat4 mmdSkinInfluence = mat4(
     mix(sdefInfluence[0], skinInfluence[0], useLinearDeform),
@@ -246,6 +276,41 @@ const MMD_SDEF_SKINNING_VERTEX = /* glsl */ `
 
   vec4 skinVertex = bindMatrix * vec4( transformed, 1.0 );
   vec4 skinned = mmdSkinInfluence * skinVertex;
+
+  // QDEF: Dual Quaternion Skinning — overrides SDEF/linear for type-4 vertices
+  float ywMmdUseQdef = step(0.5, matricesQdefEnabled);
+  if (ywMmdUseQdef > 0.5) {
+    vec4 qrX, qdX, qrY, qdY, qrZ, qdZ, qrW, qdW;
+    ywMmdMatToDualQuat(ywMmdBoneMatX, qrX, qdX);
+    ywMmdMatToDualQuat(ywMmdBoneMatY, qrY, qdY);
+    ywMmdMatToDualQuat(ywMmdBoneMatZ, qrZ, qdZ);
+    ywMmdMatToDualQuat(ywMmdBoneMatW, qrW, qdW);
+    // Antipodal correction: use the bone with the highest weight as reference
+    // so that a zero-weight bone X does not mis-flip contributing bones.
+    vec4 qrRef = qrX;
+    if (skinWeight.y > skinWeight.x && skinWeight.y >= skinWeight.z && skinWeight.y >= skinWeight.w) qrRef = qrY;
+    else if (skinWeight.z >= skinWeight.x && skinWeight.z >= skinWeight.y && skinWeight.z >= skinWeight.w) qrRef = qrZ;
+    else if (skinWeight.w >= skinWeight.x && skinWeight.w >= skinWeight.y && skinWeight.w >= skinWeight.z) qrRef = qrW;
+    if (dot(qrRef, qrX) < 0.0) { qrX = -qrX; qdX = -qdX; }
+    if (dot(qrRef, qrY) < 0.0) { qrY = -qrY; qdY = -qdY; }
+    if (dot(qrRef, qrZ) < 0.0) { qrZ = -qrZ; qdZ = -qdZ; }
+    if (dot(qrRef, qrW) < 0.0) { qrW = -qrW; qdW = -qdW; }
+    vec4 blendedQr = skinWeight.x * qrX + skinWeight.y * qrY + skinWeight.z * qrZ + skinWeight.w * qrW;
+    vec4 blendedQd = skinWeight.x * qdX + skinWeight.y * qdY + skinWeight.z * qdZ + skinWeight.w * qdW;
+    // Guard against zero-length blend (all-zero weights or full antipodal cancellation)
+    float blendedLen = max(length(blendedQr), 0.000001);
+    blendedQr /= blendedLen;
+    blendedQd /= blendedLen;
+    // Apply DQS: rotation via Rodrigues, translation via dual part
+    vec3 qdefP = skinVertex.xyz;
+    vec3 qdefQ = blendedQr.xyz;
+    float qdefW = blendedQr.w;
+    vec3 qdefT1 = 2.0 * cross(qdefQ, qdefP);
+    vec3 qdefRotated = qdefP + qdefW * qdefT1 + cross(qdefQ, qdefT1);
+    vec3 qdefTrans = 2.0 * (blendedQr.w * blendedQd.xyz - blendedQd.w * blendedQr.xyz - cross(blendedQd.xyz, blendedQr.xyz));
+    skinned = vec4(qdefRotated + qdefTrans, 1.0);
+  }
+
   transformed = ( bindMatrixInverse * skinned ).xyz;
 #endif
 `;
@@ -264,14 +329,43 @@ const MMD_SDEF_SKINNING_NORMAL = /* glsl */ `
   ywMmdLinearNormalSkinMatrix += skinWeight.w * ywMmdNormalBoneMatW;
   ywMmdLinearNormalSkinMatrix = bindMatrixInverse * ywMmdLinearNormalSkinMatrix * bindMatrix;
 
+  // Snapshot the unmodified objectNormal so each branch reads the original value.
+  vec3 ywMmdOriginalNormal = objectNormal;
+
   mat3 ywMmdSdefNormalRotation = ywMmdQuaternionToRotationMatrix(ywMmdSlerp(
     ywMmdRotationMatrixToQuaternion(mat3(ywMmdNormalBoneMatX)),
     ywMmdRotationMatrixToQuaternion(mat3(ywMmdNormalBoneMatY)),
     skinWeight.y
   ));
-  vec3 ywMmdSdefNormal = ywMmdSdefNormalRotation * objectNormal;
-  vec3 ywMmdLinearNormal = vec4( ywMmdLinearNormalSkinMatrix * vec4( objectNormal, 0.0 ) ).xyz;
+  vec3 ywMmdSdefNormal = ywMmdSdefNormalRotation * ywMmdOriginalNormal;
+  vec3 ywMmdLinearNormal = vec4( ywMmdLinearNormalSkinMatrix * vec4( ywMmdOriginalNormal, 0.0 ) ).xyz;
   float ywMmdUseLinearNormalDeform = 1.0 - step(0.5, matricesSdefEnabled);
   objectNormal = mix(ywMmdSdefNormal, ywMmdLinearNormal, ywMmdUseLinearNormalDeform);
+
+  // QDEF: apply DQS rotation to the original normal (no translation for normals).
+  // Uses ywMmdOriginalNormal to avoid double-rotating on top of the SDEF/linear result.
+  float ywMmdUseQdefNormal = step(0.5, matricesQdefEnabled);
+  if (ywMmdUseQdefNormal > 0.5) {
+    vec4 qrNX, qdNX, qrNY, qdNY, qrNZ, qdNZ, qrNW, qdNW;
+    ywMmdMatToDualQuat(ywMmdNormalBoneMatX, qrNX, qdNX);
+    ywMmdMatToDualQuat(ywMmdNormalBoneMatY, qrNY, qdNY);
+    ywMmdMatToDualQuat(ywMmdNormalBoneMatZ, qrNZ, qdNZ);
+    ywMmdMatToDualQuat(ywMmdNormalBoneMatW, qrNW, qdNW);
+    // Antipodal correction: use max-weight bone as reference
+    vec4 qrNRef = qrNX;
+    if (skinWeight.y > skinWeight.x && skinWeight.y >= skinWeight.z && skinWeight.y >= skinWeight.w) qrNRef = qrNY;
+    else if (skinWeight.z >= skinWeight.x && skinWeight.z >= skinWeight.y && skinWeight.z >= skinWeight.w) qrNRef = qrNZ;
+    else if (skinWeight.w >= skinWeight.x && skinWeight.w >= skinWeight.y && skinWeight.w >= skinWeight.z) qrNRef = qrNW;
+    if (dot(qrNRef, qrNX) < 0.0) { qrNX = -qrNX; }
+    if (dot(qrNRef, qrNY) < 0.0) { qrNY = -qrNY; }
+    if (dot(qrNRef, qrNZ) < 0.0) { qrNZ = -qrNZ; }
+    if (dot(qrNRef, qrNW) < 0.0) { qrNW = -qrNW; }
+    vec4 blendedQrN = skinWeight.x * qrNX + skinWeight.y * qrNY + skinWeight.z * qrNZ + skinWeight.w * qrNW;
+    blendedQrN /= max(length(blendedQrN), 0.000001);
+    vec3 qdefNQ = blendedQrN.xyz;
+    float qdefNW = blendedQrN.w;
+    vec3 qdefNT = 2.0 * cross(qdefNQ, ywMmdOriginalNormal);
+    objectNormal = ywMmdOriginalNormal + qdefNW * qdefNT + cross(qdefNQ, qdefNT);
+  }
 #endif
 `;

@@ -161,6 +161,8 @@ export class WasmBackedCore implements MmdCore {
       const edgeScale = readF32(this.wasm._yw_mmd_model_edge_scale_ptr(), vertexCount);
       const sdefEnabled = readF32(this.wasm._yw_mmd_model_sdef_enabled_ptr(), vertexCount);
       const hasSdef = sdefEnabled.some((value) => value !== 0);
+      const qdefEnabled = readF32(this.wasm._yw_mmd_model_qdef_enabled_ptr(), vertexCount);
+      const hasQdef = qdefEnabled.some((value) => value !== 0);
 
       const indicesU32Ptr = this.wasm._yw_mmd_model_indices_ptr();
       let indices: Uint16Array | Uint32Array;
@@ -207,7 +209,8 @@ export class WasmBackedCore implements MmdCore {
         edgeScale,
         skinIndices,
         skinWeights,
-        sdef
+        sdef,
+        qdef: hasQdef ? { enabled: qdefEnabled } : undefined
       };
 
       if (hasSdef) {
