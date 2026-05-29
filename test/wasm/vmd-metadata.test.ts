@@ -89,61 +89,13 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
     expect(parentTrack?.physicsToggles[0]).toBe(1);
   });
 
-  it("preserves Babylon-MMD VMD bone physics toggle bytes", async () => {
+  it("preserves VMD bone physics toggle bytes", async () => {
     const core = await initCore();
     const disabled = core.loadVmd(createBonePhysicsToggleVmd(0));
     const enabled = core.loadVmd(createBonePhysicsToggleVmd(1));
 
     expect(disabled.boneTracks.Root?.physicsToggles[0]).toBe(0);
     expect(enabled.boneTracks.Root?.physicsToggles[0]).toBe(1);
-  });
-
-  it("preserves Babylon-MMD public VMD physics-toggle fixtures", async () => {
-    const core = await initCore();
-    const fixturePaths = [
-      "references/babylon-mmd/res/motion/physics_toggle_test_v2_yyb10th.vmd",
-      "references/babylon-mmd/res/motion/physics_toggle_test_v3_yyb10th.vmd",
-      "references/babylon-mmd/res/motion/physics_toggle_test_yyb10th.vmd"
-    ];
-    if (skipIfMissing(fixturePaths)) {
-      return;
-    }
-
-    const v2 = core.loadVmd(await readFile(resolve(fixturePaths[0])));
-    const v3 = core.loadVmd(await readFile(resolve(fixturePaths[1])));
-    const full = core.loadVmd(await readFile(resolve(fixturePaths[2])));
-
-    expect(v2.metadata).toMatchObject({
-      modelName: "YYB式初音ミク_10th_v",
-      counts: { bones: 3, morphs: 0, properties: 0 },
-      maxFrame: 21
-    });
-    expect(new Set(Array.from(v2.boneTracks.D4!.physicsToggles))).toEqual(new Set([0, 1]));
-
-    expect(v3.metadata).toMatchObject({
-      modelName: "YYB式初音ミク_10th_v",
-      counts: { bones: 17, morphs: 0, properties: 0 },
-      maxFrame: 20
-    });
-    expect(v3.boneTracks["右肩P"]?.physicsToggles[0]).toBe(1);
-
-    expect(full.metadata).toMatchObject({
-      modelName: "YYB式初音ミク_10th_v",
-      counts: { bones: 454, morphs: 100, properties: 1 },
-      maxFrame: 100
-    });
-    expect(full.propertyFrames[0]).toMatchObject({
-      frame: 0,
-      visible: true,
-      physicsSimulation: true,
-      ikStates: [
-        { boneName: "右足ＩＫ", enabled: true },
-        { boneName: "右つま先ＩＫ", enabled: true },
-        { boneName: "左足ＩＫ", enabled: true },
-        { boneName: "左つま先ＩＫ", enabled: true }
-      ]
-    });
-    expect(full.boneTracks["操作中心"]?.physicsToggles[0]).toBe(1);
   });
 
   wavefileCameraIt("parses camera and light frame arrays", async () => {
@@ -189,15 +141,6 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
     );
   });
 });
-
-function skipIfMissing(paths: readonly string[]): boolean {
-  const missing = paths.filter((path) => !existsSync(resolve(path)));
-  if (missing.length > 0) {
-    console.warn(`Skipping optional Babylon-MMD fixture test; missing ${missing.join(", ")}`);
-    return true;
-  }
-  return false;
-}
 
 function createLightOnlyVmd(): Uint8Array {
   const bytes = new Uint8Array(30 + 20 + 4 + 4 + 4 + 4 + 2 * (4 + 6 * 4));

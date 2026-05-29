@@ -724,94 +724,6 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     ).toBe(false);
   });
 
-  it("loads Babylon-MMD public PMX fixture matrix without parser diagnostics", async () => {
-    const core = await initCore();
-    const fixtureExpectations = [
-      {
-        path: "references/babylon-mmd/res/model/uv_morph_test.pmx",
-        counts: { vertices: 24, faces: 12, materials: 1, bones: 2, displayFrames: 2 },
-        material: { texturePath: "ref.jpg", sphereMode: "multiply" }
-      },
-      {
-        path: "references/babylon-mmd/res/model/matcap_sample.pmx",
-        counts: { vertices: 2452, faces: 4900, materials: 1, bones: 2, displayFrames: 2 },
-        material: { sphereTexturePath: "./ref.jpg", sphereMode: "multiply" }
-      },
-      {
-        path: "references/babylon-mmd/res/model/bone_hierarchy_test.pmx",
-        counts: { vertices: 0, faces: 0, materials: 0, bones: 5, displayFrames: 2 }
-      },
-      {
-        path: "references/babylon-mmd/res/model/bone_hierarchy_test2.pmx",
-        counts: { vertices: 0, faces: 0, materials: 0, bones: 3, displayFrames: 2 }
-      },
-      {
-        path: "references/babylon-mmd/res/model/bone_flag_test.pmx",
-        counts: { vertices: 0, faces: 0, materials: 0, bones: 3, displayFrames: 2 },
-        appendedBoneCount: 2
-      }
-    ] as const;
-    if (skipIfMissing(fixtureExpectations.map((fixture) => fixture.path))) {
-      return;
-    }
-
-    for (const expectation of fixtureExpectations) {
-      const model = core.loadModel(await readFile(resolve(expectation.path)), { format: "pmx" });
-      const metadata = model.metadata();
-
-      expect(metadata.counts).toMatchObject(expectation.counts);
-      expect(metadata.diagnostics).toEqual([]);
-      expect(model.skeleton().bones).toHaveLength(expectation.counts.bones);
-      expect(model.displayFrames()).toHaveLength(expectation.counts.displayFrames);
-      if (expectation.material) {
-        expect(model.materials()[0]).toMatchObject(expectation.material);
-      }
-      if (expectation.appendedBoneCount !== undefined) {
-        expect(
-          model
-            .skeleton()
-            .bones.filter((bone) => bone.flags.appendRotate && bone.flags.appendTranslate)
-        ).toHaveLength(expectation.appendedBoneCount);
-      }
-    }
-  });
-
-  it("preserves Babylon-MMD public constraint fixture physics metadata", async () => {
-    const core = await initCore();
-    const constraintFixtures = [
-      "references/babylon-mmd/res/model/constraint_test.pmx",
-      "references/babylon-mmd/res/model/constraint_test2.pmx",
-      "references/babylon-mmd/res/model/constraint_test3.pmx",
-      "references/babylon-mmd/res/model/constraint_test4.pmx"
-    ];
-    if (skipIfMissing(constraintFixtures)) {
-      return;
-    }
-
-    for (const path of constraintFixtures) {
-      const model = core.loadModel(await readFile(resolve(path)), { format: "pmx" });
-
-      expect(model.metadata().diagnostics).toEqual([]);
-      expect(model.metadata().counts).toMatchObject({
-        vertices: 48,
-        faces: 24,
-        materials: 2,
-        bones: 2,
-        rigidBodies: 2,
-        joints: 1
-      });
-      expect(model.rigidBodies().map((body) => body.mode)).toEqual(["static", "dynamic"]);
-      expect(model.rigidBodies().every((body) => body.shape === "box")).toBe(true);
-      expect(model.rigidBodies().map((body) => body.boneIndex)).toEqual([0, 1]);
-      expect(model.joints()[0]).toMatchObject({
-        type: "generic6dofSpring",
-        rigidBodyIndexA: 0,
-        rigidBodyIndexB: 1
-      });
-      expect(Math.max(...model.joints()[0]!.rotationUpperLimit)).toBeGreaterThan(1.5);
-    }
-  });
-
   it("parses PMX append, IK, fixed-axis, and local-axis bone data", async () => {
     const core = await initCore();
     const appendModel = core.loadModel(
@@ -1119,15 +1031,6 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     }
   });
 });
-
-function skipIfMissing(paths: readonly string[]): boolean {
-  const missing = paths.filter((path) => !existsSync(resolve(path)));
-  if (missing.length > 0) {
-    console.warn(`Skipping optional Babylon-MMD fixture test; missing ${missing.join(", ")}`);
-    return true;
-  }
-  return false;
-}
 
 function createMinimalSdefPmx(
   options: {

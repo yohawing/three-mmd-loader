@@ -50,7 +50,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(matchedMorphIndices.length).toBeGreaterThan(0);
   });
 
-  it("accepts Babylon-MMD-compatible VPD whitespace and comments before statements", async () => {
+  it("accepts permissive VPD whitespace and comments before statements", async () => {
     const core = await initCore();
     const pose = core.loadVpd(
       new TextEncoder().encode(
@@ -89,7 +89,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
         [
           "Vocaloid Pose Data file",
           "",
-          "// Babylon-MMD consumes the first statement as the model name.",
+          "// The first statement is consumed as the model name.",
           "Model.pmx;",
           "// The second statement is the declared bone count.",
           "0;"
@@ -102,7 +102,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(pose.metadata.morphCount).toBe(0);
   });
 
-  it("ignores mismatched VPD declared bone counts like Babylon-MMD", async () => {
+  it("ignores mismatched VPD declared bone counts", async () => {
     const core = await initCore();
     const pose = core.loadVpd(
       new TextEncoder().encode(
@@ -131,7 +131,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(pose.bones.Upper?.rotation).toEqual([0, 0.25, 0, 0.96875]);
   });
 
-  it("uses the last duplicate VPD bone and morph block like Babylon-MMD", async () => {
+  it("uses the last duplicate VPD bone and morph block", async () => {
     const core = await initCore();
     const pose = core.loadVpd(
       new TextEncoder().encode(

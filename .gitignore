@@ -28,6 +28,8 @@ test/fixtures/oracles/*.local.json
 test/fixtures/generated/*.pmx
 test/fixtures/generated/**/*.pmx
 test/fixtures/generated/**/*.png
+test/fixtures/generated/**/*.tga
+test/fixtures/generated/**/*.vmd
 
 # Local native nanoem oracle generator
 scripts/local/oracle/
