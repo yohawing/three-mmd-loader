@@ -771,6 +771,7 @@ export function getDefaultToonGradientMap(): THREE.DataTexture {
   texture.magFilter = THREE.NearestFilter;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.userData.mmdFallbackToonGradient = true;
   defaultToonGradientMap = texture;
   return defaultToonGradientMap;
 }

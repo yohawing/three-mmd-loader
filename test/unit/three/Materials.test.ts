@@ -337,6 +337,7 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.gradientMap).toBe(getDefaultToonGradientMap());
     expect(materials[0]?.gradientMap).toBeInstanceOf(THREE.DataTexture);
     expect(materials[0]?.gradientMap?.name).toBe("mmd-default-toon");
+    expect(materials[0]?.gradientMap?.userData.mmdFallbackToonGradient).toBe(true);
   });
 
   it("does not run UV-rasterized texture alpha evaluation by default", async () => {
@@ -872,6 +873,37 @@ describe("Three.js MMD materials", () => {
       "directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]"
     );
     expect(shader.fragmentShader).not.toContain("directLight.color *= mix(");
+  });
+
+  it("routes default face toon self-shadows through the MMD toon gradient path", async () => {
+    const [material] = createThreeMmdMaterials([createMaterialInfo()]);
+    if (!material) {
+      throw new Error("missing material");
+    }
+    await applyThreeMmdMaterialTextures([material], [createMaterialInfo()], {
+      textureLoader: createTextureLoaderMock()
+    });
+    attachMmdMaterialFactors(material);
+
+    const shader = {
+      uniforms: {},
+      vertexShader: "",
+      fragmentShader: [
+        "#include <map_pars_fragment>",
+        "#include <map_fragment>",
+        "#include <lights_fragment_end>",
+        "#include <gradientmap_pars_fragment>",
+        "#include <lights_fragment_begin>",
+        "float dotNL = dot( normal, lightDirection );",
+        "\tvec2 coord = vec2( dotNL * 0.5 + 0.5, 0.0 );",
+        "\treturn vec3( texture2D( gradientMap, coord ).r );"
+      ].join("\n")
+    };
+
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    expect(shader.fragmentShader).toContain("return texture2D( gradientMap, coord ).rgb;");
+    expect(shader.fragmentShader).not.toContain("directLight.color *= mix( 0.75, 1.0, ywMmdToonShadowFactor );");
   });
 
   it("keeps fallback toon self-shadows above a black light multiplier", async () => {
