@@ -659,7 +659,8 @@ function readQuaternionFromBuffer(
 
 function applyPhysicsOutputToSkeleton(
   mesh: THREE.SkinnedMesh,
-  context: MmdPhysicsStepContext
+  context: MmdPhysicsStepContext,
+  updatedBoneCount?: number
 ): void {
   const translations = context.output?.translations;
   const rotations = context.output?.rotations;
@@ -667,14 +668,16 @@ function applyPhysicsOutputToSkeleton(
     return;
   }
   const updatedIndices = context.output?.updatedBoneIndices;
-  if (!updatedIndices || updatedIndices.length === 0) {
+  const indexCount = updatedBoneCount ?? updatedIndices?.length ?? 0;
+  if (!updatedIndices || indexCount === 0) {
     for (let index = 0; index < mesh.skeleton.bones.length; index += 1) {
       applyPhysicsOutputToBone(mesh.skeleton.bones[index], index, translations, rotations);
     }
     return;
   }
   const applied = new Set<number>();
-  for (const index of updatedIndices) {
+  for (let offset = 0; offset < indexCount; offset += 1) {
+    const index = updatedIndices[offset];
     if (applied.has(index)) {
       continue;
     }

@@ -52,8 +52,15 @@
     }
   },
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-wasm.mjs",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-wasm.mjs && node scripts/copy-bullet-ammo.mjs && node scripts/copy-bullet-mmd.mjs",
     "build:wasm": "node scripts/build-wasm.mjs",
+    "build:bullet": "npm run build:bullet:ammo && npm run build:bullet:mmd",
+    "build:bullet:ammo": "node scripts/build-bullet-wasm.mjs",
+    "build:bullet:mmd": "node scripts/build-bullet-mmd-wasm.mjs",
+    "compare:bullet": "node scripts/compare-bullet-ammo.mjs",
+    "compare:bullet:mmd": "node scripts/compare-bullet-mmd.mjs",
+    "compare:bullet:mmd:local": "node scripts/compare-bullet-mmd-local-fixture.mjs",
+    "smoke:bullet:mmd": "node scripts/smoke-bullet-mmd.mjs",
     "bench:wasm:perf": "node scripts/bench_wasm_perf.mjs",
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",
     "example:viewer": "npm run dev",

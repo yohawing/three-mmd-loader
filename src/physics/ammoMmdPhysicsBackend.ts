@@ -111,6 +111,10 @@ export interface AmmoTransform {
   getOrigin(): AmmoVector3;
   setRotation?(rotation: AmmoQuaternion): void;
   getRotation?(): AmmoQuaternion | undefined;
+  getRotationX?(): number;
+  getRotationY?(): number;
+  getRotationZ?(): number;
+  getRotationW?(): number;
 }
 
 export interface AmmoMotionState {
@@ -540,9 +544,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
         const origin = bodyTransform.getOrigin();
         const physicsWorld = {
           position: [origin.x(), origin.y(), origin.z()] as [number, number, number],
-          rotation: bodyTransform.getRotation
-            ? (ammoQuaternionToTuple(bodyTransform.getRotation()) ?? [0, 0, 0, 1])
-            : ([0, 0, 0, 1] as [number, number, number, number])
+          rotation: this.readTransformRotation(bodyTransform, [0, 0, 0, 1])
         };
         const mmdWorld = physicsTransformToMmd(physicsWorld);
         return transformToColumnMajorMatrix(mmdWorld.position, mmdWorld.rotation);
@@ -554,7 +556,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
 
   debugPhysicsContacts(): AmmoMmdPhysicsContactDebug[] {
     const dispatcher = this.world?.getDispatcher?.();
-    if (!dispatcher || !this.ammo.getPointer) {
+    if (!dispatcher) {
       return [];
     }
     const bindingByPointer = new Map<
@@ -574,8 +576,13 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       if (contactCount <= 0) {
         continue;
       }
-      const bodyA = bindingByPointer.get(this.ammo.getPointer(manifold.getBody0()));
-      const bodyB = bindingByPointer.get(this.ammo.getPointer(manifold.getBody1()));
+      const bodyPointerA = ammoObjectPointer(this.ammo, manifold.getBody0());
+      const bodyPointerB = ammoObjectPointer(this.ammo, manifold.getBody1());
+      if (bodyPointerA === undefined || bodyPointerB === undefined) {
+        continue;
+      }
+      const bodyA = bindingByPointer.get(bodyPointerA);
+      const bodyB = bindingByPointer.get(bodyPointerB);
       if (!bodyA || !bodyB) {
         continue;
       }
@@ -757,7 +764,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
         rigidBody,
         shape,
         motionState,
-        rigidBodyPointer: Ammo.getPointer?.(rigidBody),
+        rigidBodyPointer: ammoObjectPointer(Ammo, rigidBody),
         body,
         effectiveMode: body.mode,
         baseCollisionFlags: rigidBody.getCollisionFlags?.(),
@@ -1214,9 +1221,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     try {
       rigidBody.getMotionState().getWorldTransform(currentTransform);
       const currentOrigin = currentTransform.getOrigin();
-      const currentRotation = currentTransform.getRotation
-        ? (ammoQuaternionToTuple(currentTransform.getRotation()) ?? [0, 0, 0, 1])
-        : ([0, 0, 0, 1] as [number, number, number, number]);
+      const currentRotation = this.readTransformRotation(currentTransform, [0, 0, 0, 1]);
       const forceFactor = 30;
       const linearVelocity = new Ammo.btVector3(
         (physicsTarget.position[0] - currentOrigin.x()) * forceFactor,
@@ -1365,9 +1370,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     fallback: AmmoQuaternionTuple
   ): AmmoQuaternionTuple {
     const bodyTransform = this.getRigidBodyWorldTransform(rigidBody, transform);
-    const physicsRotation = bodyTransform.getRotation
-      ? ammoQuaternionToTuple(bodyTransform.getRotation())
-      : undefined;
+    const physicsRotation = this.readTransformRotation(bodyTransform);
     return physicsRotation ? mmdQuaternionToPhysics(physicsRotation) : fallback;
   }
 
@@ -1395,10 +1398,10 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       const currentBoneWorld = worldCache.get(body.boneIndex);
       const physicsBodyWorld = {
         position: [origin.x(), origin.y(), origin.z()] as [number, number, number],
-        rotation: bodyTransform.getRotation
-          ? (ammoQuaternionToTuple(bodyTransform.getRotation()) ??
-            mmdQuaternionToPhysics(currentBoneWorld.rotation))
-          : mmdQuaternionToPhysics(currentBoneWorld.rotation)
+        rotation: this.readTransformRotation(
+          bodyTransform,
+          mmdQuaternionToPhysics(currentBoneWorld.rotation)
+        )
       };
       const bodyWorld = physicsTransformToMmd(physicsBodyWorld);
       const offset = bodyOffsetFromBoneRest(body, context);
@@ -1445,10 +1448,41 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
         body.boneIndex,
         transformToColumnMajorMatrix(boneWorld.position, boneWorld.rotation)
       );
-      context.output.updatedBoneIndices?.push(body.boneIndex);
+      if (Array.isArray(context.output.updatedBoneIndices)) {
+        context.output.updatedBoneIndices.push(body.boneIndex);
+      }
       worldCache.set(body.boneIndex, boneWorld);
     }
     this.destroy(transform);
+  }
+
+  private readTransformRotation(
+    transform: AmmoTransform,
+    fallback: AmmoQuaternionTuple
+  ): AmmoQuaternionTuple;
+  private readTransformRotation(transform: AmmoTransform): AmmoQuaternionTuple | undefined;
+  private readTransformRotation(
+    transform: AmmoTransform,
+    fallback?: AmmoQuaternionTuple
+  ): AmmoQuaternionTuple | undefined {
+    if (
+      transform.getRotationX &&
+      transform.getRotationY &&
+      transform.getRotationZ &&
+      transform.getRotationW
+    ) {
+      return [
+        transform.getRotationX(),
+        transform.getRotationY(),
+        transform.getRotationZ(),
+        transform.getRotationW()
+      ];
+    }
+    const rotation = transform.getRotation?.();
+    if (!rotation) {
+      return fallback;
+    }
+    return ammoQuaternionToTuple(rotation) ?? fallback;
   }
 
   private destroy(value: object | undefined): void {
@@ -1552,6 +1586,18 @@ function createAmmoStepContext(context: MmdPhysicsStepContext): AmmoStepContext 
     morphImpulses: context.morphImpulses,
     debug: context.debug
   };
+}
+
+function ammoObjectPointer(ammo: AmmoNamespace, value: object | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const exportedPointer = ammo.getPointer?.(value);
+  if (exportedPointer !== undefined) {
+    return exportedPointer;
+  }
+  const embindPointer = (value as { $$?: { ptr?: unknown } }).$$?.ptr;
+  return typeof embindPointer === "number" ? embindPointer : undefined;
 }
 
 function requireConcreteStepContext(context: MmdPhysicsStepContext): RequiredConcreteStepContext {

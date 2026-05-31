@@ -147,7 +147,10 @@ swapped. The current implementation uses Ammo.js (Bullet Physics).
 ```ts
 import {
   createAmmoMmdPhysicsBackend,
-  createDisabledMmdPhysicsBackend
+  createCustomBulletMmdPhysicsBackend,
+  createDisabledMmdPhysicsBackend,
+  loadCustomBulletAmmoNamespace,
+  loadCustomBulletMmdModule
 } from "@yohawing/three-mmd-loader/physics";
 
 // No simulation fallback.
@@ -156,10 +159,19 @@ const disabledPhysicsBackend = createDisabledMmdPhysicsBackend();
 // Ammo.js backend.
 const Ammo = await import("ammo.js").then((m) => m.default ?? m);
 const physicsBackend = createAmmoMmdPhysicsBackend(Ammo);
+
+// Browser helper for the packaged Bullet/Ammo build.
+const packagedAmmo = await loadCustomBulletAmmoNamespace();
+const packagedPhysicsBackend = createAmmoMmdPhysicsBackend(packagedAmmo);
+
+// Experimental MMD-optimized Bullet backend with direct Wasm buffers.
+const mmdBullet = await loadCustomBulletMmdModule();
+const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 ```
 
 ## Development
 
 Development notes for tests, scripts, and fixtures are in
-[docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md). The release checklist is in
+[docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md). Bullet/Ammo build notes are in
+[docs/BULLET_BUILD.md](./docs/BULLET_BUILD.md). The release checklist is in
 [docs/RELEASE.md](./docs/RELEASE.md).

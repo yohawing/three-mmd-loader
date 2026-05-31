@@ -375,6 +375,8 @@ describe("AmmoMmdPhysicsBackend source guards", () => {
     expect(source).toContain("info.set_m_additionalDamping?.(this.options.additionalDamping ?? true);");
     expect(source).toContain("rigidBody.setActivationState?.(DISABLE_DEACTIVATION);");
     expect(source).toContain("rigidBody.getCenterOfMassTransform()");
+    expect(source).toContain("transform.getRotationX()");
+    expect(source).not.toContain("this.destroy(rotation);");
     expect(source).toContain(
       "world.addConstraint(constraint, this.options.disableCollisionsBetweenLinkedBodies ?? false);"
     );

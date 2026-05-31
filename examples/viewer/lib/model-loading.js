@@ -9,7 +9,7 @@ import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
 import { createPhysicsBackend, disposeActivePhysicsBackend } from "./ammo-bootstrap.js";
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
-import { restoreDebugMaterials } from "./debug.js";
+import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, setOutlineHidden, showColliderHelpers } from "./debug.js";
 import { reportTextureDiagnostics } from "./diagnostics.js";
 import { dom, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStageState, updateTransportState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
@@ -98,7 +98,14 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
     updateStageState();
+    if (state.debugOutlineHidden) {
+      setOutlineHidden(true);
+    }
+    if (state.showDebugColliders) {
+      showColliderHelpers();
+    }
     renderStillFrame();
+    refreshDebugPanelState();
     loadProfile?.mark("first-render");
     return true;
   } catch (error) {
@@ -168,7 +175,14 @@ export async function loadModelFolder(files) {
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
     updateStageState();
+    if (state.debugOutlineHidden) {
+      setOutlineHidden(true);
+    }
+    if (state.showDebugColliders) {
+      showColliderHelpers();
+    }
     renderStillFrame();
+    refreshDebugPanelState();
     profile?.mark("first-render");
   } catch (error) {
     profile?.mark("error");
@@ -222,7 +236,14 @@ export async function switchFolderModel(modelFile) {
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
     updateStageState();
+    if (state.debugOutlineHidden) {
+      setOutlineHidden(true);
+    }
+    if (state.showDebugColliders) {
+      showColliderHelpers();
+    }
     renderStillFrame();
+    refreshDebugPanelState();
     profile?.mark("first-render");
   } catch (error) {
     profile?.mark("error");
@@ -234,6 +255,7 @@ export async function switchFolderModel(modelFile) {
 }
 
 export function clearModel(options = {}) {
+  hideColliderHelpers();
   restoreDebugMaterials();
   if (state.currentModel) {
     state.scene.remove(state.currentModel.mesh);
