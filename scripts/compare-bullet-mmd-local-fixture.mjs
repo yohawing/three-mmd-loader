@@ -12,12 +12,18 @@ import {
 
 const require = createRequire(import.meta.url);
 
+if (hasFlag("--help") || hasFlag("-h")) {
+  printUsage();
+  process.exit(0);
+}
+
 const defaultModelPath = resolve("..", "data", "unittest", "test_hair_physics.pmx");
 const modelPath = resolve(readArg("--model") ?? process.env.MMD_BULLET_LOCAL_MODEL ?? defaultModelPath);
 const motionPathArg = readArg("--motion") ?? process.env.MMD_BULLET_LOCAL_MOTION;
 const motionPath = motionPathArg ? resolve(motionPathArg) : undefined;
 const scriptPath = resolve(readArg("--bullet") ?? "dist/physics/mmd/yw_mmd_bullet.js");
 const ammoScriptPath = readArg("--ammo-script") ?? process.env.MMD_BULLET_LOCAL_AMMO_SCRIPT ?? "npm";
+const outputJson = hasFlag("--json");
 const frameCount = readNumberArg("--frames", 120);
 const frameRate = readNumberArg("--frame-rate", 30);
 const failPositionDelta = readNumberArg("--fail-position-delta", Number.POSITIVE_INFINITY);
@@ -38,61 +44,72 @@ const customSplitImpulsePenetrationThreshold = readOptionalNumberArg(
   "--split-impulse-penetration-threshold"
 );
 
-if (!await fileExists(modelPath)) {
-  throw new Error(`Local MMD fixture not found: ${modelPath}`);
-}
-if (motionPath && !await fileExists(motionPath)) {
-  throw new Error(`Local MMD motion fixture not found: ${motionPath}`);
-}
-
-const Ammo = ammoScriptPath === "npm" ? await loadNpmAmmo() : await loadScriptAmmo(ammoScriptPath);
-const mmdModule = await loadMmdBullet(scriptPath);
-const ammoBackend = new AmmoMmdPhysicsBackend(Ammo, {
-  resetCatchUpSteps: 0,
-  solverIterations: 20,
-  fixedTimeStep: ammoFixedTimeStep,
-  maxSubSteps: ammoMaxSubSteps
-});
-const customBackend = createCustomBulletMmdPhysicsBackend(mmdModule, {
-  ...(customDynamicWithBoneRotationFeedbackScale !== undefined
-    ? { dynamicWithBoneRotationFeedbackScale: customDynamicWithBoneRotationFeedbackScale }
-    : {}),
-  ...(customCollisionMargin !== undefined ? { collisionMargin: customCollisionMargin } : {}),
-  ...(customSolverIterations !== undefined ? { solverIterations: customSolverIterations } : {}),
-  ...(customSplitImpulse !== undefined ? { splitImpulse: customSplitImpulse } : {}),
-  ...(customSplitImpulsePenetrationThreshold !== undefined
-    ? { splitImpulsePenetrationThreshold: customSplitImpulsePenetrationThreshold }
-    : {})
+await main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
 });
 
-try {
-  const [ammoCase, customCase] = await Promise.all([
-    loadRuntimeCase("ammo", ammoBackend),
-    loadRuntimeCase("custom", customBackend)
-  ]);
-  const metrics = compareCases(ammoCase, customCase);
-  printMetrics(metrics);
-  if (metrics.nonFiniteSamples.length > 0) {
-    throw new Error(`Non-finite samples were detected: ${metrics.nonFiniteSamples.length}`);
+async function main() {
+  if (!await fileExists(modelPath)) {
+    throw new Error(`Local MMD fixture not found: ${modelPath}`);
   }
-  if (metrics.maxPositionDelta > failPositionDelta) {
-    throw new Error(
-      `Max Ammo/custom bone position delta ${metrics.maxPositionDelta.toFixed(6)} exceeded ${failPositionDelta}.`
-    );
+  if (motionPath && !await fileExists(motionPath)) {
+    throw new Error(`Local MMD motion fixture not found: ${motionPath}`);
   }
-  if (metrics.maxSkirtRigidBodyPositionDelta > failSkirtRigidBodyPositionDelta) {
-    throw new Error(
-      `Max Ammo/custom skirt rigid-body position delta ${metrics.maxSkirtRigidBodyPositionDelta.toFixed(6)} exceeded ${failSkirtRigidBodyPositionDelta}.`
-    );
+
+  const Ammo = ammoScriptPath === "npm" ? await loadNpmAmmo() : await loadScriptAmmo(ammoScriptPath);
+  const mmdModule = await loadMmdBullet(scriptPath);
+  const ammoBackend = new AmmoMmdPhysicsBackend(Ammo, {
+    resetCatchUpSteps: 0,
+    solverIterations: 20,
+    fixedTimeStep: ammoFixedTimeStep,
+    maxSubSteps: ammoMaxSubSteps
+  });
+  const customBackend = createCustomBulletMmdPhysicsBackend(mmdModule, {
+    ...(customDynamicWithBoneRotationFeedbackScale !== undefined
+      ? { dynamicWithBoneRotationFeedbackScale: customDynamicWithBoneRotationFeedbackScale }
+      : {}),
+    ...(customCollisionMargin !== undefined ? { collisionMargin: customCollisionMargin } : {}),
+    ...(customSolverIterations !== undefined ? { solverIterations: customSolverIterations } : {}),
+    ...(customSplitImpulse !== undefined ? { splitImpulse: customSplitImpulse } : {}),
+    ...(customSplitImpulsePenetrationThreshold !== undefined
+      ? { splitImpulsePenetrationThreshold: customSplitImpulsePenetrationThreshold }
+      : {})
+  });
+
+  try {
+    const [ammoCase, customCase] = await Promise.all([
+      loadRuntimeCase("ammo", ammoBackend),
+      loadRuntimeCase("custom", customBackend)
+    ]);
+    const metrics = compareCases(ammoCase, customCase);
+    if (outputJson) {
+      printMetricsJson(metrics);
+    } else {
+      printMetrics(metrics);
+    }
+    if (metrics.nonFiniteSamples.length > 0) {
+      throw new Error(`Non-finite samples were detected: ${metrics.nonFiniteSamples.length}`);
+    }
+    if (metrics.maxPositionDelta > failPositionDelta) {
+      throw new Error(
+        `Max Ammo/custom bone position delta ${metrics.maxPositionDelta.toFixed(6)} exceeded ${failPositionDelta}.`
+      );
+    }
+    if (metrics.maxSkirtRigidBodyPositionDelta > failSkirtRigidBodyPositionDelta) {
+      throw new Error(
+        `Max Ammo/custom skirt rigid-body position delta ${metrics.maxSkirtRigidBodyPositionDelta.toFixed(6)} exceeded ${failSkirtRigidBodyPositionDelta}.`
+      );
+    }
+    if (metrics.customMaxPositionMagnitude > failCustomMaxPosition) {
+      throw new Error(
+        `Custom max bone position magnitude ${metrics.customMaxPositionMagnitude.toFixed(6)} exceeded ${failCustomMaxPosition}.`
+      );
+    }
+  } finally {
+    customBackend.dispose?.();
+    ammoBackend.dispose?.();
   }
-  if (metrics.customMaxPositionMagnitude > failCustomMaxPosition) {
-    throw new Error(
-      `Custom max bone position magnitude ${metrics.customMaxPositionMagnitude.toFixed(6)} exceeded ${failCustomMaxPosition}.`
-    );
-  }
-} finally {
-  customBackend.dispose?.();
-  ammoBackend.dispose?.();
 }
 
 async function loadRuntimeCase(label, physicsBackend) {
@@ -316,11 +333,13 @@ function compareRigidBodies(metrics, ammoCase, customCase, ammoSample, customSam
 }
 
 function printMetrics(metrics) {
-  console.log(`Local Bullet MMD fixture: ${metrics.modelPath}`);
-  console.log(`Local Bullet MMD motion: ${metrics.motionPath ?? "(rest pose)"}`);
-  console.log(`Local Bullet MMD Ammo baseline: ${metrics.ammoBaseline}`);
+  console.log("Ammo.js vs custom Bullet MMD comparison");
+  console.log(`fixture=${metrics.modelPath}`);
+  console.log(`motion=${metrics.motionPath ?? "(rest pose)"}`);
+  console.log(`ammoBaseline=${formatAmmoBaseline(metrics.ammoBaseline)}`);
+  console.log(`customBullet=${scriptPath}`);
   console.log(
-    `Local Bullet MMD Ammo stepping: fixedTimeStep=${metrics.ammoFixedTimeStep} maxSubSteps=${metrics.ammoMaxSubSteps}`
+    `ammoStepping=fixedTimeStep=${metrics.ammoFixedTimeStep} maxSubSteps=${metrics.ammoMaxSubSteps}`
   );
   if (
     metrics.customDynamicWithBoneRotationFeedbackScale !== undefined ||
@@ -362,6 +381,18 @@ function printMetrics(metrics) {
   console.log(`worstRigidBodyRotationDelta=${formatRigidBodyRotationSample(metrics.worstRigidBodyRotationDelta)}`);
   console.log(`worstCustomFrameMove=${formatSample(metrics.worstCustomFrameMove)}`);
   console.log(`worstCustomFrameRotation=${formatRotationSample(metrics.worstCustomFrameRotation)}`);
+}
+
+function printMetricsJson(metrics) {
+  console.log(JSON.stringify({
+    ...metrics,
+    ammoBaselineLabel: formatAmmoBaseline(metrics.ammoBaseline),
+    customBullet: scriptPath
+  }, null, 2));
+}
+
+function formatAmmoBaseline(baseline) {
+  return baseline === "npm" ? "ammo.js npm package" : baseline;
 }
 
 function formatRigidBodySample(sample) {
@@ -630,6 +661,10 @@ function readArg(name) {
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
+function hasFlag(name) {
+  return process.argv.includes(name);
+}
+
 function readNumberArg(name, fallback) {
   const value = readArg(name);
   return value === undefined ? fallback : Number(value);
@@ -659,4 +694,32 @@ async function fileExists(path) {
   } catch {
     return false;
   }
+}
+
+function printUsage() {
+  console.log(`Usage:
+  npm run compare:bullet:mmd:local -- [options]
+
+Compares the stable ammo.js backend against the custom Bullet MMD backend.
+The default Ammo baseline is the npm ammo.js package.
+
+Options:
+  --model <path>                     PMX/PMD model path
+  --motion <path>                    VMD motion path; defaults to rest pose
+  --bullet <path>                    custom Bullet MMD script path
+  --ammo-script npm|<path>           Ammo.js baseline; defaults to npm
+  --frames <count>                   frame range end; defaults to 120
+  --frame-rate <fps>                 runtime frame rate; defaults to 30
+  --ammo-fixed-time-step <seconds>   Ammo.js fixed time step; defaults to 1/65
+  --ammo-max-sub-steps <count>       Ammo.js max substeps; defaults to 3
+  --dynamic-with-bone-rotation-feedback-scale <value>
+  --collision-margin <value>
+  --solver-iterations <count>
+  --split-impulse 0|1|false|true
+  --split-impulse-penetration-threshold <value>
+  --json                            print metrics as JSON
+  --fail-position-delta <value>      fail when max bone position delta exceeds value
+  --fail-skirt-rigid-body-position-delta <value>
+  --fail-custom-max-position <value>
+`);
 }

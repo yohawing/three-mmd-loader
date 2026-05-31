@@ -70,6 +70,22 @@ describe("Custom Bullet MMD backend", () => {
     );
   });
 
+  it("compares custom Bullet MMD against npm ammo.js by default", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/compare-bullet-mmd-local-fixture.mjs"),
+      "utf8"
+    );
+
+    expect(source).toContain('const ammoScriptPath = readArg("--ammo-script") ?? process.env.MMD_BULLET_LOCAL_AMMO_SCRIPT ?? "npm";');
+    expect(source).toContain("ammo.js npm package");
+    expect(source).toContain("Ammo.js vs custom Bullet MMD comparison");
+    expect(source).toContain("await main().catch");
+    expect(source).toContain("--ammo-fixed-time-step <seconds>");
+    expect(source).toContain("--split-impulse-penetration-threshold <value>");
+    expect(source).not.toContain("yw_bullet_ammo");
+    expect(source).not.toContain("loadCustomBulletAmmoNamespace");
+  });
+
   it("uses Wasm memory views as direct step buffers", () => {
     const module = createFakeModule();
     const backend = createCustomBulletMmdPhysicsBackend(module);

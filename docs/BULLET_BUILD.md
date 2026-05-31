@@ -27,6 +27,7 @@ git submodule update --init --recursive native/third_party/bullet3
 npm run build:bullet
 npm run build
 npm run compare:bullet:mmd
+npm run compare:bullet:mmd:local -- --frames 120
 npm run smoke:bullet:mmd
 ```
 
@@ -76,3 +77,33 @@ The intended native API shape is:
 `DefaultMmdRuntime` currently falls back to the existing JavaScript scratch
 buffers when a model needs `transformAfterPhysics` pre-physics rest-pose input,
 because that path still needs an intermediate local-pose compose pass.
+
+## Comparing against Ammo.js
+
+Use `compare:bullet:mmd:local` when checking whether the custom Bullet MMD
+backend still tracks the stable Ammo.js behavior. The script compares
+`AmmoMmdPhysicsBackend` using the npm `ammo.js` package against
+`createCustomBulletMmdPhysicsBackend(...)` using `dist/physics/mmd/yw_mmd_bullet.js`.
+
+```powershell
+npm run build
+npm run compare:bullet:mmd:local -- --frames 120
+```
+
+Useful options:
+
+- `--model <path>`: PMX/PMD model to load
+- `--motion <path>`: VMD motion to play; omitted means rest pose
+- `--bullet <path>`: custom Bullet MMD script path
+- `--ammo-script npm|<path>`: Ammo.js baseline; defaults to `npm`
+- `--ammo-fixed-time-step <seconds>` and `--ammo-max-sub-steps <count>`:
+  Ammo.js stepping controls
+- `--dynamic-with-bone-rotation-feedback-scale <value>`, `--collision-margin <value>`,
+  `--solver-iterations <count>`, `--split-impulse <0|1>`, and
+  `--split-impulse-penetration-threshold <value>`: custom Bullet tuning controls
+- `--json`: print parseable metric output
+- `--fail-position-delta <value>`: fail when max bone position delta exceeds the threshold
+
+`compare:bullet:mmd` remains a small synthetic smoke comparison. It is useful
+for quick local checks, but real parity work should use
+`compare:bullet:mmd:local` with a representative model and motion.
