@@ -172,6 +172,7 @@ export interface AmmoGeneric6DofConstraint {
   setAngularLowerLimit(value: AmmoVector3): void;
   setAngularUpperLimit(value: AmmoVector3): void;
   setParam?(parameter: number, value: number, axis: number): void;
+  setUseFrameOffset?(enabled: boolean): void;
   enableSpring?(index: number, enabled: boolean): void;
   setStiffness?(index: number, stiffness: number): void;
   setEquilibriumPoint?(index?: number): void;
@@ -825,7 +826,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     } else {
       shape = new Ammo.btSphereShape(Math.max(body.size[0], MIN_SHAPE_SIZE));
     }
-    if (this.options.collisionMargin !== undefined) {
+    if (this.options.collisionMargin !== undefined && this.options.collisionMargin >= 0) {
       shape.setMargin?.(this.options.collisionMargin);
     }
     return shape;
@@ -934,6 +935,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       return undefined;
     }
     const constraint = new Constraint(bindingA.rigidBody, bindingB.rigidBody, frameA, frameB, true);
+    constraint.setUseFrameOffset?.(false);
     const limits = mmdJointLimitsToPhysics(joint);
     constraint.setLinearLowerLimit(
       this.registerWorldResource(this.vector(limits.translationLowerLimit))
@@ -1092,12 +1094,8 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     for (let axis = 0; axis < 3; axis++) {
       const stiffness = joint.springRotationFactor[axis];
       const constraintAxis = axis + 3;
-      if (stiffness !== 0) {
-        constraint.enableSpring(constraintAxis, true);
-        constraint.setStiffness(constraintAxis, stiffness);
-      } else {
-        constraint.enableSpring(constraintAxis, false);
-      }
+      constraint.enableSpring(constraintAxis, true);
+      constraint.setStiffness(constraintAxis, stiffness);
     }
   }
 

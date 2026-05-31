@@ -768,9 +768,10 @@ btVector3 mmdAngularUpperLimitToPhysics(const btVector3 &lower, const btVector3 
 void configureSpringAxis(
     btGeneric6DofSpringConstraint *constraint,
     int axis,
-    btScalar stiffness)
+    btScalar stiffness,
+    bool enableWhenZero = false)
 {
-    if (stiffness != 0) {
+    if (enableWhenZero || stiffness != 0) {
         constraint->enableSpring(axis, true);
         constraint->setStiffness(axis, stiffness);
     } else {
@@ -805,9 +806,9 @@ bool commitJoints(YwMmdBulletWorld *state)
         configureSpringAxis(constraint, 0, config.springLinear.x());
         configureSpringAxis(constraint, 1, config.springLinear.y());
         configureSpringAxis(constraint, 2, config.springLinear.z());
-        configureSpringAxis(constraint, 3, config.springAngular.x());
-        configureSpringAxis(constraint, 4, config.springAngular.y());
-        configureSpringAxis(constraint, 5, config.springAngular.z());
+        configureSpringAxis(constraint, 3, config.springAngular.x(), true);
+        configureSpringAxis(constraint, 4, config.springAngular.y(), true);
+        configureSpringAxis(constraint, 5, config.springAngular.z(), true);
         for (int axis = 0; axis < 6; axis += 1) {
             constraint->setParam(BT_CONSTRAINT_STOP_ERP_PARAM, BT_CONSTRAINT_STOP_ERP, axis);
         }

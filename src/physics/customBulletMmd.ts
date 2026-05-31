@@ -2,6 +2,9 @@ import type {
   MmdDirectBufferPhysicsBackend,
   MmdPhysicsDiagnostic,
   MmdPhysicsMatrix4ColumnMajorTuple,
+  MmdPhysicsMutableIndexBuffer,
+  MmdPhysicsMutableNumericBuffer,
+  MmdPhysicsNumericBuffer,
   MmdPhysicsResetContext,
   MmdPhysicsStepBufferLayout,
   MmdPhysicsStepBuffers,
@@ -29,9 +32,9 @@ export interface CustomBulletMmdPhysicsBackendOptions {
 }
 
 export interface CustomBulletMmdModule {
-  readonly HEAPF32: Float32Array;
-  readonly HEAPU8: Uint8Array;
-  readonly HEAPU32: Uint32Array;
+  readonly HEAPF32?: Float32Array;
+  readonly HEAPU8?: Uint8Array;
+  readonly HEAPU32?: Uint32Array;
   refreshMemoryViews?(): void;
   _yw_mmd_bullet_create_world(): number;
   _yw_mmd_bullet_destroy_world(world: number): void;
@@ -205,16 +208,19 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
     if (
       this.buffers &&
       this.lastLayout?.boneCount === layout.boneCount &&
-      this.module.HEAPF32.buffer === this.buffers.inputTranslations.buffer
+      this.currentHeapBuffer() === this.buffers.inputTranslations.buffer
     ) {
       return this.buffers;
     }
     if (this.module._yw_mmd_bullet_ensure_step_buffers(this.world, layout.boneCount) === 0) {
       return undefined;
     }
-    this.module.refreshMemoryViews?.();
+    const heapBuffer = this.refreshHeapBuffer();
+    if (!heapBuffer) {
+      return undefined;
+    }
     this.lastLayout = layout;
-    this.buffers = this.createStepBufferViews(layout);
+    this.buffers = this.createStepBufferViews(layout, heapBuffer);
     return this.buffers;
   }
 
@@ -235,6 +241,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
       };
     }
     this.syncTuning();
+    const stepBuffers = this.syncContextToStepBuffers(context);
     if (this.pendingResetPoseSync && context.seeking !== true) {
       const resetCatchUpSteps = sanitizeIntegerOption(
         this.options.resetCatchUpSteps,
@@ -269,6 +276,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
       context.frameRate,
       context.seeking === true ? 1 : 0
     );
+    this.copyStepBuffersToContextOutput(context, stepBuffers, updatedBoneCount);
     return { simulated: updatedBoneCount > 0, updatedBoneCount };
   }
 
@@ -315,8 +323,11 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
     if (count <= 0 || pointer === 0) {
       return [];
     }
-    this.module.refreshMemoryViews?.();
-    const values = new Float32Array(this.module.HEAPF32.buffer as ArrayBuffer, pointer, count * 3);
+    const heapBuffer = this.refreshHeapBuffer();
+    if (!heapBuffer) {
+      return [];
+    }
+    const values = new Float32Array(heapBuffer, pointer, count * 3);
     const contacts: {
       rigidBodyIndexA: number;
       rigidBodyIndexB: number;
@@ -339,8 +350,11 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
     if (count <= 0 || pointer === 0) {
       return [];
     }
-    this.module.refreshMemoryViews?.();
-    const values = new Float32Array(this.module.HEAPF32.buffer as ArrayBuffer, pointer, count * 16);
+    const heapBuffer = this.refreshHeapBuffer();
+    if (!heapBuffer) {
+      return [];
+    }
+    const values = new Float32Array(heapBuffer, pointer, count * 16);
     const matrices: MmdPhysicsMatrix4ColumnMajorTuple[] = [];
     for (let index = 0; index < count; index += 1) {
       const base = index * 16;
@@ -366,8 +380,23 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
     return matrices;
   }
 
-  private createStepBufferViews(layout: MmdPhysicsStepBufferLayout): MmdPhysicsStepBuffers {
-    const heapBuffer = this.module.HEAPF32.buffer as ArrayBuffer;
+  private currentHeapBuffer(): ArrayBuffer | undefined {
+    return (this.module.HEAPF32?.buffer ??
+      this.module.HEAPU8?.buffer ??
+      this.module.HEAPU32?.buffer) as ArrayBuffer | undefined;
+  }
+
+  private refreshHeapBuffer(): ArrayBuffer | undefined {
+    this.module.refreshMemoryViews?.();
+    return this.currentHeapBuffer();
+  }
+
+  private createStepBufferViews(
+    layout: MmdPhysicsStepBufferLayout,
+    heapBuffer: ArrayBuffer
+  ): MmdPhysicsStepBuffers {
+    const heapU8Buffer = (this.module.HEAPU8?.buffer ?? heapBuffer) as ArrayBuffer;
+    const heapU32Buffer = (this.module.HEAPU32?.buffer ?? heapBuffer) as ArrayBuffer;
     return {
       inputTranslations: new Float32Array(
         heapBuffer,
@@ -400,16 +429,64 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
         layout.worldMatrixValueCount
       ),
       bonePhysicsToggles: new Uint8Array(
-        this.module.HEAPU8.buffer as ArrayBuffer,
+        heapU8Buffer,
         this.module._yw_mmd_bullet_bone_physics_toggles(this.world),
         layout.boneCount
       ),
       updatedBoneIndices: new Uint32Array(
-        this.module.HEAPU32.buffer as ArrayBuffer,
+        heapU32Buffer,
         this.module._yw_mmd_bullet_updated_bone_indices(this.world),
         layout.boneCount
       )
     };
+  }
+
+  private syncContextToStepBuffers(context: MmdPhysicsStepContext): MmdPhysicsStepBuffers | undefined {
+    const boneCount = this.contextBoneCount(context);
+    if (boneCount <= 0) {
+      return this.buffers;
+    }
+    const buffers = this.acquireStepBuffers({
+      boneCount,
+      translationValueCount: boneCount * 3,
+      rotationValueCount: boneCount * 4,
+      worldMatrixValueCount: boneCount * 16
+    });
+    if (!buffers) {
+      return undefined;
+    }
+    copyNumericInput(context.inputTranslations, buffers.inputTranslations);
+    copyNumericInput(context.inputRotations, buffers.inputRotations);
+    copyNumericInput(context.inputWorldMatricesColumnMajor, buffers.inputWorldMatricesColumnMajor);
+    copyToggleInput(context.bonePhysicsToggles, buffers.bonePhysicsToggles);
+    return buffers;
+  }
+
+  private copyStepBuffersToContextOutput(
+    context: MmdPhysicsStepContext,
+    buffers: MmdPhysicsStepBuffers | undefined,
+    updatedBoneCount: number
+  ): void {
+    if (!buffers || !context.output) {
+      return;
+    }
+    copyNumericOutput(buffers.outputTranslations, context.output.translations);
+    copyNumericOutput(buffers.outputRotations, context.output.rotations);
+    copyNumericOutput(
+      buffers.outputWorldMatricesColumnMajor,
+      context.output.worldMatricesColumnMajor
+    );
+    copyIndexOutput(buffers.updatedBoneIndices, context.output.updatedBoneIndices, updatedBoneCount);
+  }
+
+  private contextBoneCount(context: MmdPhysicsStepContext): number {
+    return (
+      context.skeleton?.bones.length ??
+      inferBoneCountFromBuffer(context.inputWorldMatricesColumnMajor, 16) ??
+      inferBoneCountFromBuffer(context.inputRotations, 4) ??
+      inferBoneCountFromBuffer(context.inputTranslations, 3) ??
+      0
+    );
   }
 
   private ensureModelUploaded(context: MmdPhysicsStepContext): boolean {
@@ -603,6 +680,81 @@ function motionTypeToNative(motionType: string): number {
     return 2;
   }
   return 0;
+}
+
+function inferBoneCountFromBuffer(
+  buffer: MmdPhysicsNumericBuffer | undefined,
+  stride: number
+): number | undefined {
+  if (!buffer || buffer.length === 0) {
+    return undefined;
+  }
+  return Math.floor(buffer.length / stride);
+}
+
+function copyNumericInput(
+  source: MmdPhysicsNumericBuffer | undefined,
+  target: Float32Array<ArrayBuffer>
+): void {
+  if (!source || source === target) {
+    return;
+  }
+  target.set(source);
+}
+
+function copyToggleInput(
+  source: readonly boolean[] | Uint8Array | undefined,
+  target: Uint8Array<ArrayBuffer>
+): void {
+  if (!source || source === target) {
+    return;
+  }
+  for (let index = 0; index < source.length; index += 1) {
+    target[index] = source[index] ? 1 : 0;
+  }
+}
+
+function copyNumericOutput(
+  source: Float32Array<ArrayBuffer>,
+  target: MmdPhysicsMutableNumericBuffer | undefined
+): void {
+  if (!target || target === source) {
+    return;
+  }
+  if (Array.isArray(target)) {
+    target.length = source.length;
+    for (let index = 0; index < source.length; index += 1) {
+      target[index] = source[index];
+    }
+    return;
+  }
+  target.set(source.subarray(0, target.length));
+}
+
+function copyIndexOutput(
+  source: MmdPhysicsMutableIndexBuffer | undefined,
+  target: MmdPhysicsMutableIndexBuffer | undefined,
+  count: number
+): void {
+  if (!source || !target || target === source) {
+    return;
+  }
+  if (Array.isArray(target)) {
+    const boundedCount = Math.min(count, source.length);
+    target.length = boundedCount;
+    for (let index = 0; index < boundedCount; index += 1) {
+      target[index] = source[index];
+    }
+    return;
+  }
+  const boundedCount = Math.min(count, source.length, target.length);
+  if (Array.isArray(source)) {
+    for (let index = 0; index < boundedCount; index += 1) {
+      target[index] = source[index];
+    }
+    return;
+  }
+  target.set(source.subarray(0, boundedCount));
 }
 
 function shapeTypeToNative(shapeType: string): number {

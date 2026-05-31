@@ -115,6 +115,78 @@ describe("Custom Bullet MMD backend", () => {
     );
   });
 
+  it("copies non-direct step contexts through native buffers", () => {
+    const module = createFakeModule();
+    const backend = createCustomBulletMmdPhysicsBackend(module);
+    const updatedBoneIndices: number[] = [];
+    const result = backend.step({
+      seconds: 1,
+      deltaSeconds: 1 / 60,
+      frame: 60,
+      frameRate: 60,
+      skeleton: {
+        bones: [{ index: 0, name: "physics", parentIndex: -1, restTranslation: [1, 2, 3] }]
+      },
+      inputTranslations: new Float32Array([1, 2, 3]),
+      inputRotations: new Float32Array([0, 0, 0, 1]),
+      inputWorldMatricesColumnMajor: new Float32Array([
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        1, 2, 3, 1
+      ]),
+      output: {
+        translations: [0, 0, 0],
+        rotations: [0, 0, 0, 0],
+        worldMatricesColumnMajor: new Float32Array(16),
+        updatedBoneIndices
+      },
+      bonePhysicsToggles: [true]
+    });
+
+    expect(result).toEqual({ simulated: true, updatedBoneCount: 1 });
+    expect(module.nativeInputTranslations()).toEqual([1, 2, 3]);
+    expect(module.nativeInputWorldTranslation()).toEqual([1, 2, 3]);
+    expect(updatedBoneIndices).toEqual([0]);
+    expect(module.nativeBonePhysicsToggles()).toEqual([1]);
+  });
+
+  it("uses the shared Wasm memory buffer when unsigned heap views are not exported", () => {
+    const module = createFakeModule();
+    delete (module as { HEAPU32?: Uint32Array }).HEAPU32;
+    const backend = createCustomBulletMmdPhysicsBackend(module);
+    const buffers = backend.acquireStepBuffers({
+      boneCount: 1,
+      translationValueCount: 3,
+      rotationValueCount: 4,
+      worldMatrixValueCount: 16
+    });
+
+    expect(buffers).toBeDefined();
+    buffers?.updatedBoneIndices?.set([123]);
+
+    expect(buffers?.updatedBoneIndices?.[0]).toBe(123);
+    backend.dispose?.();
+  });
+
+  it("falls back to HEAPU8.buffer when HEAPF32 is not exported after a model switch", () => {
+    const module = createFakeModule();
+    delete (module as { HEAPF32?: Float32Array }).HEAPF32;
+    const backend = createCustomBulletMmdPhysicsBackend(module);
+    const buffers = backend.acquireStepBuffers({
+      boneCount: 1,
+      translationValueCount: 3,
+      rotationValueCount: 4,
+      worldMatrixValueCount: 16
+    });
+
+    expect(buffers).toBeDefined();
+    buffers?.inputTranslations.set([4, 5, 6]);
+
+    expect(Array.from(buffers?.inputTranslations ?? [])).toEqual([4, 5, 6]);
+    backend.dispose?.();
+  });
+
   it("uploads rigid bodies once for a stable step context identity", () => {
     const module = createFakeModule();
     const backend = createCustomBulletMmdPhysicsBackend(module);
@@ -331,6 +403,9 @@ function createFakeModule(): CustomBulletMmdModule & {
   }[];
   resetPoseSyncCount(): number;
   resetPoseCatchUpSteps(): readonly number[];
+  nativeInputTranslations(): readonly number[];
+  nativeInputWorldTranslation(): readonly number[];
+  nativeBonePhysicsToggles(): readonly number[];
 } {
   const memory = new ArrayBuffer(4096);
   const heapF32 = new Float32Array(memory);
@@ -419,6 +494,7 @@ function createFakeModule(): CustomBulletMmdModule & {
     _yw_mmd_bullet_step: () => {
       heapF32.set(heapF32.subarray(pointers.inputTranslations / 4, pointers.inputTranslations / 4 + 3), pointers.outputTranslations / 4);
       heapF32.set(heapF32.subarray(pointers.inputRotations / 4, pointers.inputRotations / 4 + 4), pointers.outputRotations / 4);
+      heapF32.set(heapF32.subarray(pointers.inputWorldMatrices / 4, pointers.inputWorldMatrices / 4 + 16), pointers.outputWorldMatrices / 4);
       heapU32[pointers.updated / 4] = 0;
       return 1;
     },
@@ -435,7 +511,10 @@ function createFakeModule(): CustomBulletMmdModule & {
     rigidBodyUploads: () => rigidBodyUploads,
     tuningUploads: () => tuningUploads,
     resetPoseSyncCount: () => resetPoseCatchUpSteps.length,
-    resetPoseCatchUpSteps: () => resetPoseCatchUpSteps
+    resetPoseCatchUpSteps: () => resetPoseCatchUpSteps,
+    nativeInputTranslations: () => Array.from(heapF32.slice(pointers.inputTranslations / 4, pointers.inputTranslations / 4 + 3)),
+    nativeInputWorldTranslation: () => Array.from(heapF32.slice(pointers.inputWorldMatrices / 4 + 12, pointers.inputWorldMatrices / 4 + 15)),
+    nativeBonePhysicsToggles: () => Array.from(heapU8.slice(pointers.toggles, pointers.toggles + 1))
   } as CustomBulletMmdModule & {
     uploadCount(): number;
     jointUploadCount(): number;
@@ -452,5 +531,8 @@ function createFakeModule(): CustomBulletMmdModule & {
     }[];
     resetPoseSyncCount(): number;
     resetPoseCatchUpSteps(): readonly number[];
+    nativeInputTranslations(): readonly number[];
+    nativeInputWorldTranslation(): readonly number[];
+    nativeBonePhysicsToggles(): readonly number[];
   };
 }

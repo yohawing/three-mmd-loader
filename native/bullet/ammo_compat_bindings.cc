@@ -280,7 +280,8 @@ EMSCRIPTEN_BINDINGS(yw_bullet_ammo_compat)
         .function("setLinearLowerLimit", &btGeneric6DofConstraint::setLinearLowerLimit)
         .function("setLinearUpperLimit", &btGeneric6DofConstraint::setLinearUpperLimit)
         .function("setAngularLowerLimit", &btGeneric6DofConstraint::setAngularLowerLimit)
-        .function("setAngularUpperLimit", &btGeneric6DofConstraint::setAngularUpperLimit);
+        .function("setAngularUpperLimit", &btGeneric6DofConstraint::setAngularUpperLimit)
+        .function("setUseFrameOffset", &btGeneric6DofConstraint::setUseFrameOffset);
 
     class_<btGeneric6DofSpringConstraint, base<btGeneric6DofConstraint>>("btGeneric6DofSpringConstraint")
         .constructor<btRigidBody &, btRigidBody &, const btTransform &, const btTransform &, bool>()
