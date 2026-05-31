@@ -30,11 +30,18 @@ import {
   findMmdModelFiles,
   findMmdMotionFiles,
   type AmmoNamespace,
+  createCustomBulletMmdPhysicsBackend,
+  customBulletMmdScriptPath,
   type MmdPhysicsStepContext,
+  customBulletAmmoScriptPath,
   isModelSource,
+  loadCustomBulletMmdModule,
+  loadCustomBulletAmmoNamespace,
   loadAmmoNamespace,
   mmdWorldMatrixToThree,
   normalizeMmdRelativePath,
+  resolveCustomBulletMmdScriptUrl,
+  resolveCustomBulletAmmoScriptUrl,
   resolveMappedTexture
 } from "../../../src/index.js";
 import * as publicApi from "../../../src/index.js";
@@ -214,6 +221,17 @@ center
 
   it("exports the browser Ammo namespace loader from the public barrel", () => {
     expect(loadAmmoNamespace).toBeTypeOf("function");
+    expect(loadCustomBulletAmmoNamespace).toBeTypeOf("function");
+    expect(loadCustomBulletMmdModule).toBeTypeOf("function");
+    expect(createCustomBulletMmdPhysicsBackend).toBeTypeOf("function");
+    expect(customBulletAmmoScriptPath).toBe("./ammo/yw_bullet_ammo.js");
+    expect(customBulletMmdScriptPath).toBe("./mmd/yw_mmd_bullet.js");
+    expect(resolveCustomBulletAmmoScriptUrl("https://example.test/pkg/dist/physics/index.js")).toBe(
+      "https://example.test/pkg/dist/physics/ammo/yw_bullet_ammo.js"
+    );
+    expect(resolveCustomBulletMmdScriptUrl("https://example.test/pkg/dist/physics/index.js")).toBe(
+      "https://example.test/pkg/dist/physics/mmd/yw_mmd_bullet.js"
+    );
   });
 
   it("loads a PMX model and disposes a concrete Ammo physics backend", async () => {

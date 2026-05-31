@@ -2,7 +2,7 @@ import { clearAudioSource, isAudioElement, loadAudioFile, switchAudioEntry } fro
 import { bindAssetLibraryControls, initializeAssetLibrary } from "./lib/asset-library.js";
 import { clearBackground, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
 import { clearCameraMotion, loadCameraFile, loadCameraFromUrl, switchCameraEntry } from "./lib/camera-loading.js";
-import { createViewerDebugApi } from "./lib/debug.js";
+import { createViewerDebugApi, refreshDebugPanelState, setCollisionMargin, setDebugMaterialMode, setDynamicWithBoneRotationFeedbackScale, setOutlineHidden, setPhysicsMaxSubSteps, setSolverIterations, setSplitImpulse, setSplitImpulsePenetrationThreshold, toggleColliderHelpers } from "./lib/debug.js";
 import { dom, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/ammo-bootstrap.js";
@@ -32,6 +32,7 @@ const viewerApi = {
 };
 if (debugEnabled) {
   viewerApi.debug = createViewerDebugApi();
+  window.mmdDebug = viewerApi.debug;
 }
 window.mmdViewer = viewerApi;
 
@@ -58,6 +59,7 @@ function bindControls() {
   document.querySelector("#choose-background")?.addEventListener("click", () => dom.backgroundFolderInput?.click());
   document.querySelector("#choose-camera")?.addEventListener("click", () => dom.cameraFileInput?.click());
   bindAssetLibraryControls();
+  bindDebugControls();
   dom.modelFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
     if (files && files.length > 0) void loadModelFolder(Array.from(files));
@@ -138,12 +140,6 @@ function bindControls() {
     evaluateRuntime({ physics: false });
     syncAudioToMotionTime();
     scheduleSeekEnd();
-    window.console?.debug("[mmd-debug] seek", {
-      value: Number(dom.timeline.value),
-      elapsed: state.elapsedSeconds,
-      audioTime: dom.bgmAudio?.currentTime,
-      isSeeking: state.isSeeking
-    });
   });
   dom.timeline?.addEventListener("sl-change", endSeek);
   dom.volumeSlider?.addEventListener("sl-input", () => {
@@ -163,9 +159,6 @@ function bindControls() {
     updateVolumeIcon();
   });
   if (isAudioElement(dom.bgmAudio)) {
-    dom.bgmAudio.addEventListener("volumechange", () => {
-      window.console?.debug("[mmd-debug] volumechange", { volume: dom.bgmAudio.volume, muted: dom.bgmAudio.muted });
-    });
     dom.bgmAudio.addEventListener("play", () => {
       if (!state.isSyncingAudioState && hasTimelineSource()) setPlaybackState(true);
     });
@@ -198,6 +191,48 @@ function bindControls() {
   bindDropTarget();
   updatePlaybackDisplay();
   updateStageState();
+}
+
+function bindDebugControls() {
+  if (!debugEnabled) {
+    return;
+  }
+  if (dom.debugMenu) {
+    dom.debugMenu.hidden = false;
+  }
+  dom.debugCollidersToggle?.addEventListener("change", () => {
+    toggleColliderHelpers();
+    refreshDebugPanelState();
+  });
+  dom.debugNormalsToggle?.addEventListener("change", () => {
+    setDebugMaterialMode(dom.debugNormalsToggle.checked ? "normals" : "default");
+  });
+  dom.debugToonOffToggle?.addEventListener("change", () => {
+    setDebugMaterialMode(dom.debugToonOffToggle.checked ? "toonOff" : "default");
+  });
+  dom.debugOutlineOffToggle?.addEventListener("change", () => {
+    setOutlineHidden(dom.debugOutlineOffToggle.checked);
+  });
+  dom.debugMaxSubStepsInput?.addEventListener("change", () => {
+    setPhysicsMaxSubSteps(dom.debugMaxSubStepsInput.value);
+  });
+  dom.debugDynamicWithBoneFeedbackInput?.addEventListener("change", () => {
+    setDynamicWithBoneRotationFeedbackScale(dom.debugDynamicWithBoneFeedbackInput.value);
+  });
+  dom.debugCollisionMarginInput?.addEventListener("change", () => {
+    setCollisionMargin(dom.debugCollisionMarginInput.value);
+  });
+  dom.debugSolverIterationsInput?.addEventListener("change", () => {
+    setSolverIterations(dom.debugSolverIterationsInput.value);
+  });
+  dom.debugSplitImpulseToggle?.addEventListener("change", () => {
+    setSplitImpulse(dom.debugSplitImpulseToggle.checked);
+  });
+  dom.debugSplitImpulsePenetrationThresholdInput?.addEventListener("change", () => {
+    setSplitImpulsePenetrationThreshold(dom.debugSplitImpulsePenetrationThresholdInput.value);
+  });
+  dom.debugRefreshStateButton?.addEventListener("click", refreshDebugPanelState);
+  refreshDebugPanelState();
 }
 
 function initLocalization() {
@@ -237,7 +272,6 @@ function initVolumeControls() {
     dom.volumeSlider.value = volume;
   }
   updateVolumeIcon();
-  window.console?.debug("[mmd-debug] vol-init", { read: { volume, muted }, applied: dom.bgmAudio?.volume });
   // sl-range may not be upgraded yet on first paint; re-apply the stored value once it is.
   window.customElements?.whenDefined?.("sl-range").then(() => {
     if (dom.volumeSlider) {
@@ -272,7 +306,6 @@ function readStoredVolume() {
 }
 
 function persistVolume(volume, muted) {
-  window.console?.debug("[mmd-debug] persist", { volume, muted }, new Error().stack);
   try {
     window.localStorage.setItem(volumeStorageKey, JSON.stringify({ volume, muted }));
   } catch {

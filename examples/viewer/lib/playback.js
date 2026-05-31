@@ -1,6 +1,7 @@
 import { dom, setStatus, updatePlayToggle, updatePlaybackDisplay } from "./dom.js";
 import { hasActiveAudioSource, isAudioElement } from "./audio-loading.js";
 import { applyCameraMotion } from "./camera-loading.js";
+import { updateColliderHelpers } from "./debug.js";
 import { currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
 
 export function render() {
@@ -11,6 +12,7 @@ export function render() {
     state.elapsedSeconds += delta;
   }
   evaluateRuntime();
+  updateColliderHelpers();
   state.controls.update();
   applyCameraMotion();
   state.renderer.render(state.scene, state.camera);
@@ -18,6 +20,7 @@ export function render() {
 
 export function renderStillFrame() {
   evaluateRuntime();
+  updateColliderHelpers();
   state.controls.update();
   applyCameraMotion();
   state.renderer.render(state.scene, state.camera);
@@ -87,7 +90,6 @@ export function syncMotionToAudioTime(options = {}) {
     return;
   }
   const audioTime = Number.isFinite(dom.bgmAudio.currentTime) ? dom.bgmAudio.currentTime : 0;
-  window.console?.debug("[mmd-debug] sync-m2a override", { audioTime, prevElapsed: state.elapsedSeconds, isSeeking: state.isSeeking });
   state.elapsedSeconds = audioTime;
   if (options.evaluate !== false) {
     evaluateRuntime({ physics: options.physics ?? false });
@@ -100,15 +102,6 @@ function hasTimelineSource() {
 
 export function syncAudioToMotionTime(options = {}) {
   const active = hasActiveAudioSource();
-  window.console?.debug("[mmd-debug] a2m enter", {
-    active,
-    elapsed: state.elapsedSeconds,
-    duration: dom.bgmAudio?.duration,
-    seekable: dom.bgmAudio?.seekable?.length,
-    readyState: dom.bgmAudio?.readyState,
-    curBefore: dom.bgmAudio?.currentTime,
-    onlyIfDrifted: options.onlyIfDrifted
-  });
   if (!isAudioElement(dom.bgmAudio) || !active) {
     return;
   }
@@ -123,7 +116,6 @@ export function syncAudioToMotionTime(options = {}) {
       window.clearTimeout(state.audioSeekSyncTimer);
     }
     dom.bgmAudio.currentTime = Math.max(targetTime, 0);
-    window.console?.debug("[mmd-debug] a2m set", { targetTime, curAfter: dom.bgmAudio.currentTime });
     state.audioSeekSyncTimer = window.setTimeout(() => {
       state.isSyncingAudioTime = false;
       state.audioSeekSyncTimer = undefined;

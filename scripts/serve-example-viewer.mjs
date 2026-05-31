@@ -37,7 +37,7 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? `${host}:${port}`}`);
     if (url.pathname === "/examples/viewer" || url.pathname === "/examples/viewer/") {
       response.writeHead(302, {
-        Location: "/"
+        Location: `/${url.search}`
       });
       response.end();
       return;

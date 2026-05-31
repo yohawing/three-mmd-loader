@@ -1,10 +1,40 @@
-import { createAmmoMmdPhysicsBackend, createDisabledMmdPhysicsBackend, loadAmmoNamespace } from "../../../dist/physics/index.js";
+import {
+  createAmmoMmdPhysicsBackend,
+  createCustomBulletMmdPhysicsBackend,
+  createDisabledMmdPhysicsBackend,
+  loadCustomBulletAmmoNamespace,
+  loadCustomBulletMmdModule
+} from "../../../dist/physics/index.js";
 
 import { dom, setStatus } from "./dom.js";
 import { state } from "./state.js";
 
 export async function createPhysicsBackend() {
   disposeActivePhysicsBackend();
+  if (state.physicsBackendKind === "custom-bullet-mmd") {
+    if (!state.customBulletMmdModule) {
+      setStatus("Loading custom Bullet MMD physics engine...", "loading");
+    }
+    state.customBulletMmdModule ??= await initCustomBulletMmdModuleSafely();
+    if (!state.customBulletMmdModule) {
+      state.activePhysicsBackend = createDisabledMmdPhysicsBackend({
+        reason: "Custom Bullet MMD physics failed to load; physics simulation disabled."
+      });
+      return state.activePhysicsBackend;
+    }
+    try {
+      state.activePhysicsBackend = createCustomBulletMmdPhysicsBackend(
+        state.customBulletMmdModule,
+        state.physicsTuningOptions
+      );
+    } catch (error) {
+      reportAmmoInitializationFailure("createCustomBulletMmdPhysicsBackend", error);
+      state.activePhysicsBackend = createDisabledMmdPhysicsBackend({
+        reason: "Custom Bullet MMD physics backend failed to initialize; physics simulation disabled."
+      });
+    }
+    return state.activePhysicsBackend;
+  }
   if (!state.ammoNamespace) {
     setStatus("Loading physics engine...", "loading");
   }
@@ -16,7 +46,10 @@ export async function createPhysicsBackend() {
     return state.activePhysicsBackend;
   }
   try {
-    state.activePhysicsBackend = createAmmoMmdPhysicsBackend(state.ammoNamespace);
+    state.activePhysicsBackend = createAmmoMmdPhysicsBackend(
+      state.ammoNamespace,
+      state.physicsTuningOptions
+    );
   } catch (error) {
     reportAmmoInitializationFailure("createAmmoMmdPhysicsBackend", error);
     state.activePhysicsBackend = createDisabledMmdPhysicsBackend({
@@ -35,11 +68,24 @@ export function disposeActivePhysicsBackend() {
 
 async function initAmmoNamespaceSafely() {
   try {
-    state.ammoScriptLoadPromise ??= loadAmmoNamespace(state.ammoScriptUrl);
+    state.ammoScriptLoadPromise ??= loadCustomBulletAmmoNamespace({ scriptUrl: state.ammoScriptUrl });
     return await state.ammoScriptLoadPromise;
   } catch (error) {
     state.ammoScriptLoadPromise = undefined;
     reportAmmoInitializationFailure("loadAmmoNamespace", error);
+    return undefined;
+  }
+}
+
+async function initCustomBulletMmdModuleSafely() {
+  try {
+    state.customBulletMmdLoadPromise ??= loadCustomBulletMmdModule({
+      scriptUrl: state.customBulletMmdScriptUrl
+    });
+    return await state.customBulletMmdLoadPromise;
+  } catch (error) {
+    state.customBulletMmdLoadPromise = undefined;
+    reportAmmoInitializationFailure("loadCustomBulletMmdModule", error);
     return undefined;
   }
 }

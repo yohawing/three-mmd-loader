@@ -170,6 +170,58 @@
             <p class="info-version">v<span id="app-version">0.0.0</span></p>
           </div>
         </details>
+        <details class="debug-menu" id="debug-menu" hidden>
+          <summary aria-label="Debug panel">
+            <span class="material-symbols-rounded" aria-hidden="true">bug_report</span>
+          </summary>
+          <div class="debug-menu-panel" role="menu" aria-label="Debug panel">
+            <h2 class="debug-title">Debug</h2>
+            <div class="debug-actions">
+              <label class="debug-toggle">
+                <span>Colliders</span>
+                <input id="debug-colliders-toggle" type="checkbox" role="switch" />
+              </label>
+              <label class="debug-toggle">
+                <span>Normals</span>
+                <input id="debug-normals-toggle" type="checkbox" role="switch" />
+              </label>
+              <label class="debug-toggle">
+                <span>Toon off</span>
+                <input id="debug-toon-off-toggle" type="checkbox" role="switch" />
+              </label>
+              <label class="debug-toggle">
+                <span>Outline off</span>
+                <input id="debug-outline-off-toggle" type="checkbox" role="switch" />
+              </label>
+              <label class="debug-number">
+                <span>Max steps</span>
+                <input id="debug-max-sub-steps" type="number" min="0" max="16" step="1" value="5" />
+              </label>
+              <label class="debug-number">
+                <span>Bone feedback</span>
+                <input id="debug-dynamic-with-bone-feedback" type="number" min="0" max="1" step="0.05" value="1" />
+              </label>
+              <label class="debug-number">
+                <span>Margin</span>
+                <input id="debug-collision-margin" type="number" min="-1" max="0.2" step="0.005" value="-1" />
+              </label>
+              <label class="debug-number">
+                <span>Solver iters</span>
+                <input id="debug-solver-iterations" type="number" min="1" max="120" step="1" value="20" />
+              </label>
+              <label class="debug-toggle">
+                <span>Split impulse</span>
+                <input id="debug-split-impulse-toggle" type="checkbox" role="switch" checked />
+              </label>
+              <label class="debug-number">
+                <span>Split threshold</span>
+                <input id="debug-split-impulse-threshold" type="number" min="-1" max="0.2" step="0.005" value="-0.04" />
+              </label>
+              <button id="debug-refresh-state" type="button">Refresh state</button>
+            </div>
+            <pre id="debug-state-output" aria-label="Debug state"></pre>
+          </div>
+        </details>
       </nav>
 
       <section class="stage" aria-label="MMD model viewport">

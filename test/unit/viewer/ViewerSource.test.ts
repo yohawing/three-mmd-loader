@@ -197,6 +197,7 @@ describe("example viewer source", () => {
     expect(serverSource).toContain('"fixtures.local.json"');
     expect(serverSource).toContain('const dataRoute = "/__mmd_data/"');
     expect(serverSource).toContain('const localAssetsRoute = "/__mmd_assets__/fixtures-local.json"');
+    expect(serverSource).toContain('Location: `/${url.search}`');
     expect(serverSource).toContain("createLocalAssetManifest");
     expect(serverSource).toContain("backgrounds");
     expect(serverSource).toContain("backgroundPmx");
@@ -294,9 +295,11 @@ describe("example viewer source", () => {
 
   it("delegates Ammo script loading to the public physics browser loader", async () => {
     const ammoSource = await readFile("examples/viewer/lib/ammo-bootstrap.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
 
-    expect(ammoSource).toContain("loadAmmoNamespace");
-    expect(ammoSource).toContain("state.ammoScriptLoadPromise ??= loadAmmoNamespace(state.ammoScriptUrl)");
+    expect(ammoSource).toContain("loadCustomBulletAmmoNamespace");
+    expect(ammoSource).toContain("state.ammoScriptLoadPromise ??= loadCustomBulletAmmoNamespace({ scriptUrl: state.ammoScriptUrl })");
+    expect(stateSource).toContain('ammoScriptUrl: "/dist/physics/ammo/yw_bullet_ammo.js"');
     expect(ammoSource).toContain("dom.physicsErrorBanner.textContent = message");
     expect(ammoSource).not.toContain("function loadAmmoScript");
     expect(ammoSource).not.toContain("function getAmmoCandidate");
@@ -318,5 +321,92 @@ describe("example viewer source", () => {
     const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
 
     expect(serverSource).toContain('[".wasm", "application/wasm"]');
+  });
+
+  it("keeps the debug panel behind the debug query flag with collider controls", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('id="debug-menu" hidden');
+    expect(html).toContain('id="debug-colliders-toggle"');
+    expect(html).toContain('id="debug-normals-toggle"');
+    expect(html).toContain('id="debug-toon-off-toggle"');
+    expect(html).toContain('id="debug-outline-off-toggle"');
+    expect(html).toContain('id="debug-max-sub-steps"');
+    expect(html).toContain('id="debug-max-sub-steps" type="number" min="0" max="16" step="1" value="5"');
+    expect(html).toContain('id="debug-solver-iterations"');
+    expect(html).toContain('id="debug-split-impulse-toggle"');
+    expect(html).toContain('id="debug-split-impulse-threshold"');
+    expect(html).toContain('type="checkbox" role="switch"');
+    expect(html).toContain("bug_report");
+    expect(html).not.toContain("id=\"debug-normals\"");
+    expect(html).not.toContain("id=\"debug-toon-off\"");
+    expect(html).not.toContain("id=\"debug-outline-off\"");
+    expect(domSource).toContain('debugMenu: document.querySelector("#debug-menu")');
+    expect(domSource).toContain('debugCollidersToggle: document.querySelector("#debug-colliders-toggle")');
+    expect(domSource).toContain('debugNormalsToggle: document.querySelector("#debug-normals-toggle")');
+    expect(domSource).toContain('debugToonOffToggle: document.querySelector("#debug-toon-off-toggle")');
+    expect(domSource).toContain('debugOutlineOffToggle: document.querySelector("#debug-outline-off-toggle")');
+    expect(domSource).toContain('debugMaxSubStepsInput: document.querySelector("#debug-max-sub-steps")');
+    expect(domSource).toContain('debugSolverIterationsInput: document.querySelector("#debug-solver-iterations")');
+    expect(domSource).toContain('debugSplitImpulseToggle: document.querySelector("#debug-split-impulse-toggle")');
+    expect(domSource).toContain('debugSplitImpulsePenetrationThresholdInput: document.querySelector("#debug-split-impulse-threshold")');
+    expect(stateSource).toContain('new window.URLSearchParams(location.search).has("debug")');
+    expect(stateSource).toContain('maxSubSteps: initialPhysicsMaxSubSteps');
+    expect(stateSource).toContain('parseDebugInteger(query.get("maxSubSteps"), 5)');
+    expect(stateSource).toContain('solverIterations: initialSolverIterations');
+    expect(stateSource).toContain('splitImpulsePenetrationThreshold: initialSplitImpulsePenetrationThreshold');
+    expect(stateSource).toContain("if (value === null)");
+    expect(stateSource).toContain('debugMaterialMode: "default"');
+    expect(stateSource).toContain("debugOutlineHidden: false");
+    expect(mainSource).toContain("if (!debugEnabled)");
+    expect(mainSource).toContain("dom.debugMenu.hidden = false");
+    expect(mainSource).toContain("window.mmdDebug = viewerApi.debug");
+    expect(mainSource).toContain("toggleColliderHelpers()");
+    expect(mainSource).toContain('setDebugMaterialMode(dom.debugNormalsToggle.checked ? "normals" : "default")');
+    expect(mainSource).toContain('setDebugMaterialMode(dom.debugToonOffToggle.checked ? "toonOff" : "default")');
+    expect(mainSource).toContain("setOutlineHidden(dom.debugOutlineOffToggle.checked)");
+    expect(mainSource).toContain("setPhysicsMaxSubSteps(dom.debugMaxSubStepsInput.value)");
+    expect(mainSource).toContain("setSolverIterations(dom.debugSolverIterationsInput.value)");
+    expect(mainSource).toContain("setSplitImpulse(dom.debugSplitImpulseToggle.checked)");
+    expect(mainSource).toContain("setSplitImpulsePenetrationThreshold(dom.debugSplitImpulsePenetrationThresholdInput.value)");
+    expect(playbackSource).toContain("updateColliderHelpers()");
+    expect(debugSource).toContain("export function toggleColliderHelpers()");
+    expect(debugSource).toContain("export function setDebugMaterialMode(mode)");
+    expect(debugSource).toContain("export function setOutlineHidden(hidden)");
+    expect(debugSource).toContain("export function setPhysicsMaxSubSteps(value)");
+    expect(debugSource).toContain("export function setSolverIterations(value)");
+    expect(debugSource).toContain("export function setSplitImpulse(enabled)");
+    expect(debugSource).toContain("export function setSplitImpulsePenetrationThreshold(value)");
+    expect(debugSource).toContain("dumpRigidBodies(indices)");
+    expect(debugSource).toContain("dumpCollisionPair(indexA, indexB)");
+    expect(debugSource).toContain("function rigidBodyCollisionGroup(body)");
+    expect(debugSource).toContain("function rigidBodyCollisionMask(body)");
+    expect(debugSource).toContain("function colliderMaterialForGroup(collisionGroup, materialsByGroup)");
+    expect(debugSource).toContain("function createRigidBodyRestMatrix(body)");
+    expect(debugSource).toContain("function setHelperMatrixFromMmdMatrix(helper, matrix)");
+    expect(debugSource).toContain("makeScale(1, 1, -1)");
+    expect(debugSource).toContain("helper.matrixWorldNeedsUpdate = true");
+    expect(debugSource).toContain("mmdRigidBodyRestMatrix");
+    expect(debugSource).toContain("mmdRigidBodyGroup");
+    expect(debugSource).toContain("mmd collider group");
+    expect(debugSource).toContain("state.showDebugColliders = state.debugCollidersVisible");
+    expect(styles).toContain(".debug-menu[hidden]");
+    expect(styles).toContain(".debug-number input");
+    expect(styles).toContain(".debug-toggle input:checked");
+  });
+
+  it("does not keep transient debug console logs in the viewer", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const marker = "[mmd" + "-debug]";
+
+    expect(mainSource).not.toContain(marker);
+    expect(playbackSource).not.toContain(marker);
   });
 });

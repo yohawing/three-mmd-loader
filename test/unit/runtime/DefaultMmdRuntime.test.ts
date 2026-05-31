@@ -4,7 +4,10 @@ import * as THREE from "three";
 import { DefaultMmdRuntime } from "../../../src/index.js";
 import type { MmdAnimation, VmdBoneFrame, VmdBoneTrack, VmdMorphFrame, VmdMorphTrack } from "../../../src/index.js";
 import type {
+  MmdDirectBufferPhysicsBackend,
   MmdPhysicsBackend,
+  MmdPhysicsStepBufferLayout,
+  MmdPhysicsStepBuffers,
   MmdPhysicsStepContext,
   MmdPhysicsStepResult
 } from "../../../src/physics/index.js";
@@ -641,6 +644,55 @@ describe("DefaultMmdRuntime", () => {
     expect(runtime.debugState().stages.physics.worldMatricesColumnMajor[14]).toBe(3);
   });
 
+  it("writes external physics input directly into backend-owned step buffers", () => {
+    const bone = new THREE.Bone();
+    bone.name = "physics";
+    bone.userData.mmdBoneName = "physics";
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.userData.mmdPhysics = {
+      rigidBodies: [
+        {
+          name: "body",
+          boneIndex: 0,
+          group: 1,
+          mask: 0xffff,
+          shape: "sphere",
+          mode: "dynamic",
+          size: [0.5, 0.5, 0.5],
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          mass: 1,
+          linearDamping: 0,
+          angularDamping: 0,
+          restitution: 0,
+          friction: 0.5
+        }
+      ],
+      joints: []
+    };
+    const backend = new DirectBufferPhysicsBackend();
+    const runtime = new DefaultMmdRuntime({
+      physics: "external",
+      physicsBackend: backend
+    });
+
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
+    runtime.evaluate(1 / 30);
+
+    expect(backend.acquireCount).toBe(1);
+    expect(backend.lastContext?.inputTranslations).toBe(backend.buffers.inputTranslations);
+    expect(backend.lastContext?.inputRotations).toBe(backend.buffers.inputRotations);
+    expect(backend.lastContext?.inputWorldMatricesColumnMajor).toBe(
+      backend.buffers.inputWorldMatricesColumnMajor
+    );
+    expect(backend.lastContext?.output?.translations).toBe(backend.buffers.outputTranslations);
+    expect(backend.lastContext?.bonePhysicsToggles).toBe(backend.buffers.bonePhysicsToggles);
+    expect(backend.buffers.inputRotations[3]).toBe(1);
+    expect(bone.position.toArray()).toEqual([4, 5, -6]);
+  });
+
   it("skips and resets external physics when evaluate disables physics", () => {
     const bone = new THREE.Bone();
     bone.name = "physics";
@@ -915,6 +967,45 @@ class InspectingPhysicsBackend implements MmdPhysicsBackend {
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
     this.lastContext = context;
     return { simulated: true };
+  }
+}
+
+class DirectBufferPhysicsBackend implements MmdDirectBufferPhysicsBackend {
+  readonly name = "direct-buffer";
+  readonly disabled = false;
+  readonly disposed = false;
+  readonly buffers: MmdPhysicsStepBuffers = {
+    inputTranslations: new Float32Array(3),
+    inputRotations: new Float32Array(4),
+    inputWorldMatricesColumnMajor: new Float32Array(16),
+    outputTranslations: new Float32Array(3),
+    outputRotations: new Float32Array(4),
+    outputWorldMatricesColumnMajor: new Float32Array(16),
+    bonePhysicsToggles: new Uint8Array(1),
+    updatedBoneIndices: new Uint32Array(1)
+  };
+  acquireCount = 0;
+  lastContext: MmdPhysicsStepContext | undefined;
+
+  acquireStepBuffers(layout: MmdPhysicsStepBufferLayout): MmdPhysicsStepBuffers | undefined {
+    this.acquireCount += 1;
+    expect(layout).toEqual({
+      boneCount: 1,
+      translationValueCount: 3,
+      rotationValueCount: 4,
+      worldMatrixValueCount: 16
+    });
+    return this.buffers;
+  }
+
+  step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
+    this.lastContext = context;
+    context.output?.translations?.set([4, 5, 6], 0);
+    context.output?.rotations?.set([0, 0, 0, 1], 0);
+    if (context.output?.updatedBoneIndices instanceof Uint32Array) {
+      context.output.updatedBoneIndices.set([0], 0);
+    }
+    return { simulated: true, updatedBoneCount: 1 };
   }
 }
 

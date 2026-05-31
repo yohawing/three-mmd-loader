@@ -4,13 +4,39 @@ import { ThreeMmdLoader } from "../../../dist/three/index.js";
 import { viewerConfig } from "./viewer-config.js";
 
 export const debugEnabled = new window.URLSearchParams(location.search).has("debug");
+const query = new window.URLSearchParams(location.search);
+const initialPhysicsMaxSubSteps = parseDebugInteger(query.get("maxSubSteps"), 5);
+const initialDynamicWithBoneFeedback = parseDebugNumber(
+  query.get("dynamicWithBoneRotationFeedbackScale"),
+  1
+);
+const initialCollisionMargin = parseDebugNumber(query.get("collisionMargin"), -1);
+const initialSolverIterations = parseDebugInteger(query.get("solverIterations"), 20);
+const initialSplitImpulse = query.get("splitImpulse") === "0" ? false : true;
+const initialSplitImpulsePenetrationThreshold = parseDebugNumber(
+  query.get("splitImpulsePenetrationThreshold"),
+  -0.04
+);
 
 export const state = {
   hasLocalFixtures: false,
-  ammoScriptUrl: "/node_modules/ammo.js/ammo.js",
+  ammoScriptUrl: "/dist/physics/ammo/yw_bullet_ammo.js",
+  customBulletMmdScriptUrl: "/dist/physics/mmd/yw_mmd_bullet.js",
+  physicsBackendKind: query.get("physics") === "custom-bullet-mmd" ? "custom-bullet-mmd" : "ammo",
+  physicsTuningOptions: {
+    maxSubSteps: initialPhysicsMaxSubSteps,
+    dynamicWithBoneRotationFeedbackScale: initialDynamicWithBoneFeedback,
+    collisionMargin: initialCollisionMargin,
+    solverIterations: initialSolverIterations,
+    splitImpulse: initialSplitImpulse,
+    splitImpulsePenetrationThreshold: initialSplitImpulsePenetrationThreshold
+  },
+  showDebugColliders: query.has("collision") || query.has("debugCollision"),
   activePhysicsBackend: undefined,
   ammoNamespace: undefined,
   ammoScriptLoadPromise: undefined,
+  customBulletMmdModule: undefined,
+  customBulletMmdLoadPromise: undefined,
   animationLoader: new ThreeMmdLoader({ runtime: { frameRate: viewerConfig.mmdFrameRate } }),
   clock: new THREE.Clock(),
   renderer: undefined,
@@ -65,6 +91,10 @@ export const state = {
     perspective: true
   },
   debugMaterialState: new Map(),
+  debugColliderGroup: undefined,
+  debugCollidersVisible: false,
+  debugMaterialMode: "default",
+  debugOutlineHidden: false,
   restPoseAnimation: {
     kind: "vmd",
     metadata: {
@@ -81,6 +111,22 @@ export const state = {
     propertyFrames: []
   }
 };
+
+function parseDebugInteger(value, fallback) {
+  if (value === null) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(Math.trunc(parsed), 0) : fallback;
+}
+
+function parseDebugNumber(value, fallback) {
+  if (value === null) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 state.cameraApplyOptions = {
   target: state.cameraTargetScratch,
