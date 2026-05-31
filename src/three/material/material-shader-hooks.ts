@@ -6,6 +6,14 @@ import { clampColor } from "../utils.js";
 
 const MMD_DIRECT_DIFFUSE_SCALE = Math.PI;
 const MMD_AMBIENT_COLOR_SCALE = 0.2;
+const MMD_SELF_SHADOW_TOON_DOT_FLOOR = 0.22;
+const MMD_FALLBACK_SELF_SHADOW_LIGHT_FLOOR = 0.75;
+const MMD_TOON_SHADOW_FACTOR_DECLARATION = "float ywMmdToonShadowFactor = 1.0;";
+const DIRECTIONAL_LIGHT_INFO_CALL = "getDirectionalLightInfo( directionalLight, directLight );";
+const DIRECTIONAL_SHADOW_COLOR_MULTIPLY =
+  "directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;";
+const MMD_DIRECTIONAL_SELF_SHADOW_FACTOR =
+  "ywMmdToonShadowFactor = ( mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;";
 const THREE_GRADIENT_IRRADIANCE_BODY = [
   "float dotNL = dot( normal, lightDirection );",
   "\tvec2 coord = vec2( dotNL * 0.5 + 0.5, 0.0 );"
@@ -22,6 +30,7 @@ function mmdToonGradientParsFragment(toonNdotLSign: number): string {
     "vec3 getGradientIrradiance( vec3 normal, vec3 lightDirection ) {",
     "",
     `\tfloat dotNL = dot( normal, lightDirection ) * ${toonNdotLSign.toFixed(1)};`,
+    `\tdotNL = mix( ${MMD_SELF_SHADOW_TOON_DOT_FLOOR.toFixed(2)}, dotNL, ywMmdToonShadowFactor );`,
     "\tvec2 coord = vec2( 0.5, clamp( dotNL, 0.02, 0.98 ) );",
     "",
     "\t#ifdef USE_GRADIENTMAP",
@@ -37,6 +46,15 @@ function mmdToonGradientParsFragment(toonNdotLSign: number): string {
     "",
     "}"
   ].join("\n");
+}
+
+function mmdLightsFragmentBegin(shadowReplacement: string): string {
+  return THREE.ShaderChunk.lights_fragment_begin
+    .replace(
+      DIRECTIONAL_LIGHT_INFO_CALL,
+      [DIRECTIONAL_LIGHT_INFO_CALL, "ywMmdToonShadowFactor = 1.0;"].join("\n")
+    )
+    .replace(DIRECTIONAL_SHADOW_COLOR_MULTIPLY, shadowReplacement);
 }
 
 export function attachMmdMaterialFactors(material: THREE.Material): void {
@@ -66,6 +84,9 @@ export function attachMmdMaterialFactors(material: THREE.Material): void {
     shader.uniforms.mmdDirectLightColor = { value: new THREE.Color(0, 0, 0) };
     shader.uniforms.mmdDirectDiffuseScale = { value: MMD_DIRECT_DIFFUSE_SCALE };
     shader.uniforms.mmdAmbientColorScale = { value: MMD_AMBIENT_COLOR_SCALE };
+    shader.uniforms.mmdSelfShadowReceive = {
+      value: materialReceivesMmdSelfShadow(material) ? 1 : 0
+    };
     const lightUniformState = material.userData.mmdLightUniformState as
       | { direction: [number, number, number]; directColor: [number, number, number] }
       | undefined;
@@ -137,7 +158,9 @@ export function attachMmdMaterialFactors(material: THREE.Material): void {
         "uniform vec3 mmdLightDirection;",
         "uniform vec3 mmdDirectLightColor;",
         "uniform float mmdDirectDiffuseScale;",
-        "uniform float mmdAmbientColorScale;"
+        "uniform float mmdAmbientColorScale;",
+        "uniform float mmdSelfShadowReceive;",
+        MMD_TOON_SHADOW_FACTOR_DECLARATION
       ].join("\n")
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -162,21 +185,41 @@ export function attachMmdMaterialFactors(material: THREE.Material): void {
         mmdToonGradientParsFragment(toonNdotLSign)
       );
       shader.fragmentShader = shader.fragmentShader.replace(
+        "\treturn vec3( texture2D( gradientMap, coord ).r );",
+        "\treturn texture2D( gradientMap, coord ).rgb;"
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <lights_fragment_begin>",
+        mmdLightsFragmentBegin(MMD_DIRECTIONAL_SELF_SHADOW_FACTOR)
+      );
+    } else {
+      shader.fragmentShader = shader.fragmentShader.replace(
         THREE_GRADIENT_IRRADIANCE_BODY,
         [
-          `float dotNL = dot( normal, lightDirection ) * ${toonNdotLSign.toFixed(1)};`,
-          "\tvec2 coord = vec2( 0.5, clamp( dotNL, 0.02, 0.98 ) );"
+          "float dotNL = dot( normal, lightDirection );",
+          `\tdotNL = mix( ${MMD_SELF_SHADOW_TOON_DOT_FLOOR.toFixed(2)}, dotNL, ywMmdToonShadowFactor );`,
+          "\tvec2 coord = vec2( dotNL * 0.5 + 0.5, 0.0 );"
         ].join("\n")
       );
       shader.fragmentShader = shader.fragmentShader.replace(
-        "\treturn vec3( texture2D( gradientMap, coord ).r );",
-        "\treturn texture2D( gradientMap, coord ).rgb;"
+        "#include <lights_fragment_begin>",
+        mmdLightsFragmentBegin(
+          [
+            MMD_DIRECTIONAL_SELF_SHADOW_FACTOR,
+            `directLight.color *= mix( ${MMD_FALLBACK_SELF_SHADOW_LIGHT_FLOOR.toFixed(2)}, 1.0, ywMmdToonShadowFactor );`
+          ].join("\n")
+        )
       );
     }
   };
   material.customProgramCacheKey = () =>
     `${previousProgramCacheKey()}-yw-mmd-material-factors-${material.userData.mmdMaterialFactors.babylonToonGradientSampling ? "babylon-toon-gradient" : "standard-toon-gradient"}-toon-ndl-${material.userData.mmdMaterialFactors.toonNdotLSign === -1 ? "neg" : "pos"}`;
   material.needsUpdate = true;
+}
+
+function materialReceivesMmdSelfShadow(material: THREE.Material): boolean {
+  const flags = material.userData.mmdMaterial?.flags as { selfShadow?: boolean } | undefined;
+  return flags?.selfShadow !== false;
 }
 
 export function materialHasTextureMap(

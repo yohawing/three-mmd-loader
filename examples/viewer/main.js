@@ -2,7 +2,7 @@ import { clearAudioSource, isAudioElement, loadAudioFile, switchAudioEntry } fro
 import { bindAssetLibraryControls, initializeAssetLibrary } from "./lib/asset-library.js";
 import { clearBackground, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
 import { clearCameraMotion, loadCameraFile, loadCameraFromUrl, switchCameraEntry } from "./lib/camera-loading.js";
-import { createViewerDebugApi, refreshDebugPanelState, setCollisionMargin, setDebugMaterialMode, setDynamicWithBoneRotationFeedbackScale, setOutlineHidden, setPhysicsMaxSubSteps, setSolverIterations, setSplitImpulse, setSplitImpulsePenetrationThreshold, toggleColliderHelpers } from "./lib/debug.js";
+import { createViewerDebugApi, refreshDebugPanelState, setCollisionMargin, setDebugMaterialMode, setDynamicWithBoneRotationFeedbackScale, setOutlineHidden, setPhysicsMaxSubSteps, setSelfShadowEnabled, setSolverIterations, setSplitImpulse, setSplitImpulsePenetrationThreshold, toggleColliderHelpers } from "./lib/debug.js";
 import { dom, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/ammo-bootstrap.js";
@@ -212,6 +212,9 @@ function bindDebugControls() {
   });
   dom.debugOutlineOffToggle?.addEventListener("change", () => {
     setOutlineHidden(dom.debugOutlineOffToggle.checked);
+  });
+  dom.debugSelfShadowToggle?.addEventListener("change", () => {
+    setSelfShadowEnabled(dom.debugSelfShadowToggle.checked);
   });
   dom.debugMaxSubStepsInput?.addEventListener("change", () => {
     setPhysicsMaxSubSteps(dom.debugMaxSubStepsInput.value);

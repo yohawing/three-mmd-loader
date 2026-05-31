@@ -17,6 +17,7 @@ const initialSplitImpulsePenetrationThreshold = parseDebugNumber(
   query.get("splitImpulsePenetrationThreshold"),
   -0.04
 );
+const initialSelfShadowEnabled = query.get("selfShadow") === "0" ? false : true;
 
 export const state = {
   hasLocalFixtures: false,
@@ -83,6 +84,12 @@ export const state = {
   cameraEulerScratch: new THREE.Euler(),
   cameraQuaternionScratch: new THREE.Quaternion(),
   cameraUpScratch: new THREE.Vector3(),
+  selfShadowBoundsScratch: new THREE.Box3(),
+  selfShadowStateScratch: {
+    mode: 1,
+    distance: 0.4
+  },
+  selfShadowFrameHint: { index: 0 },
   cameraStateScratch: {
     distance: 0,
     position: [0, 0, 0],
@@ -95,6 +102,7 @@ export const state = {
   debugCollidersVisible: false,
   debugMaterialMode: "default",
   debugOutlineHidden: false,
+  debugSelfShadowEnabled: initialSelfShadowEnabled,
   restPoseAnimation: {
     kind: "vmd",
     metadata: {

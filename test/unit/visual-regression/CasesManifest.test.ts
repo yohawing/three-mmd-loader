@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 const manifestPath = path.resolve("scripts/visual-regression/cases.manifest.json");
 const realModelsManifestPath = path.resolve("scripts/visual-regression/real-models.manifest.json");
 const generatedPmxManifestPath = path.resolve("scripts/visual-regression/generated-pmx.manifest.json");
+const selfShadowManifestPath = path.resolve("scripts/visual-regression/self-shadow.manifest.json");
+const packageJsonPath = path.resolve("package.json");
 
 interface VisualCase {
   id: string;
@@ -29,7 +31,7 @@ interface RealModelVisualCase {
   model: string;
   motion?: string;
   timeSeconds?: number;
-  camera: "front-fit" | {
+  camera: "front-fit" | "viewer-fit" | {
     position: number[];
     target: number[];
     fov: number;
@@ -60,6 +62,31 @@ function readRealModelsManifest(): RealModelVisualManifest {
 
 function readGeneratedPmxManifest(): RealModelVisualManifest {
   return JSON.parse(readFileSync(generatedPmxManifestPath, "utf8")) as RealModelVisualManifest;
+}
+
+interface SelfShadowVisualManifest extends RealModelVisualManifest {
+  comparisons: Array<{
+    name: string;
+    shadowOn: string;
+    shadowOff: string;
+    receiverRoi: { x: number; y: number; width: number; height: number };
+    thresholds: {
+      receiverMeanDarkeningMin: number;
+      receiverP95DarkeningMin: number;
+      shadowPixelRatioMin: number;
+      shadowOnMeanLuminanceMin?: number;
+      shadowOnP05LuminanceMin?: number;
+      outsideRoiMeanDeltaMax: number;
+    };
+  }>;
+}
+
+function readSelfShadowManifest(): SelfShadowVisualManifest {
+  return JSON.parse(readFileSync(selfShadowManifestPath, "utf8")) as SelfShadowVisualManifest;
+}
+
+function readPackageJson(): { scripts: Record<string, string> } {
+  return JSON.parse(readFileSync(packageJsonPath, "utf8")) as { scripts: Record<string, string> };
 }
 
 describe("visual regression cases manifest", () => {
@@ -209,5 +236,74 @@ describe("generated PMX visual regression manifest", () => {
       expect(visualCase.thresholds?.mean).toBeGreaterThan(0);
       expect(visualCase.thresholds?.p95).toBeGreaterThan(visualCase.thresholds?.mean ?? 0);
     }
+  });
+});
+
+describe("self-shadow visual regression manifest", () => {
+  it("defines paired cases that fail no-op and object-level-only self-shadow implementations", () => {
+    const manifest = readSelfShadowManifest();
+    const names = manifest.cases.map(visualCase => visualCase.name);
+
+    expect(manifest.note).toContain("no-op");
+    expect(manifest.render.resolution).toEqual({ width: 512, height: 512 });
+    expect(manifest.render.pixelRatio).toBe(1);
+    expect((manifest.render as unknown as { shadow?: { enabled?: boolean } }).shadow?.enabled).toBe(true);
+    expect(names).toEqual(expect.arrayContaining([
+      "mmd-self-shadow-body-on",
+      "mmd-self-shadow-body-caster-off",
+      "mmd-self-shadow-body-black-toon-on",
+      "mmd-self-shadow-body-black-toon-caster-off",
+      "mmd-self-shadow-body-vmd-off",
+      "mmd-self-shadow-body-vmd-on",
+      "mmd-self-shadow-on",
+      "mmd-self-shadow-caster-flag-off-mixed",
+      "mmd-self-shadow-receiver-flag-off-mixed",
+      "mmd-self-shadow-vmd-off",
+      "mmd-self-shadow-vmd-on",
+      "mmd-self-shadow-sdef-depth"
+    ]));
+  });
+
+  it("keeps self-shadow comparisons explicit and measurable", () => {
+    const manifest = readSelfShadowManifest();
+    const names = new Set(manifest.cases.map(visualCase => visualCase.name));
+
+    expect(manifest.comparisons.length).toBeGreaterThanOrEqual(3);
+    for (const comparison of manifest.comparisons) {
+      expect(comparison.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+      expect(names.has(comparison.shadowOn)).toBe(true);
+      expect(names.has(comparison.shadowOff)).toBe(true);
+      expect(comparison.shadowOn).not.toBe(comparison.shadowOff);
+      expect(comparison.receiverRoi.width).toBeGreaterThan(0);
+      expect(comparison.receiverRoi.height).toBeGreaterThan(0);
+      expect(comparison.thresholds.receiverMeanDarkeningMin).toBeGreaterThan(0);
+      expect(comparison.thresholds.receiverP95DarkeningMin).toBeGreaterThan(
+        comparison.thresholds.receiverMeanDarkeningMin
+      );
+      expect(comparison.thresholds.shadowPixelRatioMin).toBeGreaterThanOrEqual(0);
+      if (comparison.thresholds.shadowOnMeanLuminanceMin !== undefined) {
+        expect(comparison.thresholds.shadowOnMeanLuminanceMin).toBeGreaterThan(0);
+      }
+      if (comparison.thresholds.shadowOnP05LuminanceMin !== undefined) {
+        expect(comparison.thresholds.shadowOnP05LuminanceMin).toBeGreaterThan(0);
+      }
+      expect(comparison.thresholds.outsideRoiMeanDeltaMax).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("visual regression smoke scripts", () => {
+  it("exposes JavaScript and NVIDIA FLIP smoke entrypoints", () => {
+    const scripts = readPackageJson().scripts;
+
+    expect(scripts["visual:smoke"]).toContain("visual:report");
+    expect(scripts["visual:smoke:flip"]).toContain("visual:report:flip");
+    expect(scripts["visual:report:flip"]).toContain("--metric flip");
+    expect(scripts["visual:smoke:generated-pmx"]).toContain("visual:report:generated-pmx");
+    expect(scripts["visual:smoke:generated-pmx:flip"]).toContain("visual:report:generated-pmx:flip");
+    expect(scripts["visual:report:generated-pmx:flip"]).toContain("--metric flip");
+    expect(scripts["visual:smoke:self-shadow"]).toContain("visual:report:self-shadow");
+    expect(scripts["visual:report:self-shadow"]).toContain("compute-shadow-metrics.mjs");
+    expect(scripts["render:visual:self-shadow:local"]).toContain("render-local-self-shadow-pair.mjs");
   });
 });

@@ -21,14 +21,19 @@ export function disposeMmdModel(model: ThreeMmdModel): void {
     for (const material of normalizeMaterials(mesh.material)) {
       disposeMaterialResources(material, disposedMaterials, disposedTextures);
     }
+    disposeMaterialResources(mesh.customDepthMaterial, disposedMaterials, disposedTextures);
+    disposeMaterialResources(mesh.customDistanceMaterial, disposedMaterials, disposedTextures);
   }
 }
 
 function disposeMaterialResources(
-  material: THREE.Material,
+  material: THREE.Material | undefined,
   disposedMaterials: Set<THREE.Material>,
   disposedTextures: Set<THREE.Texture>
 ): void {
+  if (!material) {
+    return;
+  }
   for (const texture of collectMaterialTextures(material)) {
     disposeTexture(texture, disposedTextures);
   }

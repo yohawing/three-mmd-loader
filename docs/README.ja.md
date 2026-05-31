@@ -36,7 +36,7 @@ English: [README.md](../README.md)　- [デモサイト](https://three.mmd.yohaw
 | IK link-local / parent-local clamp | ⚠️ 単軸固定は対応 / 複数軸は部分対応 |
 | VMD Camera | ✅ Runtime sampling + Three.js helper、perspective/orthographic 切替 |
 | VMD Light | ⚠️ 解析は対応 / runtime 適用の parity 要検証 |
-| Self Shadow | ❌ 未実装 |
+| Self Shadow | ✅ Three.js shadow-map 経路 + VMD self-shadow sampling |
 | 物理 (Ammo backend) | ✅ Ammo.jsを使用。  |
 | Soft Body | ⚠️ PMX データは解析 / runtime simulation は未実装 |
 

@@ -5,6 +5,8 @@ import { clampColor } from "../utils.js";
 import { mmdMaterialDepthWrite, mmdMaterialSuppressesColorAtAlpha } from "./material-metadata.js";
 
 type ShaderUniformMap = Record<string, { value: unknown }>;
+const mmdDirectionalLightPositionScratch = new THREE.Vector3();
+const mmdDirectionalLightTargetScratch = new THREE.Vector3();
 
 export function syncMmdMaterialStates(
   materials: THREE.Material | THREE.Material[],
@@ -121,8 +123,7 @@ export function syncMmdSpecularDirection(
   lightDirection: THREE.Vector3 | THREE.DirectionalLight
 ): void {
   const materialList = Array.isArray(material) ? material : [material];
-  const directionSource =
-    lightDirection instanceof THREE.DirectionalLight ? lightDirection.position : lightDirection;
+  const directionSource = mmdLightDirectionSource(lightDirection);
   const directColor: [number, number, number] =
     lightDirection instanceof THREE.Light
       ? [
@@ -149,4 +150,15 @@ export function syncMmdSpecularDirection(
       color.setRGB(directColor[0], directColor[1], directColor[2]);
     }
   });
+}
+
+function mmdLightDirectionSource(lightDirection: THREE.Vector3 | THREE.DirectionalLight): THREE.Vector3 {
+  if (!(lightDirection instanceof THREE.DirectionalLight)) {
+    return lightDirection;
+  }
+  lightDirection.updateMatrixWorld();
+  lightDirection.target.updateMatrixWorld();
+  mmdDirectionalLightPositionScratch.setFromMatrixPosition(lightDirection.matrixWorld);
+  mmdDirectionalLightTargetScratch.setFromMatrixPosition(lightDirection.target.matrixWorld);
+  return mmdDirectionalLightPositionScratch.sub(mmdDirectionalLightTargetScratch);
 }

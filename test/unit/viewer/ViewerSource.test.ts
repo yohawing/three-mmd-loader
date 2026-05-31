@@ -278,6 +278,46 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("state.cameraApplyOptions = {");
   });
 
+  it("wires self-shadow rendering into the viewer renderer, light, and playback loop", async () => {
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const htmlSource = await readFile("examples/viewer/index.html", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const sceneSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+
+    expect(sceneSource).toContain("state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled");
+    expect(sceneSource).toContain("state.keyLight.castShadow = state.debugSelfShadowEnabled");
+    expect(sceneSource).toContain("configureMmdSelfShadowDirectionalLight");
+    expect(sceneSource).toContain("fitMmdSelfShadowDirectionalLightToBox");
+    expect(sceneSource).toContain("mapSize: 4096");
+    expect(sceneSource).toContain("shadowIntensity: 1.0");
+    expect(sceneSource).toContain("normalBias: 0.006");
+    expect(sceneSource).toContain("export function fitShadowCameraToObject(object)");
+    expect(sceneSource).toContain("state.selfShadowBoundsScratch.setFromObject(object)");
+    expect(sceneSource).toContain("marginScale: 0.06");
+    expect(stateSource).toContain("selfShadowStateScratch");
+    expect(stateSource).toContain("selfShadowBoundsScratch: new THREE.Box3()");
+    expect(stateSource).toContain("selfShadowFrameHint");
+    expect(stateSource).toContain("debugSelfShadowEnabled: initialSelfShadowEnabled");
+    expect(playbackSource).toContain("sampleMmdSelfShadowTrackInto");
+    expect(playbackSource).toContain("applyMmdSelfShadowStateToThreeDirectionalLight");
+    expect(playbackSource).toContain('from "../../../dist/runtime/index.js"');
+    expect(playbackSource).toContain('from "../../../dist/three/index.js"');
+    expect(playbackSource).toContain("applySelfShadowMotion()");
+    expect(playbackSource).toContain("fitShadowCameraToObject(state.currentModel.mesh)");
+    expect(playbackSource).toContain("state.keyLight.castShadow = true");
+    expect(playbackSource).toContain("!state.debugSelfShadowEnabled");
+    expect(playbackSource).toContain("shadowIntensity: 1.0");
+    expect(htmlSource).toContain('id="debug-self-shadow-toggle"');
+    expect(domSource).toContain('debugSelfShadowToggle: document.querySelector("#debug-self-shadow-toggle")');
+    expect(mainSource).toContain("setSelfShadowEnabled(dom.debugSelfShadowToggle.checked)");
+    expect(debugSource).toContain("export function setSelfShadowEnabled(enabled)");
+    expect(debugSource).toContain("state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled");
+    expect(debugSource).toContain("selfShadowEnabled: state.debugSelfShadowEnabled");
+  });
+
   it("keeps audio playback resume from seeking back to the start", async () => {
     const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");

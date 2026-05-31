@@ -40,6 +40,7 @@ export const dom = {
   debugNormalsToggle: document.querySelector("#debug-normals-toggle"),
   debugToonOffToggle: document.querySelector("#debug-toon-off-toggle"),
   debugOutlineOffToggle: document.querySelector("#debug-outline-off-toggle"),
+  debugSelfShadowToggle: document.querySelector("#debug-self-shadow-toggle"),
   debugMaxSubStepsInput: document.querySelector("#debug-max-sub-steps"),
   debugDynamicWithBoneFeedbackInput: document.querySelector("#debug-dynamic-with-bone-feedback"),
   debugCollisionMarginInput: document.querySelector("#debug-collision-margin"),

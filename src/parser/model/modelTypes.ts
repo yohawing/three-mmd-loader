@@ -494,6 +494,11 @@ export interface VmdSelfShadowFrame {
   distance: number;
 }
 
+export interface SelfShadowState {
+  mode: number;
+  distance: number;
+}
+
 export interface VmdPropertyFrame {
   frame: number;
   visible: boolean;

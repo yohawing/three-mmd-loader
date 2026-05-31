@@ -41,9 +41,10 @@ const LINEAR_INTERPOLATION = new Uint8Array([
  * @param {string} [options.modelName]  Model name written into VMD header (cosmetic).
  * @param {Array<{boneName: string, frame?: number, quaternion: [number,number,number,number]}>} options.boneFrames
  *   Each entry sets one bone keyframe. quaternion = [x, y, z, w].
+ * @param {Array<{frame?: number, mode: number, distance: number}>} [options.selfShadowFrames]
  * @returns {Uint8Array}
  */
-export function generateMinimalVmd({ modelName = "", boneFrames = [] }) {
+export function generateMinimalVmd({ modelName = "", boneFrames = [], selfShadowFrames = [] }) {
   const out = [];
 
   const u32 = (v) => {
@@ -85,8 +86,16 @@ export function generateMinimalVmd({ modelName = "", boneFrames = [] }) {
     out.push(...LINEAR_INTERPOLATION);             // interpolation (64 bytes)
   }
 
-  // Remaining sections: morph, camera, light, self-shadow, property (all zero)
-  i32(0); i32(0); i32(0); i32(0); i32(0);
+  // Remaining sections: morph, camera, light
+  i32(0); i32(0); i32(0);
+  i32(selfShadowFrames.length);
+  for (const frame of selfShadowFrames) {
+    u32(frame.frame ?? 0);
+    out.push(frame.mode & 0xff);
+    f32(frame.distance);
+  }
+  // property
+  i32(0);
 
   return new Uint8Array(out);
 }
@@ -127,6 +136,32 @@ export const SKINNING_VMOD_CASES = {
   }
 };
 
+export const SELF_SHADOW_VMD_CASES = {
+  "mmd-self-shadow-vmd-off": {
+    modelName: "shadowOff",
+    boneFrames: [],
+    selfShadowFrames: [
+      { frame: 0, mode: 0, distance: 0 }
+    ]
+  },
+  "mmd-self-shadow-vmd-on": {
+    modelName: "shadowOn",
+    boneFrames: [],
+    selfShadowFrames: [
+      { frame: 0, mode: 1, distance: 0.4 }
+    ]
+  },
+  "mmd-self-shadow-sdef-depth": {
+    modelName: "sdefShadow",
+    boneFrames: [
+      { boneName: "upperArm", frame: 0, quaternion: rotZ(72) }
+    ],
+    selfShadowFrames: [
+      { frame: 0, mode: 1, distance: 0.4 }
+    ]
+  }
+};
+
 export function skinningVmdCaseIds() {
   return Object.keys(SKINNING_VMOD_CASES);
 }
@@ -134,6 +169,16 @@ export function skinningVmdCaseIds() {
 export function generateSkinningVmd(caseId) {
   const spec = SKINNING_VMOD_CASES[caseId];
   if (!spec) throw new Error(`Unknown skinning VMD case: ${caseId}`);
+  return generateMinimalVmd(spec);
+}
+
+export function selfShadowVmdCaseIds() {
+  return Object.keys(SELF_SHADOW_VMD_CASES);
+}
+
+export function generateSelfShadowVmd(caseId) {
+  const spec = SELF_SHADOW_VMD_CASES[caseId];
+  if (!spec) throw new Error(`Unknown self-shadow VMD case: ${caseId}`);
   return generateMinimalVmd(spec);
 }
 
@@ -148,9 +193,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       ? process.argv[outputArgIndex + 1]
       : SKINNING_VMD_OUTPUT_DIR;
 
-  for (const caseId of skinningVmdCaseIds()) {
+  const writeSelfShadow = process.argv.includes("--all-self-shadow");
+  const caseIds = writeSelfShadow ? selfShadowVmdCaseIds() : skinningVmdCaseIds();
+  for (const caseId of caseIds) {
     const outputPath = resolve(outputDir, `${caseId}.vmd`);
-    const bytes = generateSkinningVmd(caseId);
+    const bytes = writeSelfShadow ? generateSelfShadowVmd(caseId) : generateSkinningVmd(caseId);
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, bytes);
     console.log(`wrote ${bytes.byteLength} bytes to ${outputPath}`);

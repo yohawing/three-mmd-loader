@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack } from "../../../src/index.js";
-import type { VmdCameraFrame, VmdLightFrame } from "../../../src/parser/model/modelTypes.js";
+import { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack, sampleMmdSelfShadowTrack, sampleMmdSelfShadowTrackInto } from "../../../src/index.js";
+import type { VmdCameraFrame, VmdLightFrame, VmdSelfShadowFrame } from "../../../src/parser/model/modelTypes.js";
 
 describe("camera and light runtime sampling", () => {
   it("samples VMD camera frames with channel-specific interpolation", () => {
@@ -93,6 +93,28 @@ describe("camera and light runtime sampling", () => {
       direction: [0, -0.5, 0.5]
     });
   });
+
+  it("samples VMD self-shadow frames as held states", () => {
+    expect(sampleMmdSelfShadowTrack(createSelfShadowFrames(), 5)).toMatchObject({
+      mode: 1,
+      distance: 0.3
+    });
+    expect(sampleMmdSelfShadowTrack(createSelfShadowFrames(), 10)).toMatchObject({
+      mode: 0,
+      distance: 0.8
+    });
+  });
+
+  it("samples VMD self-shadow frames into caller-owned scratch state", () => {
+    const target = { mode: 0, distance: 0 };
+    const hint = { index: 0 };
+
+    const state = sampleMmdSelfShadowTrackInto(createSelfShadowFrames(), 12, target, hint);
+
+    expect(state).toBe(target);
+    expect(target).toEqual({ mode: 0, distance: 0.8 });
+    expect(hint.index).toBe(1);
+  });
 });
 
 function createCameraFrames(): VmdCameraFrame[] {
@@ -145,5 +167,12 @@ function createLightFrames(): VmdLightFrame[] {
       color: [1, 0.5, 0.5],
       direction: [-1, -1, 1]
     }
+  ];
+}
+
+function createSelfShadowFrames(): VmdSelfShadowFrame[] {
+  return [
+    { frame: 0, mode: 1, distance: 0.3 },
+    { frame: 10, mode: 0, distance: 0.8 }
   ];
 }

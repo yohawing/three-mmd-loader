@@ -29,6 +29,9 @@ export function createViewerDebugApi() {
       setOutlineHidden(true);
       return "outline hidden";
     },
+    selfShadow(enabled = true) {
+      return `selfShadow=${setSelfShadowEnabled(enabled)}`;
+    },
     showColliders() {
       showColliderHelpers();
       state.renderer.render(state.scene, state.camera);
@@ -264,6 +267,23 @@ export function setOutlineHidden(hidden) {
   return state.debugOutlineHidden;
 }
 
+export function setSelfShadowEnabled(enabled) {
+  state.debugSelfShadowEnabled = !!enabled;
+  if (state.renderer?.shadowMap) {
+    state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled;
+    state.renderer.shadowMap.needsUpdate = true;
+  }
+  if (state.keyLight) {
+    state.keyLight.castShadow = state.debugSelfShadowEnabled;
+  }
+  if (state.debugSelfShadowEnabled) {
+    evaluateRuntime({ physics: false });
+  }
+  state.renderer?.render(state.scene, state.camera);
+  refreshDebugPanelState();
+  return state.debugSelfShadowEnabled;
+}
+
 export function setPhysicsMaxSubSteps(value) {
   const nextValue = Math.max(0, Math.trunc(Number(value)));
   if (!Number.isFinite(nextValue)) {
@@ -333,6 +353,13 @@ export function refreshDebugPanelState() {
   }
   if (dom.debugOutlineOffToggle) {
     dom.debugOutlineOffToggle.checked = state.debugOutlineHidden;
+  }
+  if (dom.debugSelfShadowToggle) {
+    dom.debugSelfShadowToggle.checked = state.debugSelfShadowEnabled;
+    dom.debugSelfShadowToggle.setAttribute(
+      "aria-checked",
+      String(state.debugSelfShadowEnabled)
+    );
   }
   if (dom.debugMaxSubStepsInput) {
     dom.debugMaxSubStepsInput.value = String(state.physicsTuningOptions.maxSubSteps);
@@ -567,6 +594,9 @@ function createSmokeState() {
     solverIterations: state.physicsTuningOptions.solverIterations,
     splitImpulse: state.physicsTuningOptions.splitImpulse,
     splitImpulsePenetrationThreshold: state.physicsTuningOptions.splitImpulsePenetrationThreshold,
+    selfShadowEnabled: state.debugSelfShadowEnabled,
+    keyLightCastShadow: state.keyLight?.castShadow ?? null,
+    rendererShadowMapEnabled: state.renderer?.shadowMap?.enabled ?? null,
     rigidBodyBounds: matrixTranslationBounds(rigidBodyTransforms),
     matricesFinite: finiteArray(physicsStage?.worldMatricesColumnMajor ?? []),
     morphWeightsFinite: finiteArray(physicsStage?.morphWeights ?? []),

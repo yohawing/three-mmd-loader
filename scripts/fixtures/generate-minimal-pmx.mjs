@@ -8,6 +8,7 @@ const DEFAULT_OUTPUT = "test/fixtures/generated/minimal-loader-smoke.pmx";
 const REST_POSE_OUTPUT_DIR = "test/fixtures/generated/rest-pose";
 const VISUAL_OUTPUT_DIR = "test/fixtures/generated/visual";
 const SKINNING_OUTPUT_DIR = "test/fixtures/generated/skinning";
+const SELF_SHADOW_OUTPUT_DIR = "test/fixtures/generated/self-shadow";
 const BASE_BONE_FLAGS = 0x001e;
 const REST_POSE_CASES = {
   "append-rotate-parent": {
@@ -528,6 +529,55 @@ const VISUAL_CASES = {
   }
 };
 
+const SELF_SHADOW_CASES = {
+  "mmd-self-shadow-body-on": selfShadowBodyCase({
+    receiverFlags: 0x09,
+    casterFlags: 0x05,
+    customToonTexture: true,
+    comment: "self shadow body fixture: an in-model protruding caster casts onto the model body"
+  }),
+  "mmd-self-shadow-body-caster-off": selfShadowBodyCase({
+    receiverFlags: 0x09,
+    casterFlags: 0x01,
+    customToonTexture: true,
+    comment: "self shadow body fixture with visible protruding caster disabled for shadow map"
+  }),
+  "mmd-self-shadow-body-black-toon-on": selfShadowBodyCase({
+    receiverFlags: 0x09,
+    casterFlags: 0x05,
+    customToonTexture: true,
+    comment: "self shadow body fixture using a black-bottom toon texture to catch black self-shadow collapse"
+  }),
+  "mmd-self-shadow-body-black-toon-caster-off": selfShadowBodyCase({
+    receiverFlags: 0x09,
+    casterFlags: 0x01,
+    customToonTexture: true,
+    comment: "black-toon self shadow body fixture with visible protruding caster disabled for shadow map"
+  }),
+  "mmd-self-shadow-on": selfShadowCase({
+    receiverFlags: 0x09,
+    casterFlags: 0x05,
+    probeCaster: false,
+    probeReceiver: false,
+    comment: "self shadow positive fixture: caster draws to shadow map and receiver receives"
+  }),
+  "mmd-self-shadow-caster-flag-off-mixed": selfShadowCase({
+    receiverFlags: 0x09,
+    casterFlags: 0x01,
+    probeCaster: true,
+    probeReceiver: false,
+    comment: "material-level caster fixture: visible caster must not cast even though another material casts"
+  }),
+  "mmd-self-shadow-receiver-flag-off-mixed": selfShadowCase({
+    receiverFlags: 0x01,
+    casterFlags: 0x05,
+    probeCaster: false,
+    probeReceiver: true,
+    comment: "material-level receiver fixture: visible receiver must not receive even though another material receives"
+  }),
+  "mmd-self-shadow-sdef-depth": selfShadowSdefCase()
+};
+
 export function generateMinimalPmx() {
   return generatePmx({
     name: "generated minimal loader smoke",
@@ -641,6 +691,37 @@ export function skinningCaseIds() {
   return Object.keys(SKINNING_CASES);
 }
 
+export function generateSelfShadowPmx(caseId) {
+  const shadowCase = SELF_SHADOW_CASES[caseId];
+  if (!shadowCase) {
+    throw new Error(`Unknown self-shadow PMX case: ${caseId}`);
+  }
+  return generatePmx({
+    name: `generated self shadow ${caseId}`,
+    englishName: shadowCase.englishName,
+    comment: "redistribution-safe self shadow visual fixture",
+    englishComment: shadowCase.comment,
+    bones: shadowCase.bones,
+    morphs: false,
+    geometry: shadowCase.geometry,
+    materials: shadowCase.materials,
+    textures: shadowCase.textures ?? [],
+    textEncoding: "utf16le",
+    indexSizes: {
+      vertex: 4,
+      texture: 4,
+      material: 4,
+      bone: 4,
+      morph: 4,
+      rigidBody: 4
+    }
+  });
+}
+
+export function selfShadowCaseIds() {
+  return Object.keys(SELF_SHADOW_CASES);
+}
+
 function generatePmx({
   name,
   englishName,
@@ -697,6 +778,11 @@ async function main() {
     return;
   }
 
+  if (process.argv.includes("--list-self-shadow-cases")) {
+    console.log(selfShadowCaseIds().join("\n"));
+    return;
+  }
+
   if (process.argv.includes("--all-rest-pose")) {
     const outputArgIndex = process.argv.indexOf("--output-dir");
     const outputDir =
@@ -743,9 +829,27 @@ async function main() {
     return;
   }
 
+  if (process.argv.includes("--all-self-shadow")) {
+    const outputArgIndex = process.argv.indexOf("--output-dir");
+    const outputDir =
+      outputArgIndex >= 0 && process.argv[outputArgIndex + 1] !== undefined
+        ? process.argv[outputArgIndex + 1]
+        : SELF_SHADOW_OUTPUT_DIR;
+    for (const caseId of selfShadowCaseIds()) {
+      const outputPath = resolve(outputDir, `${caseId}.pmx`);
+      const bytes = generateSelfShadowPmx(caseId);
+      await mkdir(dirname(outputPath), { recursive: true });
+      await writeFile(outputPath, bytes);
+      await writeSelfShadowAssets(caseId, dirname(outputPath));
+      console.log(`wrote ${bytes.byteLength} bytes to ${outputPath}`);
+    }
+    return;
+  }
+
   const caseArgIndex = process.argv.indexOf("--case");
   const visualCaseArgIndex = process.argv.indexOf("--visual-case");
   const skinningCaseArgIndex = process.argv.indexOf("--skinning-case");
+  const selfShadowCaseArgIndex = process.argv.indexOf("--self-shadow-case");
   const outputArgIndex = process.argv.indexOf("--output");
   const outputPath =
     outputArgIndex >= 0 && process.argv[outputArgIndex + 1] !== undefined
@@ -753,7 +857,9 @@ async function main() {
       : DEFAULT_OUTPUT;
   const absoluteOutput = resolve(outputPath);
   const bytes =
-    skinningCaseArgIndex >= 0 && process.argv[skinningCaseArgIndex + 1] !== undefined
+    selfShadowCaseArgIndex >= 0 && process.argv[selfShadowCaseArgIndex + 1] !== undefined
+      ? generateSelfShadowPmx(process.argv[selfShadowCaseArgIndex + 1])
+      : skinningCaseArgIndex >= 0 && process.argv[skinningCaseArgIndex + 1] !== undefined
       ? generateSkinningPmx(process.argv[skinningCaseArgIndex + 1])
       : visualCaseArgIndex >= 0 && process.argv[visualCaseArgIndex + 1] !== undefined
       ? generateVisualPmx(process.argv[visualCaseArgIndex + 1])
@@ -765,6 +871,9 @@ async function main() {
   await writeFile(absoluteOutput, bytes);
   if (visualCaseArgIndex >= 0 && process.argv[visualCaseArgIndex + 1] !== undefined) {
     await writeVisualAssets(process.argv[visualCaseArgIndex + 1], dirname(absoluteOutput));
+  }
+  if (selfShadowCaseArgIndex >= 0 && process.argv[selfShadowCaseArgIndex + 1] !== undefined) {
+    await writeSelfShadowAssets(process.argv[selfShadowCaseArgIndex + 1], dirname(absoluteOutput));
   }
   console.log(`wrote ${bytes.byteLength} bytes to ${outputPath}`);
 }
@@ -783,6 +892,16 @@ async function writeVisualAssets(caseId, outputDir) {
     throw new Error(`Unknown visual PMX case: ${caseId}`);
   }
   for (const asset of visualCase.assets ?? []) {
+    await writeFile(resolve(outputDir, asset.path), asset.bytes());
+  }
+}
+
+async function writeSelfShadowAssets(caseId, outputDir) {
+  const shadowCase = SELF_SHADOW_CASES[caseId];
+  if (!shadowCase) {
+    throw new Error(`Unknown self-shadow PMX case: ${caseId}`);
+  }
+  for (const asset of shadowCase.assets ?? []) {
     await writeFile(resolve(outputDir, asset.path), asset.bytes());
   }
 }
@@ -1050,6 +1169,232 @@ function mergeGeometries(geometries) {
   return { vertices, indices };
 }
 
+function selfShadowCase({ receiverFlags, casterFlags, probeCaster, probeReceiver, comment }) {
+  const geometries = [
+    boxGeometry({
+      min: [-0.9, -0.04, -0.55],
+      max: [0.9, 0.02, 0.55],
+      bone: 0,
+      normalMode: "face"
+    }),
+    transformGeometry(
+      boxGeometry({
+        min: [-0.16, 0.02, -0.08],
+        max: [0.16, 1.0, 0.08],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      { rotateY: 0.48, rotateX: -0.08, translate: [-0.22, 0, -0.04] }
+    )
+  ];
+  const materials = [
+    material("mat_receiver", "Receiver", {
+      diffuse: [0.86, 0.86, 0.82, 1],
+      specular: [0.02, 0.02, 0.02],
+      ambient: [0.28, 0.28, 0.26],
+      edgeColor: [0, 0, 0, 0],
+      edgeSize: 0,
+      toonShared: 0,
+      toonTextureIndex: 0,
+      flags: receiverFlags,
+      faceVertexCount: 36,
+      comment: "receiver material under self-shadow test"
+    }),
+    material("mat_visible_caster", "VisibleCaster", {
+      diffuse: [0.9, 0.34, 0.18, 1],
+      specular: [0.04, 0.02, 0.01],
+      ambient: [0.28, 0.1, 0.06],
+      edgeColor: [0, 0, 0, 0],
+      edgeSize: 0,
+      toonShared: 0,
+      toonTextureIndex: 0,
+      flags: casterFlags,
+      faceVertexCount: 36,
+      comment: "visible caster material under self-shadow test"
+    })
+  ];
+
+  if (probeCaster) {
+    geometries.push(
+      transformGeometry(
+        boxGeometry({
+          min: [-0.04, 0.02, -0.04],
+          max: [0.04, 0.16, 0.04],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { translate: [2.8, 0, 1.8] }
+      )
+    );
+    materials.push(material("mat_probe_caster", "ProbeCaster", {
+      diffuse: [0.2, 0.2, 0.2, 1],
+      specular: [0, 0, 0],
+      ambient: [0.05, 0.05, 0.05],
+      edgeColor: [0, 0, 0, 0],
+      edgeSize: 0,
+      toonShared: 0,
+      toonTextureIndex: 0,
+      flags: 0x05,
+      faceVertexCount: 36,
+      comment: "off-camera material that may cast shadows"
+    }));
+  }
+
+  if (probeReceiver) {
+    geometries.push(
+      transformGeometry(
+        boxGeometry({
+          min: [-0.06, -0.04, -0.06],
+          max: [0.06, 0.02, 0.06],
+          bone: 0,
+          normalMode: "face"
+        }),
+        { translate: [-2.8, 0, -1.8] }
+      )
+    );
+    materials.push(material("mat_probe_receiver", "ProbeReceiver", {
+      diffuse: [0.7, 0.7, 0.7, 1],
+      specular: [0, 0, 0],
+      ambient: [0.2, 0.2, 0.2],
+      edgeColor: [0, 0, 0, 0],
+      edgeSize: 0,
+      toonShared: 0,
+      toonTextureIndex: 0,
+      flags: 0x09,
+      faceVertexCount: 36,
+      comment: "off-camera material that may receive shadows"
+    }));
+  }
+
+  return {
+    englishName: "GeneratedSelfShadow",
+    comment,
+    bones: [bone("center", "center", [0, 0, 0], -1, { tail: [0, 1, 0] })],
+    geometry: mergeGeometries(geometries),
+    textures: ["self-shadow-black-toon.png"],
+    assets: [
+      {
+        path: "self-shadow-black-toon.png",
+        bytes: () => selfShadowBlackToonPng()
+      }
+    ],
+    materials
+  };
+}
+
+function selfShadowBodyCase({ receiverFlags, casterFlags, comment, customToonTexture = false }) {
+  const body = transformGeometry(
+    boxGeometry({
+      min: [-0.55, 0.28, -0.42],
+      max: [0.55, 0.34, 0.42],
+      bone: 0,
+      normalMode: "face"
+    }),
+    { rotateY: 0.08 }
+  );
+  const protrudingCaster = transformGeometry(
+    boxGeometry({
+      min: [-0.1, 0.34, -0.06],
+      max: [0.1, 1.0, 0.06],
+      bone: 0,
+      normalMode: "corner"
+    }),
+    { rotateY: 0.42, rotateX: -0.08, translate: [0.08, 0, -0.02] }
+  );
+
+  return {
+    englishName: "GeneratedSelfShadowBody",
+    comment,
+    bones: [bone("center", "center", [0, 0, 0], -1, { tail: [0, 1, 0] })],
+    geometry: mergeGeometries([body, protrudingCaster]),
+    textures: customToonTexture ? ["self-shadow-black-toon.png"] : [],
+    assets: customToonTexture
+      ? [
+          {
+            path: "self-shadow-black-toon.png",
+            bytes: () => selfShadowBlackToonPng()
+          }
+        ]
+      : [],
+    materials: [
+      material("mat_body_receiver", "BodyReceiver", {
+        diffuse: [0.92, 0.78, 0.58, 1],
+        specular: [0.04, 0.03, 0.02],
+        ambient: [0.32, 0.22, 0.14],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        ...(customToonTexture ? { toonShared: 0, toonTextureIndex: 0 } : {}),
+        flags: receiverFlags,
+        faceVertexCount: body.indices.length,
+        comment: "body receiver material for in-model self-shadow test"
+      }),
+      material("mat_protruding_caster", "ProtrudingCaster", {
+        diffuse: [0.36, 0.44, 0.78, 1],
+        specular: [0.02, 0.03, 0.06],
+        ambient: [0.1, 0.12, 0.24],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        ...(customToonTexture ? { toonShared: 0, toonTextureIndex: 0 } : {}),
+        flags: casterFlags,
+        faceVertexCount: protrudingCaster.indices.length,
+        comment: "visible in-model caster material for self-shadow test"
+      })
+    ]
+  };
+}
+
+function selfShadowSdefCase() {
+  const receiver = boxGeometry({
+    min: [-0.9, -0.04, -0.55],
+    max: [0.9, 0.02, 0.55],
+    bone: 0,
+    normalMode: "face"
+  });
+  const caster = transformGeometry(
+    cylinderGeometry({
+      radius: 0.13,
+      height: 1.0,
+      rings: 5,
+      segments: 12,
+      bone0: 0,
+      bone1: 1,
+      skinType: 3
+    }),
+    { rotateY: 0.48, rotateX: -0.08, translate: [-0.18, 0.02, -0.04] }
+  );
+  return {
+    englishName: "GeneratedSelfShadowSdefDepth",
+    comment: "self shadow fixture requiring SDEF-compatible shadow depth material",
+    bones: [
+      bone("lowerArm", "lowerArm", [0, 0, 0], -1, { tail: [0, 1, 0] }),
+      bone("upperArm", "upperArm", [0, 1, 0], 0, { tail: [0, 0.4, 0] })
+    ],
+    geometry: mergeGeometries([receiver, caster]),
+    materials: [
+      material("mat_receiver", "Receiver", {
+        diffuse: [0.86, 0.86, 0.82, 1],
+        specular: [0.02, 0.02, 0.02],
+        ambient: [0.28, 0.28, 0.26],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        flags: 0x09,
+        faceVertexCount: receiver.indices.length,
+        comment: "receiver material for SDEF shadow depth test"
+      }),
+      material("mat_sdef_caster", "SdefCaster", {
+        diffuse: [0.18, 0.45, 0.86, 1],
+        specular: [0.02, 0.03, 0.05],
+        ambient: [0.06, 0.14, 0.28],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        flags: 0x05,
+        faceVertexCount: caster.indices.length,
+        comment: "SDEF caster material for shadow depth test"
+      })
+    ]
+  };
+}
+
 function transformGeometry(geometry, transform) {
   const cosX = Math.cos(transform.rotateX ?? 0);
   const sinX = Math.sin(transform.rotateX ?? 0);
@@ -1122,6 +1467,32 @@ function softAlphaOverlayPng(color) {
   const size = 96;
   const png = new PNG({ width: size, height: size });
   writeSoftAlphaPixels(png.data, size, size, color);
+  return PNG.sync.write(png);
+}
+
+function selfShadowBlackToonPng() {
+  const size = 32;
+  const png = new PNG({ width: size, height: size });
+  for (let y = 0; y < size; y += 1) {
+    const t = y / (size - 1);
+    for (let x = 0; x < size; x += 1) {
+      const index = (y * size + x) * 4;
+      if (t < 0.35) {
+        png.data[index] = 255;
+        png.data[index + 1] = 255;
+        png.data[index + 2] = 255;
+      } else if (t < 0.7) {
+        png.data[index] = 198;
+        png.data[index + 1] = 166;
+        png.data[index + 2] = 128;
+      } else {
+        png.data[index] = 4;
+        png.data[index + 1] = 4;
+        png.data[index + 2] = 4;
+      }
+      png.data[index + 3] = 255;
+    }
+  }
   return PNG.sync.write(png);
 }
 

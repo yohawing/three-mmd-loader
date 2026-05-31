@@ -11,6 +11,7 @@ import type { LoaderMmdModelData } from "./internalModelData.js";
 import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 import {
   computeMmdMaterialRenderOrder,
+  mmdMaterialCastsSelfShadow,
   syncMmdModelShadowFlags
 } from "./material/material-metadata.js";
 import { attachMmdSdefSkinning } from "./material/material-sdef.js";
@@ -22,6 +23,7 @@ import {
   createMmdOutlineMeshes
 } from "./outline.js";
 import { createLoaderPerformanceProfile } from "./performance.js";
+import { MMD_SELF_SHADOW_LAYER } from "./shadow.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
@@ -42,6 +44,12 @@ export {
   syncThreeMmdRuntimeToMesh,
   syncThreeMmdRuntimeToModel
 } from "./runtime-sync.js";
+export {
+  applyMmdSelfShadowStateToThreeDirectionalLight,
+  configureMmdSelfShadowDirectionalLight,
+  fitMmdSelfShadowDirectionalLightToBox,
+  MMD_SELF_SHADOW_LAYER
+} from "./shadow.js";
 export { createThreeSkeleton } from "./skeleton.js";
 export {
   attachMmdMaterialMetadata,
@@ -91,6 +99,11 @@ export {
 export type {
   ApplyMmdCameraStateOptions
 } from "./camera.js";
+export type {
+  ApplyMmdSelfShadowStateOptions,
+  ConfigureMmdSelfShadowDirectionalLightOptions,
+  FitMmdSelfShadowDirectionalLightOptions
+} from "./shadow.js";
 export type {
   ThreeMmdAdditionalUvMorphOffset,
   ThreeMmdGeometryBuffers,
@@ -366,20 +379,28 @@ function createThreeMmdModel(options: {
         materials: options.materials
       })
     : [];
+  if (options.materials.some((material) => mmdMaterialCastsSelfShadow(material.flags))) {
+    options.mesh.layers.enable(MMD_SELF_SHADOW_LAYER);
+  }
   outlineMeshes.forEach((outline) => {
     syncMmdModelShadowFlags(outline, options.materials);
     outline.frustumCulled = options.mesh.frustumCulled;
   });
-  // MMD-compatible outlines need body proxies so body/outline draw in PMX
-  // material definition order: body0, outline0, body1, outline1.
-  const renderOrderMeshes = options.outlines && options.renderOrderProxies
+  // MMD-compatible material order and per-material shadow flags need body
+  // proxies; outline proxies then interleave with the same material order.
+  const renderOrderMeshes = options.renderOrderProxies
     ? createMmdMaterialRenderOrderMeshes({
         mesh: options.mesh,
         materials: options.materials
+      }, {
+        shadowOnly: !options.outlines
       })
     : [];
-  if (renderOrderMeshes.length > 0) {
+  if (options.outlines && renderOrderMeshes.length > 0) {
     options.mesh.geometry.setDrawRange(0, 0);
+  }
+  if (renderOrderMeshes.length > 0) {
+    options.mesh.castShadow = false;
   }
   const object = new THREE.Group();
   object.name = options.mesh.name;

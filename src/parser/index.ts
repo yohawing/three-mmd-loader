@@ -6,7 +6,9 @@ export type {
   MmdCore,
   MmdModel,
   MmdPose,
+  SelfShadowState,
   VmdBoneTrack,
+  VmdSelfShadowFrame,
   VmdMorphTrack
 } from "./model/modelTypes.js";
 export { FallbackCore, initCore, initCoreWithFallback } from "./wasm/index.js";

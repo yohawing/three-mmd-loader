@@ -38,7 +38,7 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | IK link-local / parent-local clamp | ⚠️ Single-axis fixed; multi-axis partial |
 | VMD Camera | ✅ Runtime sampling + Three.js helper, perspective/orthographic switch |
 | VMD Light | ⚠️ Parsed; runtime/application parity needs verification |
-| Self Shadow | ❌ Not implemented |
+| Self Shadow | ✅ Three.js shadow-map path with VMD self-shadow sampling |
 | Physics (Ammo backend) | ✅ Uses Ammo.js |
 | Soft Body | ⚠️ PMX data parsed; runtime simulation not implemented |
 

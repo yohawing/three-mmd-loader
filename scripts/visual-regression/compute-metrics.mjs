@@ -3,6 +3,7 @@ import { existsSync, createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 
@@ -26,7 +27,7 @@ const profiles = {
     caseKey: "name"
   }
 };
-const defaultThresholds = { mean: 0.03, p95: 0.12 };
+const defaultThresholds = { mean: 0.03, p95: 0.12, max: 1 };
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -56,7 +57,9 @@ async function main() {
       baselinePath,
       currentPath,
       diffPath,
-      thresholds
+      thresholds,
+      metric: options.metric,
+      flipPath: options.flipPath
     });
     results.push(result);
   }
@@ -70,6 +73,7 @@ async function main() {
       arch: process.arch,
       cpus: os.cpus().length
     },
+    metric: options.metric,
     pass,
     cases: results
   };
@@ -80,7 +84,7 @@ async function main() {
   for (const result of results) {
     const status = result.pass ? "PASS" : "FAIL";
     console.log(
-      `${status} ${result.case} mean=${formatMetric(result.mean)} p95=${formatMetric(result.p95)} max=${formatMetric(result.max)}`
+      formatResultLine(status, result)
     );
   }
   console.log(`Report: ${path.relative(repoRoot, reportPath)}`);
@@ -90,7 +94,7 @@ async function main() {
   }
 }
 
-export async function compareCase({ id, baselinePath, currentPath, diffPath, thresholds }) {
+export async function compareCase({ id, baselinePath, currentPath, diffPath, thresholds, metric = "js", flipPath }) {
   if (!existsSync(baselinePath)) {
     throw new Error(`Missing baseline PNG for ${id}: ${path.relative(repoRoot, baselinePath)}`);
   }
@@ -103,6 +107,17 @@ export async function compareCase({ id, baselinePath, currentPath, diffPath, thr
     throw new Error(
       `Image size mismatch for ${id}: baseline=${baseline.width}x${baseline.height}, current=${current.width}x${current.height}`
     );
+  }
+
+  if (metric === "flip") {
+    return await compareCaseWithFlip({
+      id,
+      baselinePath,
+      currentPath,
+      diffPath,
+      thresholds,
+      flipPath
+    });
   }
 
   const pixelCount = baseline.width * baseline.height;
@@ -129,12 +144,47 @@ export async function compareCase({ id, baselinePath, currentPath, diffPath, thr
 
   return {
     case: id,
+    metric,
     mean: roundMetric(mean),
     p95: roundMetric(p95),
     max: roundMetric(max),
     thresholds,
     pass
   };
+}
+
+export async function compareCaseWithFlip({ id, baselinePath, currentPath, diffPath, thresholds, flipPath }) {
+  const executable = flipPath ?? process.env.NVIDIA_FLIP_PATH ?? process.env.FLIP_EXECUTABLE ?? "flip";
+  const diffBasePath = diffPath.replace(/\.png$/i, "");
+  const { stdout, stderr } = await runFlip(executable, [
+    "--reference",
+    baselinePath,
+    "--test",
+    currentPath,
+    "--basename",
+    diffBasePath
+  ]);
+  const metrics = parseFlipOutput(stdout);
+  const pass = metrics.mean <= thresholds.mean && metrics.max <= thresholds.max;
+
+  return {
+    case: id,
+    metric: "flip",
+    mean: roundMetric(metrics.mean),
+    p95: undefined,
+    max: roundMetric(metrics.max),
+    thresholds,
+    diffPath: path.relative(repoRoot, `${diffBasePath}.png`),
+    stdout: stdout.trim(),
+    stderr: stderr.trim(),
+    pass
+  };
+}
+
+export function parseFlipOutput(output) {
+  const mean = parseMetric(output, "Mean");
+  const max = parseMetric(output, "Max");
+  return { mean, max };
 }
 
 export function perceptualDistance(baselineData, currentData, offset) {
@@ -170,7 +220,14 @@ function roundMetric(value) {
 }
 
 function formatMetric(value) {
+  if (value === undefined) {
+    return "n/a";
+  }
   return value.toFixed(6);
+}
+
+function formatResultLine(status, result) {
+  return `${status} ${result.case} metric=${result.metric} mean=${formatMetric(result.mean)} p95=${formatMetric(result.p95)} max=${formatMetric(result.max)}`;
 }
 
 async function readPng(filePath) {
@@ -217,7 +274,8 @@ function selectCases(cases, caseId) {
 function normalizeThresholds(thresholds) {
   return {
     mean: numericThreshold(thresholds?.mean, defaultThresholds.mean, "mean"),
-    p95: numericThreshold(thresholds?.p95, defaultThresholds.p95, "p95")
+    p95: numericThreshold(thresholds?.p95, defaultThresholds.p95, "p95"),
+    max: numericThreshold(thresholds?.max, defaultThresholds.max, "max")
   };
 }
 
@@ -238,7 +296,9 @@ function parseArgs(args) {
     diffDir: undefined,
     reportPath: undefined,
     caseId: undefined,
-    profile: "shaderball"
+    profile: "shaderball",
+    metric: "js",
+    flipPath: undefined
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -255,12 +315,58 @@ function parseArgs(args) {
       options.caseId = requireRawValue(args, (index += 1), arg);
     } else if (arg === "--profile") {
       options.profile = requireRawValue(args, (index += 1), arg);
+    } else if (arg === "--metric") {
+      const metric = requireRawValue(args, (index += 1), arg);
+      if (metric !== "js" && metric !== "flip") {
+        throw new Error("--metric must be one of: js, flip");
+      }
+      options.metric = metric;
+    } else if (arg === "--flip-path") {
+      options.flipPath = requireRawValue(args, (index += 1), arg);
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
 
   return options;
+}
+
+function parseMetric(output, label) {
+  const match = new RegExp(`${label}:\\s*([0-9]+(?:\\.[0-9]+)?)`, "i").exec(output);
+  if (match === null) {
+    throw new Error(`Unable to parse NVIDIA FLIP ${label} from output`);
+  }
+  return Number(match[1]);
+}
+
+function runFlip(executable, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", chunk => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", chunk => {
+      stderr += chunk;
+    });
+    child.on("error", error => {
+      reject(new Error(`Failed to run NVIDIA FLIP executable "${executable}": ${error.message}`));
+    });
+    child.on("close", code => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      reject(new Error(`NVIDIA FLIP exited with code ${code}\n${stderr || stdout}`));
+    });
+  });
 }
 
 function requireValue(args, index, flag) {
