@@ -409,4 +409,17 @@ describe("example viewer source", () => {
     expect(mainSource).not.toContain(marker);
     expect(playbackSource).not.toContain(marker);
   });
+
+  it("uses the non-deprecated Three.js frame timer in the viewer loop", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+
+    expect(stateSource).toContain("frameTimer: new THREE.Timer()");
+    expect(stateSource).toContain("state.frameTimer.connect(document)");
+    expect(mainSource).toContain("state.frameTimer.update()");
+    expect(playbackSource).toContain("state.frameTimer.update()");
+    expect(playbackSource).toContain("state.frameTimer.getDelta()");
+    expect(stateSource).not.toContain("new THREE.Clock()");
+  });
 });

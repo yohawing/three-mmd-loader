@@ -5,7 +5,8 @@ import { updateColliderHelpers } from "./debug.js";
 import { currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
 
 export function render() {
-  const delta = state.clock.getDelta();
+  state.frameTimer.update();
+  const delta = state.frameTimer.getDelta();
   if (state.isPlaying && !state.isSeeking && hasActiveAudioSource()) {
     syncMotionToAudioTime({ evaluate: false });
   } else if (state.isPlaying && !state.isSeeking) {

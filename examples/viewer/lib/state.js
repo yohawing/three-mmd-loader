@@ -38,7 +38,7 @@ export const state = {
   customBulletMmdModule: undefined,
   customBulletMmdLoadPromise: undefined,
   animationLoader: new ThreeMmdLoader({ runtime: { frameRate: viewerConfig.mmdFrameRate } }),
-  clock: new THREE.Clock(),
+  frameTimer: new THREE.Timer(),
   renderer: undefined,
   scene: undefined,
   camera: undefined,
@@ -111,6 +111,8 @@ export const state = {
     propertyFrames: []
   }
 };
+
+state.frameTimer.connect(document);
 
 function parseDebugInteger(value, fallback) {
   if (value === null) {

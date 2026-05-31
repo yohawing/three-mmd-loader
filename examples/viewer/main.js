@@ -39,7 +39,7 @@ window.mmdViewer = viewerApi;
 bindControls();
 void initializeAssetLibrary();
 resize();
-state.clock.getDelta();
+state.frameTimer.update();
 state.renderer.setAnimationLoop(render);
 
 function bindControls() {
@@ -330,6 +330,7 @@ function disposeViewerResources() {
   state.pendingMotionLabel = undefined;
   clearAudioSource();
   disposeActivePhysicsBackend();
+  state.frameTimer.dispose();
   state.controls.dispose();
   state.renderer.dispose();
   state.renderer.forceContextLoss?.();

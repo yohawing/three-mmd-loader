@@ -1492,11 +1492,25 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
   }
 
   private getRigidBodyWorldTransform(rigidBody: AmmoRigidBody, target: AmmoTransform): AmmoTransform {
-    if (rigidBody.getCenterOfMassTransform) {
-      return rigidBody.getCenterOfMassTransform();
+    const centerOfMassTransform = rigidBody.getCenterOfMassTransform?.();
+    if (this.hasReadableTransformOrigin(centerOfMassTransform)) {
+      return centerOfMassTransform;
     }
     rigidBody.getMotionState().getWorldTransform(target);
     return target;
+  }
+
+  private hasReadableTransformOrigin(
+    transform: AmmoTransform | null | undefined
+  ): transform is AmmoTransform {
+    const origin = transform?.getOrigin() as AmmoVector3 | null | undefined;
+    return (
+      origin !== null &&
+      origin !== undefined &&
+      typeof origin.x === "function" &&
+      typeof origin.y === "function" &&
+      typeof origin.z === "function"
+    );
   }
 
   private registerWorldResource<T extends object>(value: T): T {
