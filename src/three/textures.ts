@@ -1198,16 +1198,59 @@ function recordRasterizedUvTriangleAlpha(
   uvCY: number,
   resolution: number
 ): void {
-  const ax = wrapUnit(uvAX) * resolution;
-  const ay = wrapUnit(uvAY) * resolution;
-  const bx = wrapUnit(uvBX) * resolution;
-  const by = wrapUnit(uvBY) * resolution;
-  const cx = wrapUnit(uvCX) * resolution;
-  const cy = wrapUnit(uvCY) * resolution;
+  const minU = Math.min(uvAX, uvBX, uvCX);
+  const maxU = Math.max(uvAX, uvBX, uvCX);
+  const minV = Math.min(uvAY, uvBY, uvCY);
+  const maxV = Math.max(uvAY, uvBY, uvCY);
+  const shiftMinU = Math.ceil(-maxU);
+  const shiftMaxU = Math.floor(1 - minU);
+  const shiftMinV = Math.ceil(-maxV);
+  const shiftMaxV = Math.floor(1 - minV);
+  for (let shiftU = shiftMinU; shiftU <= shiftMaxU; shiftU += 1) {
+    for (let shiftV = shiftMinV; shiftV <= shiftMaxV; shiftV += 1) {
+      recordRasterizedUvTriangleAlphaTile(
+        stats,
+        rgba,
+        width,
+        height,
+        uvAX + shiftU,
+        uvAY + shiftV,
+        uvBX + shiftU,
+        uvBY + shiftV,
+        uvCX + shiftU,
+        uvCY + shiftV,
+        resolution
+      );
+    }
+  }
+}
+
+function recordRasterizedUvTriangleAlphaTile(
+  stats: AlphaStats,
+  rgba: ArrayLike<number>,
+  width: number,
+  height: number,
+  uvAX: number,
+  uvAY: number,
+  uvBX: number,
+  uvBY: number,
+  uvCX: number,
+  uvCY: number,
+  resolution: number
+): void {
+  const ax = uvAX * resolution;
+  const ay = uvAY * resolution;
+  const bx = uvBX * resolution;
+  const by = uvBY * resolution;
+  const cx = uvCX * resolution;
+  const cy = uvCY * resolution;
   const minX = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
   const maxX = Math.min(resolution - 1, Math.ceil(Math.max(ax, bx, cx)));
   const minY = Math.max(0, Math.floor(Math.min(ay, by, cy)));
   const maxY = Math.min(resolution - 1, Math.ceil(Math.max(ay, by, cy)));
+  if (minX > maxX || minY > maxY) {
+    return;
+  }
   const denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
   if (Math.abs(denominator) < 1e-9) {
     return;
@@ -1224,11 +1267,6 @@ function recordRasterizedUvTriangleAlpha(
       }
     }
   }
-}
-
-function wrapUnit(value: number): number {
-  const wrapped = value % 1;
-  return wrapped < 0 ? wrapped + 1 : wrapped;
 }
 
 function evaluateMmdTextureAlphaCanvasImage(
