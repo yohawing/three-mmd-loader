@@ -265,6 +265,74 @@ describe("AmmoMmdPhysicsBackend smoke coverage", () => {
     backend.dispose?.();
   });
 
+  it("treats negative collisionMargin as an unset sentinel", async () => {
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+    const marginCalls: number[] = [];
+    const trackedAmmo = createMarginTrackingAmmo(Ammo, marginCalls);
+
+    const sentinelBackend = createAmmoMmdPhysicsBackend(trackedAmmo, {
+      collisionMargin: -1,
+      resetCatchUpSteps: 0
+    });
+    sentinelBackend.step(createStepContext());
+    sentinelBackend.dispose?.();
+
+    expect(marginCalls).toEqual([]);
+
+    const explicitBackend = createAmmoMmdPhysicsBackend(trackedAmmo, {
+      collisionMargin: 0.02,
+      resetCatchUpSteps: 0
+    });
+    explicitBackend.step(createStepContext());
+    explicitBackend.dispose?.();
+
+    expect(marginCalls).toEqual([0.02]);
+  });
+
+  it("disables Generic6Dof frame offsets when the Ammo build exposes the hook", async () => {
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+    const frameOffsetCalls: boolean[] = [];
+    const trackedAmmo = createFrameOffsetTrackingAmmo(Ammo, frameOffsetCalls);
+    const backend = createAmmoMmdPhysicsBackend(trackedAmmo, {
+      gravity: [0, 0, 0],
+      fixedTimeStep: 1 / 60,
+      maxSubSteps: 0,
+      resetCatchUpSteps: 0
+    });
+
+    backend.step(createSpringStepContext());
+    backend.dispose?.();
+
+    expect(frameOffsetCalls).toEqual([false]);
+  });
+
+  it("keeps angular Generic6Dof springs enabled even when angular stiffness is zero", async () => {
+    const ammoModule = await import("ammo.js");
+    const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
+    const springCalls: Array<{ axis: number; enabled: boolean }> = [];
+    const trackedAmmo = createSpringTrackingAmmo(Ammo, springCalls);
+    const backend = createAmmoMmdPhysicsBackend(trackedAmmo, {
+      gravity: [0, 0, 0],
+      fixedTimeStep: 1 / 60,
+      maxSubSteps: 0,
+      resetCatchUpSteps: 0
+    });
+
+    backend.step(createSpringStepContext());
+    backend.dispose?.();
+
+    expect(springCalls).toEqual([
+      { axis: 0, enabled: true },
+      { axis: 1, enabled: false },
+      { axis: 2, enabled: false },
+      { axis: 3, enabled: true },
+      { axis: 4, enabled: true },
+      { axis: 5, enabled: true }
+    ]);
+  });
+
   it("keeps connected rigid-body contacts enabled by default and allows Three.js-compatible disable", async () => {
     const ammoModule = await import("ammo.js");
     const Ammo = (ammoModule.default ?? ammoModule) as AmmoNamespace;
@@ -377,11 +445,16 @@ describe("AmmoMmdPhysicsBackend source guards", () => {
     expect(source).toContain("rigidBody.getCenterOfMassTransform?.()");
     expect(source).toContain("hasReadableTransformOrigin(centerOfMassTransform)");
     expect(source).toContain("transform.getRotationX()");
+    expect(source).toContain(
+      "this.options.collisionMargin !== undefined && this.options.collisionMargin >= 0"
+    );
+    expect(source).toContain("constraint.setUseFrameOffset?.(false);");
     expect(source).not.toContain("this.destroy(rotation);");
     expect(source).toContain(
       "world.addConstraint(constraint, this.options.disableCollisionsBetweenLinkedBodies ?? false);"
     );
-    expect(source).toContain("if (stiffness !== 0) {\n        constraint.enableSpring(constraintAxis, true);");
+    expect(source).toContain("constraint.enableSpring(constraintAxis, true);");
+    expect(source).toContain("constraint.setStiffness(constraintAxis, stiffness);");
   });
 
   it("documents the local dynamicWithBone visual-sync override separately from nanoem parity", async () => {
@@ -969,6 +1042,90 @@ function createRigidBody(
     collisionGroup: 0,
     collisionMask: 0xffff
   };
+}
+
+function createMarginTrackingAmmo(
+  Ammo: AmmoNamespace,
+  marginCalls: number[]
+): AmmoNamespace {
+  const trackedAmmo = Object.create(Ammo) as AmmoNamespace;
+  const OriginalSphereShape = Ammo.btSphereShape;
+  trackedAmmo.btSphereShape = function TrackedSphereShape(radius: number) {
+    const shape = new OriginalSphereShape(radius);
+    const originalSetMargin = shape.setMargin?.bind(shape);
+    shape.setMargin = (margin: number): void => {
+      marginCalls.push(margin);
+      originalSetMargin?.(margin);
+    };
+    return shape;
+  } as unknown as AmmoNamespace["btSphereShape"];
+  return trackedAmmo;
+}
+
+function createFrameOffsetTrackingAmmo(
+  Ammo: AmmoNamespace,
+  frameOffsetCalls: boolean[]
+): AmmoNamespace {
+  const trackedAmmo = Object.create(Ammo) as AmmoNamespace;
+  const OriginalConstraint = Ammo.btGeneric6DofSpringConstraint;
+  if (!OriginalConstraint) {
+    return trackedAmmo;
+  }
+  trackedAmmo.btGeneric6DofSpringConstraint = function TrackedGeneric6DofSpringConstraint(
+    bodyA,
+    bodyB,
+    frameA,
+    frameB,
+    useLinearReferenceFrameA
+  ) {
+    const constraint = new OriginalConstraint(
+      bodyA,
+      bodyB,
+      frameA,
+      frameB,
+      useLinearReferenceFrameA
+    );
+    const originalSetUseFrameOffset = constraint.setUseFrameOffset?.bind(constraint);
+    constraint.setUseFrameOffset = (enabled: boolean): void => {
+      frameOffsetCalls.push(enabled);
+      originalSetUseFrameOffset?.(enabled);
+    };
+    return constraint;
+  } as AmmoNamespace["btGeneric6DofSpringConstraint"];
+  return trackedAmmo;
+}
+
+function createSpringTrackingAmmo(
+  Ammo: AmmoNamespace,
+  springCalls: Array<{ axis: number; enabled: boolean }>
+): AmmoNamespace {
+  const trackedAmmo = Object.create(Ammo) as AmmoNamespace;
+  const OriginalConstraint = Ammo.btGeneric6DofSpringConstraint;
+  if (!OriginalConstraint) {
+    return trackedAmmo;
+  }
+  trackedAmmo.btGeneric6DofSpringConstraint = function TrackedGeneric6DofSpringConstraint(
+    bodyA,
+    bodyB,
+    frameA,
+    frameB,
+    useLinearReferenceFrameA
+  ) {
+    const constraint = new OriginalConstraint(
+      bodyA,
+      bodyB,
+      frameA,
+      frameB,
+      useLinearReferenceFrameA
+    );
+    const originalEnableSpring = constraint.enableSpring?.bind(constraint);
+    constraint.enableSpring = (axis: number, enabled: boolean): void => {
+      springCalls.push({ axis, enabled });
+      originalEnableSpring?.(axis, enabled);
+    };
+    return constraint;
+  } as AmmoNamespace["btGeneric6DofSpringConstraint"];
+  return trackedAmmo;
 }
 
 function writeBoneTranslation(
