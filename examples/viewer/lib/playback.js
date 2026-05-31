@@ -2,7 +2,10 @@ import { dom, setStatus, updatePlayToggle, updatePlaybackDisplay } from "./dom.j
 import { hasActiveAudioSource, isAudioElement } from "./audio-loading.js";
 import { applyCameraMotion } from "./camera-loading.js";
 import { updateColliderHelpers } from "./debug.js";
-import { currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
+import { currentMmdFrame, currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
+import { sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
+import { applyMmdSelfShadowStateToThreeDirectionalLight } from "../../../dist/three/index.js";
+import { fitShadowCameraToObject } from "./scene-setup.js";
 
 export function render() {
   state.frameTimer.update();
@@ -40,10 +43,42 @@ export function evaluateRuntime(options = {}) {
       physics: options.physics ?? (!state.isSeeking && state.elapsedSeconds > 0)
     });
   }
+  if (state.currentModel?.mesh) {
+    fitShadowCameraToObject(state.currentModel.mesh);
+  }
+  applySelfShadowMotion();
   if (dom.timeline) {
     dom.timeline.value = state.elapsedSeconds;
   }
   updatePlaybackDisplay();
+}
+
+function applySelfShadowMotion() {
+  if (!state.keyLight) {
+    return;
+  }
+  if (!state.debugSelfShadowEnabled) {
+    state.keyLight.castShadow = false;
+    return;
+  }
+  const frames = state.currentMotion?.animation?.selfShadowFrames;
+  if (!frames || frames.length === 0) {
+    state.keyLight.castShadow = true;
+    state.selfShadowFrameHint.index = 0;
+    return;
+  }
+  const selfShadowState = sampleMmdSelfShadowTrackInto(
+    frames,
+    currentMmdFrame(),
+    state.selfShadowStateScratch,
+    state.selfShadowFrameHint
+  );
+  applyMmdSelfShadowStateToThreeDirectionalLight(state.keyLight, selfShadowState, {
+    distanceScale: 100,
+    minFar: 1,
+    maxFar: 100,
+    shadowIntensity: 1.0
+  });
 }
 
 export async function setPlaybackPlaying(playing) {

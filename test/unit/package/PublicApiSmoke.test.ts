@@ -19,8 +19,13 @@ import {
   DefaultMmdRuntime,
   ThreeMmdLoader,
   sampleMmdCameraTrackInto,
+  sampleMmdSelfShadowTrackInto,
   createAmmoMmdPhysicsBackend,
   applyMmdCameraStateToThreeCamera,
+  applyMmdSelfShadowStateToThreeDirectionalLight,
+  configureMmdSelfShadowDirectionalLight,
+  fitMmdSelfShadowDirectionalLightToBox,
+  MMD_SELF_SHADOW_LAYER,
   createMmdTextureMapFromFiles,
   createThreeBufferGeometry,
   createThreeSkeleton,
@@ -130,6 +135,14 @@ center
   it("exports Three.js adapter camera helpers from the public barrel", () => {
     expect(applyMmdCameraStateToThreeCamera).toBeTypeOf("function");
     expect(sampleMmdCameraTrackInto).toBeTypeOf("function");
+  });
+
+  it("exports Three.js adapter self-shadow helpers from the public barrel", () => {
+    expect(applyMmdSelfShadowStateToThreeDirectionalLight).toBeTypeOf("function");
+    expect(configureMmdSelfShadowDirectionalLight).toBeTypeOf("function");
+    expect(fitMmdSelfShadowDirectionalLightToBox).toBeTypeOf("function");
+    expect(sampleMmdSelfShadowTrackInto).toBeTypeOf("function");
+    expect(MMD_SELF_SHADOW_LAYER).toBe(1);
   });
 
   it("does not expose Three.js AnimationClip creation from the public barrel", () => {

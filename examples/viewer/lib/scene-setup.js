@@ -1,8 +1,19 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import {
+  configureMmdSelfShadowDirectionalLight,
+  fitMmdSelfShadowDirectionalLightToBox
+} from "../../../dist/three/index.js";
 
 import { dom, updateChromeHeights } from "./dom.js";
 import { state } from "./state.js";
+
+const viewerSelfShadowQuality = {
+  mapSize: 4096,
+  shadowIntensity: 1.0,
+  bias: -0.00035,
+  normalBias: 0.006
+};
 
 export function setupScene() {
   if (!(dom.canvas instanceof HTMLCanvasElement)) throw new Error("Viewer canvas is missing");
@@ -13,6 +24,8 @@ export function setupScene() {
   });
   state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   state.renderer.setClearColor(0xffffff, 1);
+  state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled;
+  state.renderer.shadowMap.type = THREE.PCFShadowMap;
   state.scene = new THREE.Scene();
   state.perspectiveCamera = new THREE.PerspectiveCamera(22, 1, 0.01, 1000);
   state.orthographicCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 1000);
@@ -25,6 +38,10 @@ export function setupScene() {
   state.scene.add(new THREE.AxesHelper(10));
   state.keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
   state.keyLight.position.set(3, 4, 5);
+  state.keyLight.castShadow = state.debugSelfShadowEnabled;
+  configureMmdSelfShadowDirectionalLight(state.keyLight, viewerSelfShadowQuality);
+  state.keyLight.target.position.set(0, 0.9, 0);
+  state.scene.add(state.keyLight.target);
   state.scene.add(state.keyLight);
   state.scene.add(new THREE.AmbientLight(0xffffff, 0.15));
 }
@@ -44,6 +61,7 @@ export function fitCameraToObject(object) {
   state.perspectiveCamera.near = Math.max(radius / 100, 0.01);
   state.perspectiveCamera.far = Math.max(radius * 40, 100);
   state.perspectiveCamera.updateProjectionMatrix();
+  fitShadowCameraToObject(object);
   state.controls.update();
 }
 
@@ -55,6 +73,11 @@ export function setDefaultCameraView() {
   state.perspectiveCamera.near = 0.01;
   state.perspectiveCamera.far = 1000;
   state.perspectiveCamera.updateProjectionMatrix();
+  state.selfShadowBoundsScratch.set(
+    new THREE.Vector3(-0.6, 0, -0.6),
+    new THREE.Vector3(0.6, 1.8, 0.6)
+  );
+  fitShadowCameraToBounds(state.selfShadowBoundsScratch);
   state.controls.update();
 }
 
@@ -67,4 +90,28 @@ export function resize() {
   state.perspectiveCamera.updateProjectionMatrix();
   state.orthographicCamera.updateProjectionMatrix();
   updateChromeHeights();
+}
+
+export function fitShadowCameraToObject(object) {
+  if (!state.keyLight) {
+    return;
+  }
+  state.selfShadowBoundsScratch.setFromObject(object);
+  if (state.selfShadowBoundsScratch.isEmpty()) {
+    return;
+  }
+  fitShadowCameraToBounds(state.selfShadowBoundsScratch);
+}
+
+function fitShadowCameraToBounds(bounds) {
+  if (!state.keyLight) {
+    return;
+  }
+  fitMmdSelfShadowDirectionalLightToBox(state.keyLight, bounds, {
+    marginScale: 0.06,
+    minNear: 0.02,
+    minFarSpan: 2,
+    maxFar: 80
+  });
+  state.keyLight.target.updateMatrixWorld();
 }

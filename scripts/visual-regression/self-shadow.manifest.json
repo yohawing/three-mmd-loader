@@ -1,0 +1,222 @@
+{
+  "note": "Generated PMX/VMD self-shadow visual TDD profile. These cases are designed so a no-op or object-level-only shadow implementation fails.",
+  "render": {
+    "resolution": { "width": 512, "height": 512 },
+    "pixelRatio": 1,
+    "background": "#f4f1ea",
+    "lights": {
+      "ambient": { "color": "#ffffff", "intensity": 0.58 },
+      "directional": {
+        "color": "#ffffff",
+        "intensity": 2.25,
+        "position": [1.8, 3.4, 2.2],
+        "target": [0, 0, 0]
+      }
+    },
+    "shadow": {
+      "enabled": true,
+      "directional": {
+        "mapSize": 1024,
+        "left": -1.8,
+        "right": 1.8,
+        "top": 2.0,
+        "bottom": -0.6,
+        "near": 0.1,
+        "far": 8,
+        "bias": -0.0005,
+        "normalBias": 0.01
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "mmd-self-shadow-body-on",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-on.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.02, 0.62, 3.1],
+        "target": [-0.02, 0.55, 0.04],
+        "fov": 24,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-body-caster-off",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-caster-off.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.02, 0.62, 3.1],
+        "target": [-0.02, 0.55, 0.04],
+        "fov": 24,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-body-black-toon-on",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-black-toon-on.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.02, 0.62, 3.1],
+        "target": [-0.02, 0.55, 0.04],
+        "fov": 24,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-body-black-toon-caster-off",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-black-toon-caster-off.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.02, 0.62, 3.1],
+        "target": [-0.02, 0.55, 0.04],
+        "fov": 24,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-body-vmd-off",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-on.pmx",
+      "motion": "test/fixtures/generated/self-shadow/mmd-self-shadow-vmd-off.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.02, 0.62, 3.1],
+        "target": [-0.02, 0.55, 0.04],
+        "fov": 24,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-body-vmd-on",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-on.pmx",
+      "motion": "test/fixtures/generated/self-shadow/mmd-self-shadow-vmd-on.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.02, 0.62, 3.1],
+        "target": [-0.02, 0.55, 0.04],
+        "fov": 24,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-on",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-on.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.08, 0.72, 3.2],
+        "target": [0.02, 0.34, 0],
+        "fov": 28,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-caster-flag-off-mixed",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-caster-flag-off-mixed.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.08, 0.72, 3.2],
+        "target": [0.02, 0.34, 0],
+        "fov": 28,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-receiver-flag-off-mixed",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-receiver-flag-off-mixed.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.08, 0.72, 3.2],
+        "target": [0.02, 0.34, 0],
+        "fov": 28,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-vmd-off",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-on.pmx",
+      "motion": "test/fixtures/generated/self-shadow/mmd-self-shadow-vmd-off.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.08, 0.72, 3.2],
+        "target": [0.02, 0.34, 0],
+        "fov": 28,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-vmd-on",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-on.pmx",
+      "motion": "test/fixtures/generated/self-shadow/mmd-self-shadow-vmd-on.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.08, 0.72, 3.2],
+        "target": [0.02, 0.34, 0],
+        "fov": 28,
+        "near": 0.1,
+        "far": 20
+      }
+    },
+    {
+      "name": "mmd-self-shadow-sdef-depth",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-sdef-depth.pmx",
+      "motion": "test/fixtures/generated/self-shadow/mmd-self-shadow-sdef-depth.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.08, 0.72, 3.2],
+        "target": [0.02, 0.34, 0],
+        "fov": 28,
+        "near": 0.1,
+        "far": 20
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "body-self-shadow-caster-removes-torso-shadow",
+      "shadowOn": "mmd-self-shadow-body-on",
+      "shadowOff": "mmd-self-shadow-body-caster-off",
+      "receiverRoi": { "x": 99, "y": 323, "width": 236, "height": 19 },
+      "thresholds": {
+        "receiverMeanDarkeningMin": 0.0015,
+        "receiverP95DarkeningMin": 0.006,
+        "shadowPixelRatioMin": 0,
+        "outsideRoiMeanDeltaMax": 0.08
+      }
+    },
+    {
+      "name": "body-self-shadow-vmd-mode-toggles-torso-shadow",
+      "shadowOn": "mmd-self-shadow-body-vmd-on",
+      "shadowOff": "mmd-self-shadow-body-vmd-off",
+      "receiverRoi": { "x": 99, "y": 323, "width": 236, "height": 19 },
+      "thresholds": {
+        "receiverMeanDarkeningMin": 0.0015,
+        "receiverP95DarkeningMin": 0.006,
+        "shadowPixelRatioMin": 0,
+        "outsideRoiMeanDeltaMax": 0.08
+      }
+    },
+    {
+      "name": "body-self-shadow-black-toon-does-not-collapse-to-black",
+      "shadowOn": "mmd-self-shadow-body-black-toon-on",
+      "shadowOff": "mmd-self-shadow-body-black-toon-caster-off",
+      "receiverRoi": { "x": 124, "y": 322, "width": 210, "height": 20 },
+      "thresholds": {
+        "receiverMeanDarkeningMin": 0.001,
+        "receiverP95DarkeningMin": 0.005,
+        "shadowPixelRatioMin": 0,
+        "shadowOnMeanLuminanceMin": 0.12,
+        "shadowOnP05LuminanceMin": 0.05,
+        "outsideRoiMeanDeltaMax": 0.08
+      }
+    }
+  ]
+}

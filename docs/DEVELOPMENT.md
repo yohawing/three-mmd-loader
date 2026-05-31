@@ -357,6 +357,10 @@ Visual regression scripts are development tools, not release-blocking CI gates.
 | `npm run render:visual` | Renders deterministic material cases to `test-results/visual/current/`. |
 | `npm run render:visual:baseline` | Writes the same cases to `test-results/visual/baseline/`. |
 | `npm run visual:report` | Compares baseline/current images and writes a JSON report plus diffs. |
+| `npm run visual:smoke` | Renders deterministic material cases, then runs `visual:report`. |
+| `npm run visual:smoke:flip` | Renders deterministic material cases, then compares them with NVIDIA FLIP. |
+| `npm run visual:smoke:generated-pmx` | Regenerates focused PMX visual fixtures, renders them, then compares them. |
+| `npm run visual:smoke:generated-pmx:flip` | Runs the generated-PMX visual smoke through NVIDIA FLIP. |
 | `npm run render:visual:real-models` | Renders local user-owned real-model cases. Skips when `MMD_DATA_ROOT` is unset. |
 | `npm run render:visual:real-models:baseline` | Writes real-model baseline images. |
 | `npm run visual:report:real-models` | Compares real-model baseline/current images. |
@@ -369,6 +373,26 @@ Real-model scripts expect user-owned assets outside the repository:
 ```bash
 MMD_DATA_ROOT=/path/to/local/mmd-assets npm run render:visual:real-models
 ```
+
+`visual:report` uses the repository-local JavaScript metric by default. To use
+NVIDIA FLIP, install the official tool and run one of the `:flip` variants:
+
+```bash
+python -m pip install flip-evaluator
+npm run visual:smoke:flip
+```
+
+If the `flip` executable is not on `PATH`, point the script at it with either
+`NVIDIA_FLIP_PATH`, `FLIP_EXECUTABLE`, or `--flip-path`:
+
+```bash
+NVIDIA_FLIP_PATH=/path/to/flip npm run visual:smoke:flip
+node scripts/visual-regression/compute-metrics.mjs --metric flip --flip-path /path/to/flip
+```
+
+The FLIP integration treats NVIDIA's CLI as an optional external evaluator. It
+records FLIP `Mean` and `Max` in the JSON report and stores the FLIP error map
+under `test-results/visual/**/diff/`.
 
 Do not commit generated files under `test-results/`.
 

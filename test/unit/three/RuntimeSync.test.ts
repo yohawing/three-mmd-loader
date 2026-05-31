@@ -143,6 +143,46 @@ describe("syncThreeMmdRuntimeToModel", () => {
 
     expect(renderOrderMesh.visible).toBe(false);
   });
+
+  it("syncs shadow-only render-order proxy materials by PMX material index", () => {
+    const mesh = createSkinnedMesh(new THREE.MeshBasicMaterial());
+    const renderOrderMaterial = new THREE.MeshBasicMaterial();
+    renderOrderMaterial.userData.mmdMaterial = {
+      transparencyMode: "alphaBlend",
+      flags: {}
+    };
+    renderOrderMaterial.userData.mmdShadowOnlyRenderProxy = true;
+    renderOrderMaterial.colorWrite = false;
+    renderOrderMaterial.depthWrite = false;
+    const renderOrderMesh = createSkinnedMesh(renderOrderMaterial);
+    renderOrderMesh.userData.mmdMaterialRenderProxy = { materialIndex: 1 };
+    const runtime: MmdRuntimeMeshSyncSource = {
+      boneMatrices: () =>
+        new Float32Array([
+          1, 0, 0, 0,
+          0, 1, 0, 0,
+          0, 0, 1, 0,
+          0, 0, 0, 1
+        ]),
+      morphWeights: () => new Float32Array(),
+      propertyState: () => ({ visible: true }),
+      materialStates: () => [
+        createMaterialRuntimeState({ diffuse: [1, 0, 0, 1] }),
+        createMaterialRuntimeState({ diffuse: [0, 1, 0, 0.25] })
+      ]
+    };
+
+    syncThreeMmdRuntimeToModel(
+      createModelSkeleton(),
+      { mesh, renderOrderMeshes: [renderOrderMesh] },
+      runtime
+    );
+
+    expect(renderOrderMaterial.opacity).toBeCloseTo(0.25);
+    expect(renderOrderMaterial.transparent).toBe(true);
+    expect(renderOrderMaterial.colorWrite).toBe(false);
+    expect(renderOrderMaterial.depthWrite).toBe(false);
+  });
 });
 
 describe("syncMmdMaterialStates", () => {

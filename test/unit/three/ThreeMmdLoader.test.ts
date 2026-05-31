@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { FallbackCore, ThreeMmdLoader } from "../../../src/index.js";
+import { FallbackCore, MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
   MmdCore,
@@ -177,6 +177,22 @@ describe("ThreeMmdLoader", () => {
     expect(model.object.children).toEqual([model.mesh, ...model.outlineMeshes]);
   });
 
+  it("keeps self-shadow casters on the self-shadow layer when render-order proxies are disabled", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        materialFlags: 0x04
+      }),
+      { renderOrderProxies: false }
+    );
+
+    expect(model.renderOrderMeshes).toEqual([]);
+    expect(model.mesh.layers.mask & (1 << MMD_SELF_SHADOW_LAYER)).toBe(1 << MMD_SELF_SHADOW_LAYER);
+  });
+
   it("allows loadModel callers to disable generated outline meshes explicitly", async () => {
     const loader = new ThreeMmdLoader();
 
@@ -190,8 +206,15 @@ describe("ThreeMmdLoader", () => {
     );
 
     expect(model.outlineMeshes).toEqual([]);
-    expect(model.renderOrderMeshes).toEqual([]);
-    expect(model.object.children).toEqual([model.mesh]);
+    expect(model.renderOrderMeshes).toHaveLength(1);
+    expect(model.renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
+    expect(model.mesh.geometry.drawRange.count).toBe(Number.POSITIVE_INFINITY);
+    expect(model.mesh.castShadow).toBe(false);
+    expect(model.renderOrderMeshes[0]?.material).toMatchObject({
+      colorWrite: false,
+      depthWrite: false
+    });
+    expect(model.object.children).toEqual([model.mesh, ...model.renderOrderMeshes]);
   });
 
   it("applies load-time frustum culling to the mesh and generated proxy meshes", async () => {
@@ -533,6 +556,7 @@ function createMinimalPmxModelBytes(options: {
   readonly texturePath?: string;
   readonly triangle?: boolean;
   readonly edge?: boolean;
+  readonly materialFlags?: number;
 }): Uint8Array {
   const bytes: number[] = [];
   const encoder = new TextEncoder();
@@ -625,7 +649,7 @@ function createMinimalPmxModelBytes(options: {
     f32(0.2);
     f32(0.2);
     f32(0.2);
-    u8(options.edge ? 0x10 : 0);
+    u8(options.materialFlags ?? (options.edge ? 0x10 : 0));
     f32(0);
     f32(0);
     f32(0);

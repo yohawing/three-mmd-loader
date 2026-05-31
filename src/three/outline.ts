@@ -4,8 +4,11 @@ import * as THREE from "three";
 import {
   computeMmdMaterialRenderOrder,
   mmdMaterialCastsShadow,
+  mmdMaterialCastsSelfShadow,
   mmdMaterialSuppressesColorAtAlpha
 } from "./material/material-metadata.js";
+import { createMmdShadowDepthMaterial } from "./material/material-shadow.js";
+import { MMD_SELF_SHADOW_LAYER } from "./shadow.js";
 import type {
   MmdMaterialRenderOrderEntry
 } from "./material/material-metadata.js";
@@ -26,6 +29,8 @@ export interface MmdOutlineModelSource {
 
 export interface MmdMaterialRenderOrderMeshOptions {
   readonly renderOrderBase?: number;
+  readonly shadowOnly?: boolean;
+  readonly selfShadowLayer?: number;
 }
 
 export interface MmdOutlineRenderOrderOptions {
@@ -309,6 +314,7 @@ export function createMmdMaterialRenderOrderMeshes(
   const renderOrder = mmdMaterialRenderOrderEntries(model);
   const groups = model.mesh.geometry.groups;
   const renderOrderBase = options.renderOrderBase ?? model.mesh.renderOrder;
+  const selfShadowLayer = options.selfShadowLayer ?? MMD_SELF_SHADOW_LAYER;
   const meshes: THREE.SkinnedMesh[] = [];
   for (const entry of renderOrder) {
     const group = groups.find((item) => item.materialIndex === entry.materialIndex);
@@ -317,7 +323,10 @@ export function createMmdMaterialRenderOrderMeshes(
       continue;
     }
     const geometry = createMmdMaterialProxyGeometry(model.mesh.geometry, group);
-    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const mesh = new THREE.SkinnedMesh(
+      geometry,
+      options.shadowOnly ? createShadowOnlyMaterial(material) : material
+    );
     mesh.name = `${model.mesh.name || "mmd"} material ${entry.materialIndex}`;
     mesh.bind(model.mesh.skeleton, model.mesh.bindMatrix);
     mesh.morphTargetDictionary = model.mesh.morphTargetDictionary;
@@ -325,12 +334,30 @@ export function createMmdMaterialRenderOrderMeshes(
     mesh.renderOrder = renderOrderBase + entry.renderOrder;
     mesh.frustumCulled = model.mesh.frustumCulled;
     const materialInfo = model.materials[entry.materialIndex];
+    const castsSelfShadow = !!materialInfo && mmdMaterialCastsSelfShadow(materialInfo.flags);
     mesh.castShadow = !!materialInfo && mmdMaterialCastsShadow(materialInfo.flags);
     mesh.receiveShadow = !!materialInfo?.flags.selfShadow;
+    if (castsSelfShadow) {
+      mesh.layers.enable(selfShadowLayer);
+    }
+    if (mesh.castShadow) {
+      mesh.customDepthMaterial = createMmdShadowDepthMaterial(material);
+    }
     mesh.userData.mmdMaterialRenderProxy = { ...entry };
     meshes.push(mesh);
   }
   return meshes;
+}
+
+function createShadowOnlyMaterial(source: THREE.Material): THREE.Material {
+  const material = source.clone();
+  material.colorWrite = false;
+  material.depthWrite = false;
+  material.userData = {
+    ...material.userData,
+    mmdShadowOnlyRenderProxy: true
+  };
+  return material;
 }
 
 function mmdMaterialRenderOrderEntries(

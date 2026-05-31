@@ -203,13 +203,13 @@ function validateManifest(manifest) {
       throw new Error(`Real-model case ${visualCase.name} timeSeconds must be a non-negative number`);
     }
     if (!isValidCamera(visualCase.camera)) {
-      throw new Error(`Real-model case ${visualCase.name} must define camera as "front-fit" or a camera config object`);
+      throw new Error(`Real-model case ${visualCase.name} must define camera as "front-fit", "viewer-fit", or a camera config object`);
     }
   }
 }
 
 function isValidCamera(camera) {
-  if (camera === "front-fit") {
+  if (camera === "front-fit" || camera === "viewer-fit") {
     return true;
   }
   return Boolean(
@@ -356,7 +356,13 @@ function rendererHtml() {
   <body>
     <script type="module">
       import * as THREE from "three";
-      import { ThreeMmdLoader } from "/dist/three/index.js";
+      import {
+        ThreeMmdLoader,
+        applyMmdSelfShadowStateToThreeDirectionalLight,
+        configureMmdSelfShadowDirectionalLight,
+        fitMmdSelfShadowDirectionalLightToBox
+      } from "/dist/three/index.js";
+      import { sampleMmdSelfShadowTrack } from "/dist/runtime/index.js";
 
       globalThis.renderRealModelVisualRegressionCases = async config => {
         const renderer = new THREE.WebGLRenderer({
@@ -370,6 +376,10 @@ function rendererHtml() {
         renderer.setClearColor(config.render.background, 1);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.NoToneMapping;
+        if (config.render.shadow?.enabled === true) {
+          renderer.shadowMap.enabled = true;
+          renderer.shadowMap.type = THREE.PCFShadowMap;
+        }
         document.body.append(renderer.domElement);
 
         const results = [];
@@ -387,15 +397,34 @@ function rendererHtml() {
           }
           scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes);
 
+          let selfShadowState;
           if (visualCase.motionUrl !== undefined) {
             const { animation } = await loader.loadAnimation(await fetchBytes(visualCase.motionUrl));
             model.runtime?.setAnimation(animation, model.mesh);
             model.runtime?.evaluate(visualCase.timeSeconds, { physics: false });
+            if (config.render.shadow?.enabled === true) {
+              selfShadowState = sampleMmdSelfShadowTrack(animation.selfShadowFrames, visualCase.timeSeconds * 30);
+            }
           } else {
             model.runtime?.evaluate(visualCase.timeSeconds, { physics: false });
           }
 
           model.mesh.updateMatrixWorld(true);
+          if (config.render.shadow?.enabled === true) {
+            const shadowBounds = new THREE.Box3().setFromObject(model.mesh);
+            fitMmdSelfShadowDirectionalLightToBox(scene.userData.mmdDirectionalLight, shadowBounds, {
+              marginScale: config.render.shadow.directional?.marginScale ?? 0.06,
+              minNear: config.render.shadow.directional?.minNear ?? 0.02,
+              minFarSpan: config.render.shadow.directional?.minFarSpan ?? 2,
+              maxFar: config.render.shadow.directional?.maxFar ?? 80
+            });
+            applyMmdSelfShadowStateToThreeDirectionalLight(scene.userData.mmdDirectionalLight, selfShadowState, {
+              distanceScale: 100,
+              minFar: 1,
+              maxFar: 20,
+              shadowIntensity: config.render.shadow.directional?.intensity ?? 0.55
+            });
+          }
           const camera = createCamera(visualCase.camera, model.mesh, config.render.resolution);
           renderer.render(scene, camera);
           await new Promise(requestAnimationFrame);
@@ -422,7 +451,26 @@ function rendererHtml() {
         const directional = render.lights.directional;
         const light = new THREE.DirectionalLight(directional.color, directional.intensity);
         light.position.fromArray(directional.position);
+        if (render.shadow?.enabled === true) {
+          light.castShadow = true;
+          const shadow = render.shadow.directional ?? {};
+          configureMmdSelfShadowDirectionalLight(light, {
+            mapSize: shadow.mapSize ?? 1024,
+            bias: shadow.bias ?? -0.0005,
+            normalBias: shadow.normalBias ?? 0.01,
+            shadowIntensity: shadow.intensity ?? 0.55,
+            cameraLeft: shadow.left ?? -2,
+            cameraRight: shadow.right ?? 2,
+            cameraTop: shadow.top ?? 2,
+            cameraBottom: shadow.bottom ?? -2,
+            cameraNear: shadow.near ?? 0.1,
+            cameraFar: shadow.far ?? 10
+          });
+          light.target.position.fromArray(directional.target ?? [0, 0, 0]);
+          scene.add(light.target);
+        }
         scene.add(light);
+        scene.userData.mmdDirectionalLight = light;
 
         return scene;
       }
@@ -458,6 +506,14 @@ function rendererHtml() {
           const halfWidth = halfHeight * aspect;
           const camera = new THREE.OrthographicCamera(-halfWidth, halfWidth, halfHeight, -halfHeight, 0.1, radius * 10 + 100);
           camera.position.set(sphere.center.x, sphere.center.y, sphere.center.z + radius * 3);
+          camera.lookAt(sphere.center);
+          camera.updateProjectionMatrix();
+          return camera;
+        }
+
+        if (cameraConfig === "viewer-fit") {
+          const camera = new THREE.PerspectiveCamera(22, resolution.width / resolution.height, Math.max(radius / 100, 0.01), Math.max(radius * 40, 100));
+          camera.position.copy(sphere.center).add(new THREE.Vector3(0, radius * 0.15, radius * 5.2));
           camera.lookAt(sphere.center);
           camera.updateProjectionMatrix();
           return camera;
