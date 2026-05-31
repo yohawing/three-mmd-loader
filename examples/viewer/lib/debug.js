@@ -21,10 +21,6 @@ export function createViewerDebugApi() {
       }
       return `flatShading=${!!enabled}`;
     },
-    toonOff() {
-      setDebugMaterialMode("toonOff");
-      return "MeshLambertMaterial debug override enabled";
-    },
     outlineOff() {
       setOutlineHidden(true);
       return "outline hidden";
@@ -195,7 +191,10 @@ export function showColliderHelpers() {
   const materialsByGroup = new Map();
   for (const body of rigidBodies) {
     const collisionGroup = rigidBodyCollisionGroup(body);
-    const helper = new THREE.Mesh(createColliderGeometry(body), colliderMaterialForGroup(collisionGroup, materialsByGroup));
+    const helper = new THREE.LineSegments(
+      createColliderLineGeometry(body),
+      colliderMaterialForGroup(collisionGroup, materialsByGroup)
+    );
     helper.name = `collider:${body.name ?? ""}`;
     helper.matrixAutoUpdate = false;
     helper.userData.mmdRigidBodyGroup = collisionGroup;
@@ -240,7 +239,7 @@ export function toggleColliderHelpers() {
 }
 
 export function setDebugMaterialMode(mode) {
-  const nextMode = mode === "normals" || mode === "toonOff" ? mode : "default";
+  const nextMode = mode === "normals" ? mode : "default";
   restoreDebugMaterials();
   state.debugMaterialMode = nextMode;
   if (nextMode === "normals") {
@@ -249,8 +248,6 @@ export function setDebugMaterialMode(mode) {
       rememberDebugMaterial(mesh);
       mesh.material = normalMaterial;
     }
-  } else if (nextMode === "toonOff") {
-    applyToonOffMaterial();
   }
   state.renderer.render(state.scene, state.camera);
   refreshDebugPanelState();
@@ -348,9 +345,6 @@ export function refreshDebugPanelState() {
   if (dom.debugNormalsToggle) {
     dom.debugNormalsToggle.checked = state.debugMaterialMode === "normals";
   }
-  if (dom.debugToonOffToggle) {
-    dom.debugToonOffToggle.checked = state.debugMaterialMode === "toonOff";
-  }
   if (dom.debugOutlineOffToggle) {
     dom.debugOutlineOffToggle.checked = state.debugOutlineHidden;
   }
@@ -360,59 +354,6 @@ export function refreshDebugPanelState() {
       "aria-checked",
       String(state.debugSelfShadowEnabled)
     );
-  }
-  if (dom.debugMaxSubStepsInput) {
-    dom.debugMaxSubStepsInput.value = String(state.physicsTuningOptions.maxSubSteps);
-  }
-  if (dom.debugDynamicWithBoneFeedbackInput) {
-    dom.debugDynamicWithBoneFeedbackInput.value = String(
-      state.physicsTuningOptions.dynamicWithBoneRotationFeedbackScale
-    );
-  }
-  if (dom.debugCollisionMarginInput) {
-    dom.debugCollisionMarginInput.value = String(state.physicsTuningOptions.collisionMargin);
-  }
-  if (dom.debugSolverIterationsInput) {
-    dom.debugSolverIterationsInput.value = String(state.physicsTuningOptions.solverIterations);
-  }
-  if (dom.debugSplitImpulseToggle) {
-    dom.debugSplitImpulseToggle.checked = state.physicsTuningOptions.splitImpulse;
-    dom.debugSplitImpulseToggle.setAttribute(
-      "aria-checked",
-      String(state.physicsTuningOptions.splitImpulse)
-    );
-  }
-  if (dom.debugSplitImpulsePenetrationThresholdInput) {
-    dom.debugSplitImpulsePenetrationThresholdInput.value = String(
-      state.physicsTuningOptions.splitImpulsePenetrationThreshold
-    );
-  }
-  if (dom.debugStateOutput) {
-    dom.debugStateOutput.textContent = JSON.stringify(createSmokeState(), null, 2);
-  }
-}
-
-function applyToonOffMaterial() {
-  for (const mesh of currentDebugMeshes()) {
-    rememberDebugMaterial(mesh);
-    mesh.material = normalizeMaterials(mesh.material).map((material) => {
-      const lambert = new THREE.MeshLambertMaterial({
-        color: material.color instanceof THREE.Color ? material.color : 0xffffff,
-        map: "map" in material ? material.map : null,
-        alphaMap: "alphaMap" in material ? material.alphaMap : null,
-        transparent: material.transparent,
-        opacity: material.opacity,
-        alphaTest: material.alphaTest,
-        side: material.side,
-        depthWrite: material.depthWrite,
-        wireframe: material.wireframe
-      });
-      lambert.name = `${material.name || "material"} debug lambert`;
-      return lambert;
-    });
-    if (!Array.isArray(state.debugMaterialState.get(mesh)?.material) && mesh.material.length === 1) {
-      mesh.material = mesh.material[0];
-    }
   }
 }
 
@@ -437,24 +378,104 @@ export function updateColliderHelpers() {
   }
 }
 
-function createColliderGeometry(body) {
+function createColliderLineGeometry(body) {
   const size = body.size ?? [0.1, 0.1, 0.1];
   if (body.shape === "box") {
-    return new THREE.BoxGeometry(
-      Math.max(size[0] * 2, 0.001),
-      Math.max(size[1] * 2, 0.001),
-      Math.max(size[2] * 2, 0.001)
-    );
+    return createColliderBoxLineGeometry(size);
   }
   if (body.shape === "capsule") {
-    return new THREE.CapsuleGeometry(
+    return createColliderCapsuleLineGeometry(
       Math.max(size[0], 0.001),
-      Math.max(size[1], 0.001),
-      8,
-      12
+      Math.max(size[1], 0.001)
     );
   }
-  return new THREE.SphereGeometry(Math.max(size[0], 0.001), 16, 8);
+  return createColliderSphereLineGeometry(Math.max(size[0], 0.001));
+}
+
+function createColliderBoxLineGeometry(size) {
+  const x = Math.max(size[0] ?? 0.1, 0.001);
+  const y = Math.max(size[1] ?? 0.1, 0.001);
+  const z = Math.max(size[2] ?? 0.1, 0.001);
+  return createLineGeometry([
+    -x, -y, -z, x, -y, -z,
+    x, -y, -z, x, y, -z,
+    x, y, -z, -x, y, -z,
+    -x, y, -z, -x, -y, -z,
+    -x, -y, z, x, -y, z,
+    x, -y, z, x, y, z,
+    x, y, z, -x, y, z,
+    -x, y, z, -x, -y, z,
+    -x, -y, -z, -x, -y, z,
+    x, -y, -z, x, -y, z,
+    x, y, -z, x, y, z,
+    -x, y, -z, -x, y, z
+  ]);
+}
+
+function createColliderSphereLineGeometry(radius) {
+  const positions = [];
+  appendEllipseSegments(positions, "xy", radius, radius);
+  appendEllipseSegments(positions, "xz", radius, radius);
+  appendEllipseSegments(positions, "yz", radius, radius);
+  return createLineGeometry(positions);
+}
+
+function createColliderCapsuleLineGeometry(radius, height) {
+  const positions = [];
+  const halfHeight = height * 0.5;
+  appendEllipseSegments(positions, "xz", radius, radius, 0, halfHeight, 0);
+  appendEllipseSegments(positions, "xz", radius, radius, 0, -halfHeight, 0);
+  appendLineSegment(positions, radius, -halfHeight, 0, radius, halfHeight, 0);
+  appendLineSegment(positions, -radius, -halfHeight, 0, -radius, halfHeight, 0);
+  appendLineSegment(positions, 0, -halfHeight, radius, 0, halfHeight, radius);
+  appendLineSegment(positions, 0, -halfHeight, -radius, 0, halfHeight, -radius);
+  appendEllipseSegments(positions, "xy", radius, radius, 0, halfHeight, 0, 0, Math.PI);
+  appendEllipseSegments(positions, "xy", radius, radius, 0, -halfHeight, 0, Math.PI, Math.PI * 2);
+  appendEllipseSegments(positions, "yz", radius, radius, 0, halfHeight, 0, 0, Math.PI);
+  appendEllipseSegments(positions, "yz", radius, radius, 0, -halfHeight, 0, Math.PI, Math.PI * 2);
+  return createLineGeometry(positions);
+}
+
+function createLineGeometry(positions) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  return geometry;
+}
+
+function appendEllipseSegments(
+  positions,
+  plane,
+  radiusA,
+  radiusB,
+  centerX = 0,
+  centerY = 0,
+  centerZ = 0,
+  startAngle = 0,
+  endAngle = Math.PI * 2,
+  segments = 32
+) {
+  for (let index = 0; index < segments; index += 1) {
+    const angleA = startAngle + ((endAngle - startAngle) * index) / segments;
+    const angleB = startAngle + ((endAngle - startAngle) * (index + 1)) / segments;
+    appendEllipsePoint(positions, plane, radiusA, radiusB, centerX, centerY, centerZ, angleA);
+    appendEllipsePoint(positions, plane, radiusA, radiusB, centerX, centerY, centerZ, angleB);
+  }
+}
+
+function appendEllipsePoint(positions, plane, radiusA, radiusB, centerX, centerY, centerZ, angle) {
+  const a = Math.cos(angle) * radiusA;
+  const b = Math.sin(angle) * radiusB;
+  if (plane === "xy") {
+    positions.push(centerX + a, centerY + b, centerZ);
+  } else if (plane === "xz") {
+    positions.push(centerX + a, centerY, centerZ + b);
+  } else {
+    positions.push(centerX, centerY + b, centerZ + a);
+  }
+}
+
+function appendLineSegment(positions, startX, startY, startZ, endX, endY, endZ) {
+  positions.push(startX, startY, startZ, endX, endY, endZ);
 }
 
 function createRigidBodyRestMatrix(body) {
@@ -520,12 +541,12 @@ function maskHex(mask) {
 function colliderMaterialForGroup(collisionGroup, materialsByGroup) {
   let material = materialsByGroup.get(collisionGroup);
   if (!material) {
-    material = new THREE.MeshBasicMaterial({
+    material = new THREE.LineBasicMaterial({
       color: colliderGroupColors[collisionGroup] ?? colliderGroupColors[0],
       depthTest: false,
+      depthWrite: false,
       opacity: 0.78,
-      transparent: true,
-      wireframe: true
+      transparent: true
     });
     material.name = `mmd collider group ${collisionGroup}`;
     materialsByGroup.set(collisionGroup, material);
@@ -545,7 +566,11 @@ function currentDebugMeshes() {
   if (!state.currentModel) {
     return [];
   }
-  return [state.currentModel.mesh, ...(state.currentModel.outlineMeshes ?? [])];
+  return [
+    state.currentModel.mesh,
+    ...(state.currentModel.renderOrderMeshes ?? []),
+    ...(state.currentModel.outlineMeshes ?? [])
+  ];
 }
 
 function currentDebugMaterials() {
