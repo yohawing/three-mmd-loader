@@ -7,12 +7,6 @@ export {
 } from "./ammoMmdPhysicsBackend.js";
 export { loadAmmoNamespace, type AmmoBrowserLoaderOptions } from "./ammoBrowserLoader.js";
 export {
-  customBulletAmmoScriptPath,
-  loadCustomBulletAmmoNamespace,
-  resolveCustomBulletAmmoScriptUrl,
-  type CustomBulletAmmoLoaderOptions
-} from "./customBulletAmmo.js";
-export {
   createCustomBulletMmdPhysicsBackend,
   customBulletMmdScriptPath,
   loadCustomBulletMmdModule,

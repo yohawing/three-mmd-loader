@@ -20,7 +20,7 @@ const initialSplitImpulsePenetrationThreshold = parseDebugNumber(
 
 export const state = {
   hasLocalFixtures: false,
-  ammoScriptUrl: "/dist/physics/ammo/yw_bullet_ammo.js",
+  ammoScriptUrl: "/node_modules/ammo.js/ammo.js",
   customBulletMmdScriptUrl: "/dist/physics/mmd/yw_mmd_bullet.js",
   physicsBackendKind: query.get("physics") === "custom-bullet-mmd" ? "custom-bullet-mmd" : "ammo",
   physicsTuningOptions: {

@@ -2,7 +2,7 @@ import {
   createAmmoMmdPhysicsBackend,
   createCustomBulletMmdPhysicsBackend,
   createDisabledMmdPhysicsBackend,
-  loadCustomBulletAmmoNamespace,
+  loadAmmoNamespace,
   loadCustomBulletMmdModule
 } from "../../../dist/physics/index.js";
 
@@ -68,7 +68,7 @@ export function disposeActivePhysicsBackend() {
 
 async function initAmmoNamespaceSafely() {
   try {
-    state.ammoScriptLoadPromise ??= loadCustomBulletAmmoNamespace({ scriptUrl: state.ammoScriptUrl });
+    state.ammoScriptLoadPromise ??= loadAmmoNamespace(state.ammoScriptUrl);
     return await state.ammoScriptLoadPromise;
   } catch (error) {
     state.ammoScriptLoadPromise = undefined;

@@ -149,7 +149,6 @@ import {
   createAmmoMmdPhysicsBackend,
   createCustomBulletMmdPhysicsBackend,
   createDisabledMmdPhysicsBackend,
-  loadCustomBulletAmmoNamespace,
   loadCustomBulletMmdModule
 } from "@yohawing/three-mmd-loader/physics";
 
@@ -159,10 +158,6 @@ const disabledPhysicsBackend = createDisabledMmdPhysicsBackend();
 // Ammo.js backend.
 const Ammo = await import("ammo.js").then((m) => m.default ?? m);
 const physicsBackend = createAmmoMmdPhysicsBackend(Ammo);
-
-// Browser helper for the packaged Bullet/Ammo build.
-const packagedAmmo = await loadCustomBulletAmmoNamespace();
-const packagedPhysicsBackend = createAmmoMmdPhysicsBackend(packagedAmmo);
 
 // Experimental MMD-optimized Bullet backend with direct Wasm buffers.
 const mmdBullet = await loadCustomBulletMmdModule();

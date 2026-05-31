@@ -297,9 +297,10 @@ describe("example viewer source", () => {
     const ammoSource = await readFile("examples/viewer/lib/ammo-bootstrap.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
 
-    expect(ammoSource).toContain("loadCustomBulletAmmoNamespace");
-    expect(ammoSource).toContain("state.ammoScriptLoadPromise ??= loadCustomBulletAmmoNamespace({ scriptUrl: state.ammoScriptUrl })");
-    expect(stateSource).toContain('ammoScriptUrl: "/dist/physics/ammo/yw_bullet_ammo.js"');
+    expect(ammoSource).toContain("loadAmmoNamespace");
+    expect(ammoSource).toContain("state.ammoScriptLoadPromise ??= loadAmmoNamespace(state.ammoScriptUrl)");
+    expect(stateSource).toContain('ammoScriptUrl: "/node_modules/ammo.js/ammo.js"');
+    expect(stateSource).toContain('customBulletMmdScriptUrl: "/dist/physics/mmd/yw_mmd_bullet.js"');
     expect(ammoSource).toContain("dom.physicsErrorBanner.textContent = message");
     expect(ammoSource).not.toContain("function loadAmmoScript");
     expect(ammoSource).not.toContain("function getAmmoCandidate");
