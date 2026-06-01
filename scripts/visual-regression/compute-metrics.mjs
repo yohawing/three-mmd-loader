@@ -11,11 +11,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
 const visualRoot = path.join(repoRoot, "test-results", "visual");
 const profiles = {
-  shaderball: {
-    manifestPath: path.join(__dirname, "cases.manifest.json"),
-    root: visualRoot,
-    caseKey: "id"
-  },
   "real-models": {
     manifestPath: path.join(__dirname, "real-models.manifest.json"),
     root: path.join(visualRoot, "real-models"),
@@ -24,6 +19,11 @@ const profiles = {
   "generated-pmx": {
     manifestPath: path.join(__dirname, "generated-pmx.manifest.json"),
     root: path.join(visualRoot, "generated-pmx"),
+    caseKey: "name"
+  },
+  skinning: {
+    manifestPath: path.join(__dirname, "skinning.manifest.json"),
+    root: path.join(visualRoot, "skinning"),
     caseKey: "name"
   }
 };
@@ -35,7 +35,7 @@ async function main() {
   if (profile === undefined) {
     throw new Error(`Unknown visual regression profile: ${options.profile}`);
   }
-  const manifest = await loadManifest(profile.manifestPath);
+  const manifest = await loadManifest(options.manifestPath ?? profile.manifestPath);
   const selectedCases = selectCases(manifest.cases, options.caseId);
   const baselineDir = options.baselineDir ?? path.join(profile.root, "baseline");
   const currentDir = options.currentDir ?? path.join(profile.root, "current");
@@ -295,8 +295,9 @@ function parseArgs(args) {
     currentDir: undefined,
     diffDir: undefined,
     reportPath: undefined,
+    manifestPath: undefined,
     caseId: undefined,
-    profile: "shaderball",
+    profile: "generated-pmx",
     metric: "js",
     flipPath: undefined
   };
@@ -311,6 +312,8 @@ function parseArgs(args) {
       options.diffDir = requireValue(args, (index += 1), arg);
     } else if (arg === "--report") {
       options.reportPath = requireValue(args, (index += 1), arg);
+    } else if (arg === "--manifest") {
+      options.manifestPath = requireValue(args, (index += 1), arg);
     } else if (arg === "--case") {
       options.caseId = requireRawValue(args, (index += 1), arg);
     } else if (arg === "--profile") {

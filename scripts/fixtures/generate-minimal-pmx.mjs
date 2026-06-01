@@ -161,6 +161,218 @@ const SKINNING_CASES = {
 };
 
 const VISUAL_CASES = {
+  "mmd-diffuse-lit-box": {
+    name: "generated visual diffuse lit box",
+    englishName: "GeneratedVisualDiffuseLitBox",
+    comment: "redistribution-safe PMX visual fixture for basic diffuse lighting",
+    englishComment: "A plain lit PMX box catches basic material color and lighting regressions.",
+    geometry: transformGeometry(
+      boxGeometry({
+        min: [-0.46, 0.12, -0.28],
+        max: [0.46, 1.04, 0.28],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      { rotateY: -0.36, rotateX: 0.08, translate: [0.03, 0, 0] }
+    ),
+    materials: [
+      material("mat_diffuse_lit", "DiffuseLit", {
+        diffuse: [0.31, 0.56, 0.85, 1],
+        specular: [0.03, 0.03, 0.04],
+        ambient: [0.1, 0.18, 0.3],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.8,
+        flags: 0x11,
+        faceVertexCount: 36,
+        comment: "basic diffuse lit material"
+      })
+    ]
+  },
+  "mmd-toon-ramp-lit-box": {
+    name: "generated visual toon ramp lit box",
+    englishName: "GeneratedVisualToonRampLitBox",
+    comment: "redistribution-safe PMX visual fixture for custom toon ramp lighting",
+    englishComment: "A PMX box with a custom toon texture catches toon gradient regressions.",
+    geometry: transformGeometry(
+      boxGeometry({
+        min: [-0.46, 0.12, -0.28],
+        max: [0.46, 1.04, 0.28],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      { rotateY: 0.38, rotateX: -0.06, translate: [0.03, 0, 0] }
+    ),
+    textures: ["toon-three-step-warm.png"],
+    assets: [
+      {
+        path: "toon-three-step-warm.png",
+        bytes: () => toonRampPng()
+      }
+    ],
+    materials: [
+      material("mat_toon_ramp", "ToonRamp", {
+        diffuse: [0.94, 0.56, 0.22, 1],
+        specular: [0.04, 0.02, 0.01],
+        ambient: [0.32, 0.16, 0.06],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.8,
+        flags: 0x11,
+        toonTextureIndex: 0,
+        faceVertexCount: 36,
+        comment: "custom toon ramp material"
+      })
+    ]
+  },
+  "mmd-alpha-blend-overlap": {
+    name: "generated visual alpha blend overlap",
+    englishName: "GeneratedVisualAlphaBlendOverlap",
+    comment: "redistribution-safe PMX visual fixture for transparent overlap blending",
+    englishComment: "Two overlapping translucent PMX materials catch alpha blending and material ordering regressions.",
+    geometry: mergeGeometries([
+      transformGeometry(
+        boxGeometry({
+          min: [-0.55, 0.18, -0.18],
+          max: [0.24, 1.0, 0.18],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { rotateY: 0.16, translate: [-0.08, 0, -0.1] }
+      ),
+      transformGeometry(
+        boxGeometry({
+          min: [-0.24, 0.34, -0.16],
+          max: [0.55, 1.16, 0.16],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { rotateY: -0.16, translate: [0.08, 0, -0.28] }
+      )
+    ]),
+    materials: [
+      material("mat_alpha_red", "AlphaRed", {
+        diffuse: [1, 0.1, 0.08, 0.55],
+        specular: [0.03, 0.01, 0.01],
+        ambient: [0.3, 0.04, 0.03],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        flags: 0x01,
+        faceVertexCount: 36,
+        comment: "front translucent red material"
+      }),
+      material("mat_alpha_blue", "AlphaBlue", {
+        diffuse: [0.08, 0.22, 1, 0.58],
+        specular: [0.01, 0.02, 0.04],
+        ambient: [0.03, 0.07, 0.3],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        flags: 0x01,
+        faceVertexCount: 36,
+        comment: "back translucent blue material"
+      })
+    ]
+  },
+  "mmd-texture-uv-orientation-plane": {
+    name: "generated visual texture uv orientation plane",
+    englishName: "GeneratedVisualTextureUvOrientationPlane",
+    comment: "redistribution-safe PMX visual fixture for diffuse texture UV orientation",
+    englishComment: "A textured PMX plane with asymmetric corner colors catches U/V orientation regressions.",
+    geometry: transformGeometry(
+      singleBoneQuadGeometry(0),
+      { translate: [0, 0.08, 0] }
+    ),
+    textures: ["uv-orientation.png"],
+    assets: [
+      {
+        path: "uv-orientation.png",
+        bytes: () => uvOrientationPng()
+      }
+    ],
+    materials: [
+      material("mat_uv_orientation", "UvOrientation", {
+        diffuse: [1, 1, 1, 1],
+        specular: [0.02, 0.02, 0.02],
+        ambient: [0.35, 0.35, 0.35],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.5,
+        flags: 0x11,
+        textureIndex: 0,
+        faceVertexCount: 6,
+        comment: "asymmetric diffuse texture for PMX UV orientation"
+      })
+    ]
+  },
+  "mmd-sphere-texture-multiply": {
+    name: "generated visual sphere texture multiply",
+    englishName: "GeneratedVisualSphereTextureMultiply",
+    comment: "redistribution-safe PMX visual fixture for multiply sphere texture shading",
+    englishComment: "A rounded PMX box with a multiply sphere texture catches sphere-map shader regressions.",
+    geometry: transformGeometry(
+      boxGeometry({
+        min: [-0.46, 0.12, -0.28],
+        max: [0.46, 1.04, 0.28],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      { rotateY: -0.44, rotateX: 0.08, translate: [0.03, 0, 0] }
+    ),
+    textures: ["sphere-radial-multiply.png"],
+    assets: [
+      {
+        path: "sphere-radial-multiply.png",
+        bytes: () => sphereRadialPng([108, 164, 238], [18, 34, 74])
+      }
+    ],
+    materials: [
+      material("mat_sphere_multiply", "SphereMultiply", {
+        diffuse: [0.76, 0.86, 1, 1],
+        specular: [0.03, 0.04, 0.06],
+        ambient: [0.24, 0.29, 0.36],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.8,
+        flags: 0x11,
+        sphereTextureIndex: 0,
+        sphereMode: 1,
+        faceVertexCount: 36,
+        comment: "multiply sphere texture material"
+      })
+    ]
+  },
+  "mmd-sphere-texture-add": {
+    name: "generated visual sphere texture add",
+    englishName: "GeneratedVisualSphereTextureAdd",
+    comment: "redistribution-safe PMX visual fixture for additive sphere texture shading",
+    englishComment: "A rounded PMX box with an additive sphere texture catches sphere-map shader regressions.",
+    geometry: transformGeometry(
+      boxGeometry({
+        min: [-0.46, 0.12, -0.28],
+        max: [0.46, 1.04, 0.28],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      { rotateY: 0.42, rotateX: -0.06, translate: [0.03, 0, 0] }
+    ),
+    textures: ["sphere-radial-add.png"],
+    assets: [
+      {
+        path: "sphere-radial-add.png",
+        bytes: () => sphereRadialPng([255, 190, 76], [18, 12, 6])
+      }
+    ],
+    materials: [
+      material("mat_sphere_add", "SphereAdd", {
+        diffuse: [0.36, 0.62, 0.36, 1],
+        specular: [0.02, 0.04, 0.02],
+        ambient: [0.1, 0.2, 0.1],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.8,
+        flags: 0x11,
+        sphereTextureIndex: 0,
+        sphereMode: 2,
+        faceVertexCount: 36,
+        comment: "additive sphere texture material"
+      })
+    ]
+  },
   "mmd-material-order-body-outline-interleave": {
     name: "generated visual material order body outline interleave",
     englishName: "GeneratedVisualMaterialOrderBodyOutlineInterleave",
@@ -1458,6 +1670,75 @@ function atlasPaddingPng() {
       png.data[index + 1] = usedRegion ? 179 : 84;
       png.data[index + 2] = usedRegion ? 64 : 180;
       png.data[index + 3] = usedRegion ? 255 : 0;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+function uvOrientationPng() {
+  const size = 96;
+  const png = new PNG({ width: size, height: size });
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const index = (y * size + x) * 4;
+      const u = x / (size - 1);
+      const v = y / (size - 1);
+      const left = u < 0.5;
+      const top = v < 0.5;
+      const border = x < 5 || y < 5 || x >= size - 5 || y >= size - 5;
+      const color = border
+        ? [20, 20, 20]
+        : left && top
+        ? [230, 48, 54]
+        : !left && top
+        ? [48, 94, 230]
+        : left
+        ? [42, 178, 84]
+        : [238, 196, 54];
+      png.data[index] = color[0];
+      png.data[index + 1] = color[1];
+      png.data[index + 2] = color[2];
+      png.data[index + 3] = 255;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+function sphereRadialPng(centerColor, edgeColor) {
+  const size = 96;
+  const png = new PNG({ width: size, height: size });
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const index = (y * size + x) * 4;
+      const u = x / (size - 1) - 0.5;
+      const v = y / (size - 1) - 0.5;
+      const t = Math.min(1, Math.hypot(u, v) * 1.75);
+      png.data[index] = Math.round(centerColor[0] * (1 - t) + edgeColor[0] * t);
+      png.data[index + 1] = Math.round(centerColor[1] * (1 - t) + edgeColor[1] * t);
+      png.data[index + 2] = Math.round(centerColor[2] * (1 - t) + edgeColor[2] * t);
+      png.data[index + 3] = 255;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+function toonRampPng() {
+  const width = 16;
+  const height = 16;
+  const png = new PNG({ width, height });
+  for (let y = 0; y < height; y += 1) {
+    const t = y / (height - 1);
+    const color = t < 0.34
+      ? [255, 244, 172]
+      : t < 0.72
+      ? [226, 142, 62]
+      : [112, 58, 38];
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      png.data[index] = color[0];
+      png.data[index + 1] = color[1];
+      png.data[index + 2] = color[2];
+      png.data[index + 3] = 255;
     }
   }
   return PNG.sync.write(png);
