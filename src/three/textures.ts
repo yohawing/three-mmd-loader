@@ -911,6 +911,9 @@ async function loadResolvedTextureUncached(
         request.url,
         (texture) => {
           configureMmdTexture(texture, textureInfo);
+          if (!textureLoader) {
+            texture.userData.mmdTextureOwnership = "loader";
+          }
           if (request.alphaMode) {
             texture.userData.mmdTextureAlphaMode = request.alphaMode;
           }
@@ -946,6 +949,7 @@ async function loadMmdTgaTexture(
     const texture = new THREE.DataTexture(image.data, image.width, image.height, THREE.RGBAFormat);
     texture.type = THREE.UnsignedByteType;
     texture.userData.mmdTextureAlphaSource = "tga";
+    texture.userData.mmdTextureOwnership = "loader";
     texture.userData.mmdTextureAlphaMode = image.hasAlpha
       ? evaluateMmdTextureAlphaRgba(image.data)
       : "opaque";

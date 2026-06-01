@@ -1,10 +1,16 @@
 import * as THREE from "three";
 
-import { FallbackCore, initCoreWithFallback } from "../parser/wasm/index.js";
+import { FallbackCore, initCore } from "../parser/wasm/index.js";
 import { parseVpd } from "../parser/index.js";
 import type { MmdAnimation, MmdCore, MmdPose, VmdBoneTrack } from "../parser/model/modelTypes.js";
 import { DefaultMmdRuntime } from "../runtime/index.js";
-import type { MmdRuntime, DefaultMmdRuntimeOptions } from "../runtime/index.js";
+import type {
+  DefaultMmdRuntimeOptions,
+  MmdFrameState,
+  MmdRuntime,
+  MmdRuntimeEvaluateOptions,
+  MmdRuntimeTickOptions
+} from "../runtime/index.js";
 import { createThreeBufferGeometry } from "./geometry.js";
 import { createLoaderMmdModelDataFromModel } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
@@ -15,21 +21,28 @@ import {
   syncMmdModelShadowFlags
 } from "./material/material-metadata.js";
 import { attachMmdSdefSkinning } from "./material/material-sdef.js";
-import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
+import type {
+  MaterialTransparencyDiagnostic,
+  TextureLoadDiagnostic,
+  ThreeMmdTextureLoader
+} from "./materials.js";
 import { isModelSource } from "./modelSource.js";
-import { readModelSourceBytes } from "./modelSource.js";
+import { readModelSource, readModelSourceBytes } from "./modelSource.js";
 import {
   createMmdMaterialRenderOrderMeshes,
   createMmdOutlineMeshes
 } from "./outline.js";
 import { createLoaderPerformanceProfile } from "./performance.js";
+import type { LoaderPerformanceMeasure, LoaderPerformanceOptions } from "./performance.js";
 import { MMD_SELF_SHADOW_LAYER } from "./shadow.js";
 import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
+import type { ModelSourceDiagnostic, ModelSourceFetch } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry } from "./geometry.js";
 export { applyMmdCameraStateToThreeCamera } from "./camera.js";
 export { disposeMmdModel } from "./dispose.js";
+export type { DisposeMmdModelOptions } from "./dispose.js";
 export {
   createMmdTextureMapFromFiles,
   findMmdModelFiles,
@@ -115,8 +128,22 @@ export type {
   ThreeMmdUvMorphOffset,
   ThreeMmdVertexMorphOffset
 } from "./geometry.js";
-export type { ModelSource } from "./modelSource.js";
-export type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "./materials.js";
+export type {
+  ModelSource,
+  ModelSourceDiagnostic,
+  ModelSourceFetch,
+  ReadModelSourceOptions,
+  ReadModelSourceResult
+} from "./modelSource.js";
+export type {
+  MaterialTransparencyDiagnostic,
+  TextureLoadDiagnostic,
+  ThreeMmdTextureLoader
+} from "./materials.js";
+export type {
+  LoaderPerformanceMeasure,
+  LoaderPerformanceOptions
+} from "./performance.js";
 export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
 export type { MmdSdefNormalSkinningInput, MmdSdefSkinningInput } from "./material/material-sdef.js";
 export type {
@@ -141,25 +168,54 @@ export type {
 } from "./textures.js";
 
 export interface ThreeMmdLoaderOptions {
+  /** Resolves MMD-relative texture paths when loading model materials. */
   readonly textureResolver?: TextureResolver;
+  /** Maps MMD-relative texture paths to browser-loadable texture sources. */
   readonly textureMap?: TextureMap;
+  /** Overrides the default Three.js texture loader for ordinary textures. */
   readonly textureLoader?: ThreeMmdTextureLoader;
+  /** Overrides the texture loader used for DDS textures. */
   readonly ddsLoader?: ThreeMmdTextureLoader;
+  /** Enables geometry-aware texture alpha checks. Defaults to off, except when outlines require it internally. */
   readonly geometryAwareAlpha?: boolean;
+  /** Options forwarded to the per-model DefaultMmdRuntime. */
   readonly runtime?: DefaultMmdRuntimeOptions;
+  /** Parser core override. When omitted, the loader initializes the bundled WASM core with TypeScript fallback. */
   readonly core?: MmdCore | Promise<MmdCore>;
+  /** Overrides fetch for string ModelSource values. */
+  readonly fetch?: ModelSourceFetch;
+  /** Enables load-time performance marks and diagnostics. */
+  readonly performance?: boolean | LoaderPerformanceOptions;
+  /** Receives recoverable WASM parser failures before falling back to the TypeScript parser. */
   readonly onCoreFallback?: (event: ThreeMmdCoreFallbackEvent) => void;
 }
 
 export interface ThreeMmdCoreFallbackEvent {
-  readonly operation: "loadModel" | "loadVmd";
+  readonly operation: "initCore" | "loadModel" | "loadVmd";
   readonly error: unknown;
 }
 
 export interface ThreeMmdLoadModelOptions {
+  /** Creates MMD outline proxy meshes. Defaults to true. */
+  readonly outline?: boolean;
+  /**
+   * @deprecated Use outline instead. This alias will be removed in the next
+   * breaking release.
+   */
   readonly outlines?: boolean;
-  readonly frustumCulled?: boolean;
+  /** Applies MMD-compatible per-material render ordering with proxy meshes. Defaults to true. */
+  readonly materialRenderOrder?: boolean;
+  /**
+   * @deprecated Use materialRenderOrder instead. This alias will be removed in
+   * the next breaking release.
+   */
   readonly renderOrderProxies?: boolean;
+  /** Applies frustum culling to the base mesh and generated proxy meshes. */
+  readonly frustumCulled?: boolean;
+  /** Overrides fetch for this string ModelSource load. */
+  readonly fetch?: ModelSourceFetch;
+  /** Cancels this string ModelSource fetch when supported by the host fetch implementation. */
+  readonly signal?: AbortSignal;
 }
 
 export type ThreeMmdModelSourceDescriptor =
@@ -179,14 +235,53 @@ export type ThreeMmdModelSourceDescriptor =
     };
 
 export interface ThreeMmdModel {
+  /** Scene-ready root. Usually add only this object to the scene. */
+  readonly root: THREE.Group;
+  /**
+   * @deprecated Use root instead. This alias will be removed in the next
+   * breaking release.
+   */
   readonly object: THREE.Group;
+  /** Base MMD SkinnedMesh for advanced access and runtime binding. */
   readonly mesh: THREE.SkinnedMesh;
+  /** Generated outline proxy meshes. Empty when outline is false. */
   readonly outlineMeshes: readonly THREE.SkinnedMesh[];
+  /** Generated render-order proxy meshes. Empty when materialRenderOrder is false. */
   readonly renderOrderMeshes: readonly THREE.SkinnedMesh[];
-  readonly runtime?: MmdRuntime;
+  /** Runtime bound to this model. */
+  readonly runtime: MmdRuntime;
   readonly source: ThreeMmdModelSourceDescriptor;
+  /** Structured diagnostics grouped by subsystem. */
+  readonly diagnostics: {
+    readonly core: ThreeMmdCoreDiagnostic;
+    readonly source: ModelSourceDiagnostic;
+    readonly textures: readonly TextureLoadDiagnostic[];
+    readonly materials: readonly MaterialTransparencyDiagnostic[];
+    readonly performance: readonly LoaderPerformanceMeasure[];
+  };
+  /**
+   * @deprecated Use diagnostics.textures instead. This alias will be removed in
+   * the next breaking release.
+   */
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
+  /** Binds a VMD/VPD animation to this model's mesh. */
+  setAnimation(animation: MmdAnimation | ThreeMmdAnimation): void;
+  /** Evaluates the bound animation and syncs this model's root for rendering. */
+  update(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
 }
+
+export type ThreeMmdCoreDiagnostic =
+  | {
+      readonly kind: "provided";
+    }
+  | {
+      readonly kind: "wasm";
+    }
+  | {
+      readonly kind: "fallback";
+      readonly operation: ThreeMmdCoreFallbackEvent["operation"];
+      readonly reason: string;
+    };
 
 export interface ThreeMmdAnimation {
   readonly source: ModelSource;
@@ -204,10 +299,12 @@ export class ThreeMmdLoader {
   private corePromise: Promise<MmdCore> | undefined;
   private fallbackCore: FallbackCore | undefined;
   private readonly useExplicitCore: boolean;
+  private coreDiagnostic: ThreeMmdCoreDiagnostic;
 
   constructor(readonly options: ThreeMmdLoaderOptions = {}) {
     validateLoaderOptions(options);
     this.useExplicitCore = options.core !== undefined;
+    this.coreDiagnostic = this.useExplicitCore ? { kind: "provided" } : { kind: "wasm" };
     if (options.core) {
       this.corePromise = Promise.resolve(options.core);
     }
@@ -218,13 +315,20 @@ export class ThreeMmdLoader {
     options: ThreeMmdLoadModelOptions = {}
   ): Promise<ThreeMmdModel> {
     validateModelSource(source, "loadModel");
-    const profile = createLoaderPerformanceProfile(describeModelSourceForPerformance(source));
+    validateLoadModelOptions(options);
+    const profile = createLoaderPerformanceProfile(
+      describeModelSourceForPerformance(source),
+      normalizeLoaderPerformanceOptions(this.options.performance)
+    );
     profile?.mark("start");
     try {
-      const bytes = await readModelSourceBytes(source);
+      const { bytes, diagnostic: sourceDiagnostic } = await readModelSource(source, {
+        fetch: options.fetch ?? this.options.fetch,
+        signal: options.signal
+      });
       profile?.mark("bytes");
       const core = await this.getCore();
-      const parsedModel = this.loadCoreModel(core, bytes);
+      const { model: parsedModel, coreDiagnostic } = this.loadCoreModel(core, bytes);
       const modelData = createLoaderMmdModelDataFromModel(parsedModel);
       let parsedModelDisposed = false;
       try {
@@ -234,7 +338,9 @@ export class ThreeMmdLoader {
         parsedModelDisposed = true;
         profile?.mark("mesh");
         const materials = normalizeMeshMaterials(mesh.material);
-        const effectiveOutlines = options.outlines ?? true;
+        warnDeprecatedLoadModelOptions(options);
+        const effectiveOutlines = options.outline ?? options.outlines ?? true;
+        const materialDiagnostics: MaterialTransparencyDiagnostic[] = [];
         const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
           textureResolver: this.options.textureResolver,
           textureMap: this.options.textureMap,
@@ -244,6 +350,7 @@ export class ThreeMmdLoader {
           geometry: mesh.geometry,
           morphs: modelData.morphs,
           geometryAwareAlpha: this.options.geometryAwareAlpha || effectiveOutlines,
+          materialDiagnostics,
           textureCache: this.textureCache
         });
         profile?.mark("textures");
@@ -263,10 +370,14 @@ export class ThreeMmdLoader {
           mesh,
           runtime: new DefaultMmdRuntime(this.options.runtime),
           source: createModelSourceDescriptor(source, bytes.byteLength),
+          sourceDiagnostic,
+          coreDiagnostic,
           textureDiagnostics,
+          materialDiagnostics,
+          performanceDiagnostics: profile?.measures ?? [],
           materials: modelData.materials,
           outlines: effectiveOutlines,
-          renderOrderProxies: options.renderOrderProxies ?? true
+          renderOrderProxies: options.materialRenderOrder ?? options.renderOrderProxies ?? true
         });
         profile?.mark("assembled");
         profile?.measure("read-bytes", "start", "bytes");
@@ -288,39 +399,92 @@ export class ThreeMmdLoader {
   }
 
   private getCore(): Promise<MmdCore> {
-    this.corePromise ??= initCoreWithFallback();
+    this.corePromise ??= this.initCoreWithObservableFallback();
     return this.corePromise;
   }
 
-  private loadCoreModel(core: MmdCore, bytes: Uint8Array) {
+  private async initCoreWithObservableFallback(): Promise<MmdCore> {
     try {
-      return core.loadModel(bytes);
+      const core = await initCore();
+      this.coreDiagnostic = { kind: "wasm" };
+      return core;
+    } catch (error) {
+      this.options.onCoreFallback?.({ operation: "initCore", error });
+      this.coreDiagnostic = {
+        kind: "fallback",
+        operation: "initCore",
+        reason: formatDiagnosticReason(error)
+      };
+      this.fallbackCore ??= new FallbackCore();
+      return this.fallbackCore;
+    }
+  }
+
+  private loadCoreModel(
+    core: MmdCore,
+    bytes: Uint8Array
+  ): { readonly model: ReturnType<MmdCore["loadModel"]>; readonly coreDiagnostic: ThreeMmdCoreDiagnostic } {
+    try {
+      const model = core.loadModel(bytes);
+      return {
+        model,
+        coreDiagnostic: this.createSuccessfulCoreDiagnostic(core)
+      };
     } catch (error) {
       if (this.useExplicitCore) {
         throw error;
       }
       this.options.onCoreFallback?.({ operation: "loadModel", error });
+      const coreDiagnostic: ThreeMmdCoreDiagnostic = {
+        kind: "fallback",
+        operation: "loadModel",
+        reason: formatDiagnosticReason(error)
+      };
       this.fallbackCore ??= new FallbackCore();
-      return this.fallbackCore.loadModel(bytes);
+      return {
+        model: this.fallbackCore.loadModel(bytes),
+        coreDiagnostic
+      };
     }
   }
 
   private loadCoreVmd(core: MmdCore, bytes: Uint8Array): MmdAnimation {
     try {
-      return core.loadVmd(bytes);
+      const animation = core.loadVmd(bytes);
+      this.recordSuccessfulCoreUse(core);
+      return animation;
     } catch (error) {
       if (this.useExplicitCore) {
         throw error;
       }
       this.options.onCoreFallback?.({ operation: "loadVmd", error });
+      this.coreDiagnostic = {
+        kind: "fallback",
+        operation: "loadVmd",
+        reason: formatDiagnosticReason(error)
+      };
       this.fallbackCore ??= new FallbackCore();
       return this.fallbackCore.loadVmd(bytes);
     }
   }
 
+  private recordSuccessfulCoreUse(core: MmdCore): void {
+    this.coreDiagnostic = this.createSuccessfulCoreDiagnostic(core);
+  }
+
+  private createSuccessfulCoreDiagnostic(core: MmdCore): ThreeMmdCoreDiagnostic {
+    if (this.useExplicitCore) {
+      return { kind: "provided" };
+    }
+    if (core !== this.fallbackCore) {
+      return { kind: "wasm" };
+    }
+    return this.coreDiagnostic;
+  }
+
   async loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation> {
     validateModelSource(source, "loadAnimation");
-    const bytes = await readModelSourceBytes(source);
+    const bytes = await readModelSourceBytes(source, { fetch: this.options.fetch });
     if (bytes.byteLength === 0) {
       throw createEmptySourceError("loadAnimation");
     }
@@ -335,7 +499,7 @@ export class ThreeMmdLoader {
 
   async loadPose(source: ModelSource): Promise<ThreeMmdPose> {
     validateModelSource(source, "loadPose");
-    const bytes = await readModelSourceBytes(source);
+    const bytes = await readModelSourceBytes(source, { fetch: this.options.fetch });
     if (bytes.byteLength === 0) {
       throw createEmptySourceError("loadPose");
     }
@@ -350,7 +514,7 @@ export class ThreeMmdLoader {
     name = "pose"
   ): Promise<ThreeMmdAnimation> {
     validateModelSource(source, "loadPoseAnimation");
-    const bytes = await readModelSourceBytes(source);
+    const bytes = await readModelSourceBytes(source, { fetch: this.options.fetch });
     if (bytes.byteLength === 0) {
       throw createEmptySourceError("loadPoseAnimation");
     }
@@ -366,9 +530,13 @@ export class ThreeMmdLoader {
 
 function createThreeMmdModel(options: {
   readonly mesh: THREE.SkinnedMesh;
-  readonly runtime?: MmdRuntime;
+  readonly runtime: MmdRuntime;
   readonly source: ThreeMmdModelSourceDescriptor;
+  readonly sourceDiagnostic: ModelSourceDiagnostic;
+  readonly coreDiagnostic: ThreeMmdCoreDiagnostic;
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
+  readonly materialDiagnostics: readonly MaterialTransparencyDiagnostic[];
+  readonly performanceDiagnostics: readonly LoaderPerformanceMeasure[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
   readonly outlines: boolean;
   readonly renderOrderProxies: boolean;
@@ -405,15 +573,79 @@ function createThreeMmdModel(options: {
   const object = new THREE.Group();
   object.name = options.mesh.name;
   object.add(options.mesh, ...renderOrderMeshes, ...outlineMeshes);
+  const runtimeTickOptions: MutableMmdRuntimeTickOptions = { mesh: object };
   return {
-    object,
+    root: object,
+    get object() {
+      warnDeprecatedApi("ThreeMmdModel.object", "ThreeMmdModel.root");
+      return object;
+    },
     mesh: options.mesh,
     outlineMeshes,
     renderOrderMeshes,
     runtime: options.runtime,
     source: options.source,
-    textureDiagnostics: options.textureDiagnostics
+    diagnostics: {
+      core: options.coreDiagnostic,
+      source: options.sourceDiagnostic,
+      textures: options.textureDiagnostics,
+      materials: options.materialDiagnostics,
+      performance: options.performanceDiagnostics
+    },
+    get textureDiagnostics() {
+      warnDeprecatedApi(
+        "ThreeMmdModel.textureDiagnostics",
+        "ThreeMmdModel.diagnostics.textures"
+      );
+      return options.textureDiagnostics;
+    },
+    setAnimation(animation) {
+      options.runtime.setAnimation(unwrapThreeMmdAnimation(animation), options.mesh);
+    },
+    update(seconds, updateOptions) {
+      runtimeTickOptions.physics = updateOptions?.physics;
+      runtimeTickOptions.ik = updateOptions?.ik;
+      return options.runtime.tick(seconds, runtimeTickOptions);
+    }
   };
+}
+
+type MutableMmdRuntimeTickOptions = {
+  -readonly [K in keyof MmdRuntimeTickOptions]: MmdRuntimeTickOptions[K];
+};
+
+function unwrapThreeMmdAnimation(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimation {
+  return "animation" in animation ? animation.animation : animation;
+}
+
+const deprecatedApiWarnings = new Set<string>();
+
+function warnDeprecatedLoadModelOptions(options: ThreeMmdLoadModelOptions): void {
+  if (options.outlines !== undefined) {
+    warnDeprecatedApi("ThreeMmdLoadModelOptions.outlines", "outline");
+  }
+  if (options.renderOrderProxies !== undefined) {
+    warnDeprecatedApi("ThreeMmdLoadModelOptions.renderOrderProxies", "materialRenderOrder");
+  }
+}
+
+function validateLoadModelOptions(options: ThreeMmdLoadModelOptions): void {
+  if (typeof options !== "object" || options === null || Array.isArray(options)) {
+    throw new TypeError("ThreeMmdLoader.loadModel options must be an object");
+  }
+  if (options.fetch !== undefined && typeof options.fetch !== "function") {
+    throw new TypeError("ThreeMmdLoader.loadModel fetch must be a function");
+  }
+}
+
+function warnDeprecatedApi(name: string, replacement: string): void {
+  if (deprecatedApiWarnings.has(name)) {
+    return;
+  }
+  deprecatedApiWarnings.add(name);
+  globalThis.console?.warn?.(
+    `[three-mmd-loader] ${name} is deprecated and will be removed in the next breaking release. Use ${replacement} instead.`
+  );
 }
 
 function createModelSourceDescriptor(
@@ -458,6 +690,25 @@ function describeModelSourceForPerformance(source: ModelSource): string {
 
 function createEmptySourceError(method: string): Error {
   return new Error(`ThreeMmdLoader.${method} source must not be empty`);
+}
+
+function normalizeLoaderPerformanceOptions(
+  performanceOptions: ThreeMmdLoaderOptions["performance"]
+): LoaderPerformanceOptions {
+  if (performanceOptions === true) {
+    return { enabled: true };
+  }
+  if (performanceOptions && typeof performanceOptions === "object") {
+    return performanceOptions;
+  }
+  return {};
+}
+
+function formatDiagnosticReason(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
@@ -742,6 +993,29 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
 
   if (options.onCoreFallback !== undefined && typeof options.onCoreFallback !== "function") {
     throw new TypeError("ThreeMmdLoader onCoreFallback must be a function");
+  }
+
+  if (options.fetch !== undefined && typeof options.fetch !== "function") {
+    throw new TypeError("ThreeMmdLoader fetch must be a function");
+  }
+
+  if (
+    options.performance !== undefined &&
+    typeof options.performance !== "boolean" &&
+    (typeof options.performance !== "object" ||
+      options.performance === null ||
+      Array.isArray(options.performance))
+  ) {
+    throw new TypeError("ThreeMmdLoader performance must be a boolean or options object");
+  }
+
+  if (
+    typeof options.performance === "object" &&
+    options.performance !== null &&
+    options.performance.onMeasure !== undefined &&
+    typeof options.performance.onMeasure !== "function"
+  ) {
+    throw new TypeError("ThreeMmdLoader performance.onMeasure must be a function");
   }
 }
 

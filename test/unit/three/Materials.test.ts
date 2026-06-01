@@ -152,6 +152,21 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.envMap).toBeUndefined();
   });
 
+  it("marks internally loaded textures as loader-owned for owned disposal", async () => {
+    const tgaBytes = new Uint8Array([
+      0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0x20,
+      255, 255, 255, 255
+    ]);
+    const mmdMaterials = [createMaterialInfo({ texturePath: "textures/body.tga" })];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/body.tga": new Blob([tgaBytes]) }
+    });
+
+    expect(materials[0]?.map?.userData.mmdTextureOwnership).toBe("loader");
+  });
+
   it("shares material textures with the same resolved path within a loader cache", async () => {
     const mmdMaterials = [
       createMaterialInfo({ texturePath: "textures/body.png" }),
