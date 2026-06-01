@@ -11,7 +11,7 @@ export function render() {
   state.frameTimer.update();
   const delta = state.frameTimer.getDelta();
   if (state.isPlaying && !state.isSeeking && hasActiveAudioSource()) {
-    syncMotionToAudioTime({ evaluate: false });
+    syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
   } else if (state.isPlaying && !state.isSeeking) {
     state.elapsedSeconds += delta;
   }
@@ -30,18 +30,17 @@ export function renderStillFrame() {
   state.renderer.render(state.scene, state.camera);
 }
 
-export function evaluateRuntime(options = {}) {
+export function evaluateRuntime(options) {
   const maxTime = Number(dom.timeline?.max ?? 10);
   if (state.elapsedSeconds > maxTime && maxTime > 0) {
     state.elapsedSeconds %= maxTime;
     syncAudioToMotionTime();
   }
   if (state.currentModel?.runtime) {
-    state.currentModel.runtime.tick(currentMmdSeconds(), {
-      mesh: state.currentModel.mesh,
-      ik: options.ik ?? hasCurrentMotion(),
-      physics: options.physics ?? (!state.isSeeking && state.elapsedSeconds > 0)
-    });
+    const updateOptions = state.runtimeUpdateOptionsScratch;
+    updateOptions.ik = options?.ik ?? hasCurrentMotion();
+    updateOptions.physics = options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0);
+    state.currentModel.update(currentMmdSeconds(), updateOptions);
   }
   if (state.currentModel?.mesh) {
     fitShadowCameraToObject(state.currentModel.mesh);
@@ -73,12 +72,11 @@ function applySelfShadowMotion() {
     state.selfShadowStateScratch,
     state.selfShadowFrameHint
   );
-  applyMmdSelfShadowStateToThreeDirectionalLight(state.keyLight, selfShadowState, {
-    distanceScale: 100,
-    minFar: 1,
-    maxFar: 100,
-    shadowIntensity: 1.0
-  });
+  applyMmdSelfShadowStateToThreeDirectionalLight(
+    state.keyLight,
+    selfShadowState,
+    state.selfShadowLightOptionsScratch
+  );
 }
 
 export async function setPlaybackPlaying(playing) {
@@ -89,10 +87,10 @@ export async function setPlaybackPlaying(playing) {
   state.isSyncingAudioState = true;
   try {
     if (playing) {
-      syncAudioToMotionTime({ onlyIfDrifted: true });
+      syncAudioToMotionTime(state.audioDriftSyncOptionsScratch);
       await dom.bgmAudio.play();
     } else {
-      syncMotionToAudioTime({ evaluate: false });
+      syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
       dom.bgmAudio.pause();
     }
   } catch (error) {
@@ -115,10 +113,10 @@ export function syncPlaybackToCurrentAudioState() {
     return;
   }
   setPlaybackState(true);
-  syncMotionToAudioTime({ evaluate: false });
+  syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
 }
 
-export function syncMotionToAudioTime(options = {}) {
+export function syncMotionToAudioTime(options) {
   if (!isAudioElement(dom.bgmAudio) || !hasTimelineSource()) {
     return;
   }
@@ -127,8 +125,10 @@ export function syncMotionToAudioTime(options = {}) {
   }
   const audioTime = Number.isFinite(dom.bgmAudio.currentTime) ? dom.bgmAudio.currentTime : 0;
   state.elapsedSeconds = audioTime;
-  if (options.evaluate !== false) {
-    evaluateRuntime({ physics: options.physics ?? false });
+  if (options?.evaluate !== false) {
+    const evaluateOptions = state.runtimePhysicsDisabledOptionsScratch;
+    evaluateOptions.physics = options?.physics ?? false;
+    evaluateRuntime(evaluateOptions);
   }
 }
 
@@ -136,14 +136,14 @@ function hasTimelineSource() {
   return hasCurrentMotion() || state.currentCameraMotion !== undefined;
 }
 
-export function syncAudioToMotionTime(options = {}) {
+export function syncAudioToMotionTime(options) {
   const active = hasActiveAudioSource();
   if (!isAudioElement(dom.bgmAudio) || !active) {
     return;
   }
   const duration = Number.isFinite(dom.bgmAudio.duration) ? dom.bgmAudio.duration : undefined;
   const targetTime = duration ? Math.min(state.elapsedSeconds, Math.max(duration - 0.001, 0)) : state.elapsedSeconds;
-  if (options.onlyIfDrifted && Math.abs(dom.bgmAudio.currentTime - targetTime) < 0.05) {
+  if (options?.onlyIfDrifted && Math.abs(dom.bgmAudio.currentTime - targetTime) < 0.05) {
     return;
   }
   try {

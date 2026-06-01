@@ -90,6 +90,25 @@ export const state = {
     distance: 0.4
   },
   selfShadowFrameHint: { index: 0 },
+  runtimeUpdateOptionsScratch: {
+    ik: true,
+    physics: true
+  },
+  runtimePhysicsDisabledOptionsScratch: {
+    physics: false
+  },
+  audioNoEvaluateOptionsScratch: {
+    evaluate: false
+  },
+  audioDriftSyncOptionsScratch: {
+    onlyIfDrifted: true
+  },
+  selfShadowLightOptionsScratch: {
+    distanceScale: 100,
+    minFar: 1,
+    maxFar: 100,
+    shadowIntensity: 1.0
+  },
   cameraStateScratch: {
     distance: 0,
     position: [0, 0, 0],

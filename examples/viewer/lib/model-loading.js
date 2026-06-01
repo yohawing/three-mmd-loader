@@ -86,13 +86,13 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
-      state.currentModel.runtime?.setAnimation(state.currentMotion.animation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
       updateTransportState();
       syncPlaybackToCurrentAudioState();
     } else {
-      state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.restPoseAnimation);
     }
     loadProfile?.mark("animation-ready");
     setStatus("", "ready");
@@ -163,13 +163,13 @@ export async function loadModelFolder(files) {
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
-      state.currentModel.runtime?.setAnimation(state.currentMotion.animation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
       updateTransportState();
       syncPlaybackToCurrentAudioState();
     } else {
-      state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.restPoseAnimation);
     }
     profile?.mark("animation-ready");
     setStatus("", "ready");
@@ -224,13 +224,13 @@ export async function switchFolderModel(modelFile) {
     updatePlaybackDisplay();
     fitCameraToObject(state.currentModel.mesh);
     if (hasCurrentMotion()) {
-      state.currentModel.runtime?.setAnimation(state.currentMotion.animation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
       updateTransportState();
       syncPlaybackToCurrentAudioState();
     } else {
-      state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.restPoseAnimation);
     }
     profile?.mark("animation-ready");
     setStatus("", "ready");
@@ -258,7 +258,7 @@ export function clearModel(options = {}) {
   hideColliderHelpers();
   restoreDebugMaterials();
   if (state.currentModel) {
-    state.scene.remove(state.currentModel.mesh);
+    state.scene.remove(state.currentModel.root);
     disposeModelResources(state.currentModel);
   }
   state.currentModel = undefined;
@@ -283,11 +283,7 @@ export function clearModel(options = {}) {
 }
 
 function addModelToScene(model) {
-  state.scene.add(
-    model.mesh,
-    ...(model.outlineMeshes ?? []),
-    ...(model.renderOrderMeshes ?? [])
-  );
+  state.scene.add(model.root);
 }
 
 export function bindDropTarget() {

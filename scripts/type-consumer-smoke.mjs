@@ -58,7 +58,7 @@ try {
   );
   await writeFile(
     join(workDir, "consumer.ts"),
-    `import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
+    `import { ThreeMmdLoader, type ThreeMmdAnimation, type ThreeMmdModel } from "@yohawing/three-mmd-loader";
 import { parsePmxMetadata } from "@yohawing/three-mmd-loader/parser";
 import { DefaultMmdRuntime } from "@yohawing/three-mmd-loader/runtime";
 import { createThreeSkeleton } from "@yohawing/three-mmd-loader/three";
@@ -67,6 +67,12 @@ import { createDisabledMmdPhysicsBackend } from "@yohawing/three-mmd-loader/phys
 const loader: ThreeMmdLoader = new ThreeMmdLoader();
 const runtime: DefaultMmdRuntime = new DefaultMmdRuntime();
 const physics = createDisabledMmdPhysicsBackend();
+declare const model: ThreeMmdModel;
+declare const animation: ThreeMmdAnimation;
+model.root.add(model.mesh);
+model.setAnimation(animation);
+model.update(0);
+model.diagnostics.textures.forEach((diagnostic) => void diagnostic.code);
 
 void loader;
 void runtime;

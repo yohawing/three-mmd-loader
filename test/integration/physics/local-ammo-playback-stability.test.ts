@@ -81,8 +81,8 @@ async function collectPlaybackMetrics(
   });
   try {
     const model = await loader.loadModel(await readFile(playbackCase.modelPath), {
-      outlines: false,
-      renderOrderProxies: false
+      outline: false,
+      materialRenderOrder: false
     });
     const motion = await loader.loadAnimation(await readFile(playbackCase.motionPath));
     const runtime = model.runtime;

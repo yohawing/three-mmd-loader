@@ -137,7 +137,8 @@ function bindControls() {
   dom.timeline?.addEventListener("sl-input", () => {
     state.isSeeking = true;
     state.elapsedSeconds = Number(dom.timeline.value);
-    evaluateRuntime({ physics: false });
+    state.runtimePhysicsDisabledOptionsScratch.physics = false;
+    evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
     syncAudioToMotionTime();
     scheduleSeekEnd();
   });
@@ -176,7 +177,7 @@ function bindControls() {
     });
     dom.bgmAudio.addEventListener("timeupdate", () => {
       if (!state.isPlaying || state.isSeeking || !hasTimelineSource()) return;
-      syncMotionToAudioTime({ evaluate: false });
+      syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
     });
     dom.bgmAudio.addEventListener("ended", () => {
       if (!dom.bgmAudio.loop) setPlaybackState(false);

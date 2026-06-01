@@ -274,7 +274,8 @@ export function setSelfShadowEnabled(enabled) {
     state.keyLight.castShadow = state.debugSelfShadowEnabled;
   }
   if (state.debugSelfShadowEnabled) {
-    evaluateRuntime({ physics: false });
+    state.runtimePhysicsDisabledOptionsScratch.physics = false;
+    evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
   }
   state.renderer?.render(state.scene, state.camera);
   refreshDebugPanelState();

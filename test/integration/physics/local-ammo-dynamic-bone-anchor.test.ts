@@ -251,8 +251,8 @@ async function collectAnchorMetrics(
   });
   try {
     const model = await loader.loadModel(await readFile(playbackCase.modelPath), {
-      outlines: false,
-      renderOrderProxies: false
+      outline: false,
+      materialRenderOrder: false
     });
     const motion = playbackCase.motionPath
       ? await loader.loadAnimation(await readFile(playbackCase.motionPath))

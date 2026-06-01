@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
@@ -36,6 +37,22 @@ describe("DefaultMmdRuntime", () => {
       frame: 75,
       frameRate: 60
     });
+  });
+
+  it("keeps tick render sync on the hot path allocation-free", async () => {
+    const source = await readFile("src/runtime/core.ts", "utf8");
+
+    expect(source).not.toContain("function normalizeTickOptions");
+    expect(source).not.toContain("const { mesh, evaluateOptions } =");
+    expect(source).not.toContain("evaluate(seconds: number, options: MmdRuntimeEvaluateOptions = {})");
+    expect(source).not.toContain("this.state = createFrameState(seconds, this.frameRate);");
+    expect(source).not.toContain(".traverse((");
+    expect(source).toContain("let mesh: THREE.Object3D | null | undefined;");
+    expect(source).toContain("let evaluateOptions: MmdRuntimeEvaluateOptions | undefined;");
+    expect(source).toContain("evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions)");
+    expect(source).toContain("writeFrameState(this.state, seconds, this.frameRate);");
+    expect(source).toContain("return copyFrameStateInto(this.evaluateReturnState, this.state);");
+    expect(source).toContain("function updateSkinnedMeshSkeletons(");
   });
 
   it("ticks evaluation and syncs renderer-facing skeleton matrices", () => {
@@ -209,6 +226,18 @@ describe("DefaultMmdRuntime", () => {
       frame: 0,
       frameRate: 30
     });
+  });
+
+  it("documents volatile evaluate returns while keeping frameState snapshots stable", async () => {
+    const runtime = new DefaultMmdRuntime();
+    const evaluated = runtime.evaluate(0);
+
+    runtime.evaluate(1);
+
+    expect(evaluated.seconds).toBe(1);
+    const types = await readFile("src/runtime/types.ts", "utf8");
+    expect(types).toContain("The returned state is volatile");
+    expect(types).toContain("frameState() when you need to retain a stable snapshot");
   });
 
   it("expands group morph weights from model morph metadata", () => {

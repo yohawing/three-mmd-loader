@@ -390,23 +390,23 @@ function rendererHtml() {
             runtime: { physics: "none" }
           });
           const model = await loader.loadModel(await fetchBytes(visualCase.modelUrl));
-          if (model.textureDiagnostics.length > 0) {
-            for (const diagnostic of model.textureDiagnostics) {
+          if (model.diagnostics.textures.length > 0) {
+            for (const diagnostic of model.diagnostics.textures) {
               console.warn("Real-model texture diagnostic " + visualCase.name + ": " + diagnostic.code + " " + diagnostic.path);
             }
           }
-          scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes);
+          scene.add(model.root);
 
           let selfShadowState;
           if (visualCase.motionUrl !== undefined) {
             const { animation } = await loader.loadAnimation(await fetchBytes(visualCase.motionUrl));
-            model.runtime?.setAnimation(animation, model.mesh);
-            model.runtime?.evaluate(visualCase.timeSeconds, { physics: false });
+            model.setAnimation(animation);
+            model.update(visualCase.timeSeconds, { physics: false });
             if (config.render.shadow?.enabled === true) {
               selfShadowState = sampleMmdSelfShadowTrack(animation.selfShadowFrames, visualCase.timeSeconds * 30);
             }
           } else {
-            model.runtime?.evaluate(visualCase.timeSeconds, { physics: false });
+            model.update(visualCase.timeSeconds, { physics: false });
           }
 
           model.mesh.updateMatrixWorld(true);

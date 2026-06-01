@@ -784,7 +784,7 @@ function summarizeThreeModel(model) {
     morphs: Object.keys(model.mesh.morphTargetDictionary ?? {}).length,
     outlineMeshes: model.outlineMeshes.length,
     renderOrderMeshes: model.renderOrderMeshes.length,
-    textureDiagnostics: model.textureDiagnostics.length
+    textureDiagnostics: model.diagnostics.textures.length
   };
 }
 

@@ -63,25 +63,26 @@ import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
 
 const loader = new ThreeMmdLoader();
 const model = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path は fetch で解決)
-scene.add(model.object);
+scene.add(model.root);
 
 const remoteModel = await loader.loadModel("/models/example.pmx");
-scene.add(remoteModel.object);
+scene.add(remoteModel.root);
 ```
 
-`model.object` は scene にそのまま追加できる root で、base mesh と生成された
+`model.root` は scene にそのまま追加できる root で、base mesh と生成された
 outline / render-order proxy mesh を含みます。proxy を生成しない場合は
-`{ outlines: false }` を渡します。
+`{ outline: false }` または `{ materialRenderOrder: false }` を渡します。
+テクスチャ解決の警告は `model.diagnostics.textures` で確認できます。
 
 ## 使い方 - アニメーション
 
 ```ts
 const model = await loader.loadModel(modelSource);
 const { animation } = await loader.loadAnimation(vmdSource);
-model.runtime?.setAnimation(animation, model.mesh);
+model.setAnimation(animation);
 
 // 毎フレーム。
-model.runtime?.tick(currentSeconds, model.mesh);
+model.update(currentSeconds);
 ```
 
 ## 使い方 - カメラモーション
@@ -129,7 +130,7 @@ URL query で切り替えられます。
 ```ts
 const { pose } = await loader.loadPose(vpdSource);
 const { animation } = await loader.loadPoseAnimation(vpdSource, "myPose");
-model.runtime?.setAnimation(animation, model.mesh);
+model.setAnimation(animation);
 ```
 
 ## 使い方 - 物理

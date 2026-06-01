@@ -266,7 +266,13 @@ export interface ThreeMmdModel {
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   /** Binds a VMD/VPD animation to this model's mesh. */
   setAnimation(animation: MmdAnimation | ThreeMmdAnimation): void;
-  /** Evaluates the bound animation and syncs this model's root for rendering. */
+  /**
+   * Evaluates the bound animation and syncs this model's root for rendering.
+   *
+   * The returned state is volatile and may be reused by later updates to keep
+   * per-frame evaluation allocation-free. Use runtime.frameState() when you
+   * need to retain a stable snapshot.
+   */
   update(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
 }
 

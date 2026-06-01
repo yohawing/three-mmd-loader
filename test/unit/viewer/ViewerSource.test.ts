@@ -20,7 +20,7 @@ describe("example viewer source", () => {
     const styles = await readFile("examples/viewer/styles.css", "utf8");
 
     expect(modelSource).toContain("reportTextureDiagnostics(state.currentModel)");
-    expect(diagnosticsSource).toContain("model.textureDiagnostics ?? []");
+    expect(diagnosticsSource).toContain("model.diagnostics?.textures ?? model.textureDiagnostics ?? []");
     expect(diagnosticsSource).toContain('globalThis.console.warn("[mmd-viewer] texture diagnostics:"');
     expect(diagnosticsSource).toContain('setStatus(');
     expect(diagnosticsSource).toContain('"warning"');
@@ -232,6 +232,8 @@ describe("example viewer source", () => {
     expect(urlLabelSource).toContain("decodeURIComponent(label)");
     expect(modelSource).toContain("await loadModel(bytes, label, () => createUrlTextureLoader(url), profile");
     expect(motionSource).toContain("await loadMotion(url, labelFromUrl(url))");
+    expect(backgroundSource).toContain("state.scene.add(background.root)");
+    expect(backgroundSource).toContain("state.scene.remove(state.currentBackground.root)");
     expect(html).toContain('id="choose-background"');
     expect(html).toContain('id="choose-camera"');
     expect(html).toContain('id="background-switcher"');
@@ -309,7 +311,8 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("fitShadowCameraToObject(state.currentModel.mesh)");
     expect(playbackSource).toContain("state.keyLight.castShadow = true");
     expect(playbackSource).toContain("!state.debugSelfShadowEnabled");
-    expect(playbackSource).toContain("shadowIntensity: 1.0");
+    expect(playbackSource).toContain("state.selfShadowLightOptionsScratch");
+    expect(stateSource).toContain("shadowIntensity: 1.0");
     expect(htmlSource).toContain('id="debug-self-shadow-toggle"');
     expect(domSource).toContain('debugSelfShadowToggle: document.querySelector("#debug-self-shadow-toggle")');
     expect(mainSource).toContain("setSelfShadowEnabled(dom.debugSelfShadowToggle.checked)");
@@ -322,8 +325,8 @@ describe("example viewer source", () => {
     const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
 
-    expect(playbackSource).toContain("syncMotionToAudioTime({ evaluate: false });");
-    expect(playbackSource).toContain("syncAudioToMotionTime({ onlyIfDrifted: true })");
+    expect(playbackSource).toContain("syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);");
+    expect(playbackSource).toContain("syncAudioToMotionTime(state.audioDriftSyncOptionsScratch)");
     expect(playbackSource).toContain("Math.abs(dom.bgmAudio.currentTime - targetTime) < 0.05");
     expect(playbackSource).toContain("state.isSyncingAudioTime = true;");
     expect(playbackSource).toContain("export function finishAudioTimeSync()");
@@ -331,6 +334,23 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("function hasTimelineSource()");
     expect(mainSource).toContain("function hasTimelineSource()");
     expect(mainSource).not.toContain("!state.isPlaying || !hasCurrentMotion()");
+  });
+
+  it("keeps viewer runtime updates allocation-light on the render path", async () => {
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+
+    expect(playbackSource).toContain("export function evaluateRuntime(options)");
+    expect(playbackSource).not.toContain("export function evaluateRuntime(options = {})");
+    expect(playbackSource).not.toContain("state.currentModel.update(currentMmdSeconds(), {");
+    expect(playbackSource).not.toContain("applyMmdSelfShadowStateToThreeDirectionalLight(state.keyLight, selfShadowState, {");
+    expect(playbackSource).toContain("const updateOptions = state.runtimeUpdateOptionsScratch");
+    expect(playbackSource).toContain("state.currentModel.update(currentMmdSeconds(), updateOptions)");
+    expect(playbackSource).toContain("state.selfShadowLightOptionsScratch");
+    expect(stateSource).toContain("runtimeUpdateOptionsScratch");
+    expect(stateSource).toContain("runtimePhysicsDisabledOptionsScratch");
+    expect(stateSource).toContain("audioNoEvaluateOptionsScratch");
+    expect(stateSource).toContain("selfShadowLightOptionsScratch");
   });
 
   it("delegates Ammo script loading to the public physics browser loader", async () => {

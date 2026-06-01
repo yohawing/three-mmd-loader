@@ -16,6 +16,9 @@ import { readMmdBoneUserData } from "./userData.js";
 type MutableDebugStages = {
   -readonly [K in keyof MmdRuntimeDebugState["stages"]]: MmdRuntimeDebugState["stages"][K];
 };
+type MutableFrameState = {
+  -readonly [K in keyof MmdFrameState]: MmdFrameState[K];
+};
 
 const mmdMatrixAxisSigns = [1, 1, -1, 1] as const;
 
@@ -30,7 +33,12 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private externalPhysicsData: RuntimeExternalPhysicsData | undefined;
   private bonePhysicsToggles: Record<string, number> = {};
   private debugStages: MutableDebugStages = createEmptyDebugStages();
-  private state: MmdFrameState;
+  private readonly state: MutableFrameState;
+  private readonly evaluateReturnState: MutableFrameState = {
+    seconds: 0,
+    frame: 0,
+    frameRate: 30
+  };
   private readonly physicsMode: "none" | "stateful-spring" | "external";
   private readonly physicsBackend: MmdPhysicsBackend | undefined;
   private previousEvaluateSeconds: number | undefined;
@@ -92,9 +100,9 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.state = createFrameState(options.initialSeconds ?? 0, this.frameRate);
   }
 
-  evaluate(seconds: number, options: MmdRuntimeEvaluateOptions = {}): MmdFrameState {
+  evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState {
     const previousSeconds = this.state.seconds;
-    this.state = createFrameState(seconds, this.frameRate);
+    writeFrameState(this.state, seconds, this.frameRate);
     if (this.mmdAnimation && this.mesh) {
       this.applyCurrentMmdAnimation(this.state.frame);
       this.updateCurrentIkStates(this.state.frame);
@@ -102,11 +110,11 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
     this.applyCurrentAppendTransforms();
     this.captureDebugStage("appendTransform");
-    if (options.ik !== false) {
+    if (options?.ik !== false) {
       this.solveIk();
     }
     this.captureDebugStage("ik");
-    if (options.physics === false) {
+    if (options?.physics === false) {
       if (!this.physicsDisabled) {
         this.resetPhysicsState();
       }
@@ -118,8 +126,8 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
     this.mesh?.skeleton.update();
     this.captureDebugStage("physics");
-    this.previousEvaluateSeconds = options.physics === false ? undefined : seconds;
-    return this.frameState();
+    this.previousEvaluateSeconds = options?.physics === false ? undefined : seconds;
+    return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
 
   tick(seconds: number, options?: MmdRuntimeTickOptions): MmdFrameState;
@@ -136,16 +144,26 @@ export class DefaultMmdRuntime implements MmdRuntime {
     meshOrOptions?: THREE.Object3D | MmdRuntimeTickOptions | null,
     options?: MmdRuntimeEvaluateOptions
   ): MmdFrameState {
-    const tickOptions = normalizeTickOptions(meshOrOptions, options);
-    const { mesh, ...evaluateOptions } = tickOptions;
+    let mesh: THREE.Object3D | null | undefined;
+    let evaluateOptions: MmdRuntimeEvaluateOptions | undefined;
+    if (isObject3D(meshOrOptions)) {
+      mesh = meshOrOptions;
+      evaluateOptions = options;
+    } else if (meshOrOptions == null) {
+      mesh = undefined;
+      evaluateOptions = options;
+    } else {
+      mesh = meshOrOptions.mesh;
+      evaluateOptions = meshOrOptions;
+    }
     const state = this.evaluate(seconds, evaluateOptions);
     syncRuntimeMeshForRender(mesh ?? undefined);
     return state;
   }
 
   seek(seconds: number): MmdFrameState {
-    this.state = createFrameState(seconds, this.frameRate);
-    return this.frameState();
+    writeFrameState(this.state, seconds, this.frameRate);
+    return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
 
   resetPose(): void {
@@ -185,7 +203,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.debugStages = createEmptyDebugStages();
     this.previousEvaluateSeconds = undefined;
     this.physicsDisabled = false;
-    return this.frameState();
+    return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
 
   setAnimation(animation: MmdAnimation, mesh: THREE.SkinnedMesh): void {
@@ -646,24 +664,20 @@ function syncRuntimeMeshForRender(mesh: THREE.Object3D | undefined): void {
   }
   // Keep renderer-facing world and bone matrices in sync after runtime evaluation.
   mesh.updateMatrixWorld(true);
-  mesh.traverse((object) => {
-    if (isSkinnedMesh(object)) {
-      object.skeleton.update();
-    }
-  });
+  updateSkinnedMeshSkeletons(mesh);
 }
 
-function normalizeTickOptions(
-  meshOrOptions: THREE.Object3D | MmdRuntimeTickOptions | null | undefined,
-  options: MmdRuntimeEvaluateOptions | undefined
-): MmdRuntimeTickOptions {
-  if (isObject3D(meshOrOptions)) {
-    return { ...(options ?? {}), mesh: meshOrOptions };
+function updateSkinnedMeshSkeletons(object: THREE.Object3D): void {
+  if (isSkinnedMesh(object)) {
+    object.skeleton.update();
   }
-  if (meshOrOptions == null) {
-    return options ?? {};
+  const children = object.children;
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index];
+    if (child) {
+      updateSkinnedMeshSkeletons(child);
+    }
   }
-  return meshOrOptions;
 }
 
 function isObject3D(value: unknown): value is THREE.Object3D {
@@ -780,12 +794,37 @@ function extractMmdWorldMatricesIntoFloat32(
 }
 
 function createFrameState(seconds: number, frameRate: number): MmdFrameState {
+  return writeFrameState(
+    {
+      seconds: 0,
+      frame: 0,
+      frameRate: 30
+    },
+    seconds,
+    frameRate
+  );
+}
+
+function writeFrameState(
+  target: MutableFrameState,
+  seconds: number,
+  frameRate: number
+): MutableFrameState {
   if (!Number.isFinite(seconds)) {
     throw new RangeError("MMD runtime seconds must be finite");
   }
-  return {
-    seconds,
-    frame: seconds * frameRate,
-    frameRate
-  };
+  target.seconds = seconds;
+  target.frame = seconds * frameRate;
+  target.frameRate = frameRate;
+  return target;
+}
+
+function copyFrameStateInto(
+  target: MutableFrameState,
+  source: MmdFrameState
+): MmdFrameState {
+  target.seconds = source.seconds;
+  target.frame = source.frame;
+  target.frameRate = source.frameRate;
+  return target;
 }

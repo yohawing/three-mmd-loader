@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Add the preferred `ThreeMmdModel.root`, `ThreeMmdModel.setAnimation(...)`,
+  `ThreeMmdModel.update(...)`, `ThreeMmdModel.diagnostics.textures`,
+  `ThreeMmdLoadModelOptions.outline`, and
+  `ThreeMmdLoadModelOptions.materialRenderOrder` API surface.
+
+### Deprecated
+
+- Deprecate `ThreeMmdModel.object`, `ThreeMmdModel.textureDiagnostics`,
+  `ThreeMmdLoadModelOptions.outlines`, and
+  `ThreeMmdLoadModelOptions.renderOrderProxies`. These aliases now emit a
+  one-time runtime warning when used and are planned for removal in the next
+  breaking release. Root exports remain supported.
+
 ## [0.2.2] - 2026-05-28
 
 ### Added

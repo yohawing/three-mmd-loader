@@ -29,7 +29,7 @@ describe("skinning fixture loader smoke", () => {
       expect(model.mesh.isSkinnedMesh).toBe(true);
       expect(model.mesh.geometry.getAttribute("position").count).toBeGreaterThan(0);
       expect(model.mesh.skeleton.bones.length).toBeGreaterThanOrEqual(1);
-      expect(model.textureDiagnostics).toEqual([]);
+      expect(model.diagnostics.textures).toEqual([]);
     });
   }
 

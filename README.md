@@ -65,29 +65,29 @@ import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
 
 const loader = new ThreeMmdLoader();
 const model = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path resolved via fetch)
-scene.add(model.object);
+scene.add(model.root);
 
 const remoteModel = await loader.loadModel("/models/example.pmx");
-scene.add(remoteModel.object);
+scene.add(remoteModel.root);
 ```
 
-`loadModel(...)` also returns `textureDiagnostics: TextureLoadDiagnostic[]`.
+`loadModel(...)` also returns `diagnostics.textures: TextureLoadDiagnostic[]`.
 Texture folder resolution failures and related recoverable texture issues are
 reported there with `level: "warning"`.
 
-`model.object` is the scene-ready root that contains the base mesh plus any
-generated outline and render-order proxy meshes. Pass `{ outlines: false }` to
-skip those proxies.
+`model.root` is the scene-ready root that contains the base mesh plus any
+generated outline and render-order proxy meshes. Pass `{ outline: false }` or
+`{ materialRenderOrder: false }` to skip those proxy families.
 
 ## Usage - Animation
 
 ```ts
 const model = await loader.loadModel(modelSource);
 const { animation } = await loader.loadAnimation(vmdSource);
-model.runtime?.setAnimation(animation, model.mesh);
+model.setAnimation(animation);
 
 // Per frame.
-model.runtime?.tick(currentSeconds, model.mesh);
+model.update(currentSeconds);
 ```
 
 ## Usage - Camera Motion
@@ -136,7 +136,7 @@ playback controls through URL query parameters:
 ```ts
 const { pose } = await loader.loadPose(vpdSource);
 const { animation } = await loader.loadPoseAnimation(vpdSource, "myPose");
-model.runtime?.setAnimation(animation, model.mesh);
+model.setAnimation(animation);
 ```
 
 ## Usage - Physics

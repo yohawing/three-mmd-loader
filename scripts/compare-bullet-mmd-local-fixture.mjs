@@ -121,8 +121,8 @@ async function loadRuntimeCase(label, physicsBackend) {
     }
   });
   const model = await loader.loadModel(await readFile(modelPath), {
-    outlines: false,
-    renderOrderProxies: false
+    outline: false,
+    materialRenderOrder: false
   });
   const runtime = model.runtime;
   if (!runtime) {
