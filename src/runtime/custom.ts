@@ -50,6 +50,10 @@ export interface CustomRuntimeWasmRuntimeInstance {
 }
 
 export interface CustomRuntimeWasmModule {
+  parseMmdFormatJson?(data: Uint8Array, fileName?: string | null): string;
+  exportMmdFormatBytes?(data: Uint8Array, fileName?: string | null): Uint8Array;
+  exportVmdAnimationJsonBytes?(json: string): Uint8Array;
+  exportVpdPoseJsonBytes?(json: string): Uint8Array;
   readonly WasmMmdModel?: {
     fromPmxBytes?(bytes: Uint8Array): CustomRuntimeWasmModel;
   };
@@ -81,6 +85,52 @@ export interface CustomRuntimeOptions {
   readonly physicsBackend?: MmdPhysicsBackend;
   /** Own and free the wasm model/runtime/created clips on dispose. Defaults to true. */
   readonly ownsWasmResources?: boolean;
+}
+
+export function parseMmdRuntimeWasmFormatJson(
+  wasm: Pick<CustomRuntimeWasmModule, "parseMmdFormatJson">,
+  data: Uint8Array,
+  fileName?: string | null
+): unknown {
+  const parser = wasm.parseMmdFormatJson;
+  if (!parser) {
+    throw new TypeError("mmd-runtime wasm module does not expose parseMmdFormatJson");
+  }
+  return JSON.parse(parser(data, fileName ?? null)) as unknown;
+}
+
+export function exportMmdRuntimeWasmFormatBytes(
+  wasm: Pick<CustomRuntimeWasmModule, "exportMmdFormatBytes">,
+  data: Uint8Array,
+  fileName?: string | null
+): Uint8Array {
+  const exporter = wasm.exportMmdFormatBytes;
+  if (!exporter) {
+    throw new TypeError("mmd-runtime wasm module does not expose exportMmdFormatBytes");
+  }
+  return exporter(data, fileName ?? null);
+}
+
+export function exportMmdRuntimeWasmVmdAnimationJsonBytes(
+  wasm: Pick<CustomRuntimeWasmModule, "exportVmdAnimationJsonBytes">,
+  json: string
+): Uint8Array {
+  const exporter = wasm.exportVmdAnimationJsonBytes;
+  if (!exporter) {
+    throw new TypeError("mmd-runtime wasm module does not expose exportVmdAnimationJsonBytes");
+  }
+  return exporter(json);
+}
+
+export function exportMmdRuntimeWasmVpdPoseJsonBytes(
+  wasm: Pick<CustomRuntimeWasmModule, "exportVpdPoseJsonBytes">,
+  json: string
+): Uint8Array {
+  const exporter = wasm.exportVpdPoseJsonBytes;
+  if (!exporter) {
+    throw new TypeError("mmd-runtime wasm module does not expose exportVpdPoseJsonBytes");
+  }
+  return exporter(json);
 }
 
 /**

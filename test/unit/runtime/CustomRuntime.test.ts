@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
-import { CustomRuntime } from "../../../src/index.js";
+import {
+  CustomRuntime,
+  exportMmdRuntimeWasmFormatBytes,
+  exportMmdRuntimeWasmVmdAnimationJsonBytes,
+  exportMmdRuntimeWasmVpdPoseJsonBytes,
+  parseMmdRuntimeWasmFormatJson
+} from "../../../src/index.js";
 import type { CustomRuntimeWasmModule, MmdAnimation, MmdPhysicsBackend, MmdPhysicsStepContext, MmdPhysicsStepResult } from "../../../src/index.js";
 
 describe("CustomRuntime", () => {
@@ -80,6 +86,41 @@ describe("CustomRuntime", () => {
     expect(mesh.skeleton.bones[0]?.position.toArray()).toEqual([4, 5, -6]);
     expect(runtime.debugRigidBodyWorldTransformsColumnMajor()).toEqual([backend.debugMatrix]);
   });
+
+  it("calls mmd-runtime wasm parser and exporter helpers without package coupling", () => {
+    const wasm = createFakeWasmModule();
+    const bytes = new Uint8Array([1, 2, 3]);
+
+    expect(parseMmdRuntimeWasmFormatJson(wasm, bytes, "motion.vmd")).toEqual({
+      kind: "vmd",
+      fileName: "motion.vmd",
+      byteLength: 3
+    });
+    expect(Array.from(exportMmdRuntimeWasmFormatBytes(wasm, bytes, "motion.vmd"))).toEqual([
+      3, 2, 1
+    ]);
+    expect(Array.from(exportMmdRuntimeWasmVmdAnimationJsonBytes(wasm, "{\"kind\":\"vmd\"}"))).toEqual([
+      0x56, 0x4d, 0x44
+    ]);
+    expect(Array.from(exportMmdRuntimeWasmVpdPoseJsonBytes(wasm, "{\"kind\":\"vpd\"}"))).toEqual([
+      0x56, 0x50, 0x44
+    ]);
+  });
+
+  it("throws clear errors when parser/exporter helpers are missing", () => {
+    expect(() => parseMmdRuntimeWasmFormatJson({}, new Uint8Array())).toThrow(
+      /parseMmdFormatJson/
+    );
+    expect(() => exportMmdRuntimeWasmFormatBytes({}, new Uint8Array())).toThrow(
+      /exportMmdFormatBytes/
+    );
+    expect(() => exportMmdRuntimeWasmVmdAnimationJsonBytes({}, "{}")).toThrow(
+      /exportVmdAnimationJsonBytes/
+    );
+    expect(() => exportMmdRuntimeWasmVpdPoseJsonBytes({}, "{}")).toThrow(
+      /exportVpdPoseJsonBytes/
+    );
+  });
 });
 
 interface FakeWasmModule extends CustomRuntimeWasmModule {
@@ -156,6 +197,22 @@ function createFakeWasmModule(): FakeWasmModule {
     createdModels,
     createdClips,
     createdRuntimes,
+    parseMmdFormatJson(data, fileName) {
+      return JSON.stringify({
+        kind: "vmd",
+        fileName,
+        byteLength: data.byteLength
+      });
+    },
+    exportMmdFormatBytes(data) {
+      return data.slice().reverse();
+    },
+    exportVmdAnimationJsonBytes(_json) {
+      return new Uint8Array([0x56, 0x4d, 0x44]);
+    },
+    exportVpdPoseJsonBytes(_json) {
+      return new Uint8Array([0x56, 0x50, 0x44]);
+    },
     WasmMmdModel: {
       fromPmxBytes(bytes) {
         const model = new FakeWasmModel(bytes);
