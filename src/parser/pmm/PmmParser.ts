@@ -50,6 +50,7 @@ export interface PmmStaticPreviewPlan {
 const asciiDecoder = new TextDecoder("ascii");
 const shiftJisDecoder = new TextDecoder("shift-jis");
 const pmmHeaderPrefix = "Polygon Movie maker ";
+const defaultUserFileRoot = "UserFile";
 const assetPathPattern =
   /([A-Za-z]:[\\/][^\0\r\n]*?\.(?:pmd|pmx|vmd|vac|x|wav|bmp|tga)|(?:UserFile|Model|Accessory|Motion|Wave|BackGround)[\\/][^\0\r\n]*?\.(?:pmd|pmx|vmd|vac|x|wav|bmp|tga))/gi;
 
@@ -117,7 +118,7 @@ export function resolvePmmAssetReference(
   reference: PmmAssetReference,
   options: PmmAssetResolutionOptions = {}
 ): PmmAssetResolution {
-  const userFileRoot = normalizeResolutionPath(options.userFileRoot ?? "data/BuildinUserFile");
+  const userFileRoot = normalizeResolutionPath(options.userFileRoot ?? defaultUserFileRoot);
   const existingPaths = options.existingPaths
     ? new Set([...options.existingPaths].map((path) => normalizeResolutionPath(path).toLowerCase()))
     : undefined;
@@ -129,7 +130,7 @@ export function resolvePmmAssetReference(
   };
 }
 
-export function resolvePmmAssetPath(path: string, userFileRoot = "data/BuildinUserFile"): string {
+export function resolvePmmAssetPath(path: string, userFileRoot = defaultUserFileRoot): string {
   const normalizedPath = normalizeResolutionPath(path);
   const normalizedRoot = normalizeResolutionPath(userFileRoot).replace(/\/$/, "");
   const userFilePrefix = "userfile/";

@@ -972,7 +972,7 @@ function generatePmx({
   writeMaterials(writer, materials, indexSizes);
   writeBones(writer, bones, indexSizes);
   writeMorphs(writer, morphs, indexSizes);
-  writeDisplayFrames(writer, bones, indexSizes);
+  writeDisplayFrames(writer, bones, morphs, indexSizes);
   writer.i32(0);
   writer.i32(0);
 
@@ -1989,6 +1989,13 @@ function writeMorphs(writer, enabled, indexSizes) {
   writer.vec3([0, 0.05, 0]);
 }
 
+function countMorphs(enabled) {
+  if (Array.isArray(enabled)) {
+    return enabled.length;
+  }
+  return enabled ? 1 : 0;
+}
+
 function writeCustomMorph(writer, morph, indexSizes) {
   writer.text(morph.name);
   writer.text(morph.englishName);
@@ -2016,8 +2023,8 @@ function writeCustomMorph(writer, morph, indexSizes) {
   }
 }
 
-function writeDisplayFrames(writer, bones, indexSizes) {
-  writer.i32(1);
+function writeDisplayFrames(writer, bones, morphs, indexSizes) {
+  writer.i32(2);
   writer.text("Root");
   writer.text("Root");
   writer.u8(1);
@@ -2025,6 +2032,16 @@ function writeDisplayFrames(writer, bones, indexSizes) {
   for (let boneIndex = 0; boneIndex < bones.length; boneIndex += 1) {
     writer.u8(0);
     writer.index(boneIndex, indexSizes.bone);
+  }
+
+  writer.text("表情");
+  writer.text("Exp");
+  writer.u8(1);
+  const morphCount = countMorphs(morphs);
+  writer.i32(morphCount);
+  for (let morphIndex = 0; morphIndex < morphCount; morphIndex += 1) {
+    writer.u8(1);
+    writer.index(morphIndex, indexSizes.morph);
   }
 }
 

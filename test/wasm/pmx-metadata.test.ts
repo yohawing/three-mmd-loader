@@ -8,18 +8,25 @@ import { initCore } from "../../src/parser/wasm/index.js";
 import { createThreeBufferGeometry } from "../../src/three/index.js";
 import { parsePmd } from "../../src/parser/model/PmdModelParser.js";
 import { parsePmx } from "../../src/parser/model/PmxModelParser.js";
+import { existingOptionalPath, optionalLocalFixture } from "./localFixtureInventory.js";
 
 const execFileAsync = promisify(execFile);
 const generatedFixturePath = resolve("test/fixtures/generated/minimal-loader-smoke.pmx");
 const generatorPath = resolve("scripts/fixtures/generate-minimal-pmx.mjs");
 
-const parkingLotPmxIt = existsSync(resolve("data/pmx/background_pmx_Parking_Lot/Parking_Lot.pmx"))
-  ? it
-  : it.skip;
-const localMikuPmdIt = existsSync(resolve("data/pmd/miku_v2.pmd")) ? it : it.skip;
-const bundledPmdMatrixIt = existsSync(resolve("data/BuildinUserFile/Model/初音ミク.pmd"))
-  ? it
-  : it.skip;
+const parkingLotPmxPath = existingOptionalPath(
+  optionalLocalFixture("backgroundPmx", "backgroundPmx001") ??
+    process.env.THREE_MMD_WASM_PARKING_LOT_PMX
+);
+const localMikuPmdPath = existingOptionalPath(process.env.THREE_MMD_WASM_MIKU_PMD);
+const bundledPmdMatrixRoot = existingOptionalPath(process.env.THREE_MMD_WASM_PMD_MATRIX_ROOT);
+
+const parkingLotPmxIt = parkingLotPmxPath ? it : it.skip;
+const localMikuPmdIt = localMikuPmdPath ? it : it.skip;
+const bundledPmdMatrixIt =
+  bundledPmdMatrixRoot && existsSync(resolve(bundledPmdMatrixRoot, "初音ミク.pmd"))
+    ? it
+    : it.skip;
 
 describe("@yw-mmd/core-wasm PMX metadata", () => {
   it("parses the 1-bone cube fixture metadata", async () => {
@@ -80,7 +87,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
   });
 
   parkingLotPmxIt("loads a large local background PMX without fixed-memory OOM", async () => {
-    const path = resolve("data/pmx/background_pmx_Parking_Lot/Parking_Lot.pmx");
+    const path = parkingLotPmxPath!;
     expect(existsSync(path)).toBe(true);
     const core = await initCore();
     const model = core.loadModel(await readFile(path), { format: "pmx" });
@@ -232,6 +239,25 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     const model = core.loadModel(bytes, { format: "pmx" });
     const wasmMorphs = model.morphs();
 
+    expect(parsed.metadata.counts.displayFrames).toBe(2);
+    expect(parsed.displayFrames).toEqual([
+      {
+        name: "Root",
+        englishName: "Root",
+        special: true,
+        frames: [
+          { type: "bone", index: 0 },
+          { type: "bone", index: 1 },
+          { type: "bone", index: 2 }
+        ]
+      },
+      {
+        name: "表情",
+        englishName: "Exp",
+        special: true,
+        frames: [{ type: "morph", index: 0 }]
+      }
+    ]);
     expect(wasmMorphs[0]).toMatchObject({ name: "tiny_raise", type: "vertex" });
     expect(wasmMorphs[0]?.densePositionOffsets).toBeUndefined();
     expect(wasmMorphs[0]?.vertexOffsets).toHaveLength(1);
@@ -782,7 +808,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
 
   localMikuPmdIt("parses PMD metadata and geometry for the local miku fixture", async () => {
     const core = await initCore();
-    const bytes = await readFile(resolve("data/pmd/miku_v2.pmd"));
+    const bytes = await readFile(localMikuPmdPath!);
     const model = core.loadModel(bytes, { format: "pmd" });
     const metadata = model.metadata();
 
@@ -873,7 +899,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
   bundledPmdMatrixIt("loads MMD bundled PMD model metadata as a fixture matrix", async () => {
     const expectations = [
       {
-        path: "data/BuildinUserFile/Model/MEIKO.pmd",
+        fileName: "MEIKO.pmd",
         vertices: 6908,
         faces: 12899,
         materials: 17,
@@ -883,7 +909,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 8
       },
       {
-        path: "data/BuildinUserFile/Model/カイト.pmd",
+        fileName: "カイト.pmd",
         vertices: 7133,
         faces: 13144,
         materials: 15,
@@ -893,7 +919,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 0
       },
       {
-        path: "data/BuildinUserFile/Model/ダミーボーン.pmd",
+        fileName: "ダミーボーン.pmd",
         vertices: 0,
         faces: 0,
         materials: 0,
@@ -903,7 +929,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 0
       },
       {
-        path: "data/BuildinUserFile/Model/亞北ネル.pmd",
+        fileName: "亞北ネル.pmd",
         vertices: 9258,
         faces: 16902,
         materials: 13,
@@ -913,7 +939,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 20
       },
       {
-        path: "data/BuildinUserFile/Model/初音ミク.pmd",
+        fileName: "初音ミク.pmd",
         vertices: 9036,
         faces: 14997,
         materials: 17,
@@ -923,7 +949,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 27
       },
       {
-        path: "data/BuildinUserFile/Model/初音ミクVer2.pmd",
+        fileName: "初音ミクVer2.pmd",
         vertices: 12354,
         faces: 22961,
         materials: 17,
@@ -933,7 +959,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 27
       },
       {
-        path: "data/BuildinUserFile/Model/初音ミクmetal.pmd",
+        fileName: "初音ミクmetal.pmd",
         vertices: 12354,
         faces: 22961,
         materials: 17,
@@ -943,7 +969,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 27
       },
       {
-        path: "data/BuildinUserFile/Model/咲音メイコ.pmd",
+        fileName: "咲音メイコ.pmd",
         vertices: 14284,
         faces: 26392,
         materials: 15,
@@ -953,7 +979,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 14
       },
       {
-        path: "data/BuildinUserFile/Model/巡音ルカ.pmd",
+        fileName: "巡音ルカ.pmd",
         vertices: 20402,
         faces: 24815,
         materials: 31,
@@ -963,7 +989,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 57
       },
       {
-        path: "data/BuildinUserFile/Model/弱音ハク.pmd",
+        fileName: "弱音ハク.pmd",
         vertices: 8085,
         faces: 14701,
         materials: 13,
@@ -973,7 +999,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 14
       },
       {
-        path: "data/BuildinUserFile/Model/鏡音リン.pmd",
+        fileName: "鏡音リン.pmd",
         vertices: 8786,
         faces: 15561,
         materials: 13,
@@ -983,7 +1009,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 10
       },
       {
-        path: "data/BuildinUserFile/Model/鏡音リン_act2.pmd",
+        fileName: "鏡音リン_act2.pmd",
         vertices: 10148,
         faces: 18122,
         materials: 27,
@@ -993,7 +1019,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
         joints: 10
       },
       {
-        path: "data/BuildinUserFile/Model/鏡音レン.pmd",
+        fileName: "鏡音レン.pmd",
         vertices: 7161,
         faces: 13074,
         materials: 15,
@@ -1006,8 +1032,9 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     const core = await initCore();
 
     for (const expectation of expectations) {
-      expect(existsSync(resolve(expectation.path))).toBe(true);
-      const model = core.loadModel(await readFile(resolve(expectation.path)), { format: "pmd" });
+      const path = resolve(bundledPmdMatrixRoot!, expectation.fileName);
+      expect(existsSync(path)).toBe(true);
+      const model = core.loadModel(await readFile(path), { format: "pmd" });
       const metadata = model.metadata();
       const expectedCounts = {
         vertices: expectation.vertices,

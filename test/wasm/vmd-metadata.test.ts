@@ -1,14 +1,15 @@
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { initCore } from "../../src/parser/wasm/index.js";
+import { existingOptionalPath, optionalLocalFixture } from "./localFixtureInventory.js";
 
-const wavefileCameraIt = existsSync(resolve("data/vmd/wavefile_camera.vmd")) ? it : it.skip;
+const wavefileCameraPath = existingOptionalPath(process.env.THREE_MMD_WASM_CAMERA_VMD);
+const wavefileCameraIt = wavefileCameraPath ? it : it.skip;
 
 const localRealWorldVmdFixtures = [
   {
-    path: "data/vmd/V_MMD-Motion_HimeTanaka.vmd",
+    path: existingOptionalPath(process.env.THREE_MMD_WASM_HIME_TANAKA_VMD),
     modelName: "田中ヒメ ver1.30",
     maxFrame: 6180,
     counts: {
@@ -23,7 +24,9 @@ const localRealWorldVmdFixtures = [
     uniqueMorphTracks: 16
   },
   {
-    path: "data/vmd/ラビットホール.vmd",
+    path: existingOptionalPath(
+      optionalLocalFixture("vmd", "vmd109") ?? process.env.THREE_MMD_WASM_RABBIT_HOLE_VMD
+    ),
     modelName: "Sour_Miku_White",
     maxFrame: 4837,
     counts: {
@@ -41,9 +44,7 @@ const localRealWorldVmdFixtures = [
 
 describe("@yw-mmd/core-wasm VMD metadata", () => {
   it("inventories optional local real-world VMD motion fixtures", async () => {
-    const missing = localRealWorldVmdFixtures.filter(
-      (fixture) => !existsSync(resolve(fixture.path))
-    );
+    const missing = localRealWorldVmdFixtures.filter((fixture) => !fixture.path);
     if (missing.length > 0) {
       console.warn(
         `Skipping optional local VMD fixture inventory; missing ${missing.length} fixture(s).`
@@ -53,7 +54,7 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
 
     const core = await initCore();
     for (const fixture of localRealWorldVmdFixtures) {
-      const animation = core.loadVmd(await readFile(resolve(fixture.path)));
+      const animation = core.loadVmd(await readFile(fixture.path!));
 
       expect(animation.metadata.modelName).toBe(fixture.modelName);
       expect(animation.metadata.maxFrame).toBe(fixture.maxFrame);
@@ -100,7 +101,7 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
 
   wavefileCameraIt("parses camera and light frame arrays", async () => {
     const core = await initCore();
-    const cameraMotion = core.loadVmd(await readFile(resolve("data/vmd/wavefile_camera.vmd")));
+    const cameraMotion = core.loadVmd(await readFile(wavefileCameraPath!));
     const lightMotion = core.loadVmd(createLightOnlyVmd());
 
     expect(cameraMotion.cameraFrames).toHaveLength(cameraMotion.metadata.counts.cameras);

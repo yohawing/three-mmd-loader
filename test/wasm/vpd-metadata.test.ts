@@ -1,10 +1,12 @@
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { initCore } from "../../src/parser/wasm/index.js";
+import { existingOptionalPath, optionalLocalFixture } from "./localFixtureInventory.js";
 
-const luminePmxIt = existsSync(resolve("data/pmx/【女主角_荧】_by_原神/Lumine.pmx")) ? it : it.skip;
+const luminePmxPath = existingOptionalPath(
+  optionalLocalFixture("pmx", "pmx002") ?? process.env.THREE_MMD_WASM_LUMINE_PMX
+);
+const luminePmxIt = luminePmxPath ? it : it.skip;
 
 describe("@yw-mmd/core-wasm VPD metadata", () => {
   it("parses VPD bone pose blocks", async () => {
@@ -36,7 +38,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
       )
     );
     const model = core.loadModel(
-      await readFile(resolve("data/pmx/【女主角_荧】_by_原神/Lumine.pmx")),
+      await readFile(luminePmxPath!),
       {
         format: "pmx"
       }
