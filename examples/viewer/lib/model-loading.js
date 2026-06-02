@@ -5,6 +5,7 @@ import {
   normalizeMmdRelativePath,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
+import { CustomRuntime } from "../../../dist/runtime/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
 import { createPhysicsBackend, disposeActivePhysicsBackend } from "./ammo-bootstrap.js";
@@ -21,6 +22,7 @@ import { createViewerLoadProfile, describeViewerSource } from "./performance.js"
 import { currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
 import { fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
+import { viewerConfig } from "./viewer-config.js";
 
 export async function loadModelFromUrl(url) {
   const profile = createViewerLoadProfile(`url:${url}`);
@@ -495,15 +497,30 @@ export async function createUrlTextureLoader(modelUrl) {
 export async function createModelLoader(extraOptions = {}) {
   const runtimeOptions = extraOptions.runtime ?? {};
   const physicsBackend = await createPhysicsBackend();
+  const runtimeFactory = extraOptions.runtimeFactory ?? await createRuntimeFactory(physicsBackend);
   return new ThreeMmdLoader({
     ...extraOptions,
     ddsLoader: extraOptions.ddsLoader ?? new DDSLoader(),
     geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
+    runtimeFactory,
     runtime: {
       ...runtimeOptions,
       frameRate: state.mmdFrameRate,
       physics: "external",
       physicsBackend
     }
+  });
+}
+
+async function createRuntimeFactory(physicsBackend) {
+  if (viewerConfig.runtime !== "custom") {
+    return undefined;
+  }
+  const wasm = await import("/__mmd_runtime_wasm/mmd_runtime_wasm.js");
+  await wasm.default();
+  return ({ modelBytes }) => CustomRuntime.fromPmxBytes(wasm, modelBytes, {
+    frameRate: state.mmdFrameRate,
+    physics: "external",
+    physicsBackend
   });
 }

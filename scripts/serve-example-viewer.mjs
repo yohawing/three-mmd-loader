@@ -10,6 +10,8 @@ const localFixturesPath = resolve(root, "test", "fixtures", "fixtures.local.json
 const localFixtureInventory = loadLocalFixtureInventory();
 const dataRoot = resolveDataRoot();
 const dataRoute = "/__mmd_data/";
+const mmdRuntimeWasmRoot = resolveMmdRuntimeWasmRoot();
+const mmdRuntimeWasmRoute = "/__mmd_runtime_wasm/";
 const localAssetsRoute = "/__mmd_assets__/fixtures-local.json";
 const port = Number.parseInt(process.env.PORT ?? "3939", 10);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -62,6 +64,14 @@ const server = createServer(async (request, response) => {
       response.end(`${JSON.stringify(manifest, null, 2)}\n`);
       return;
     }
+    if (pathname === mmdRuntimeWasmRoute || pathname === `${mmdRuntimeWasmRoute}package.json`) {
+      response.writeHead(404, {
+        "Cache-Control": "no-store",
+        "Content-Type": "text/plain; charset=utf-8"
+      });
+      response.end("Not found");
+      return;
+    }
 
     const filePath = resolveRequestPath(pathname);
 
@@ -112,6 +122,11 @@ server.listen(port, host, () => {
     if (localFixtureInventory !== undefined) {
       console.log(`MMD local assets: ${localAssetsRoute} from ${localFixturesPath}`);
     }
+  }
+  if (mmdRuntimeWasmRoot === undefined) {
+    console.log(`mmd-runtime WASM route disabled. Set MMD_RUNTIME_WASM_ROOT to serve CustomRuntime.`);
+  } else {
+    console.log(`mmd-runtime WASM route: ${mmdRuntimeWasmRoute} -> ${mmdRuntimeWasmRoot}`);
   }
 });
 
@@ -172,6 +187,14 @@ function resolveDataRoot() {
     return resolve(dirname(localFixturesPath), localFixtureInventory.basePath);
   }
   return undefined;
+}
+
+function resolveMmdRuntimeWasmRoot() {
+  if (process.env.MMD_RUNTIME_WASM_ROOT !== undefined) {
+    return resolve(process.env.MMD_RUNTIME_WASM_ROOT);
+  }
+  const defaultRoot = resolve(root, "..", "mmd-runtime", "crates", "mmd-runtime-wasm", "harness", "pkg-web");
+  return existsSync(join(defaultRoot, "mmd_runtime_wasm.js")) ? defaultRoot : undefined;
 }
 
 function createLocalAssetManifest() {
@@ -332,6 +355,16 @@ function resolveRequestPath(pathname) {
     );
     return resolve(dataRoot, relativePath);
   }
+  if (pathname.startsWith(mmdRuntimeWasmRoute)) {
+    if (mmdRuntimeWasmRoot === undefined) {
+      return resolve(root, "__mmd_runtime_wasm_not_configured__");
+    }
+    const relativePath = normalize(decodeURIComponent(pathname.slice(mmdRuntimeWasmRoute.length))).replace(
+      /^[/\\]+/,
+      ""
+    );
+    return resolve(mmdRuntimeWasmRoot, relativePath);
+  }
   if (pathname === "/") {
     return resolve(viewerRoot, "index.html");
   }
@@ -352,7 +385,8 @@ function isAllowedPath(filePath) {
   return (
     isPathInside(filePath, root) ||
     isPathInside(filePath, viewerRoot) ||
-    (dataRoot !== undefined && isPathInside(filePath, dataRoot))
+    (dataRoot !== undefined && isPathInside(filePath, dataRoot)) ||
+    (mmdRuntimeWasmRoot !== undefined && isPathInside(filePath, mmdRuntimeWasmRoot))
   );
 }
 

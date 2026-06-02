@@ -180,6 +180,8 @@ export interface ThreeMmdLoaderOptions {
   readonly geometryAwareAlpha?: boolean;
   /** Options forwarded to the per-model DefaultMmdRuntime. */
   readonly runtime?: DefaultMmdRuntimeOptions;
+  /** Creates a per-model runtime. When omitted, DefaultMmdRuntime is used. */
+  readonly runtimeFactory?: (context: ThreeMmdRuntimeFactoryContext) => MmdRuntime;
   /** Parser core override. When omitted, the loader uses the TypeScript parser core. */
   readonly core?: MmdCore | Promise<MmdCore>;
   /** Overrides fetch for string ModelSource values. */
@@ -188,6 +190,12 @@ export interface ThreeMmdLoaderOptions {
   readonly performance?: boolean | LoaderPerformanceOptions;
   /** Receives recoverable parser-core failures before falling back to the TypeScript parser. */
   readonly onCoreFallback?: (event: ThreeMmdCoreFallbackEvent) => void;
+}
+
+export interface ThreeMmdRuntimeFactoryContext {
+  readonly modelBytes: Uint8Array;
+  readonly mesh: THREE.SkinnedMesh;
+  readonly source: ThreeMmdModelSourceDescriptor;
 }
 
 export interface ThreeMmdCoreFallbackEvent {
@@ -372,10 +380,15 @@ export class ThreeMmdLoader {
           mesh.frustumCulled = options.frustumCulled;
         }
         profile?.mark("materials");
+        const sourceDescriptor = createModelSourceDescriptor(source, bytes.byteLength);
         const model = createThreeMmdModel({
           mesh,
-          runtime: new DefaultMmdRuntime(this.options.runtime),
-          source: createModelSourceDescriptor(source, bytes.byteLength),
+          runtime: this.createRuntime({
+            modelBytes: bytes,
+            mesh,
+            source: sourceDescriptor
+          }),
+          source: sourceDescriptor,
           sourceDiagnostic,
           coreDiagnostic,
           textureDiagnostics,
@@ -402,6 +415,10 @@ export class ThreeMmdLoader {
     } finally {
       profile?.clear();
     }
+  }
+
+  private createRuntime(context: ThreeMmdRuntimeFactoryContext): MmdRuntime {
+    return this.options.runtimeFactory?.(context) ?? new DefaultMmdRuntime(this.options.runtime);
   }
 
   private getCore(): Promise<MmdCore> {
@@ -1010,6 +1027,10 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
 
   if (options.onCoreFallback !== undefined && typeof options.onCoreFallback !== "function") {
     throw new TypeError("ThreeMmdLoader onCoreFallback must be a function");
+  }
+
+  if (options.runtimeFactory !== undefined && typeof options.runtimeFactory !== "function") {
+    throw new TypeError("ThreeMmdLoader runtimeFactory must be a function");
   }
 
   if (options.fetch !== undefined && typeof options.fetch !== "function") {

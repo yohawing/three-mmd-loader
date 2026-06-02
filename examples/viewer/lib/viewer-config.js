@@ -2,7 +2,8 @@ const query = new window.URLSearchParams(location.search);
 
 export const viewerConfig = {
   mmdFrameRate: readPositiveNumber(query.get("mmdFrameRate"), 30),
-  mmdFrameQuantize: readBoolean(query.get("mmdFrameQuantize"), true)
+  mmdFrameQuantize: readBoolean(query.get("mmdFrameQuantize"), true),
+  runtime: readRuntimeMode(query.get("runtime"))
 };
 
 function readPositiveNumber(value, fallback) {
@@ -25,4 +26,8 @@ function readBoolean(value, fallback) {
     return true;
   }
   return fallback;
+}
+
+function readRuntimeMode(value) {
+  return value?.trim().toLowerCase() === "custom" ? "custom" : "default";
 }

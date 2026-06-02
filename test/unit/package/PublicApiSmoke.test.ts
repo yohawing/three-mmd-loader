@@ -17,6 +17,7 @@ import {
 } from "../../../src/parser/index.js";
 import {
   DefaultMmdRuntime,
+  CustomRuntime,
   ThreeMmdLoader,
   sampleMmdCameraTrackInto,
   sampleMmdSelfShadowTrackInto,
@@ -201,6 +202,10 @@ center
     await expect(loader.loadModel(new Uint8Array([1, 2, 3, 4]))).rejects.toThrow(
       "Unable to detect MMD model format"
     );
+  });
+
+  it("exports the experimental CustomRuntime facade", () => {
+    expect(CustomRuntime).toBeTypeOf("function");
   });
 
   it("runs the README minimal loader sample against the one-bone PMX fixture", async () => {
