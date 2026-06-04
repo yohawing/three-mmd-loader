@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { FallbackCore, MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
+import { MmdAnimRuntime, FallbackCore, MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
   MmdCore,
@@ -99,6 +99,15 @@ describe("ThreeMmdLoader", () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining("ThreeMmdModel.textureDiagnostics is deprecated")
     );
+  });
+
+  it("uses the bundled mmd-anim runtime by default for PMX models", async () => {
+    const loader = new ThreeMmdLoader();
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(model.runtime).toBeInstanceOf(MmdAnimRuntime);
   });
 
   it("allows a runtimeFactory to create the per-model runtime from PMX bytes and mesh", async () => {

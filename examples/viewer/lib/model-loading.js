@@ -5,7 +5,7 @@ import {
   normalizeMmdRelativePath,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
-import { CustomRuntime } from "../../../dist/runtime/index.js";
+import { MmdAnimRuntime, DefaultMmdRuntime } from "../../../dist/runtime/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
 import { createPhysicsBackend, disposeActivePhysicsBackend } from "./ammo-bootstrap.js";
@@ -513,12 +513,19 @@ export async function createModelLoader(extraOptions = {}) {
 }
 
 async function createRuntimeFactory(physicsBackend) {
-  if (viewerConfig.runtime !== "custom") {
+  if (viewerConfig.runtime === "js") {
+    return () => new DefaultMmdRuntime({
+      frameRate: state.mmdFrameRate,
+      physics: "external",
+      physicsBackend
+    });
+  }
+  if (viewerConfig.runtime !== "mmd-anim") {
     return undefined;
   }
   const wasm = await import("/__mmd_anim_wasm/mmd_anim_wasm.js");
   await wasm.default();
-  return ({ modelBytes }) => CustomRuntime.fromPmxBytes(wasm, modelBytes, {
+  return ({ modelBytes }) => MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, {
     frameRate: state.mmdFrameRate,
     physics: "external",
     physicsBackend

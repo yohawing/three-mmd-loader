@@ -13,7 +13,7 @@ import {
 import type { MmdRuntime, ThreeMmdModel } from "../../../src/index.js";
 import type { MmdAnimation } from "../../../src/index.js";
 
-describe("DefaultMmdRuntime parity evidence", () => {
+describe("default runtime parity evidence", () => {
   it("matches the 1-bone cube oracle at frame 0 and stays bounded across all oracle frames", async () => {
     const oracle = loadOracleDump("test_1bone_cube_dump.json");
     const { model, runtime, animation } = await loadRuntimeFixture(
@@ -44,7 +44,7 @@ describe("DefaultMmdRuntime parity evidence", () => {
       }
     }
 
-    console.log("DefaultMmdRuntime 1-bone cube parity", {
+    console.log("default runtime 1-bone cube parity", {
       ...metrics,
       frameZeroMaxAbsError
     });
@@ -119,7 +119,7 @@ async function loadRuntimeFixture(modelFixture: string, motionFixture: string): 
   const runtime = model.runtime;
 
   if (!runtime) {
-    throw new Error("Expected DefaultMmdRuntime");
+    throw new Error("Expected runtime");
   }
 
   return { model, runtime, animation: animation.animation };

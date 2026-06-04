@@ -6,8 +6,8 @@ import type {
   VmdCameraInterpolation,
   VmdMorphTrack
 } from "../parser/model/modelTypes.js";
-import type { CustomRuntimeWasmModule } from "./custom.js";
-import { parseMmdAnimWasmFormatJson } from "./custom.js";
+import type { MmdAnimRuntimeWasmModule } from "./mmdAnimRuntime.js";
+import { parseMmdAnimWasmFormatJson } from "./mmdAnimRuntime.js";
 
 interface RuntimeWasmVmdDto {
   readonly kind: "vmd";
@@ -92,7 +92,7 @@ interface RuntimeWasmVpdBonePose {
 }
 
 export function loadMmdAnimWasmVmd(
-  wasm: Pick<CustomRuntimeWasmModule, "parseMmdFormatJson">,
+  wasm: Pick<MmdAnimRuntimeWasmModule, "parseMmdFormatJson">,
   bytes: Uint8Array,
   fileName?: string | null
 ): MmdAnimation {
@@ -103,7 +103,7 @@ export function loadMmdAnimWasmVmd(
 }
 
 export function loadMmdAnimWasmVpd(
-  wasm: Pick<CustomRuntimeWasmModule, "parseMmdFormatJson">,
+  wasm: Pick<MmdAnimRuntimeWasmModule, "parseMmdFormatJson">,
   bytes: Uint8Array,
   fileName?: string | null
 ): MmdPose {

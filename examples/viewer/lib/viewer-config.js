@@ -29,5 +29,9 @@ function readBoolean(value, fallback) {
 }
 
 function readRuntimeMode(value) {
-  return value?.trim().toLowerCase() === "custom" ? "custom" : "default";
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "js" || normalized === "default") {
+    return "js";
+  }
+  return "mmd-anim";
 }

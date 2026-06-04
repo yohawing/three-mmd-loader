@@ -124,7 +124,7 @@ server.listen(port, host, () => {
     }
   }
   if (mmdAnimWasmRoot === undefined) {
-    console.log(`mmd-anim WASM route disabled. Set MMD_ANIM_WASM_ROOT to serve CustomRuntime.`);
+    console.log(`mmd-anim WASM route disabled. Set MMD_ANIM_WASM_ROOT to serve MmdAnimRuntime.`);
   } else {
     console.log(`mmd-anim WASM route: ${mmdAnimWasmRoute} -> ${mmdAnimWasmRoot}`);
   }

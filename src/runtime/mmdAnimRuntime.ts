@@ -20,28 +20,28 @@ type MutableFrameState = {
 };
 
 type MutableDebugStages = {
-  -readonly [K in keyof MmdRuntimeDebugState["stages"]]: CustomRuntimeDebugStageState;
+  -readonly [K in keyof MmdRuntimeDebugState["stages"]]: MmdAnimRuntimeDebugStageState;
 };
 
-interface CustomRuntimeDebugStageState {
+interface MmdAnimRuntimeDebugStageState {
   worldMatricesColumnMajor: number[];
   morphWeights: number[];
 }
 
-export interface CustomRuntimeWasmModel {
+export interface MmdAnimRuntimeWasmModel {
   boneCount(): number;
   morphCount?(): number;
   ikCount?(): number;
   free?(): void;
 }
 
-export interface CustomRuntimeWasmClip {
+export interface MmdAnimRuntimeWasmClip {
   free?(): void;
 }
 
-export interface CustomRuntimeWasmRuntimeInstance {
+export interface MmdAnimRuntimeWasmRuntimeInstance {
   evaluateRestPose(): void;
-  evaluateClipFrame(clip: CustomRuntimeWasmClip, frame: number): void;
+  evaluateClipFrame(clip: MmdAnimRuntimeWasmClip, frame: number): void;
   worldMatrixF32Len(): number;
   copyWorldMatrices(out: Float32Array): boolean;
   morphWeightLen?(): number;
@@ -49,32 +49,32 @@ export interface CustomRuntimeWasmRuntimeInstance {
   free?(): void;
 }
 
-export interface CustomRuntimeWasmModule {
+export interface MmdAnimRuntimeWasmModule {
   parseMmdFormatJson?(data: Uint8Array, fileName?: string | null): string;
   exportMmdFormatBytes?(data: Uint8Array, fileName?: string | null): Uint8Array;
   exportVmdAnimationJsonBytes?(json: string): Uint8Array;
   exportVpdPoseJsonBytes?(json: string): Uint8Array;
   readonly WasmMmdModel?: {
-    fromPmxBytes?(bytes: Uint8Array): CustomRuntimeWasmModel;
+    fromPmxBytes?(bytes: Uint8Array): MmdAnimRuntimeWasmModel;
   };
   readonly WasmMmdClip?: {
-    fromVmdBytesForModel?(model: CustomRuntimeWasmModel, bytes: Uint8Array): CustomRuntimeWasmClip;
+    fromVmdBytesForModel?(model: MmdAnimRuntimeWasmModel, bytes: Uint8Array): MmdAnimRuntimeWasmClip;
   };
   readonly WasmMmdRuntimeInstance: {
-    forModel?(model: CustomRuntimeWasmModel): CustomRuntimeWasmRuntimeInstance;
-    new(model: CustomRuntimeWasmModel, morphCount: number): CustomRuntimeWasmRuntimeInstance;
+    forModel?(model: MmdAnimRuntimeWasmModel): MmdAnimRuntimeWasmRuntimeInstance;
+    new(model: MmdAnimRuntimeWasmModel, morphCount: number): MmdAnimRuntimeWasmRuntimeInstance;
   };
 }
 
-export interface CustomRuntimeOptions {
+export interface MmdAnimRuntimeOptions {
   /** mmd-anim WASM module namespace. */
-  readonly wasm?: CustomRuntimeWasmModule;
+  readonly wasm?: MmdAnimRuntimeWasmModule;
   /** Prebuilt mmd-anim model. If omitted, wasm.WasmMmdModel.fromPmxBytes and pmxBytes are required. */
-  readonly model?: CustomRuntimeWasmModel;
+  readonly model?: MmdAnimRuntimeWasmModel;
   /** PMX bytes used to create a wasm model when model is omitted. */
   readonly pmxBytes?: Uint8Array;
   /** Optional prebuilt clip. setAnimation replaces this with a VMD-derived clip when possible. */
-  readonly clip?: CustomRuntimeWasmClip;
+  readonly clip?: MmdAnimRuntimeWasmClip;
   /** MMD timeline frame rate. Defaults to 30. */
   readonly frameRate?: number;
   /** Initial runtime time in seconds. Defaults to 0. */
@@ -88,7 +88,7 @@ export interface CustomRuntimeOptions {
 }
 
 export function parseMmdAnimWasmFormatJson(
-  wasm: Pick<CustomRuntimeWasmModule, "parseMmdFormatJson">,
+  wasm: Pick<MmdAnimRuntimeWasmModule, "parseMmdFormatJson">,
   data: Uint8Array,
   fileName?: string | null
 ): unknown {
@@ -100,7 +100,7 @@ export function parseMmdAnimWasmFormatJson(
 }
 
 export function exportMmdAnimWasmFormatBytes(
-  wasm: Pick<CustomRuntimeWasmModule, "exportMmdFormatBytes">,
+  wasm: Pick<MmdAnimRuntimeWasmModule, "exportMmdFormatBytes">,
   data: Uint8Array,
   fileName?: string | null
 ): Uint8Array {
@@ -112,7 +112,7 @@ export function exportMmdAnimWasmFormatBytes(
 }
 
 export function exportMmdAnimWasmVmdAnimationJsonBytes(
-  wasm: Pick<CustomRuntimeWasmModule, "exportVmdAnimationJsonBytes">,
+  wasm: Pick<MmdAnimRuntimeWasmModule, "exportVmdAnimationJsonBytes">,
   json: string
 ): Uint8Array {
   const exporter = wasm.exportVmdAnimationJsonBytes;
@@ -123,7 +123,7 @@ export function exportMmdAnimWasmVmdAnimationJsonBytes(
 }
 
 export function exportMmdAnimWasmVpdPoseJsonBytes(
-  wasm: Pick<CustomRuntimeWasmModule, "exportVpdPoseJsonBytes">,
+  wasm: Pick<MmdAnimRuntimeWasmModule, "exportVpdPoseJsonBytes">,
   json: string
 ): Uint8Array {
   const exporter = wasm.exportVpdPoseJsonBytes;
@@ -140,11 +140,11 @@ export function exportMmdAnimWasmVpdPoseJsonBytes(
  * a package name, so local harness builds and future published artifacts can be
  * tested without changing this package's dependency graph.
  */
-export class CustomRuntime implements MmdRuntime {
+export class MmdAnimRuntime implements MmdRuntime {
   private readonly frameRate: number;
-  private readonly wasm: CustomRuntimeWasmModule | undefined;
-  private readonly wasmModel: CustomRuntimeWasmModel;
-  private readonly wasmRuntime: CustomRuntimeWasmRuntimeInstance;
+  private readonly wasm: MmdAnimRuntimeWasmModule | undefined;
+  private readonly wasmModel: MmdAnimRuntimeWasmModel;
+  private readonly wasmRuntime: MmdAnimRuntimeWasmRuntimeInstance;
   private readonly ownsWasmResources: boolean;
   private readonly physicsMode: "none" | "external";
   private readonly physicsBackend: MmdPhysicsBackend | undefined;
@@ -187,14 +187,14 @@ export class CustomRuntime implements MmdRuntime {
     localPosition: new THREE.Vector3(),
     localRotation: new THREE.Quaternion()
   };
-  private wasmClip: CustomRuntimeWasmClip | undefined;
+  private wasmClip: MmdAnimRuntimeWasmClip | undefined;
   private ownsWasmClip = false;
   private mesh: THREE.SkinnedMesh | undefined;
   private externalPhysicsData: RuntimeExternalPhysicsData | undefined;
   private previousEvaluateSeconds: number | undefined;
   private physicsDisabled = false;
 
-  constructor(options: CustomRuntimeOptions) {
+  constructor(options: MmdAnimRuntimeOptions) {
     this.frameRate = normalizeFrameRate(options.frameRate ?? 30);
     this.wasm = options.wasm;
     this.wasmModel = options.model ?? createWasmModelFromPmxBytes(options.wasm, options.pmxBytes);
@@ -209,11 +209,11 @@ export class CustomRuntime implements MmdRuntime {
   }
 
   static fromPmxBytes(
-    wasm: CustomRuntimeWasmModule,
+    wasm: MmdAnimRuntimeWasmModule,
     pmxBytes: Uint8Array,
-    options: Omit<CustomRuntimeOptions, "wasm" | "pmxBytes" | "model"> = {}
-  ): CustomRuntime {
-    return new CustomRuntime({ ...options, wasm, pmxBytes });
+    options: Omit<MmdAnimRuntimeOptions, "wasm" | "pmxBytes" | "model"> = {}
+  ): MmdAnimRuntime {
+    return new MmdAnimRuntime({ ...options, wasm, pmxBytes });
   }
 
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState {
@@ -299,10 +299,10 @@ export class CustomRuntime implements MmdRuntime {
 
   setAnimation(animation: MmdAnimation, mesh: THREE.SkinnedMesh): void {
     if (!isSkinnedMesh(mesh)) {
-      throw new TypeError("CustomRuntime mesh must be a THREE.SkinnedMesh");
+      throw new TypeError("MmdAnimRuntime mesh must be a THREE.SkinnedMesh");
     }
     if (animation.kind !== "vmd") {
-      throw new TypeError("CustomRuntime animation must be an MmdAnimation");
+      throw new TypeError("MmdAnimRuntime animation must be an MmdAnimation");
     }
     this.mesh = mesh;
     writeParentBoneIndices(mesh.skeleton.bones, this.scratchParentBoneIndices);
@@ -355,7 +355,7 @@ export class CustomRuntime implements MmdRuntime {
 
   private copyWasmOutput(): void {
     if (!this.wasmRuntime.copyWorldMatrices(this.worldMatrices)) {
-      throw new RangeError("CustomRuntime world matrix buffer is too short");
+      throw new RangeError("MmdAnimRuntime world matrix buffer is too short");
     }
     this.wasmRuntime.copyMorphWeights?.(this.morphWeights);
   }
@@ -542,23 +542,23 @@ function copyArrayLikeToNumberArray(values: ArrayLike<number>, target: number[])
 }
 
 function createWasmModelFromPmxBytes(
-  wasm: CustomRuntimeWasmModule | undefined,
+  wasm: MmdAnimRuntimeWasmModule | undefined,
   bytes: Uint8Array | undefined
-): CustomRuntimeWasmModel {
+): MmdAnimRuntimeWasmModel {
   const factory = wasm?.WasmMmdModel?.fromPmxBytes;
   if (!factory || !bytes) {
-    throw new TypeError("CustomRuntime requires either a wasm model or wasm.WasmMmdModel.fromPmxBytes with pmxBytes");
+    throw new TypeError("MmdAnimRuntime requires either a wasm model or wasm.WasmMmdModel.fromPmxBytes with pmxBytes");
   }
   return factory(bytes);
 }
 
 function createWasmRuntime(
-  wasm: CustomRuntimeWasmModule | undefined,
-  model: CustomRuntimeWasmModel
-): CustomRuntimeWasmRuntimeInstance {
+  wasm: MmdAnimRuntimeWasmModule | undefined,
+  model: MmdAnimRuntimeWasmModel
+): MmdAnimRuntimeWasmRuntimeInstance {
   const runtimeFactory = wasm?.WasmMmdRuntimeInstance;
   if (!runtimeFactory) {
-    throw new TypeError("CustomRuntime requires wasm.WasmMmdRuntimeInstance");
+    throw new TypeError("MmdAnimRuntime requires wasm.WasmMmdRuntimeInstance");
   }
   return runtimeFactory.forModel?.(model) ?? new runtimeFactory(model, model.morphCount?.() ?? 0);
 }
@@ -706,7 +706,7 @@ function createEmptyDebugStages(): MutableDebugStages {
   };
 }
 
-function createEmptyDebugStage(): CustomRuntimeDebugStageState {
+function createEmptyDebugStage(): MmdAnimRuntimeDebugStageState {
   return {
     worldMatricesColumnMajor: [],
     morphWeights: []
@@ -714,7 +714,7 @@ function createEmptyDebugStage(): CustomRuntimeDebugStageState {
 }
 
 function cloneDebugStage(
-  stage: CustomRuntimeDebugStageState
+  stage: MmdAnimRuntimeDebugStageState
 ): MmdRuntimeDebugState["stages"]["physics"] {
   return {
     worldMatricesColumnMajor: Array.from(stage.worldMatricesColumnMajor),
@@ -740,7 +740,7 @@ function writeFrameState(
   frameRate: number
 ): MutableFrameState {
   if (!Number.isFinite(seconds)) {
-    throw new RangeError("CustomRuntime seconds must be finite");
+    throw new RangeError("MmdAnimRuntime seconds must be finite");
   }
   target.seconds = seconds;
   target.frame = seconds * frameRate;

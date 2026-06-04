@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
 import {
-  CustomRuntime,
+  MmdAnimRuntime,
   exportMmdAnimWasmFormatBytes,
   exportMmdAnimWasmVmdAnimationJsonBytes,
   exportMmdAnimWasmVpdPoseJsonBytes,
   parseMmdAnimWasmFormatJson
 } from "../../../src/index.js";
-import type { CustomRuntimeWasmModule, MmdAnimation, MmdPhysicsBackend, MmdPhysicsStepContext, MmdPhysicsStepResult } from "../../../src/index.js";
+import type { MmdAnimRuntimeWasmModule, MmdAnimation, MmdPhysicsBackend, MmdPhysicsStepContext, MmdPhysicsStepResult } from "../../../src/index.js";
 
-describe("CustomRuntime", () => {
+describe("MmdAnimRuntime", () => {
   it("constructs an mmd-anim wasm model from PMX bytes and evaluates frame state", () => {
     const wasm = createFakeWasmModule();
-    const runtime = CustomRuntime.fromPmxBytes(wasm, new Uint8Array([1, 2, 3]), {
+    const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([1, 2, 3]), {
       frameRate: 60
     });
 
@@ -27,7 +27,7 @@ describe("CustomRuntime", () => {
 
   it("creates a clip from MmdAnimation bytes and syncs wasm world matrices to a skinned mesh", () => {
     const wasm = createFakeWasmModule();
-    const runtime = CustomRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]));
+    const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]));
     const bone = new THREE.Bone();
     bone.name = "center";
     const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
@@ -44,7 +44,7 @@ describe("CustomRuntime", () => {
   });
 
   it("returns stable debug snapshots", () => {
-    const runtime = CustomRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]));
+    const runtime = MmdAnimRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]));
 
     runtime.evaluate(0);
     const debug = runtime.debugState();
@@ -56,7 +56,7 @@ describe("CustomRuntime", () => {
 
   it("treats synthetic empty animations as rest pose clips", () => {
     const wasm = createFakeWasmModule();
-    const runtime = CustomRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]));
+    const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]));
     const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
     const bone = new THREE.Bone();
     mesh.add(bone);
@@ -71,7 +71,7 @@ describe("CustomRuntime", () => {
 
   it("steps external physics after wasm pose evaluation", () => {
     const backend = new TranslatingPhysicsBackend([4, 5, 6]);
-    const runtime = CustomRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]), {
+    const runtime = MmdAnimRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]), {
       physics: "external",
       physicsBackend: backend
     });
@@ -123,7 +123,7 @@ describe("CustomRuntime", () => {
   });
 });
 
-interface FakeWasmModule extends CustomRuntimeWasmModule {
+interface FakeWasmModule extends MmdAnimRuntimeWasmModule {
   readonly createdModels: FakeWasmModel[];
   readonly createdClips: FakeWasmClip[];
   readonly createdRuntimes: FakeWasmRuntimeInstance[];

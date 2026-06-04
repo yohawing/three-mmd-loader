@@ -17,7 +17,7 @@ import {
 } from "../../../src/parser/index.js";
 import {
   DefaultMmdRuntime,
-  CustomRuntime,
+  MmdAnimRuntime,
   ThreeMmdLoader,
   sampleMmdCameraTrackInto,
   sampleMmdSelfShadowTrackInto,
@@ -204,8 +204,9 @@ center
     );
   });
 
-  it("exports the experimental CustomRuntime facade", () => {
-    expect(CustomRuntime).toBeTypeOf("function");
+  it("exports the experimental MmdAnimRuntime facade", () => {
+    expect(MmdAnimRuntime).toBeTypeOf("function");
+    expect("CustomRuntime" in publicApi).toBe(false);
   });
 
   it("runs the README minimal loader sample against the one-bone PMX fixture", async () => {
