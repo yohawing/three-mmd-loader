@@ -24,7 +24,46 @@ import { ParsedModel } from "./ParsedModel.js";
 
 export interface MmdAnimWasmExports {
   parsePmxModelJson(data: Uint8Array): string;
+  parsePmxModelNonGeometryJson?: (data: Uint8Array) => string;
+  WasmPmxParsedModel?: WasmPmxParsedModelConstructor;
+  WasmPmxGeometry?: WasmPmxGeometryConstructor;
   wasm_wrapper_version(): number;
+}
+
+interface WasmPmxParsedModelConstructor {
+  parse(data: Uint8Array): WasmPmxParsedModelDto;
+}
+
+interface WasmPmxParsedModelDto {
+  free?(): void;
+  nonGeometryJson(): string;
+  geometry(): WasmPmxGeometryDto;
+}
+
+interface WasmPmxGeometryConstructor {
+  fromPmxBytes(data: Uint8Array): WasmPmxGeometryDto;
+}
+
+interface WasmPmxGeometryDto {
+  free?(): void;
+  additionalUvCount(): number;
+  additionalUvs(): Float32Array;
+  edgeScale(): Float32Array;
+  indices(): Uint32Array;
+  materialGroups(): Uint32Array;
+  normals(): Float32Array;
+  positions(): Float32Array;
+  qdefEnabled(): Uint8Array;
+  sdefC(): Float32Array;
+  sdefEnabled(): Uint8Array;
+  sdefR0(): Float32Array;
+  sdefR1(): Float32Array;
+  sdefRw0(): Float32Array;
+  sdefRw1(): Float32Array;
+  skinIndices(): Uint32Array;
+  skinWeights(): Float32Array;
+  uvs(): Float32Array;
+  vertexCount(): number;
 }
 
 class MmdAnimPmxModel implements MmdModel {
@@ -35,7 +74,8 @@ class MmdAnimPmxModel implements MmdModel {
 
   constructor(
     private readonly j: Record<string, unknown>,
-    fallbackParsed?: ParsedPmx
+    fallbackParsed?: ParsedPmx,
+    geometry?: GeometryBuffers
   ) {
     const rawMeta = (j["metadata"] ?? {}) as Record<string, unknown>;
     const topDiagnostics = (j["diagnostics"] as Diagnostic[] | undefined) ?? [];
@@ -45,7 +85,8 @@ class MmdAnimPmxModel implements MmdModel {
       ...(rawMeta as unknown as ModelMetadata),
       diagnostics: [...metaDiagnostics, ...topDiagnostics, ...adapterDiagnostics]
     };
-    this._geometry = buildGeometry((j["geometry"] ?? {}) as Record<string, unknown>, fallbackParsed);
+    this._geometry =
+      geometry ?? buildGeometry((j["geometry"] ?? {}) as Record<string, unknown>, fallbackParsed);
     this._skeleton = normalizeSkeleton((j["skeleton"] ?? { bones: [] }) as SkeletonData);
     this._materials = normalizeMaterials(
       (this.j["materials"] ?? []) as MaterialInfo[],
@@ -82,15 +123,74 @@ function buildGeometry(g: Record<string, unknown>, fallbackParsed: ParsedPmx | u
     indices,
     edgeScale: g["edgeScale"] != null ? toF32(g["edgeScale"]) : undefined,
     materialGroups: g["materialGroups"] as GeometryBuffers["materialGroups"],
-    skinIndices: Uint16Array.from((g["skinIndices"] ?? []) as readonly number[]),
+    skinIndices: toSkinIndices16((g["skinIndices"] ?? []) as readonly number[]),
     skinWeights: toF32(g["skinWeights"]),
     sdef: buildSdef(g["sdef"]) ?? fallbackParsed?.geometry.sdef,
     qdef: buildQdef(g["qdef"]) ?? fallbackParsed?.geometry.qdef
   };
 }
 
+function buildGeometryFromWasm(g: WasmPmxGeometryDto): GeometryBuffers {
+  const vertexCount = g.vertexCount();
+  const rawIndices = g.indices();
+  const indices: Uint16Array | Uint32Array =
+    vertexCount <= 65535 ? Uint16Array.from(rawIndices) : rawIndices;
+  return {
+    positions: g.positions(),
+    normals: g.normals(),
+    uvs: g.uvs(),
+    additionalUvs: buildAdditionalUvsFromWasm(g.additionalUvs(), g.additionalUvCount(), vertexCount),
+    indices,
+    edgeScale: g.edgeScale(),
+    materialGroups: buildMaterialGroupsFromWasm(g.materialGroups()),
+    skinIndices: toSkinIndices16(g.skinIndices()),
+    skinWeights: g.skinWeights(),
+    sdef: buildSdefFromWasm(g),
+    qdef: buildQdefFromWasm(g)
+  };
+}
+
+function buildAdditionalUvsFromWasm(
+  raw: Float32Array,
+  additionalUvCount: number,
+  vertexCount: number
+): Float32Array[] {
+  const stride = vertexCount * 4;
+  const additionalUvs: Float32Array[] = [];
+  for (let index = 0; index < additionalUvCount; index += 1) {
+    additionalUvs.push(raw.slice(index * stride, (index + 1) * stride));
+  }
+  return additionalUvs;
+}
+
+function buildMaterialGroupsFromWasm(raw: Uint32Array): GeometryBuffers["materialGroups"] {
+  const materialGroups: NonNullable<GeometryBuffers["materialGroups"]> = [];
+  for (let index = 0; index < raw.length; index += 3) {
+    materialGroups.push({
+      start: raw[index] ?? 0,
+      count: raw[index + 1] ?? 0,
+      materialIndex: raw[index + 2] ?? 0
+    });
+  }
+  return materialGroups;
+}
+
 function toF32(value: unknown): Float32Array {
   return value != null ? Float32Array.from(value as readonly number[]) : new Float32Array(0);
+}
+
+function toSkinIndices16(values: ArrayLike<number>): Uint16Array {
+  const converted = new Uint16Array(values.length);
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index] ?? 0;
+    if (value < 0 || value > 0xffff) {
+      throw new Error(
+        `PMX bone index ${value} exceeds the current three-mmd-loader skin index range.`
+      );
+    }
+    converted[index] = value;
+  }
+  return converted;
 }
 
 function normalizeSkeleton(skeleton: SkeletonData): SkeletonData {
@@ -137,8 +237,12 @@ function buildSdef(value: unknown): GeometryBuffers["sdef"] {
     return undefined;
   }
   const sdef = value as Record<string, unknown>;
+  const enabled = toF32(sdef["enabled"]);
+  if (!hasEnabledDeformVertex(enabled)) {
+    return undefined;
+  }
   return {
-    enabled: toF32(sdef["enabled"]),
+    enabled,
     c: toF32(sdef["c"]),
     r0: toF32(sdef["r0"]),
     r1: toF32(sdef["r1"]),
@@ -152,9 +256,53 @@ function buildQdef(value: unknown): GeometryBuffers["qdef"] {
     return undefined;
   }
   const qdef = value as Record<string, unknown>;
+  const enabled = toF32(qdef["enabled"]);
+  if (!hasEnabledDeformVertex(enabled)) {
+    return undefined;
+  }
   return {
-    enabled: toF32(qdef["enabled"])
+    enabled
   };
+}
+
+function buildSdefFromWasm(g: WasmPmxGeometryDto): GeometryBuffers["sdef"] {
+  const enabled = enabledU8ToF32(g.sdefEnabled());
+  if (!hasEnabledDeformVertex(enabled)) {
+    return undefined;
+  }
+  return {
+    enabled,
+    c: g.sdefC(),
+    r0: g.sdefR0(),
+    r1: g.sdefR1(),
+    rw0: g.sdefRw0(),
+    rw1: g.sdefRw1()
+  };
+}
+
+function buildQdefFromWasm(g: WasmPmxGeometryDto): GeometryBuffers["qdef"] {
+  const enabled = enabledU8ToF32(g.qdefEnabled());
+  if (!hasEnabledDeformVertex(enabled)) {
+    return undefined;
+  }
+  return { enabled };
+}
+
+function enabledU8ToF32(enabled: Uint8Array): Float32Array {
+  const converted = new Float32Array(enabled.length);
+  for (let index = 0; index < enabled.length; index += 1) {
+    converted[index] = enabled[index] === 0 ? 0 : 1;
+  }
+  return converted;
+}
+
+function hasEnabledDeformVertex(enabled: Float32Array): boolean {
+  for (let index = 0; index < enabled.length; index += 1) {
+    if (enabled[index] > 0.5) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function buildAdapterDiagnostics(j: Record<string, unknown>): Diagnostic[] {
@@ -211,9 +359,32 @@ export class MmdAnimBackedCore implements MmdCore {
     const format =
       options.format === "auto" || !options.format ? detectModelFormat(input) : options.format;
     if (format === "pmx") {
+      if (this.wasm.WasmPmxParsedModel != null) {
+        const parsedHandle = this.wasm.WasmPmxParsedModel.parse(input);
+        try {
+          const json = JSON.parse(parsedHandle.nonGeometryJson()) as Record<string, unknown>;
+          const geometryHandle = parsedHandle.geometry();
+          try {
+            return new MmdAnimPmxModel(json, undefined, buildGeometryFromWasm(geometryHandle));
+          } finally {
+            geometryHandle.free?.();
+          }
+        } finally {
+          parsedHandle.free?.();
+        }
+      }
+      if (this.wasm.parsePmxModelNonGeometryJson != null && this.wasm.WasmPmxGeometry != null) {
+        const json = JSON.parse(this.wasm.parsePmxModelNonGeometryJson(input)) as Record<string, unknown>;
+        const geometryHandle = this.wasm.WasmPmxGeometry.fromPmxBytes(input);
+        try {
+          return new MmdAnimPmxModel(json, undefined, buildGeometryFromWasm(geometryHandle));
+        } finally {
+          geometryHandle.free?.();
+        }
+      }
       const json = JSON.parse(this.wasm.parsePmxModelJson(input)) as Record<string, unknown>;
-      // mmd-anim currently omits SDEF/QDEF buffers and some toon fields from the JSON ABI.
-      // Keep the TS parser fallback load-time only until the wasm ABI covers those fields.
+      // Keep the TS parser fallback load-time only for remaining adapter parity gaps.
+      // Wasm-unavailable environments are handled separately by FallbackCore.
       return new MmdAnimPmxModel(json, parsePmx(input));
     }
     return new ParsedModel(parsePmd(input));

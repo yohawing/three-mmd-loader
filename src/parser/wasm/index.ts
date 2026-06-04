@@ -21,6 +21,9 @@ export async function initCore(options: InitCoreOptions = {}): Promise<MmdCore> 
   await initMmdAnimWasm(mmdAnimWasm, options);
   return new MmdAnimBackedCore({
     parsePmxModelJson: mmdAnimWasm.parsePmxModelJson,
+    parsePmxModelNonGeometryJson: mmdAnimWasm.parsePmxModelNonGeometryJson,
+    WasmPmxParsedModel: mmdAnimWasm.WasmPmxParsedModel,
+    WasmPmxGeometry: mmdAnimWasm.WasmPmxGeometry,
     wasm_wrapper_version: mmdAnimWasm.wasm_wrapper_version
   });
 }

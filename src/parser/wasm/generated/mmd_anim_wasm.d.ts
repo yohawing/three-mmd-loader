@@ -74,6 +74,120 @@ export class WasmMmdRuntimeInstance {
     worldMatrixF32Len(): number;
 }
 
+/**
+ * Typed-array geometry DTO for one parsed PMX model.
+ *
+ * All getter methods return **owned copies** (no wasm-memory lifetime coupling).
+ *
+ * Strides: positions/normals/sdefC/R0/R1/Rw0/Rw1 — vertex_count×3;
+ *   uvs — vertex_count×2; additionalUvs — additional_uv_count×vertex_count×4;
+ *   indices — face_count×3 (u32); materialGroups — group_count×3
+ *   ([start, count, materialIndex], u32); skinIndices/skinWeights — vertex_count×4;
+ *   edgeScale/sdefEnabled/qdefEnabled — vertex_count×1.
+ */
+export class WasmPmxGeometry {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    additionalUvCount(): number;
+    /**
+     * Copy of additional UV coordinates (additional_uv_count×vertex_count×4, f32).
+     */
+    additionalUvs(): Float32Array;
+    /**
+     * Copy of per-vertex edge scale (vertex_count×1, f32).
+     */
+    edgeScale(): Float32Array;
+    faceCount(): number;
+    /**
+     * Parse PMX bytes and return the geometry DTO. All returned arrays are copies.
+     */
+    static fromPmxBytes(data: Uint8Array): WasmPmxGeometry;
+    /**
+     * Copy of triangle indices (face_count×3, u32). u32 because PMX allows >65535 vertices.
+     */
+    indices(): Uint32Array;
+    materialGroupCount(): number;
+    /**
+     * Copy of material groups (group_count×3, [start, count, materialIndex], u32).
+     */
+    materialGroups(): Uint32Array;
+    /**
+     * Copy of normals (vertex_count×3, XYZ, f32).
+     */
+    normals(): Float32Array;
+    /**
+     * Copy of positions (vertex_count×3, XYZ, f32).
+     */
+    positions(): Float32Array;
+    /**
+     * Copy of QDEF active flags (vertex_count×1, u8; 1=QDEF, 0=other).
+     */
+    qdefEnabled(): Uint8Array;
+    /**
+     * Copy of SDEF C vectors (vertex_count×3, XYZ, f32).
+     */
+    sdefC(): Float32Array;
+    /**
+     * Copy of SDEF active flags (vertex_count×1, u8; 1=SDEF, 0=other).
+     */
+    sdefEnabled(): Uint8Array;
+    /**
+     * Copy of SDEF R0 vectors (vertex_count×3, XYZ, f32).
+     */
+    sdefR0(): Float32Array;
+    /**
+     * Copy of SDEF R1 vectors (vertex_count×3, XYZ, f32).
+     */
+    sdefR1(): Float32Array;
+    /**
+     * Copy of SDEF Rw0 vectors (vertex_count×3, XYZ, f32). Pre-computed from R0/R1/C/weight.
+     */
+    sdefRw0(): Float32Array;
+    /**
+     * Copy of SDEF Rw1 vectors (vertex_count×3, XYZ, f32). Pre-computed from R0/R1/C/weight.
+     */
+    sdefRw1(): Float32Array;
+    /**
+     * Copy of bone skin indices (vertex_count×4, u32). 4 bones per vertex, 0-padded.
+     */
+    skinIndices(): Uint32Array;
+    /**
+     * Copy of bone skin weights (vertex_count×4, f32). 4 weights per vertex.
+     */
+    skinWeights(): Float32Array;
+    /**
+     * Copy of UV coordinates (vertex_count×2, UV, f32).
+     */
+    uvs(): Float32Array;
+    vertexCount(): number;
+}
+
+/**
+ * Parsed PMX handle for the split loader ABI.
+ *
+ * Use this when both non-geometry JSON and geometry typed arrays are needed
+ * for the same PMX bytes. The PMX parser runs once; getters return owned
+ * copies and the handle can be freed immediately after those copies are made.
+ */
+export class WasmPmxParsedModel {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Return copied geometry typed arrays for this parsed PMX model.
+     */
+    geometry(): WasmPmxGeometry;
+    /**
+     * Return JSON with all model data except geometry.
+     */
+    nonGeometryJson(): string;
+    /**
+     * Parse PMX bytes once and expose split non-geometry JSON plus geometry DTO getters.
+     */
+    static parse(data: Uint8Array): WasmPmxParsedModel;
+}
+
 export function exportAccessoryManifestBytes(data: Uint8Array, file_name?: string | null): Uint8Array;
 
 export function exportMmdFormatBytes(data: Uint8Array, file_name?: string | null): Uint8Array;
@@ -100,6 +214,15 @@ export function parseMmdFormatJson(data: Uint8Array, file_name?: string | null):
 
 export function parsePmxModelJson(data: Uint8Array): string;
 
+/**
+ * Parse PMX bytes and return a JSON string with all model data **except** the
+ * geometry section (vertex positions, normals, UVs, indices, skinning data).
+ *
+ * Each non-geometry field is serialized individually — no geometry JSON is
+ * constructed. Use `parsePmxModelJson` when full-model JSON is required.
+ */
+export function parsePmxModelNonGeometryJson(data: Uint8Array): string;
+
 export function wasm_wrapper_version(): number;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -109,6 +232,8 @@ export interface InitOutput {
     readonly __wbg_wasmmmdclip_free: (a: number, b: number) => void;
     readonly __wbg_wasmmmdmodel_free: (a: number, b: number) => void;
     readonly __wbg_wasmmmdruntimeinstance_free: (a: number, b: number) => void;
+    readonly __wbg_wasmpmxgeometry_free: (a: number, b: number) => void;
+    readonly __wbg_wasmpmxparsedmodel_free: (a: number, b: number) => void;
     readonly exportAccessoryManifestBytes: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly exportMmdFormatBytes: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly exportPmdModelBytes: (a: number, b: number) => [number, number, number, number];
@@ -122,6 +247,7 @@ export interface InitOutput {
     readonly exportVpdPoseJsonBytes: (a: number, b: number) => [number, number, number, number];
     readonly parseMmdFormatJson: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly parsePmxModelJson: (a: number, b: number) => [number, number, number, number];
+    readonly parsePmxModelNonGeometryJson: (a: number, b: number) => [number, number, number, number];
     readonly wasm_wrapper_version: () => number;
     readonly wasmmmdclip_firstFrame: (a: number) => number;
     readonly wasmmmdclip_fromVmdBytesForModel: (a: number, b: number, c: number) => [number, number, number];
@@ -161,6 +287,30 @@ export interface InitOutput {
     readonly wasmmmdruntimeinstance_worldMatrices: (a: number) => [number, number];
     readonly wasmmmdruntimeinstance_worldMatricesView: (a: number) => any;
     readonly wasmmmdruntimeinstance_worldMatrixF32Len: (a: number) => number;
+    readonly wasmpmxgeometry_additionalUvCount: (a: number) => number;
+    readonly wasmpmxgeometry_additionalUvs: (a: number) => [number, number];
+    readonly wasmpmxgeometry_edgeScale: (a: number) => [number, number];
+    readonly wasmpmxgeometry_faceCount: (a: number) => number;
+    readonly wasmpmxgeometry_fromPmxBytes: (a: number, b: number) => [number, number, number];
+    readonly wasmpmxgeometry_indices: (a: number) => [number, number];
+    readonly wasmpmxgeometry_materialGroupCount: (a: number) => number;
+    readonly wasmpmxgeometry_materialGroups: (a: number) => [number, number];
+    readonly wasmpmxgeometry_normals: (a: number) => [number, number];
+    readonly wasmpmxgeometry_positions: (a: number) => [number, number];
+    readonly wasmpmxgeometry_qdefEnabled: (a: number) => [number, number];
+    readonly wasmpmxgeometry_sdefC: (a: number) => [number, number];
+    readonly wasmpmxgeometry_sdefEnabled: (a: number) => [number, number];
+    readonly wasmpmxgeometry_sdefR0: (a: number) => [number, number];
+    readonly wasmpmxgeometry_sdefR1: (a: number) => [number, number];
+    readonly wasmpmxgeometry_sdefRw0: (a: number) => [number, number];
+    readonly wasmpmxgeometry_sdefRw1: (a: number) => [number, number];
+    readonly wasmpmxgeometry_skinIndices: (a: number) => [number, number];
+    readonly wasmpmxgeometry_skinWeights: (a: number) => [number, number];
+    readonly wasmpmxgeometry_uvs: (a: number) => [number, number];
+    readonly wasmpmxgeometry_vertexCount: (a: number) => number;
+    readonly wasmpmxparsedmodel_geometry: (a: number) => number;
+    readonly wasmpmxparsedmodel_nonGeometryJson: (a: number) => [number, number, number, number];
+    readonly wasmpmxparsedmodel_parse: (a: number, b: number) => [number, number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

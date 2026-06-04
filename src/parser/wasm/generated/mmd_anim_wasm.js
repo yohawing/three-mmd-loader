@@ -594,6 +594,310 @@ export class WasmMmdRuntimeInstance {
 if (Symbol.dispose) WasmMmdRuntimeInstance.prototype[Symbol.dispose] = WasmMmdRuntimeInstance.prototype.free;
 
 /**
+ * Typed-array geometry DTO for one parsed PMX model.
+ *
+ * All getter methods return **owned copies** (no wasm-memory lifetime coupling).
+ *
+ * Strides: positions/normals/sdefC/R0/R1/Rw0/Rw1 — vertex_count×3;
+ *   uvs — vertex_count×2; additionalUvs — additional_uv_count×vertex_count×4;
+ *   indices — face_count×3 (u32); materialGroups — group_count×3
+ *   ([start, count, materialIndex], u32); skinIndices/skinWeights — vertex_count×4;
+ *   edgeScale/sdefEnabled/qdefEnabled — vertex_count×1.
+ */
+export class WasmPmxGeometry {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmPmxGeometry.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmPmxGeometryFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmPmxGeometryFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmpmxgeometry_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    additionalUvCount() {
+        const ret = wasm.wasmpmxgeometry_additionalUvCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Copy of additional UV coordinates (additional_uv_count×vertex_count×4, f32).
+     * @returns {Float32Array}
+     */
+    additionalUvs() {
+        const ret = wasm.wasmpmxgeometry_additionalUvs(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of per-vertex edge scale (vertex_count×1, f32).
+     * @returns {Float32Array}
+     */
+    edgeScale() {
+        const ret = wasm.wasmpmxgeometry_edgeScale(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {number}
+     */
+    faceCount() {
+        const ret = wasm.wasmpmxgeometry_faceCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Parse PMX bytes and return the geometry DTO. All returned arrays are copies.
+     * @param {Uint8Array} data
+     * @returns {WasmPmxGeometry}
+     */
+    static fromPmxBytes(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmpmxgeometry_fromPmxBytes(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmPmxGeometry.__wrap(ret[0]);
+    }
+    /**
+     * Copy of triangle indices (face_count×3, u32). u32 because PMX allows >65535 vertices.
+     * @returns {Uint32Array}
+     */
+    indices() {
+        const ret = wasm.wasmpmxgeometry_indices(this.__wbg_ptr);
+        var v1 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {number}
+     */
+    materialGroupCount() {
+        const ret = wasm.wasmpmxgeometry_materialGroupCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Copy of material groups (group_count×3, [start, count, materialIndex], u32).
+     * @returns {Uint32Array}
+     */
+    materialGroups() {
+        const ret = wasm.wasmpmxgeometry_materialGroups(this.__wbg_ptr);
+        var v1 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of normals (vertex_count×3, XYZ, f32).
+     * @returns {Float32Array}
+     */
+    normals() {
+        const ret = wasm.wasmpmxgeometry_normals(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of positions (vertex_count×3, XYZ, f32).
+     * @returns {Float32Array}
+     */
+    positions() {
+        const ret = wasm.wasmpmxgeometry_positions(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of QDEF active flags (vertex_count×1, u8; 1=QDEF, 0=other).
+     * @returns {Uint8Array}
+     */
+    qdefEnabled() {
+        const ret = wasm.wasmpmxgeometry_qdefEnabled(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * Copy of SDEF C vectors (vertex_count×3, XYZ, f32).
+     * @returns {Float32Array}
+     */
+    sdefC() {
+        const ret = wasm.wasmpmxgeometry_sdefC(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of SDEF active flags (vertex_count×1, u8; 1=SDEF, 0=other).
+     * @returns {Uint8Array}
+     */
+    sdefEnabled() {
+        const ret = wasm.wasmpmxgeometry_sdefEnabled(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * Copy of SDEF R0 vectors (vertex_count×3, XYZ, f32).
+     * @returns {Float32Array}
+     */
+    sdefR0() {
+        const ret = wasm.wasmpmxgeometry_sdefR0(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of SDEF R1 vectors (vertex_count×3, XYZ, f32).
+     * @returns {Float32Array}
+     */
+    sdefR1() {
+        const ret = wasm.wasmpmxgeometry_sdefR1(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of SDEF Rw0 vectors (vertex_count×3, XYZ, f32). Pre-computed from R0/R1/C/weight.
+     * @returns {Float32Array}
+     */
+    sdefRw0() {
+        const ret = wasm.wasmpmxgeometry_sdefRw0(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of SDEF Rw1 vectors (vertex_count×3, XYZ, f32). Pre-computed from R0/R1/C/weight.
+     * @returns {Float32Array}
+     */
+    sdefRw1() {
+        const ret = wasm.wasmpmxgeometry_sdefRw1(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of bone skin indices (vertex_count×4, u32). 4 bones per vertex, 0-padded.
+     * @returns {Uint32Array}
+     */
+    skinIndices() {
+        const ret = wasm.wasmpmxgeometry_skinIndices(this.__wbg_ptr);
+        var v1 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of bone skin weights (vertex_count×4, f32). 4 weights per vertex.
+     * @returns {Float32Array}
+     */
+    skinWeights() {
+        const ret = wasm.wasmpmxgeometry_skinWeights(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of UV coordinates (vertex_count×2, UV, f32).
+     * @returns {Float32Array}
+     */
+    uvs() {
+        const ret = wasm.wasmpmxgeometry_uvs(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {number}
+     */
+    vertexCount() {
+        const ret = wasm.wasmpmxgeometry_vertexCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+}
+if (Symbol.dispose) WasmPmxGeometry.prototype[Symbol.dispose] = WasmPmxGeometry.prototype.free;
+
+/**
+ * Parsed PMX handle for the split loader ABI.
+ *
+ * Use this when both non-geometry JSON and geometry typed arrays are needed
+ * for the same PMX bytes. The PMX parser runs once; getters return owned
+ * copies and the handle can be freed immediately after those copies are made.
+ */
+export class WasmPmxParsedModel {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmPmxParsedModel.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmPmxParsedModelFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmPmxParsedModelFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmpmxparsedmodel_free(ptr, 0);
+    }
+    /**
+     * Return copied geometry typed arrays for this parsed PMX model.
+     * @returns {WasmPmxGeometry}
+     */
+    geometry() {
+        const ret = wasm.wasmpmxparsedmodel_geometry(this.__wbg_ptr);
+        return WasmPmxGeometry.__wrap(ret);
+    }
+    /**
+     * Return JSON with all model data except geometry.
+     * @returns {string}
+     */
+    nonGeometryJson() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.wasmpmxparsedmodel_nonGeometryJson(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Parse PMX bytes once and expose split non-geometry JSON plus geometry DTO getters.
+     * @param {Uint8Array} data
+     * @returns {WasmPmxParsedModel}
+     */
+    static parse(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmpmxparsedmodel_parse(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmPmxParsedModel.__wrap(ret[0]);
+    }
+}
+if (Symbol.dispose) WasmPmxParsedModel.prototype[Symbol.dispose] = WasmPmxParsedModel.prototype.free;
+
+/**
  * @param {Uint8Array} data
  * @param {string | null} [file_name]
  * @returns {Uint8Array}
@@ -850,6 +1154,36 @@ export function parsePmxModelJson(data) {
 }
 
 /**
+ * Parse PMX bytes and return a JSON string with all model data **except** the
+ * geometry section (vertex positions, normals, UVs, indices, skinning data).
+ *
+ * Each non-geometry field is serialized individually — no geometry JSON is
+ * constructed. Use `parsePmxModelJson` when full-model JSON is required.
+ * @param {Uint8Array} data
+ * @returns {string}
+ */
+export function parsePmxModelNonGeometryJson(data) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.parsePmxModelNonGeometryJson(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * @returns {number}
  */
 export function wasm_wrapper_version() {
@@ -905,6 +1239,12 @@ const WasmMmdModelFinalization = (typeof FinalizationRegistry === 'undefined')
 const WasmMmdRuntimeInstanceFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmmmdruntimeinstance_free(ptr, 1));
+const WasmPmxGeometryFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmpmxgeometry_free(ptr, 1));
+const WasmPmxParsedModelFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmpmxparsedmodel_free(ptr, 1));
 
 function _assertClass(instance, klass) {
     if (!(instance instanceof klass)) {
@@ -915,6 +1255,11 @@ function _assertClass(instance, klass) {
 function getArrayF32FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
+
+function getArrayU32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
 }
 
 function getArrayU8FromWasm0(ptr, len) {

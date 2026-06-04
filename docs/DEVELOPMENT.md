@@ -42,6 +42,20 @@ git submodule update --init --recursive third_party/mmd-anim
 
 The npm tarball contains the generated WASM files only through `dist/**`.
 
+## PMX WASM ABI Shape
+
+The default PMX path uses a split mmd-anim WASM ABI through a parsed-model
+handle when the generated wrapper exports it:
+
+- `WasmPmxParsedModel.parse(bytes)` parses the PMX bytes once.
+- `parsed.nonGeometryJson()` returns metadata, materials, skeleton, morphs,
+  display frames, rigid bodies, joints, soft bodies, and diagnostics.
+- `parsed.geometry()` returns copied typed arrays for positions, normals, UVs,
+  indices, material groups, skinning, SDEF, and QDEF.
+
+This keeps large geometry buffers out of JSON while preserving the existing
+`MmdModel` TypeScript-facing shape.
+
 ## Core Checks
 
 Run these before publishing or opening a release PR. The full operator-facing
