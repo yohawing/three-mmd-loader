@@ -7,7 +7,7 @@ import type {
   VmdMorphTrack
 } from "../parser/model/modelTypes.js";
 import type { CustomRuntimeWasmModule } from "./custom.js";
-import { parseMmdRuntimeWasmFormatJson } from "./custom.js";
+import { parseMmdAnimWasmFormatJson } from "./custom.js";
 
 interface RuntimeWasmVmdDto {
   readonly kind: "vmd";
@@ -91,29 +91,29 @@ interface RuntimeWasmVpdBonePose {
   readonly rotation: readonly [number, number, number, number];
 }
 
-export function loadMmdRuntimeWasmVmd(
+export function loadMmdAnimWasmVmd(
   wasm: Pick<CustomRuntimeWasmModule, "parseMmdFormatJson">,
   bytes: Uint8Array,
   fileName?: string | null
 ): MmdAnimation {
-  return mmdRuntimeWasmVmdDtoToAnimation(
-    expectVmdDto(parseMmdRuntimeWasmFormatJson(wasm, bytes, fileName)),
+  return mmdAnimWasmVmdDtoToAnimation(
+    expectVmdDto(parseMmdAnimWasmFormatJson(wasm, bytes, fileName)),
     bytes.slice()
   );
 }
 
-export function loadMmdRuntimeWasmVpd(
+export function loadMmdAnimWasmVpd(
   wasm: Pick<CustomRuntimeWasmModule, "parseMmdFormatJson">,
   bytes: Uint8Array,
   fileName?: string | null
 ): MmdPose {
-  return mmdRuntimeWasmVpdDtoToPose(
-    expectVpdDto(parseMmdRuntimeWasmFormatJson(wasm, bytes, fileName)),
+  return mmdAnimWasmVpdDtoToPose(
+    expectVpdDto(parseMmdAnimWasmFormatJson(wasm, bytes, fileName)),
     bytes.slice()
   );
 }
 
-export function mmdRuntimeWasmVmdDtoToAnimation(
+export function mmdAnimWasmVmdDtoToAnimation(
   dto: RuntimeWasmVmdDto,
   bytes = new Uint8Array()
 ): MmdAnimation {
@@ -158,7 +158,7 @@ export function mmdRuntimeWasmVmdDtoToAnimation(
   };
 }
 
-export function mmdRuntimeWasmVpdDtoToPose(
+export function mmdAnimWasmVpdDtoToPose(
   dto: RuntimeWasmVpdDto,
   bytes = new Uint8Array()
 ): MmdPose {
@@ -338,14 +338,14 @@ function toTuple4(value: readonly [number, number, number, number]): [number, nu
 
 function expectVmdDto(value: unknown): RuntimeWasmVmdDto {
   if (!isObject(value) || value.kind !== "vmd") {
-    throw new TypeError("mmd-runtime wasm parser did not return a VMD DTO");
+    throw new TypeError("mmd-anim wasm parser did not return a VMD DTO");
   }
   return value as unknown as RuntimeWasmVmdDto;
 }
 
 function expectVpdDto(value: unknown): RuntimeWasmVpdDto {
   if (!isObject(value) || (value.kind !== "vpd" && value.format !== "vpd")) {
-    throw new TypeError("mmd-runtime wasm parser did not return a VPD DTO");
+    throw new TypeError("mmd-anim wasm parser did not return a VPD DTO");
   }
   return value as unknown as RuntimeWasmVpdDto;
 }

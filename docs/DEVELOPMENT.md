@@ -7,7 +7,7 @@ scripts used while developing `@yohawing/three-mmd-loader`.
 
 - Node.js 22 or 24.
 - npm with the committed `package-lock.json`.
-- Optional: Emscripten via emsdk when manually rebuilding the disabled WASM wrapper.
+- Optional: Rust and wasm-pack when rebuilding the mmd-anim WASM wrapper.
 - Optional: Playwright browser dependencies for visual regression scripts.
 
 Install dependencies with:
@@ -21,32 +21,26 @@ another package manager.
 
 ## WASM Wrapper Build
 
-The nanoem-backed WASM core path is currently disabled from the default package
-build. `initCore()` uses the TypeScript fallback parser, and `npm run build`
-does not copy `yw_mmd_core.js` or `yw_mmd_core.wasm` into `dist`.
-
-The manual wrapper build remains available for future re-enablement work:
+`npm run build` copies the locally generated mmd-anim WASM wrapper into
+`dist`; it does not rebuild the wrapper. Rebuild it before `npm run build` when
+the generated wrapper is missing, or when the `third_party/mmd-anim` submodule
+or WASM export surface changed:
 
 ```bash
-npm run build:wasm
+npm run build:mmd-anim
 ```
 
-`build:wasm` runs `node scripts/build-wasm.mjs` and spawns Emscripten `em++`.
-Emscripten is not bundled as an npm dependency. Install it with the official
-emsdk and make it discoverable by one of these methods:
+`build:mmd-anim` runs `node scripts/build-mmd-anim-wasm.mjs`, builds
+`third_party/mmd-anim/crates/mmd-anim-wasm` with `wasm-pack`, and synchronizes
+the generated `mmd_anim_wasm.*` files into `src/parser/wasm/generated/`.
 
-- Set `EMSDK` to the emsdk directory.
-- Place `emsdk` under the repository root.
-- Place `emsdk` next to the repository directory.
-- Activate emsdk so `em++` is available on `PATH`.
+Initialize the submodule before rebuilding:
 
-The script supports Windows, macOS, and Linux as long as Emscripten is
-available. Generated `.js` and `.wasm` files are written to
-`src/parser/wasm/generated/` and are intentionally not checked in. The
-hand-written `yw_mmd_core.d.ts` declaration file remains in source control.
+```bash
+git submodule update --init --recursive third_party/mmd-anim
+```
 
-CI and release packaging do not require emsdk while the WASM core path remains
-disabled.
+The npm tarball contains the generated WASM files only through `dist/**`.
 
 ## Core Checks
 
@@ -70,8 +64,8 @@ Command summary:
 | `npm run lint` | Runs ESLint with `--max-warnings 0`. |
 | `npm run lint:fix` | Applies ESLint auto-fixes where available. |
 | `npm test` | Runs the Vitest unit and integration suite. |
-| `npm run build` | Compiles TypeScript and copies bundled MMD toon BMP and Bullet MMD assets into `dist`. |
-| `npm run build:wasm` | Manually rebuilds the disabled nanoem-backed WASM wrapper into `src/parser/wasm/generated/`. |
+| `npm run build` | Compiles TypeScript and copies bundled MMD toon BMP and WASM assets into `dist`. |
+| `npm run build:mmd-anim` | Rebuilds the mmd-anim WASM wrapper into `src/parser/wasm/generated/`. |
 | `npm run bench:wasm:perf -- <model> [repeat]` | Compares WASM and TypeScript fallback `loadModel` speed plus `loadModel + createThreeBufferGeometry` total time against a local PMX / PMD file. |
 | `npm run smoke:dist` | Verifies built package exports and key dist runtime paths. |
 | `npm run smoke:types` | Packs the library, installs it into a temporary TypeScript consumer, and verifies root/subpath imports with `tsc --noEmit`. |
@@ -144,57 +138,11 @@ against its metadata counts, writes `tmp/fixture-parse-report.json`, and exits
 non-zero if any file fails to parse. When `test/fixtures/fixtures.local.json` is
 absent (fresh clones, CI), the command logs a skip and exits `0`.
 
-## Local Playback Oracle Tests
+## Local Playback Fixtures
 
-The repository also has a local-only playback comparison path for runtime
-motion evaluation. It treats native nanoem as the authority, stores a numeric
-oracle dump locally, registers the same model/motion in the local fixture
-inventory, then compares runtime evaluation output against that oracle.
-
-The committed consumers are:
-
-- `test/integration/animation/local-oracle-playback.test.ts`
-- `test/helpers/nativeNanoemOracle.ts`
-- `test/helpers/localPlaybackFixtures.ts`
-
-All local playback data follows the same separation rule as the local corpus:
-the generator, inventory, and `.local.json` oracle files are developer-local
-and are not committed.
-
-### Step 1: Generate the native nanoem oracle
-
-Oracle generation uses the local-only, gitignored script
-`scripts/local/oracle/native-nanoem-dump.mjs`. The repository does not ship this
-script, so fresh clones will not have it. Local developers provide that script
-at the gitignored path when they need to refresh playback evidence.
-
-The local generator builds a native nanoem CLI from the
-`native/third_party/nanoem` git submodule with emsdk clang, runs it headlessly,
-and writes `native-nanoem-runtime-dump` JSON. Before running it, initialize the
-submodule and make emsdk available through the same discovery paths used by
-`scripts/build-wasm.mjs`:
-
-```bash
-git submodule update --init --recursive native/third_party/nanoem
-```
-
-Then generate an oracle from repository-relative or placeholder paths:
-
-```bash
-node scripts/local/oracle/native-nanoem-dump.mjs \
-  --model <model.pmx|model.pmd> \
-  --motion <motion.vmd> \
-  --frames 0,30,60 \
-  --physics none \
-  --out test/fixtures/oracles/<case>.local.json
-```
-
-`test/fixtures/oracles/*.local.json` is gitignored. Keep physics disabled for
-the initial oracle path; the default comparison stage is still named `physics`
-because it represents the final post-IK runtime snapshot in the oracle format
-when physics is off.
-
-### Step 2: Register the playback fixture
+The repository has a local-only playback fixture path for runtime and physics
+stability checks. Register model/motion pairs in the optional local fixture
+inventory and keep all user-owned corpus paths out of git.
 
 Add a case to the optional, gitignored
 `test/fixtures/fixtures.local.json` inventory. Register the model and motion in
@@ -208,9 +156,9 @@ Each playback case has these fields:
   `paths.releaseSmoke.byExtension`.
 - `motion: { key }`: Reference to a `vmd` key in
   `paths.releaseSmoke.byExtension.vmd`.
-- `oracle`: Path to the oracle JSON generated in Step 1, resolved from the
+- `oracle`: Optional path to a local comparison artifact, resolved from the
   inventory `basePath`.
-- `oracleKind: "native-nanoem-runtime-dump"`: Oracle reader discriminator.
+- `oracleKind`: Optional discriminator for local tooling.
 - `stage`: Runtime stage to compare. The default is `physics`, which is the
   post-IK final pose when the oracle was generated with `--physics none`.
 - `frames`: Frame numbers included in the oracle.
@@ -223,7 +171,7 @@ Each playback case has these fields:
 The authoritative schema is
 `test/fixtures/fixtures.schema.json` under `paths.playbackSmoke.cases`.
 
-For the committed cube fixture, the minimal local inventory looks like this:
+For the committed cube fixture, a minimal local inventory looks like this:
 
 ```json
 {
@@ -254,8 +202,6 @@ For the committed cube fixture, the minimal local inventory looks like this:
           "motion": {
             "key": "oneBoneCubeMotion"
           },
-          "oracle": "oracles/test_1bone_cube.local.json",
-          "oracleKind": "native-nanoem-runtime-dump",
           "stage": "physics",
           "frames": [0, 1, 2],
           "watchBones": ["全ての親"]
@@ -266,36 +212,21 @@ For the committed cube fixture, the minimal local inventory looks like this:
 }
 ```
 
-Generate that oracle with:
-
-```bash
-node scripts/local/oracle/native-nanoem-dump.mjs \
-  --model test/fixtures/test_1bone_cube.pmx \
-  --motion test/fixtures/test_1bone_cube_motion.vmd \
-  --frames 0,1,2 \
-  --physics none \
-  --out test/fixtures/oracles/test_1bone_cube.local.json
-```
-
 Real models such as Tda, Sour, or Lat Miku cases use the same three-step flow.
 Keep their asset paths in the local inventory; do not commit user-owned corpus
 paths.
 
-### Step 3: Run the playback comparison
+### Run Local Playback Checks
 
-Run the local playback test directly:
+Run local playback or physics stability tests directly:
 
 ```bash
-npm test -- test/integration/animation/local-oracle-playback.test.ts
+npm test -- test/integration/physics/local-ammo-playback-stability.test.ts
 ```
 
 When `test/fixtures/fixtures.local.json` is absent, has no playback cases, or a
-case's model/motion/oracle path is missing, the test is skipped and CI remains
-green. For runnable cases, the test loads the model and VMD through the
-runtime path, calls `DefaultMmdRuntime.evaluate(frame / 30, { physics: false })`,
-extracts each watched bone's world matrix in MMD coordinates, and compares it
-with the matching native nanoem oracle stage. Morph weights are compared when
-the oracle stage includes them.
+case's model/motion path is missing, local playback tests are skipped and CI
+remains green.
 
 ## Dist And Package Smoke
 
@@ -401,6 +332,7 @@ GitHub Actions run the same core sequence on Node.js 22 and 24:
 
 ```bash
 npm ci
+npm run build:mmd-anim
 npm run lint
 npm test
 npm run build

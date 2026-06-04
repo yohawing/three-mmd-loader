@@ -1,6 +1,6 @@
 export { DefaultMmdRuntime } from "./core.js";
-export { CustomRuntime, exportMmdRuntimeWasmFormatBytes, exportMmdRuntimeWasmVmdAnimationJsonBytes, exportMmdRuntimeWasmVpdPoseJsonBytes, parseMmdRuntimeWasmFormatJson } from "./custom.js";
-export { loadMmdRuntimeWasmVmd, loadMmdRuntimeWasmVpd, mmdRuntimeWasmVmdDtoToAnimation, mmdRuntimeWasmVpdDtoToPose } from "./mmdRuntimeWasmParser.js";
+export { CustomRuntime, exportMmdAnimWasmFormatBytes, exportMmdAnimWasmVmdAnimationJsonBytes, exportMmdAnimWasmVpdPoseJsonBytes, parseMmdAnimWasmFormatJson } from "./custom.js";
+export { loadMmdAnimWasmVmd, loadMmdAnimWasmVpd, mmdAnimWasmVmdDtoToAnimation, mmdAnimWasmVpdDtoToPose } from "./mmdAnimWasmParser.js";
 export { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack, sampleMmdSelfShadowTrack, sampleMmdSelfShadowTrackInto } from "./animation.js";
 export type { SelfShadowState, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
 export type { CustomRuntimeOptions, CustomRuntimeWasmClip, CustomRuntimeWasmModel, CustomRuntimeWasmModule, CustomRuntimeWasmRuntimeInstance } from "./custom.js";

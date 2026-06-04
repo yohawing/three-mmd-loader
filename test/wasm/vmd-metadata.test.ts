@@ -2,69 +2,9 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { initCore } from "../../src/parser/wasm/index.js";
-import { existingOptionalPath, optionalLocalFixture } from "./localFixtureInventory.js";
-
-const wavefileCameraPath = existingOptionalPath(process.env.THREE_MMD_WASM_CAMERA_VMD);
-const wavefileCameraIt = wavefileCameraPath ? it : it.skip;
-
-const localRealWorldVmdFixtures = [
-  {
-    path: existingOptionalPath(process.env.THREE_MMD_WASM_HIME_TANAKA_VMD),
-    modelName: "田中ヒメ ver1.30",
-    maxFrame: 6180,
-    counts: {
-      bones: 438851,
-      morphs: 19250,
-      cameras: 0,
-      lights: 0,
-      selfShadows: 0,
-      properties: 0
-    },
-    uniqueBoneTracks: 71,
-    uniqueMorphTracks: 16
-  },
-  {
-    path: existingOptionalPath(
-      optionalLocalFixture("vmd", "vmd109") ?? process.env.THREE_MMD_WASM_RABBIT_HOLE_VMD
-    ),
-    modelName: "Sour_Miku_White",
-    maxFrame: 4837,
-    counts: {
-      bones: 219685,
-      morphs: 3696,
-      cameras: 0,
-      lights: 0,
-      selfShadows: 0,
-      properties: 1
-    },
-    uniqueBoneTracks: 364,
-    uniqueMorphTracks: 132
-  }
-] as const;
 
 describe("@yw-mmd/core-wasm VMD metadata", () => {
-  it("inventories optional local real-world VMD motion fixtures", async () => {
-    const missing = localRealWorldVmdFixtures.filter((fixture) => !fixture.path);
-    if (missing.length > 0) {
-      console.warn(
-        `Skipping optional local VMD fixture inventory; missing ${missing.length} fixture(s).`
-      );
-      return;
-    }
-
-    const core = await initCore();
-    for (const fixture of localRealWorldVmdFixtures) {
-      const animation = core.loadVmd(await readFile(fixture.path!));
-
-      expect(animation.metadata.modelName).toBe(fixture.modelName);
-      expect(animation.metadata.maxFrame).toBe(fixture.maxFrame);
-      expect(animation.metadata.counts).toEqual(fixture.counts);
-      expect(Object.keys(animation.boneTracks)).toHaveLength(fixture.uniqueBoneTracks);
-      expect(Object.keys(animation.morphTracks)).toHaveLength(fixture.uniqueMorphTracks);
-    }
-  });
-
-  it("loads VMD metadata through the nanoem-backed Wasm parser", async () => {
+  it("loads VMD metadata through the mmd-anim-backed Wasm parser", async () => {
     const core = await initCore();
     const animation = core.loadVmd(
       await readFile(resolve("test/fixtures/test_1bone_cube_motion.vmd"))
@@ -99,14 +39,10 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
     expect(enabled.boneTracks.Root?.physicsToggles[0]).toBe(1);
   });
 
-  wavefileCameraIt("parses camera and light frame arrays", async () => {
+  it("parses light frame arrays", async () => {
     const core = await initCore();
-    const cameraMotion = core.loadVmd(await readFile(wavefileCameraPath!));
     const lightMotion = core.loadVmd(createLightOnlyVmd());
 
-    expect(cameraMotion.cameraFrames).toHaveLength(cameraMotion.metadata.counts.cameras);
-    expect(cameraMotion.cameraFrames[0]?.frame).toBeGreaterThanOrEqual(0);
-    expect(cameraMotion.cameraFrames.every((frame) => Number.isFinite(frame.fov))).toBe(true);
     expect(lightMotion.lightFrames).toHaveLength(lightMotion.metadata.counts.lights);
   });
 

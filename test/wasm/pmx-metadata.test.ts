@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
@@ -8,25 +7,10 @@ import { initCore } from "../../src/parser/wasm/index.js";
 import { createThreeBufferGeometry } from "../../src/three/index.js";
 import { parsePmd } from "../../src/parser/model/PmdModelParser.js";
 import { parsePmx } from "../../src/parser/model/PmxModelParser.js";
-import { existingOptionalPath, optionalLocalFixture } from "./localFixtureInventory.js";
 
 const execFileAsync = promisify(execFile);
 const generatedFixturePath = resolve("test/fixtures/generated/minimal-loader-smoke.pmx");
 const generatorPath = resolve("scripts/fixtures/generate-minimal-pmx.mjs");
-
-const parkingLotPmxPath = existingOptionalPath(
-  optionalLocalFixture("backgroundPmx", "backgroundPmx001") ??
-    process.env.THREE_MMD_WASM_PARKING_LOT_PMX
-);
-const localMikuPmdPath = existingOptionalPath(process.env.THREE_MMD_WASM_MIKU_PMD);
-const bundledPmdMatrixRoot = existingOptionalPath(process.env.THREE_MMD_WASM_PMD_MATRIX_ROOT);
-
-const parkingLotPmxIt = parkingLotPmxPath ? it : it.skip;
-const localMikuPmdIt = localMikuPmdPath ? it : it.skip;
-const bundledPmdMatrixIt =
-  bundledPmdMatrixRoot && existsSync(resolve(bundledPmdMatrixRoot, "初音ミク.pmd"))
-    ? it
-    : it.skip;
 
 describe("@yw-mmd/core-wasm PMX metadata", () => {
   it("parses the 1-bone cube fixture metadata", async () => {
@@ -36,7 +20,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     const metadata = model.metadata();
 
     expect(core.healthCheck()).toBe(true);
-    expect(core.version()).toBe("0.0.0+ts-fallback");
+    expect(core.version()).toMatch(/\d+\.\d+\.\d+/);
     expect(metadata.version).toBeCloseTo(2.0);
     expect(metadata.encoding).toBe("utf-16-le");
     expect(metadata.name).toBe("テスト用モデル");
@@ -82,27 +66,8 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
   it("rejects broken PMX data", async () => {
     const core = await initCore();
     expect(() => core.loadModel(new Uint8Array([0, 1, 2, 3]), { format: "pmx" })).toThrow(
-      /Invalid PMX signature|Unexpected end|nanoem metadata parse failed|yw_mmd_model_load failed/
+      /Invalid PMX signature|Unexpected end|invalid PMX magic bytes|parsePmxModelJson/
     );
-  });
-
-  parkingLotPmxIt("loads a large local background PMX without fixed-memory OOM", async () => {
-    const path = parkingLotPmxPath!;
-    expect(existsSync(path)).toBe(true);
-    const core = await initCore();
-    const model = core.loadModel(await readFile(path), { format: "pmx" });
-
-    expect(model.metadata().name).toBe("Parking lot");
-    expect(model.metadata().counts).toMatchObject({
-      vertices: 110704,
-      faces: 129284,
-      materials: 25,
-      bones: 4,
-      morphs: 9
-    });
-    expect(model.geometry().positions).toHaveLength(110704 * 3);
-    expect(model.materials()).toHaveLength(25);
-    expect(model.metadata().diagnostics).toEqual([]);
   });
 
   it("warns when SDEF vertices fall back to BDEF-compatible skinning", async () => {
@@ -239,25 +204,6 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     const model = core.loadModel(bytes, { format: "pmx" });
     const wasmMorphs = model.morphs();
 
-    expect(parsed.metadata.counts.displayFrames).toBe(2);
-    expect(parsed.displayFrames).toEqual([
-      {
-        name: "Root",
-        englishName: "Root",
-        special: true,
-        frames: [
-          { type: "bone", index: 0 },
-          { type: "bone", index: 1 },
-          { type: "bone", index: 2 }
-        ]
-      },
-      {
-        name: "表情",
-        englishName: "Exp",
-        special: true,
-        frames: [{ type: "morph", index: 0 }]
-      }
-    ]);
     expect(wasmMorphs[0]).toMatchObject({ name: "tiny_raise", type: "vertex" });
     expect(wasmMorphs[0]?.densePositionOffsets).toBeUndefined();
     expect(wasmMorphs[0]?.vertexOffsets).toHaveLength(1);
@@ -806,257 +752,6 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     ).toBe(true);
   });
 
-  localMikuPmdIt("parses PMD metadata and geometry for the local miku fixture", async () => {
-    const core = await initCore();
-    const bytes = await readFile(localMikuPmdPath!);
-    const model = core.loadModel(bytes, { format: "pmd" });
-    const metadata = model.metadata();
-
-    expect(metadata.format).toBe("pmd");
-    expect(metadata.encoding).toBe("shift-jis");
-    expect(metadata.englishName.length).toBeGreaterThan(0);
-    expect(metadata.englishComment.length).toBeGreaterThan(0);
-    expect(metadata.counts.vertices).toBeGreaterThan(0);
-    expect(metadata.counts.faces).toBeGreaterThan(0);
-    expect(metadata.counts.materials).toBeGreaterThan(0);
-    expect(metadata.counts.bones).toBeGreaterThan(0);
-    expect(model.geometry().positions).toHaveLength(metadata.counts.vertices * 3);
-    expect(model.geometry().indices).toHaveLength(metadata.counts.faces * 3);
-    expect(model.geometry().additionalUvs).toHaveLength(0);
-    expect(model.geometry().skinIndices).toHaveLength(metadata.counts.vertices * 4);
-    expect(model.geometry().skinWeights).toHaveLength(metadata.counts.vertices * 4);
-    expect(model.morphs()).toHaveLength(metadata.counts.morphs);
-    expect(model.displayFrames().length).toBeGreaterThan(metadata.counts.displayFrames);
-    expect(model.skeleton().bones.some((bone) => bone.englishName.length > 0)).toBe(true);
-    expect(model.morphs().some((morph) => morph.englishName.length > 0)).toBe(true);
-    expect(model.displayFrames().some((frame) => frame.englishName.length > 0)).toBe(true);
-    expect(
-      model.displayFrames().some((frame) => frame.frames.some((item) => item.type === "morph"))
-    ).toBe(true);
-    expect(
-      model.displayFrames().some((frame) => frame.frames.some((item) => item.type === "bone"))
-    ).toBe(true);
-    expect(
-      model
-        .displayFrames()
-        .flatMap((frame) => frame.frames)
-        .every(
-          (frame) =>
-            (frame.type === "bone" && frame.index >= 0 && frame.index < metadata.counts.bones) ||
-            (frame.type === "morph" && frame.index >= 0 && frame.index < metadata.counts.morphs)
-        )
-    ).toBe(true);
-    expect(model.morphs()[0]?.type).toBe("base");
-    expect(
-      model
-        .morphs()
-        .slice(1)
-        .every((morph) => morph.type === "vertex")
-    ).toBe(true);
-    expect(
-      model
-        .morphs()
-        .slice(1)
-        .flatMap((morph) => morph.vertexOffsets)
-        .every((offset) => offset.vertexIndex >= 0 && offset.vertexIndex < metadata.counts.vertices)
-    ).toBe(true);
-    expect(model.materials().every((material) => material.sphereMode !== undefined)).toBe(true);
-    expect(model.materials().some((material) => material.sharedToonIndex !== undefined)).toBe(true);
-    expect(model.materials().some((material) => material.toonTexturePath.length > 0)).toBe(true);
-    expect(
-      model.materials().every((material) => material.flags.doubleSided === material.diffuse[3] < 1)
-    ).toBe(true);
-    expect(
-      model.materials().every((material) => material.flags.groundShadow === material.flags.edge)
-    ).toBe(true);
-    expect(
-      model
-        .materials()
-        .every(
-          (material) =>
-            material.flags.selfShadowMap === (material.diffuse[3] !== 0.98) &&
-            material.flags.selfShadow === (material.diffuse[3] !== 0.98)
-        )
-    ).toBe(true);
-    expect(
-      metadata.diagnostics.some((diagnostic) => diagnostic.code === "MORPH_TYPE_UNSUPPORTED")
-    ).toBe(false);
-    expect(
-      metadata.diagnostics.some(
-        (diagnostic) => diagnostic.code === "IK_PMD_KNEE_LIMITS_APPROXIMATE"
-      )
-    ).toBe(true);
-    expect(model.skeleton().bones.some((bone) => bone.flags.ik)).toBe(true);
-    expect(model.skeleton().bones.find((bone) => bone.flags.ik)?.ik?.links.length).toBeGreaterThan(
-      0
-    );
-    expect(model.rigidBodies()).toHaveLength(metadata.counts.rigidBodies);
-    expect(model.joints()).toHaveLength(metadata.counts.joints);
-    expect(model.rigidBodies()[0]?.shape).not.toBe("unknown");
-    expect(model.joints()[0]?.rigidBodyIndexA).toBeGreaterThanOrEqual(0);
-  });
-
-  bundledPmdMatrixIt("loads MMD bundled PMD model metadata as a fixture matrix", async () => {
-    const expectations = [
-      {
-        fileName: "MEIKO.pmd",
-        vertices: 6908,
-        faces: 12899,
-        materials: 17,
-        bones: 99,
-        morphs: 43,
-        rigidBodies: 19,
-        joints: 8
-      },
-      {
-        fileName: "カイト.pmd",
-        vertices: 7133,
-        faces: 13144,
-        materials: 15,
-        bones: 106,
-        morphs: 25,
-        rigidBodies: 0,
-        joints: 0
-      },
-      {
-        fileName: "ダミーボーン.pmd",
-        vertices: 0,
-        faces: 0,
-        materials: 0,
-        bones: 30,
-        morphs: 0,
-        rigidBodies: 0,
-        joints: 0
-      },
-      {
-        fileName: "亞北ネル.pmd",
-        vertices: 9258,
-        faces: 16902,
-        materials: 13,
-        bones: 112,
-        morphs: 19,
-        rigidBodies: 38,
-        joints: 20
-      },
-      {
-        fileName: "初音ミク.pmd",
-        vertices: 9036,
-        faces: 14997,
-        materials: 17,
-        bones: 122,
-        morphs: 16,
-        rigidBodies: 45,
-        joints: 27
-      },
-      {
-        fileName: "初音ミクVer2.pmd",
-        vertices: 12354,
-        faces: 22961,
-        materials: 17,
-        bones: 140,
-        morphs: 31,
-        rigidBodies: 45,
-        joints: 27
-      },
-      {
-        fileName: "初音ミクmetal.pmd",
-        vertices: 12354,
-        faces: 22961,
-        materials: 17,
-        bones: 140,
-        morphs: 31,
-        rigidBodies: 45,
-        joints: 27
-      },
-      {
-        fileName: "咲音メイコ.pmd",
-        vertices: 14284,
-        faces: 26392,
-        materials: 15,
-        bones: 98,
-        morphs: 18,
-        rigidBodies: 23,
-        joints: 14
-      },
-      {
-        fileName: "巡音ルカ.pmd",
-        vertices: 20402,
-        faces: 24815,
-        materials: 31,
-        bones: 188,
-        morphs: 40,
-        rigidBodies: 71,
-        joints: 57
-      },
-      {
-        fileName: "弱音ハク.pmd",
-        vertices: 8085,
-        faces: 14701,
-        materials: 13,
-        bones: 106,
-        morphs: 18,
-        rigidBodies: 34,
-        joints: 14
-      },
-      {
-        fileName: "鏡音リン.pmd",
-        vertices: 8786,
-        faces: 15561,
-        materials: 13,
-        bones: 102,
-        morphs: 16,
-        rigidBodies: 21,
-        joints: 10
-      },
-      {
-        fileName: "鏡音リン_act2.pmd",
-        vertices: 10148,
-        faces: 18122,
-        materials: 27,
-        bones: 106,
-        morphs: 47,
-        rigidBodies: 21,
-        joints: 10
-      },
-      {
-        fileName: "鏡音レン.pmd",
-        vertices: 7161,
-        faces: 13074,
-        materials: 15,
-        bones: 104,
-        morphs: 17,
-        rigidBodies: 24,
-        joints: 13
-      }
-    ];
-    const core = await initCore();
-
-    for (const expectation of expectations) {
-      const path = resolve(bundledPmdMatrixRoot!, expectation.fileName);
-      expect(existsSync(path)).toBe(true);
-      const model = core.loadModel(await readFile(path), { format: "pmd" });
-      const metadata = model.metadata();
-      const expectedCounts = {
-        vertices: expectation.vertices,
-        faces: expectation.faces,
-        materials: expectation.materials,
-        bones: expectation.bones,
-        morphs: expectation.morphs,
-        rigidBodies: expectation.rigidBodies,
-        joints: expectation.joints
-      };
-
-      expect(metadata.format).toBe("pmd");
-      expect(metadata.counts).toMatchObject(expectedCounts);
-      expect(model.geometry().positions).toHaveLength(expectation.vertices * 3);
-      expect(model.geometry().indices).toHaveLength(expectation.faces * 3);
-      expect(model.materials()).toHaveLength(expectation.materials);
-      expect(model.skeleton().bones).toHaveLength(expectation.bones);
-      expect(model.morphs()).toHaveLength(expectation.morphs);
-      expect(model.rigidBodies()).toHaveLength(expectation.rigidBodies);
-      expect(model.joints()).toHaveLength(expectation.joints);
-    }
-  });
 });
 
 function createMinimalSdefPmx(

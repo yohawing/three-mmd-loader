@@ -3,15 +3,15 @@ import * as THREE from "three";
 
 import {
   CustomRuntime,
-  exportMmdRuntimeWasmFormatBytes,
-  exportMmdRuntimeWasmVmdAnimationJsonBytes,
-  exportMmdRuntimeWasmVpdPoseJsonBytes,
-  parseMmdRuntimeWasmFormatJson
+  exportMmdAnimWasmFormatBytes,
+  exportMmdAnimWasmVmdAnimationJsonBytes,
+  exportMmdAnimWasmVpdPoseJsonBytes,
+  parseMmdAnimWasmFormatJson
 } from "../../../src/index.js";
 import type { CustomRuntimeWasmModule, MmdAnimation, MmdPhysicsBackend, MmdPhysicsStepContext, MmdPhysicsStepResult } from "../../../src/index.js";
 
 describe("CustomRuntime", () => {
-  it("constructs an mmd-runtime wasm model from PMX bytes and evaluates frame state", () => {
+  it("constructs an mmd-anim wasm model from PMX bytes and evaluates frame state", () => {
     const wasm = createFakeWasmModule();
     const runtime = CustomRuntime.fromPmxBytes(wasm, new Uint8Array([1, 2, 3]), {
       frameRate: 60
@@ -87,37 +87,37 @@ describe("CustomRuntime", () => {
     expect(runtime.debugRigidBodyWorldTransformsColumnMajor()).toEqual([backend.debugMatrix]);
   });
 
-  it("calls mmd-runtime wasm parser and exporter helpers without package coupling", () => {
+  it("calls mmd-anim wasm parser and exporter helpers without package coupling", () => {
     const wasm = createFakeWasmModule();
     const bytes = new Uint8Array([1, 2, 3]);
 
-    expect(parseMmdRuntimeWasmFormatJson(wasm, bytes, "motion.vmd")).toEqual({
+    expect(parseMmdAnimWasmFormatJson(wasm, bytes, "motion.vmd")).toEqual({
       kind: "vmd",
       fileName: "motion.vmd",
       byteLength: 3
     });
-    expect(Array.from(exportMmdRuntimeWasmFormatBytes(wasm, bytes, "motion.vmd"))).toEqual([
+    expect(Array.from(exportMmdAnimWasmFormatBytes(wasm, bytes, "motion.vmd"))).toEqual([
       3, 2, 1
     ]);
-    expect(Array.from(exportMmdRuntimeWasmVmdAnimationJsonBytes(wasm, "{\"kind\":\"vmd\"}"))).toEqual([
+    expect(Array.from(exportMmdAnimWasmVmdAnimationJsonBytes(wasm, "{\"kind\":\"vmd\"}"))).toEqual([
       0x56, 0x4d, 0x44
     ]);
-    expect(Array.from(exportMmdRuntimeWasmVpdPoseJsonBytes(wasm, "{\"kind\":\"vpd\"}"))).toEqual([
+    expect(Array.from(exportMmdAnimWasmVpdPoseJsonBytes(wasm, "{\"kind\":\"vpd\"}"))).toEqual([
       0x56, 0x50, 0x44
     ]);
   });
 
   it("throws clear errors when parser/exporter helpers are missing", () => {
-    expect(() => parseMmdRuntimeWasmFormatJson({}, new Uint8Array())).toThrow(
+    expect(() => parseMmdAnimWasmFormatJson({}, new Uint8Array())).toThrow(
       /parseMmdFormatJson/
     );
-    expect(() => exportMmdRuntimeWasmFormatBytes({}, new Uint8Array())).toThrow(
+    expect(() => exportMmdAnimWasmFormatBytes({}, new Uint8Array())).toThrow(
       /exportMmdFormatBytes/
     );
-    expect(() => exportMmdRuntimeWasmVmdAnimationJsonBytes({}, "{}")).toThrow(
+    expect(() => exportMmdAnimWasmVmdAnimationJsonBytes({}, "{}")).toThrow(
       /exportVmdAnimationJsonBytes/
     );
-    expect(() => exportMmdRuntimeWasmVpdPoseJsonBytes({}, "{}")).toThrow(
+    expect(() => exportMmdAnimWasmVpdPoseJsonBytes({}, "{}")).toThrow(
       /exportVpdPoseJsonBytes/
     );
   });

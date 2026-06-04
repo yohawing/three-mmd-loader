@@ -1,12 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { initCore } from "../../src/parser/wasm/index.js";
-import { existingOptionalPath, optionalLocalFixture } from "./localFixtureInventory.js";
-
-const luminePmxPath = existingOptionalPath(
-  optionalLocalFixture("pmx", "pmx002") ?? process.env.THREE_MMD_WASM_LUMINE_PMX
-);
-const luminePmxIt = luminePmxPath ? it : it.skip;
 
 describe("@yw-mmd/core-wasm VPD metadata", () => {
   it("parses VPD bone pose blocks", async () => {
@@ -19,37 +12,6 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(Object.keys(pose.bones)).toEqual(["センター", "上半身"]);
     expect(pose.bones["センター"]?.translation).toEqual([0, 0, 3]);
     expect(pose.bones["上半身"]?.rotation[3]).toBeCloseTo(0.958242);
-  });
-
-  luminePmxIt("parses VPD morph blocks for a model fixture", async () => {
-    const core = await initCore();
-    const pose = core.loadVpd(
-      new TextEncoder().encode(
-        [
-          "Vocaloid Pose Data file",
-          "",
-          "Lumine.osm;",
-          "0;",
-          "",
-          "Morph0{irtB L B03",
-          "  0.75;",
-          "}"
-        ].join("\n")
-      )
-    );
-    const model = core.loadModel(
-      await readFile(luminePmxPath!),
-      {
-        format: "pmx"
-      }
-    );
-    const matchedMorphIndices = model
-      .morphs()
-      .map((morph, index) => (morph.englishName === "irtB L B03" ? index : -1))
-      .filter((index) => index >= 0);
-    expect(pose.metadata.morphCount).toBe(1);
-    expect(pose.morphs["irtB L B03"]).toBe(0.75);
-    expect(matchedMorphIndices.length).toBeGreaterThan(0);
   });
 
   it("accepts permissive VPD whitespace and comments before statements", async () => {
@@ -245,7 +207,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(Array.from(centerTrack?.translations.slice(0, 3) ?? [])).toEqual([0, 0, 3]);
   });
 
-  luminePmxIt("converts VPD morph pose data into one-frame morph animation tracks", async () => {
+  it("converts VPD morph pose data into one-frame morph animation tracks", async () => {
     const core = await initCore();
     const animation = core.loadVpdAnimation(
       new TextEncoder().encode(

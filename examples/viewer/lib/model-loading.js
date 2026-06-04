@@ -516,7 +516,7 @@ async function createRuntimeFactory(physicsBackend) {
   if (viewerConfig.runtime !== "custom") {
     return undefined;
   }
-  const wasm = await import("/__mmd_runtime_wasm/mmd_runtime_wasm.js");
+  const wasm = await import("/__mmd_anim_wasm/mmd_anim_wasm.js");
   await wasm.default();
   return ({ modelBytes }) => CustomRuntime.fromPmxBytes(wasm, modelBytes, {
     frameRate: state.mmdFrameRate,

@@ -4,7 +4,6 @@ import { dirname, resolve } from "node:path";
 import type * as THREE from "three";
 
 import { readMmdBoneUserData } from "../../src/runtime/userData.js";
-import { compareNumberArrays, extractMmdWorldBoneMatrix } from "./nativeNanoemOracle.js";
 
 export interface MmdDumperGoldenIkFixturesResult {
   readonly skipReason?: string;
@@ -79,6 +78,17 @@ interface GoldenIkBatchCase {
   readonly frames: readonly number[];
 }
 
+interface NumberArrayComparison {
+  readonly ok: boolean;
+  readonly maxAbsError: number;
+  readonly worst: {
+    readonly index: number;
+    readonly expected: number;
+    readonly actual: number;
+    readonly error: number;
+  } | null;
+}
+
 interface GoldenIkFixture {
   readonly name: string;
   readonly output: string;
@@ -105,6 +115,8 @@ const defaultFocusedIkBoneNames = [
   "左つま先IK",
   "右つま先IK"
 ] as const;
+
+const mmdThreeAxisSigns = [1, 1, -1, 1] as const;
 
 export async function loadMmdDumperGoldenIkFixtures(
   oracleRoot = process.env.THREE_MMD_LOADER_GOLDEN_IK_ORACLE_ROOT ?? defaultOracleRoot
@@ -362,6 +374,57 @@ function findOracleBone(
   boneName: string
 ): MmdDumperOracleBone | undefined {
   return model.bones.find((bone) => bone.name === boneName);
+}
+
+function compareNumberArrays(
+  actual: readonly number[],
+  expected: readonly number[],
+  epsilon: number
+): NumberArrayComparison {
+  if (actual.length !== expected.length) {
+    throw new Error(`Array length mismatch: actual=${actual.length} expected=${expected.length}`);
+  }
+  let maxAbsError = 0;
+  let worst: NumberArrayComparison["worst"] = null;
+  for (let index = 0; index < actual.length; index += 1) {
+    const actualValue = actual[index] ?? 0;
+    const expectedValue = expected[index] ?? 0;
+    const error = Math.abs(actualValue - expectedValue);
+    if (error > maxAbsError) {
+      maxAbsError = error;
+      worst = {
+        index,
+        expected: expectedValue,
+        actual: actualValue,
+        error
+      };
+    }
+  }
+  return {
+    ok: maxAbsError <= epsilon,
+    maxAbsError,
+    worst
+  };
+}
+
+function extractMmdWorldBoneMatrix(mesh: THREE.SkinnedMesh, boneIndex: number): readonly number[] {
+  mesh.updateWorldMatrix(false, true);
+  const bone = mesh.skeleton.bones[boneIndex];
+  if (!bone) {
+    throw new Error(`Runtime bone not found: ${boneIndex}`);
+  }
+  const elements = bone.matrixWorld.elements;
+  const values: number[] = [];
+  for (let column = 0; column < 4; column += 1) {
+    for (let row = 0; row < 4; row += 1) {
+      values.push(
+        (elements[column * 4 + row] ?? 0) *
+          (mmdThreeAxisSigns[row] ?? 1) *
+          (mmdThreeAxisSigns[column] ?? 1)
+      );
+    }
+  }
+  return values;
 }
 
 function findRuntimeBoneIndex(mesh: THREE.SkinnedMesh, boneName: string): number {

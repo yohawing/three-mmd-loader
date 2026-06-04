@@ -67,9 +67,9 @@ export interface CustomRuntimeWasmModule {
 }
 
 export interface CustomRuntimeOptions {
-  /** mmd-runtime WASM module namespace. */
+  /** mmd-anim WASM module namespace. */
   readonly wasm?: CustomRuntimeWasmModule;
-  /** Prebuilt mmd-runtime model. If omitted, wasm.WasmMmdModel.fromPmxBytes and pmxBytes are required. */
+  /** Prebuilt mmd-anim model. If omitted, wasm.WasmMmdModel.fromPmxBytes and pmxBytes are required. */
   readonly model?: CustomRuntimeWasmModel;
   /** PMX bytes used to create a wasm model when model is omitted. */
   readonly pmxBytes?: Uint8Array;
@@ -87,54 +87,54 @@ export interface CustomRuntimeOptions {
   readonly ownsWasmResources?: boolean;
 }
 
-export function parseMmdRuntimeWasmFormatJson(
+export function parseMmdAnimWasmFormatJson(
   wasm: Pick<CustomRuntimeWasmModule, "parseMmdFormatJson">,
   data: Uint8Array,
   fileName?: string | null
 ): unknown {
   const parser = wasm.parseMmdFormatJson;
   if (!parser) {
-    throw new TypeError("mmd-runtime wasm module does not expose parseMmdFormatJson");
+    throw new TypeError("mmd-anim wasm module does not expose parseMmdFormatJson");
   }
   return JSON.parse(parser(data, fileName ?? null)) as unknown;
 }
 
-export function exportMmdRuntimeWasmFormatBytes(
+export function exportMmdAnimWasmFormatBytes(
   wasm: Pick<CustomRuntimeWasmModule, "exportMmdFormatBytes">,
   data: Uint8Array,
   fileName?: string | null
 ): Uint8Array {
   const exporter = wasm.exportMmdFormatBytes;
   if (!exporter) {
-    throw new TypeError("mmd-runtime wasm module does not expose exportMmdFormatBytes");
+    throw new TypeError("mmd-anim wasm module does not expose exportMmdFormatBytes");
   }
   return exporter(data, fileName ?? null);
 }
 
-export function exportMmdRuntimeWasmVmdAnimationJsonBytes(
+export function exportMmdAnimWasmVmdAnimationJsonBytes(
   wasm: Pick<CustomRuntimeWasmModule, "exportVmdAnimationJsonBytes">,
   json: string
 ): Uint8Array {
   const exporter = wasm.exportVmdAnimationJsonBytes;
   if (!exporter) {
-    throw new TypeError("mmd-runtime wasm module does not expose exportVmdAnimationJsonBytes");
+    throw new TypeError("mmd-anim wasm module does not expose exportVmdAnimationJsonBytes");
   }
   return exporter(json);
 }
 
-export function exportMmdRuntimeWasmVpdPoseJsonBytes(
+export function exportMmdAnimWasmVpdPoseJsonBytes(
   wasm: Pick<CustomRuntimeWasmModule, "exportVpdPoseJsonBytes">,
   json: string
 ): Uint8Array {
   const exporter = wasm.exportVpdPoseJsonBytes;
   if (!exporter) {
-    throw new TypeError("mmd-runtime wasm module does not expose exportVpdPoseJsonBytes");
+    throw new TypeError("mmd-anim wasm module does not expose exportVpdPoseJsonBytes");
   }
   return exporter(json);
 }
 
 /**
- * Experimental runtime adapter for the adjacent mmd-runtime WASM evaluator.
+ * Experimental runtime adapter for the mmd-anim WASM evaluator.
  *
  * The adapter intentionally accepts structural wasm types instead of importing
  * a package name, so local harness builds and future published artifacts can be
@@ -161,6 +161,7 @@ export class CustomRuntime implements MmdRuntime {
   private readonly scratchThreeWorldMatrix = new THREE.Matrix4();
   private readonly scratchLocalMatrix = new THREE.Matrix4();
   private readonly scratchParentInverseMatrix = new THREE.Matrix4();
+  private readonly scratchParentBoneIndices: number[] = [];
   private readonly scratchExternalPhysicsInput = {
     translations: new Float32Array(0),
     rotations: new Float32Array(0),
@@ -304,6 +305,7 @@ export class CustomRuntime implements MmdRuntime {
       throw new TypeError("CustomRuntime animation must be an MmdAnimation");
     }
     this.mesh = mesh;
+    writeParentBoneIndices(mesh.skeleton.bones, this.scratchParentBoneIndices);
     this.externalPhysicsData =
       this.physicsMode === "external" && this.physicsBackend
         ? readRuntimeExternalPhysics(mesh)
@@ -367,6 +369,7 @@ export class CustomRuntime implements MmdRuntime {
       mesh,
       this.worldMatrices,
       this.scratchWorldMatrices,
+      this.scratchParentBoneIndices,
       this.scratchThreeWorldMatrix,
       this.scratchLocalMatrix,
       this.scratchParentInverseMatrix
@@ -564,6 +567,7 @@ function syncWorldMatricesToSkeleton(
   mesh: THREE.SkinnedMesh,
   matrices: Float32Array,
   worldMatrices: THREE.Matrix4[],
+  parentBoneIndices: readonly number[],
   threeWorldMatrix: THREE.Matrix4,
   localMatrix: THREE.Matrix4,
   parentInverseMatrix: THREE.Matrix4
@@ -576,7 +580,7 @@ function syncWorldMatricesToSkeleton(
   }
   for (let index = 0; index < bones.length; index += 1) {
     const bone = bones[index];
-    const parentBoneIndex = findParentBoneIndex(bones, index);
+    const parentBoneIndex = parentBoneIndices[index] ?? -1;
     if (parentBoneIndex >= 0) {
       localMatrix.copy(parentInverseMatrix.copy(worldMatrices[parentBoneIndex]).invert()).multiply(worldMatrices[index]);
     } else {
@@ -618,17 +622,21 @@ function writeMmdWorldMatrixToThree(
   );
 }
 
-function findParentBoneIndex(bones: readonly THREE.Bone[], index: number): number {
-  const parent = bones[index]?.parent;
-  if (!parent) {
-    return -1;
-  }
-  for (let candidate = 0; candidate < bones.length; candidate += 1) {
-    if (bones[candidate] === parent) {
-      return candidate;
+function writeParentBoneIndices(bones: readonly THREE.Bone[], target: number[]): void {
+  target.length = bones.length;
+  for (let index = 0; index < bones.length; index += 1) {
+    const parent = bones[index]?.parent;
+    let parentIndex = -1;
+    if (parent) {
+      for (let candidate = 0; candidate < bones.length; candidate += 1) {
+        if (bones[candidate] === parent) {
+          parentIndex = candidate;
+          break;
+        }
+      }
     }
+    target[index] = parentIndex;
   }
-  return -1;
 }
 
 function syncMorphWeights(mesh: THREE.SkinnedMesh, weights: Float32Array): void {

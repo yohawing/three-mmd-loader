@@ -1,6 +1,6 @@
-[submodule "nanoem"]
-	path = native/third_party/nanoem
-	url = https://github.com/yohawing/nanoem.git
 [submodule "native/third_party/bullet3"]
 	path = native/third_party/bullet3
 	url = https://github.com/bulletphysics/bullet3.git
+[submodule "third_party/mmd-anim"]
+	path = third_party/mmd-anim
+	url = https://github.com/yohawing/mmd-anim

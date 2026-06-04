@@ -121,7 +121,7 @@ describe("legacy MMD physics bridge helpers", () => {
     expect(joint.rotation?.map((value) => Number(value.toFixed(6)))).toEqual([1, 0, 0, 0]);
   });
 
-  it("uses nanoem's YXZ Euler order for multi-axis rigid body rotations", () => {
+  it("uses MMD's YXZ Euler order for multi-axis rigid body rotations", () => {
     expect(
       legacyMmdEulerToQuaternion([Math.PI / 2, Math.PI / 2, 0]).map((value) =>
         Number(value.toFixed(6))

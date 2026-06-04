@@ -10,8 +10,8 @@ const localFixturesPath = resolve(root, "test", "fixtures", "fixtures.local.json
 const localFixtureInventory = loadLocalFixtureInventory();
 const dataRoot = resolveDataRoot();
 const dataRoute = "/__mmd_data/";
-const mmdRuntimeWasmRoot = resolveMmdRuntimeWasmRoot();
-const mmdRuntimeWasmRoute = "/__mmd_runtime_wasm/";
+const mmdAnimWasmRoot = resolveMmdAnimWasmRoot();
+const mmdAnimWasmRoute = "/__mmd_anim_wasm/";
 const localAssetsRoute = "/__mmd_assets__/fixtures-local.json";
 const port = Number.parseInt(process.env.PORT ?? "3939", 10);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -64,7 +64,7 @@ const server = createServer(async (request, response) => {
       response.end(`${JSON.stringify(manifest, null, 2)}\n`);
       return;
     }
-    if (pathname === mmdRuntimeWasmRoute || pathname === `${mmdRuntimeWasmRoute}package.json`) {
+    if (pathname === mmdAnimWasmRoute || pathname === `${mmdAnimWasmRoute}package.json`) {
       response.writeHead(404, {
         "Cache-Control": "no-store",
         "Content-Type": "text/plain; charset=utf-8"
@@ -123,10 +123,10 @@ server.listen(port, host, () => {
       console.log(`MMD local assets: ${localAssetsRoute} from ${localFixturesPath}`);
     }
   }
-  if (mmdRuntimeWasmRoot === undefined) {
-    console.log(`mmd-runtime WASM route disabled. Set MMD_RUNTIME_WASM_ROOT to serve CustomRuntime.`);
+  if (mmdAnimWasmRoot === undefined) {
+    console.log(`mmd-anim WASM route disabled. Set MMD_ANIM_WASM_ROOT to serve CustomRuntime.`);
   } else {
-    console.log(`mmd-runtime WASM route: ${mmdRuntimeWasmRoute} -> ${mmdRuntimeWasmRoot}`);
+    console.log(`mmd-anim WASM route: ${mmdAnimWasmRoute} -> ${mmdAnimWasmRoot}`);
   }
 });
 
@@ -189,12 +189,12 @@ function resolveDataRoot() {
   return undefined;
 }
 
-function resolveMmdRuntimeWasmRoot() {
-  if (process.env.MMD_RUNTIME_WASM_ROOT !== undefined) {
-    return resolve(process.env.MMD_RUNTIME_WASM_ROOT);
+function resolveMmdAnimWasmRoot() {
+  if (process.env.MMD_ANIM_WASM_ROOT !== undefined) {
+    return resolve(process.env.MMD_ANIM_WASM_ROOT);
   }
-  const defaultRoot = resolve(root, "..", "mmd-runtime", "crates", "mmd-runtime-wasm", "harness", "pkg-web");
-  return existsSync(join(defaultRoot, "mmd_runtime_wasm.js")) ? defaultRoot : undefined;
+  const defaultRoot = resolve(root, "third_party", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
+  return existsSync(join(defaultRoot, "mmd_anim_wasm.js")) ? defaultRoot : undefined;
 }
 
 function createLocalAssetManifest() {
@@ -355,15 +355,15 @@ function resolveRequestPath(pathname) {
     );
     return resolve(dataRoot, relativePath);
   }
-  if (pathname.startsWith(mmdRuntimeWasmRoute)) {
-    if (mmdRuntimeWasmRoot === undefined) {
-      return resolve(root, "__mmd_runtime_wasm_not_configured__");
+  if (pathname.startsWith(mmdAnimWasmRoute)) {
+    if (mmdAnimWasmRoot === undefined) {
+      return resolve(root, "__mmd_anim_wasm_not_configured__");
     }
-    const relativePath = normalize(decodeURIComponent(pathname.slice(mmdRuntimeWasmRoute.length))).replace(
+    const relativePath = normalize(decodeURIComponent(pathname.slice(mmdAnimWasmRoute.length))).replace(
       /^[/\\]+/,
       ""
     );
-    return resolve(mmdRuntimeWasmRoot, relativePath);
+    return resolve(mmdAnimWasmRoot, relativePath);
   }
   if (pathname === "/") {
     return resolve(viewerRoot, "index.html");
@@ -386,7 +386,7 @@ function isAllowedPath(filePath) {
     isPathInside(filePath, root) ||
     isPathInside(filePath, viewerRoot) ||
     (dataRoot !== undefined && isPathInside(filePath, dataRoot)) ||
-    (mmdRuntimeWasmRoot !== undefined && isPathInside(filePath, mmdRuntimeWasmRoot))
+    (mmdAnimWasmRoot !== undefined && isPathInside(filePath, mmdAnimWasmRoot))
   );
 }
 

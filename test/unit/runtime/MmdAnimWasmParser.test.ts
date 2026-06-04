@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  exportMmdRuntimeWasmVmdAnimationJsonBytes,
-  exportMmdRuntimeWasmVpdPoseJsonBytes,
-  loadMmdRuntimeWasmVmd,
-  loadMmdRuntimeWasmVpd,
-  mmdRuntimeWasmVmdDtoToAnimation,
-  mmdRuntimeWasmVpdDtoToPose
+  exportMmdAnimWasmVmdAnimationJsonBytes,
+  exportMmdAnimWasmVpdPoseJsonBytes,
+  loadMmdAnimWasmVmd,
+  loadMmdAnimWasmVpd,
+  mmdAnimWasmVmdDtoToAnimation,
+  mmdAnimWasmVpdDtoToPose
 } from "../../../src/index.js";
 
-describe("mmd-runtime wasm parser adapter", () => {
+describe("mmd-anim wasm parser adapter", () => {
   it("maps VMD parser DTOs into existing packed MmdAnimation tracks", () => {
-    const animation = mmdRuntimeWasmVmdDtoToAnimation(createVmdDto(), new Uint8Array([1, 2]));
+    const animation = mmdAnimWasmVmdDtoToAnimation(createVmdDto(), new Uint8Array([1, 2]));
     const arm = animation.boneTracks.arm;
     const blink = animation.morphTracks.blink;
 
@@ -46,7 +46,7 @@ describe("mmd-runtime wasm parser adapter", () => {
   });
 
   it("maps VPD parser DTOs into existing MmdPose records", () => {
-    const pose = mmdRuntimeWasmVpdDtoToPose(
+    const pose = mmdAnimWasmVpdDtoToPose(
       {
         format: "vpd",
         modelFile: "model.pmx",
@@ -72,18 +72,18 @@ describe("mmd-runtime wasm parser adapter", () => {
     });
   });
 
-  it("loads VMD/VPD DTOs from structural mmd-runtime wasm modules", () => {
+  it("loads VMD/VPD DTOs from structural mmd-anim wasm modules", () => {
     const wasm = {
       parseMmdFormatJson(_data: Uint8Array, fileName?: string | null): string {
         return JSON.stringify(fileName?.endsWith(".vpd") ? createVpdDto() : createVmdDto());
       }
     };
 
-    expect(loadMmdRuntimeWasmVmd(wasm, new Uint8Array([1]), "motion.vmd").metadata.modelName).toBe("miku");
-    expect(loadMmdRuntimeWasmVpd(wasm, new Uint8Array([2]), "pose.vpd").metadata.modelFile).toBe("model.pmx");
+    expect(loadMmdAnimWasmVmd(wasm, new Uint8Array([1]), "motion.vmd").metadata.modelName).toBe("miku");
+    expect(loadMmdAnimWasmVpd(wasm, new Uint8Array([2]), "pose.vpd").metadata.modelFile).toBe("model.pmx");
   });
 
-  it("roundtrips DTO JSON through structural mmd-runtime wasm exporters", () => {
+  it("roundtrips DTO JSON through structural mmd-anim wasm exporters", () => {
     const wasm = {
       exportVmdAnimationJsonBytes(json: string): Uint8Array {
         expect(JSON.parse(json)).toMatchObject({ kind: "vmd" });
@@ -95,10 +95,10 @@ describe("mmd-runtime wasm parser adapter", () => {
       }
     };
 
-    expect(Array.from(exportMmdRuntimeWasmVmdAnimationJsonBytes(wasm, JSON.stringify(createVmdDto())))).toEqual([
+    expect(Array.from(exportMmdAnimWasmVmdAnimationJsonBytes(wasm, JSON.stringify(createVmdDto())))).toEqual([
       0x56, 0x4d, 0x44
     ]);
-    expect(Array.from(exportMmdRuntimeWasmVpdPoseJsonBytes(wasm, JSON.stringify(createVpdDto())))).toEqual([
+    expect(Array.from(exportMmdAnimWasmVpdPoseJsonBytes(wasm, JSON.stringify(createVpdDto())))).toEqual([
       0x56, 0x50, 0x44
     ]);
   });

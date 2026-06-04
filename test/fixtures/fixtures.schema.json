@@ -90,7 +90,7 @@
               "items": {
                 "$ref": "#/$defs/playbackSmokeCase"
               },
-              "description": "Optional local runtime playback comparisons against native nanoem oracle dumps."
+              "description": "Optional local runtime playback cases for developer-only stability checks."
             }
           }
         }
@@ -127,8 +127,6 @@
         "name",
         "model",
         "motion",
-        "oracle",
-        "oracleKind",
         "frames",
         "watchBones"
       ],
@@ -157,11 +155,11 @@
         },
         "oracle": {
           "$ref": "#/$defs/relativeFilePath",
-          "description": "Path to a gitignored native nanoem oracle JSON, resolved from basePath."
+          "description": "Optional path to a gitignored local comparison artifact, resolved from basePath."
         },
         "oracleKind": {
           "type": "string",
-          "const": "native-nanoem-runtime-dump"
+          "minLength": 1
         },
         "stage": {
           "type": "string",

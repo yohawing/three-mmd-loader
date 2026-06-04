@@ -60,7 +60,7 @@ try {
     join(workDir, "consumer.ts"),
     `import { ThreeMmdLoader, type ThreeMmdAnimation, type ThreeMmdModel } from "@yohawing/three-mmd-loader";
 import { parsePmxMetadata } from "@yohawing/three-mmd-loader/parser";
-import { DefaultMmdRuntime, exportMmdRuntimeWasmVmdAnimationJsonBytes, loadMmdRuntimeWasmVmd, parseMmdRuntimeWasmFormatJson } from "@yohawing/three-mmd-loader/runtime";
+import { DefaultMmdRuntime, exportMmdAnimWasmVmdAnimationJsonBytes, loadMmdAnimWasmVmd, parseMmdAnimWasmFormatJson } from "@yohawing/three-mmd-loader/runtime";
 import { createThreeSkeleton } from "@yohawing/three-mmd-loader/three";
 import { createDisabledMmdPhysicsBackend } from "@yohawing/three-mmd-loader/physics";
 
@@ -75,9 +75,9 @@ model.root.add(model.mesh);
 model.setAnimation(animation);
 model.update(0);
 model.diagnostics.textures.forEach((diagnostic) => void diagnostic.code);
-const parsed: unknown = parseMmdRuntimeWasmFormatJson(parserWasm, new Uint8Array(), "motion.vmd");
-const runtimeAnimation = loadMmdRuntimeWasmVmd(parserWasm, new Uint8Array(), "motion.vmd");
-const exported: Uint8Array = exportMmdRuntimeWasmVmdAnimationJsonBytes(exporterWasm, "{}");
+const parsed: unknown = parseMmdAnimWasmFormatJson(parserWasm, new Uint8Array(), "motion.vmd");
+const runtimeAnimation = loadMmdAnimWasmVmd(parserWasm, new Uint8Array(), "motion.vmd");
+const exported: Uint8Array = exportMmdAnimWasmVmdAnimationJsonBytes(exporterWasm, "{}");
 
 void loader;
 void runtime;
