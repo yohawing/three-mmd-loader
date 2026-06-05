@@ -275,6 +275,44 @@ describe("example viewer source", () => {
     expect(styles).toContain("@keyframes loading-spin");
   });
 
+  it("persists viewport grid and axis visibility controls from the load menu", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const sceneSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    const i18nSource = await readFile("examples/viewer/lib/i18n.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('id="viewport-settings-category"');
+    expect(html).toContain('data-i18n="menu.viewport"');
+    expect(html.indexOf('id="viewport-settings-category"')).toBeLessThan(html.indexOf('id="model-load-category"'));
+    expect(html).toContain('id="viewport-grid-toggle"');
+    expect(html).toContain('id="viewport-axes-toggle"');
+    expect(domSource).toContain('viewportGridToggle: document.querySelector("#viewport-grid-toggle")');
+    expect(domSource).toContain('viewportAxesToggle: document.querySelector("#viewport-axes-toggle")');
+    expect(stateSource).toContain('const viewportStorageKey = "three-mmd-loader.viewer.viewport.v1"');
+    expect(stateSource).toContain("const storedViewportSettings = readStoredViewportSettings()");
+    expect(stateSource).toContain("viewportGridVisible: storedViewportSettings.grid ?? true");
+    expect(stateSource).toContain("viewportAxesVisible: storedViewportSettings.axes ?? true");
+    expect(stateSource).toContain("export function persistViewportSettings()");
+    expect(sceneSource).toContain("state.gridHelper = new THREE.GridHelper");
+    expect(sceneSource).toContain("state.axesHelper = new THREE.AxesHelper");
+    expect(sceneSource).toContain("state.gridHelper.visible = state.viewportGridVisible");
+    expect(sceneSource).toContain("state.axesHelper.visible = state.viewportAxesVisible");
+    expect(sceneSource).toContain("export function setViewportGridVisible(visible)");
+    expect(sceneSource).toContain("export function setViewportAxesVisible(visible)");
+    expect(sceneSource).toContain("persistViewportSettings()");
+    expect(mainSource).toContain("bindViewportControls()");
+    expect(mainSource).toContain("setViewportGridVisible(dom.viewportGridToggle.checked)");
+    expect(mainSource).toContain("setViewportAxesVisible(dom.viewportAxesToggle.checked)");
+    expect(i18nSource).toContain('"menu.viewport": "Viewport"');
+    expect(i18nSource).toContain('"viewport.grid": "Grid"');
+    expect(i18nSource).toContain('"viewport.axes": "Axis"');
+    expect(styles).toContain(".viewport-settings");
+    expect(styles).toContain(".switch-toggle input:checked");
+  });
+
   it("decodes URL labels and keeps background and camera imports separate from the main model", async () => {
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
@@ -392,6 +430,25 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("function hasTimelineSource()");
     expect(mainSource).toContain("function hasTimelineSource()");
     expect(mainSource).not.toContain("!state.isPlaying || !hasCurrentMotion()");
+  });
+
+  it("persists viewer volume and reapplies it after reload and audio metadata loads", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+
+    expect(mainSource).toContain('const volumeStorageKey = "three-mmd-loader.viewer.volume.v1"');
+    expect(mainSource.indexOf("const volumeStorageKey")).toBeLessThan(mainSource.indexOf("initVolumeControls()"));
+    expect(mainSource).toContain('dom.volumeSlider?.addEventListener("sl-input", handleVolumeSliderInput)');
+    expect(mainSource).toContain('dom.volumeSlider?.addEventListener("sl-change", handleVolumeSliderInput)');
+    expect(mainSource).toContain("function applyStoredVolume()");
+    expect(mainSource).toContain("function applyVolumeState(volume, muted)");
+    expect(mainSource).toContain('dom.volumeSlider.setAttribute("value", String(clampedVolume))');
+    expect(mainSource).toContain("dom.volumeSlider.value = clampedVolume");
+    expect(mainSource).toContain("dom.volumeToggle.setAttribute(\"name\", iconName)");
+    expect(mainSource).toContain('dom.bgmAudio.addEventListener("loadedmetadata", () => {');
+    expect(mainSource).toContain("applyStoredVolume()");
+    expect(mainSource).toContain("window.localStorage.setItem(volumeStorageKey, JSON.stringify({");
+    expect(mainSource).toContain("volume: clampVolume(volume)");
+    expect(mainSource).toContain("function clampVolume(volume)");
   });
 
   it("keeps viewer runtime updates allocation-light on the render path", async () => {

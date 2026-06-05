@@ -63,6 +63,8 @@ export const dom = {
   assetAudioLoadButton: document.querySelector("#load-asset-audio"),
   assetCameraSelect: document.querySelector("#asset-camera-select"),
   assetCameraLoadButton: document.querySelector("#load-asset-camera"),
+  viewportGridToggle: document.querySelector("#viewport-grid-toggle"),
+  viewportAxesToggle: document.querySelector("#viewport-axes-toggle"),
   modelFolderInput: document.querySelector("#model-folder"),
   motionFileInput: document.querySelector("#motion-file"),
   poseFileInput: document.querySelector("#pose-file"),

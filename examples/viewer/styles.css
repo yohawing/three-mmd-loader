@@ -378,6 +378,13 @@ select:focus-visible {
     font-size: 18px;
 }
 
+.viewport-settings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    padding: 0 4px 2px 8px;
+}
+
 .top-bar input[type="file"] {
     display: none;
 }
@@ -526,7 +533,8 @@ select:focus-visible {
     white-space: nowrap;
 }
 
-.debug-toggle {
+.debug-toggle,
+.switch-toggle {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -538,13 +546,15 @@ select:focus-visible {
     cursor: pointer;
 }
 
-.debug-toggle span {
+.debug-toggle span,
+.switch-toggle span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.debug-toggle input {
+.debug-toggle input,
+.switch-toggle input {
     flex: 0 0 auto;
     width: 36px;
     height: 20px;
@@ -556,7 +566,8 @@ select:focus-visible {
     cursor: pointer;
 }
 
-.debug-toggle input::before {
+.debug-toggle input::before,
+.switch-toggle input::before {
     display: block;
     width: 16px;
     height: 16px;
@@ -568,16 +579,19 @@ select:focus-visible {
     transition: transform 0.14s ease;
 }
 
-.debug-toggle input:checked {
+.debug-toggle input:checked,
+.switch-toggle input:checked {
     border-color: var(--accent);
     background: var(--accent);
 }
 
-.debug-toggle input:checked::before {
+.debug-toggle input:checked::before,
+.switch-toggle input:checked::before {
     transform: translateX(16px);
 }
 
-.debug-toggle input:focus-visible {
+.debug-toggle input:focus-visible,
+.switch-toggle input:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }

@@ -10,8 +10,10 @@ import { disposeActivePhysicsBackend } from "./lib/ammo-bootstrap.js";
 import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
-import { resize, setupScene } from "./lib/scene-setup.js";
+import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
 import { debugEnabled, hasCurrentMotion, state } from "./lib/state.js";
+
+const volumeStorageKey = "three-mmd-loader.viewer.volume.v1";
 
 setupScene();
 initLocalization();
@@ -61,6 +63,7 @@ function bindControls() {
   document.querySelector("#choose-camera")?.addEventListener("click", () => dom.cameraFileInput?.click());
   bindAssetLibraryControls();
   bindCreditPopupControls();
+  bindViewportControls();
   bindDebugControls();
   dom.modelFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
@@ -143,16 +146,8 @@ function bindControls() {
     scheduleSeekEnd();
   });
   dom.timeline?.addEventListener("sl-change", endSeek);
-  dom.volumeSlider?.addEventListener("sl-input", () => {
-    if (!dom.volumeSlider) return;
-    const volume = Number(dom.volumeSlider.value);
-    if (isAudioElement(dom.bgmAudio)) {
-      dom.bgmAudio.volume = volume;
-      dom.bgmAudio.muted = volume === 0;
-    }
-    persistVolume(volume, volume === 0);
-    updateVolumeIcon();
-  });
+  dom.volumeSlider?.addEventListener("sl-input", handleVolumeSliderInput);
+  dom.volumeSlider?.addEventListener("sl-change", handleVolumeSliderInput);
   dom.volumeToggle?.addEventListener("click", () => {
     if (!isAudioElement(dom.bgmAudio)) return;
     dom.bgmAudio.muted = !dom.bgmAudio.muted;
@@ -182,7 +177,10 @@ function bindControls() {
     dom.bgmAudio.addEventListener("ended", () => {
       if (!dom.bgmAudio.loop) setPlaybackState(false);
     });
-    dom.bgmAudio.addEventListener("loadedmetadata", () => setStatus("", "ready"));
+    dom.bgmAudio.addEventListener("loadedmetadata", () => {
+      applyStoredVolume();
+      setStatus("", "ready");
+    });
     dom.bgmAudio.addEventListener("error", () => {
       const message = "Failed to load audio source.";
       window.console?.warn("[viewer]", message, dom.bgmAudio.error);
@@ -203,6 +201,25 @@ async function loadSelectedMotionFile(file) {
   state.currentMotionVmdFiles = [file];
   updateMotionSwitcher(file);
   await loadMotion(file);
+}
+
+function bindViewportControls() {
+  if (dom.viewportGridToggle) {
+    dom.viewportGridToggle.checked = state.viewportGridVisible;
+    dom.viewportGridToggle.setAttribute("aria-checked", String(state.viewportGridVisible));
+    dom.viewportGridToggle.addEventListener("change", () => {
+      const visible = setViewportGridVisible(dom.viewportGridToggle.checked);
+      dom.viewportGridToggle.setAttribute("aria-checked", String(visible));
+    });
+  }
+  if (dom.viewportAxesToggle) {
+    dom.viewportAxesToggle.checked = state.viewportAxesVisible;
+    dom.viewportAxesToggle.setAttribute("aria-checked", String(state.viewportAxesVisible));
+    dom.viewportAxesToggle.addEventListener("change", () => {
+      const visible = setViewportAxesVisible(dom.viewportAxesToggle.checked);
+      dom.viewportAxesToggle.setAttribute("aria-checked", String(visible));
+    });
+  }
 }
 
 function bindDebugControls() {
@@ -239,8 +256,6 @@ function initLocalization() {
   }
 }
 
-const volumeStorageKey = "three-mmd-loader.viewer.volume.v1";
-
 let seekEndTimer;
 
 function scheduleSeekEnd() {
@@ -256,22 +271,40 @@ function endSeek() {
 
 function initVolumeControls() {
   const { volume, muted } = readStoredVolume();
-  if (isAudioElement(dom.bgmAudio)) {
-    dom.bgmAudio.volume = volume;
-    dom.bgmAudio.muted = muted;
-  }
-  if (dom.volumeSlider) {
-    dom.volumeSlider.setAttribute("value", String(volume));
-    dom.volumeSlider.value = volume;
-  }
+  applyVolumeState(volume, muted);
   updateVolumeIcon();
   // sl-range may not be upgraded yet on first paint; re-apply the stored value once it is.
   window.customElements?.whenDefined?.("sl-range").then(() => {
-    if (dom.volumeSlider) {
-      dom.volumeSlider.value = volume;
-    }
+    applyVolumeState(volume, muted);
     updateVolumeIcon();
   });
+}
+
+function handleVolumeSliderInput() {
+  if (!dom.volumeSlider) return;
+  const volume = clampVolume(Number(dom.volumeSlider.value));
+  const muted = volume === 0;
+  applyVolumeState(volume, muted);
+  persistVolume(volume, muted);
+  updateVolumeIcon();
+}
+
+function applyStoredVolume() {
+  const { volume, muted } = readStoredVolume();
+  applyVolumeState(volume, muted);
+  updateVolumeIcon();
+}
+
+function applyVolumeState(volume, muted) {
+  const clampedVolume = clampVolume(volume);
+  if (isAudioElement(dom.bgmAudio)) {
+    dom.bgmAudio.volume = clampedVolume;
+    dom.bgmAudio.muted = muted;
+  }
+  if (dom.volumeSlider) {
+    dom.volumeSlider.setAttribute("value", String(clampedVolume));
+    dom.volumeSlider.value = clampedVolume;
+  }
 }
 
 function updateVolumeIcon() {
@@ -279,7 +312,9 @@ function updateVolumeIcon() {
   const audioElement = isAudioElement(dom.bgmAudio) ? dom.bgmAudio : undefined;
   const volume = audioElement ? audioElement.volume : 1;
   const muted = audioElement ? audioElement.muted : false;
-  dom.volumeToggle.name = muted || volume === 0 ? "volume-mute" : volume < 0.5 ? "volume-down" : "volume-up";
+  const iconName = muted || volume === 0 ? "volume-mute" : volume < 0.5 ? "volume-down" : "volume-up";
+  dom.volumeToggle.name = iconName;
+  dom.volumeToggle.setAttribute("name", iconName);
 }
 
 function readStoredVolume() {
@@ -300,10 +335,17 @@ function readStoredVolume() {
 
 function persistVolume(volume, muted) {
   try {
-    window.localStorage.setItem(volumeStorageKey, JSON.stringify({ volume, muted }));
+    window.localStorage.setItem(volumeStorageKey, JSON.stringify({
+      volume: clampVolume(volume),
+      muted: muted === true
+    }));
   } catch {
     // Ignore storage failures.
   }
+}
+
+function clampVolume(volume) {
+  return Number.isFinite(volume) ? Math.min(Math.max(volume, 0), 1) : 1;
 }
 
 function hasTimelineSource() {

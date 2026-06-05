@@ -5,6 +5,8 @@ import { viewerConfig } from "./viewer-config.js";
 
 export const debugEnabled = new window.URLSearchParams(location.search).has("debug");
 const query = new window.URLSearchParams(location.search);
+const viewportStorageKey = "three-mmd-loader.viewer.viewport.v1";
+const storedViewportSettings = readStoredViewportSettings();
 const initialPhysicsMaxSubSteps = parseDebugInteger(query.get("maxSubSteps"), 5);
 const initialDynamicWithBoneFeedback = parseDebugNumber(
   query.get("dynamicWithBoneRotationFeedbackScale"),
@@ -42,6 +44,10 @@ export const state = {
   frameTimer: new THREE.Timer(),
   renderer: undefined,
   scene: undefined,
+  gridHelper: undefined,
+  axesHelper: undefined,
+  viewportGridVisible: storedViewportSettings.grid ?? true,
+  viewportAxesVisible: storedViewportSettings.axes ?? true,
   camera: undefined,
   perspectiveCamera: undefined,
   orthographicCamera: undefined,
@@ -143,6 +149,32 @@ export const state = {
 };
 
 state.frameTimer.connect(document);
+
+export function persistViewportSettings() {
+  try {
+    window.localStorage.setItem(viewportStorageKey, JSON.stringify({
+      grid: state.viewportGridVisible,
+      axes: state.viewportAxesVisible
+    }));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function readStoredViewportSettings() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(viewportStorageKey) ?? "null");
+    if (parsed && typeof parsed === "object") {
+      return {
+        grid: typeof parsed.grid === "boolean" ? parsed.grid : undefined,
+        axes: typeof parsed.axes === "boolean" ? parsed.axes : undefined
+      };
+    }
+  } catch {
+    // Ignore malformed storage.
+  }
+  return {};
+}
 
 function parseDebugInteger(value, fallback) {
   if (value === null) {

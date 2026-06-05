@@ -6,7 +6,7 @@ import {
 } from "../../../dist/three/index.js";
 
 import { dom, updateChromeHeights } from "./dom.js";
-import { state } from "./state.js";
+import { persistViewportSettings, state } from "./state.js";
 
 const viewerSelfShadowQuality = {
   mapSize: 4096,
@@ -34,8 +34,12 @@ export function setupScene() {
   state.controls = new OrbitControls(state.camera, dom.canvas);
   state.controls.enableDamping = true;
   state.controls.target.set(0, 0.9, 0);
-  state.scene.add(new THREE.GridHelper(40, 40, 0x888888, 0xcccccc));
-  state.scene.add(new THREE.AxesHelper(10));
+  state.gridHelper = new THREE.GridHelper(40, 40, 0x888888, 0xcccccc);
+  state.gridHelper.visible = state.viewportGridVisible;
+  state.scene.add(state.gridHelper);
+  state.axesHelper = new THREE.AxesHelper(10);
+  state.axesHelper.visible = state.viewportAxesVisible;
+  state.scene.add(state.axesHelper);
   state.keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
   state.keyLight.position.set(3, 4, 5);
   state.keyLight.castShadow = state.debugSelfShadowEnabled;
@@ -44,6 +48,26 @@ export function setupScene() {
   state.scene.add(state.keyLight.target);
   state.scene.add(state.keyLight);
   state.scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+}
+
+export function setViewportGridVisible(visible) {
+  state.viewportGridVisible = !!visible;
+  if (state.gridHelper) {
+    state.gridHelper.visible = state.viewportGridVisible;
+  }
+  persistViewportSettings();
+  state.renderer?.render(state.scene, state.camera);
+  return state.viewportGridVisible;
+}
+
+export function setViewportAxesVisible(visible) {
+  state.viewportAxesVisible = !!visible;
+  if (state.axesHelper) {
+    state.axesHelper.visible = state.viewportAxesVisible;
+  }
+  persistViewportSettings();
+  state.renderer?.render(state.scene, state.camera);
+  return state.viewportAxesVisible;
 }
 
 export function fitCameraToObject(object) {
