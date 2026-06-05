@@ -475,7 +475,7 @@ describe("example viewer source", () => {
     expect(ammoSource).toContain("loadAmmoNamespace");
     expect(ammoSource).toContain("state.ammoScriptLoadPromise ??= loadAmmoNamespace(state.ammoScriptUrl)");
     expect(stateSource).toContain('ammoScriptUrl: "/node_modules/ammo.js/ammo.js"');
-    expect(stateSource).toContain('customBulletMmdScriptUrl: "/dist/physics/mmd/yw_mmd_bullet.js"');
+    expect(stateSource).toContain('customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js"');
     expect(ammoSource).toContain("dom.physicsErrorBanner.textContent = message");
     expect(ammoSource).not.toContain("function loadAmmoScript");
     expect(ammoSource).not.toContain("function getAmmoCandidate");

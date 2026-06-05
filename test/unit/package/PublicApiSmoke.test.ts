@@ -244,9 +244,9 @@ center
     expect(loadAmmoNamespace).toBeTypeOf("function");
     expect(loadCustomBulletMmdModule).toBeTypeOf("function");
     expect(createCustomBulletMmdPhysicsBackend).toBeTypeOf("function");
-    expect(customBulletMmdScriptPath).toBe("./mmd/yw_mmd_bullet.js");
+    expect(customBulletMmdScriptPath).toBe("./mmd/mmd_bullet.js");
     expect(resolveCustomBulletMmdScriptUrl("https://example.test/pkg/dist/physics/index.js")).toBe(
-      "https://example.test/pkg/dist/physics/mmd/yw_mmd_bullet.js"
+      "https://example.test/pkg/dist/physics/mmd/mmd_bullet.js"
     );
   });
 

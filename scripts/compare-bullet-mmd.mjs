@@ -250,7 +250,7 @@ function compareCase(label, ammoBackend, mmdBackend, createContext, boneIndex, t
   }
 }
 
-const scriptPath = process.argv[2] ?? "dist/physics/mmd/yw_mmd_bullet.js";
+const scriptPath = process.argv[2] ?? "dist/physics/mmd/mmd_bullet.js";
 const Ammo = await loadNpmAmmo();
 const mmdModule = await loadMmdBullet(scriptPath);
 const ammoBackend = new AmmoMmdPhysicsBackend(Ammo, {

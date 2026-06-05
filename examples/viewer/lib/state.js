@@ -24,7 +24,7 @@ const initialSelfShadowEnabled = query.get("selfShadow") === "0" ? false : true;
 export const state = {
   hasLocalFixtures: false,
   ammoScriptUrl: "/node_modules/ammo.js/ammo.js",
-  customBulletMmdScriptUrl: "/dist/physics/mmd/yw_mmd_bullet.js",
+  customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js",
   physicsBackendKind: query.get("physics") === "custom-bullet-mmd" ? "custom-bullet-mmd" : "ammo",
   physicsTuningOptions: {
     maxSubSteps: initialPhysicsMaxSubSteps,

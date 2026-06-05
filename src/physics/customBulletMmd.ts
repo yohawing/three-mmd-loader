@@ -12,7 +12,7 @@ import type {
   MmdPhysicsStepResult
 } from "./index.js";
 
-export const customBulletMmdScriptPath = "./mmd/yw_mmd_bullet.js";
+export const customBulletMmdScriptPath = "./mmd/mmd_bullet.js";
 
 export interface CustomBulletMmdLoaderOptions {
   readonly baseUrl?: string;
@@ -36,11 +36,11 @@ export interface CustomBulletMmdModule {
   readonly HEAPU8?: Uint8Array;
   readonly HEAPU32?: Uint32Array;
   refreshMemoryViews?(): void;
-  _yw_mmd_bullet_create_world(): number;
-  _yw_mmd_bullet_destroy_world(world: number): void;
-  _yw_mmd_bullet_ensure_step_buffers(world: number, boneCount: number): number;
-  _yw_mmd_bullet_begin_model(world: number, rigidBodyCount: number, modelIdentity: number): number;
-  _yw_mmd_bullet_add_rigid_body(
+  _mmd_bullet_create_world(): number;
+  _mmd_bullet_destroy_world(world: number): void;
+  _mmd_bullet_ensure_step_buffers(world: number, boneCount: number): number;
+  _mmd_bullet_begin_model(world: number, rigidBodyCount: number, modelIdentity: number): number;
+  _mmd_bullet_add_rigid_body(
     world: number,
     boneIndex: number,
     parentBoneIndex: number,
@@ -68,7 +68,7 @@ export interface CustomBulletMmdModule {
     group: number,
     mask: number
   ): number;
-  _yw_mmd_bullet_add_joint(
+  _mmd_bullet_add_joint(
     world: number,
     rigidBodyIndexA: number,
     rigidBodyIndexB: number,
@@ -98,9 +98,9 @@ export interface CustomBulletMmdModule {
     springAngularY: number,
     springAngularZ: number
   ): number;
-  _yw_mmd_bullet_commit_model(world: number): number;
-  _yw_mmd_bullet_model_identity(world: number): number;
-  _yw_mmd_bullet_set_tuning?(
+  _mmd_bullet_commit_model(world: number): number;
+  _mmd_bullet_model_identity(world: number): number;
+  _mmd_bullet_set_tuning?(
     world: number,
     fixedTimeStep: number,
     maxSubSteps: number,
@@ -111,9 +111,9 @@ export interface CustomBulletMmdModule {
     splitImpulse: number,
     splitImpulsePenetrationThreshold: number
   ): number;
-  _yw_mmd_bullet_reset_world(world: number): void;
-  _yw_mmd_bullet_reset_pose_sync?(world: number, catchUpSteps: number): number;
-  _yw_mmd_bullet_step(
+  _mmd_bullet_reset_world(world: number): void;
+  _mmd_bullet_reset_pose_sync?(world: number, catchUpSteps: number): number;
+  _mmd_bullet_step(
     world: number,
     seconds: number,
     deltaSeconds: number,
@@ -121,19 +121,19 @@ export interface CustomBulletMmdModule {
     frameRate: number,
     seeking: number
   ): number;
-  _yw_mmd_bullet_input_translations(world: number): number;
-  _yw_mmd_bullet_input_rotations(world: number): number;
-  _yw_mmd_bullet_input_world_matrices(world: number): number;
-  _yw_mmd_bullet_output_translations(world: number): number;
-  _yw_mmd_bullet_output_rotations(world: number): number;
-  _yw_mmd_bullet_output_world_matrices(world: number): number;
-  _yw_mmd_bullet_bone_physics_toggles(world: number): number;
-  _yw_mmd_bullet_updated_bone_indices(world: number): number;
-  _yw_mmd_bullet_debug_contact_count?(world: number): number;
-  _yw_mmd_bullet_debug_contact_pair_count?(world: number): number;
-  _yw_mmd_bullet_debug_contact_pairs?(world: number): number;
-  _yw_mmd_bullet_debug_rigid_body_count?(world: number): number;
-  _yw_mmd_bullet_debug_rigid_body_world_matrices?(world: number): number;
+  _mmd_bullet_input_translations(world: number): number;
+  _mmd_bullet_input_rotations(world: number): number;
+  _mmd_bullet_input_world_matrices(world: number): number;
+  _mmd_bullet_output_translations(world: number): number;
+  _mmd_bullet_output_rotations(world: number): number;
+  _mmd_bullet_output_world_matrices(world: number): number;
+  _mmd_bullet_bone_physics_toggles(world: number): number;
+  _mmd_bullet_updated_bone_indices(world: number): number;
+  _mmd_bullet_debug_contact_count?(world: number): number;
+  _mmd_bullet_debug_contact_pair_count?(world: number): number;
+  _mmd_bullet_debug_contact_pairs?(world: number): number;
+  _mmd_bullet_debug_rigid_body_count?(world: number): number;
+  _mmd_bullet_debug_rigid_body_world_matrices?(world: number): number;
 }
 
 type CustomBulletMmdFactory = () => CustomBulletMmdModule | Promise<CustomBulletMmdModule>;
@@ -163,7 +163,7 @@ export async function loadCustomBulletMmdModule(
   await loadScript(scriptUrl, options.timeoutMs ?? 10000);
   const candidate = getCustomBulletMmdCandidate();
   if (!candidate) {
-    throw new Error("YwMmdBullet is not available on globalThis, window, or self.");
+    throw new Error("MmdBullet is not available on globalThis, window, or self.");
   }
   return await initCustomBulletMmdModule(candidate);
 }
@@ -191,7 +191,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
     private readonly module: CustomBulletMmdModule,
     private readonly options: CustomBulletMmdPhysicsBackendOptions
   ) {
-    this.world = module._yw_mmd_bullet_create_world();
+    this.world = module._mmd_bullet_create_world();
     if (this.world === 0) {
       throw new Error("Failed to create custom Bullet MMD world.");
     }
@@ -212,7 +212,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
     ) {
       return this.buffers;
     }
-    if (this.module._yw_mmd_bullet_ensure_step_buffers(this.world, layout.boneCount) === 0) {
+    if (this.module._mmd_bullet_ensure_step_buffers(this.world, layout.boneCount) === 0) {
       return undefined;
     }
     const heapBuffer = this.refreshHeapBuffer();
@@ -247,7 +247,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
         this.options.resetCatchUpSteps,
         DEFAULT_RESET_CATCH_UP_STEPS
       );
-      const synced = this.module._yw_mmd_bullet_reset_pose_sync?.(
+      const synced = this.module._mmd_bullet_reset_pose_sync?.(
         this.world,
         resetCatchUpSteps
       );
@@ -268,7 +268,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
         return { simulated: false, updatedBoneCount: 0 };
       }
     }
-    const updatedBoneCount = this.module._yw_mmd_bullet_step(
+    const updatedBoneCount = this.module._mmd_bullet_step(
       this.world,
       context.seconds,
       context.deltaSeconds,
@@ -282,7 +282,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
 
   reset(_context?: MmdPhysicsResetContext): void {
     if (!this.disposedState) {
-      this.module._yw_mmd_bullet_reset_world(this.world);
+      this.module._mmd_bullet_reset_world(this.world);
       this.pendingResetPoseSync = true;
     }
   }
@@ -291,7 +291,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
     if (this.disposedState) {
       return;
     }
-    this.module._yw_mmd_bullet_destroy_world(this.world);
+    this.module._mmd_bullet_destroy_world(this.world);
     this.world = 0;
     this.buffers = undefined;
     this.disposedState = true;
@@ -310,7 +310,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
   }
 
   debugContactCount(): number {
-    return this.module._yw_mmd_bullet_debug_contact_count?.(this.world) ?? 0;
+    return this.module._mmd_bullet_debug_contact_count?.(this.world) ?? 0;
   }
 
   debugPhysicsContacts(): readonly {
@@ -318,8 +318,8 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
     readonly rigidBodyIndexB: number;
     readonly distance: number;
   }[] {
-    const count = this.module._yw_mmd_bullet_debug_contact_pair_count?.(this.world) ?? 0;
-    const pointer = this.module._yw_mmd_bullet_debug_contact_pairs?.(this.world) ?? 0;
+    const count = this.module._mmd_bullet_debug_contact_pair_count?.(this.world) ?? 0;
+    const pointer = this.module._mmd_bullet_debug_contact_pairs?.(this.world) ?? 0;
     if (count <= 0 || pointer === 0) {
       return [];
     }
@@ -345,8 +345,8 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
   }
 
   debugRigidBodyWorldTransformsColumnMajor(): readonly MmdPhysicsMatrix4ColumnMajorTuple[] {
-    const count = this.module._yw_mmd_bullet_debug_rigid_body_count?.(this.world) ?? 0;
-    const pointer = this.module._yw_mmd_bullet_debug_rigid_body_world_matrices?.(this.world) ?? 0;
+    const count = this.module._mmd_bullet_debug_rigid_body_count?.(this.world) ?? 0;
+    const pointer = this.module._mmd_bullet_debug_rigid_body_world_matrices?.(this.world) ?? 0;
     if (count <= 0 || pointer === 0) {
       return [];
     }
@@ -400,42 +400,42 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
     return {
       inputTranslations: new Float32Array(
         heapBuffer,
-        this.module._yw_mmd_bullet_input_translations(this.world),
+        this.module._mmd_bullet_input_translations(this.world),
         layout.translationValueCount
       ),
       inputRotations: new Float32Array(
         heapBuffer,
-        this.module._yw_mmd_bullet_input_rotations(this.world),
+        this.module._mmd_bullet_input_rotations(this.world),
         layout.rotationValueCount
       ),
       inputWorldMatricesColumnMajor: new Float32Array(
         heapBuffer,
-        this.module._yw_mmd_bullet_input_world_matrices(this.world),
+        this.module._mmd_bullet_input_world_matrices(this.world),
         layout.worldMatrixValueCount
       ),
       outputTranslations: new Float32Array(
         heapBuffer,
-        this.module._yw_mmd_bullet_output_translations(this.world),
+        this.module._mmd_bullet_output_translations(this.world),
         layout.translationValueCount
       ),
       outputRotations: new Float32Array(
         heapBuffer,
-        this.module._yw_mmd_bullet_output_rotations(this.world),
+        this.module._mmd_bullet_output_rotations(this.world),
         layout.rotationValueCount
       ),
       outputWorldMatricesColumnMajor: new Float32Array(
         heapBuffer,
-        this.module._yw_mmd_bullet_output_world_matrices(this.world),
+        this.module._mmd_bullet_output_world_matrices(this.world),
         layout.worldMatrixValueCount
       ),
       bonePhysicsToggles: new Uint8Array(
         heapU8Buffer,
-        this.module._yw_mmd_bullet_bone_physics_toggles(this.world),
+        this.module._mmd_bullet_bone_physics_toggles(this.world),
         layout.boneCount
       ),
       updatedBoneIndices: new Uint32Array(
         heapU32Buffer,
-        this.module._yw_mmd_bullet_updated_bone_indices(this.world),
+        this.module._mmd_bullet_updated_bone_indices(this.world),
         layout.boneCount
       )
     };
@@ -495,11 +495,11 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
       return true;
     }
     const identity = this.modelIdentityFor(rigidBodies, context.joints);
-    if (this.module._yw_mmd_bullet_model_identity(this.world) === identity) {
+    if (this.module._mmd_bullet_model_identity(this.world) === identity) {
       return true;
     }
     const joints = context.joints ?? [];
-    if (this.module._yw_mmd_bullet_begin_model(this.world, rigidBodies.length, identity) === 0) {
+    if (this.module._mmd_bullet_begin_model(this.world, rigidBodies.length, identity) === 0) {
       return false;
     }
     for (const body of rigidBodies) {
@@ -511,7 +511,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
       const localTranslation = body.localTranslation ?? [0, 0, 0];
       const localRotation = body.localRotation ?? [0, 0, 0, 1];
       if (
-        this.module._yw_mmd_bullet_add_rigid_body(
+        this.module._mmd_bullet_add_rigid_body(
           this.world,
           body.boneIndex ?? -1,
           bone?.parentIndex ?? -1,
@@ -553,7 +553,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
       const springLinear = joint.spring?.linear ?? [0, 0, 0];
       const springAngular = joint.spring?.angular ?? [0, 0, 0];
       if (
-        this.module._yw_mmd_bullet_add_joint(
+        this.module._mmd_bullet_add_joint(
           this.world,
           joint.rigidBodyIndexA,
           joint.rigidBodyIndexB,
@@ -587,7 +587,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
         return false;
       }
     }
-    return this.module._yw_mmd_bullet_commit_model(this.world) !== 0;
+    return this.module._mmd_bullet_commit_model(this.world) !== 0;
   }
 
   private modelIdentityFor(
@@ -612,7 +612,7 @@ class CustomBulletMmdPhysicsBackend implements MmdDirectBufferPhysicsBackend {
   }
 
   private syncTuning(): void {
-    this.module._yw_mmd_bullet_set_tuning?.(
+    this.module._mmd_bullet_set_tuning?.(
       this.world,
       sanitizePositiveOption(this.options.fixedTimeStep, DEFAULT_FIXED_TIME_STEP),
       sanitizeIntegerOption(this.options.maxSubSteps, DEFAULT_MAX_SUB_STEPS),
@@ -807,7 +807,7 @@ function getCustomBulletMmdCandidate(): CustomBulletMmdCandidate | undefined {
     typeof globalThis !== "undefined" ? globalThis.self : undefined
   ];
   for (const scope of globalScopes) {
-    const candidate = (scope as { YwMmdBullet?: CustomBulletMmdCandidate } | undefined)?.YwMmdBullet;
+    const candidate = (scope as { MmdBullet?: CustomBulletMmdCandidate } | undefined)?.MmdBullet;
     if (candidate) {
       return candidate;
     }

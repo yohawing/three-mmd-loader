@@ -9,11 +9,11 @@ const bulletRoot = join(root, "native", "third_party", "bullet3");
 const bindings = join(root, "native", "bullet-mmd", "mmd_bindings.cc");
 const outDir = join(root, "native", "bullet-mmd", "dist");
 const buildDir = join(outDir, ".tmp", `mmd-${process.pid}-${Date.now().toString(36)}`);
-const tmpJs = join(buildDir, "yw_mmd_bullet.js");
-const tmpWasm = join(buildDir, "yw_mmd_bullet.wasm");
+const tmpJs = join(buildDir, "mmd_bullet.js");
+const tmpWasm = join(buildDir, "mmd_bullet.wasm");
 const responseFile = join(buildDir, "emcc-mmd-args.rsp");
-const outJs = join(outDir, "yw_mmd_bullet.js");
-const outWasm = join(outDir, "yw_mmd_bullet.wasm");
+const outJs = join(outDir, "mmd_bullet.js");
+const outWasm = join(outDir, "mmd_bullet.wasm");
 
 const sourceRoots = [
   join(bulletRoot, "src", "LinearMath"),
@@ -187,31 +187,31 @@ async function main() {
   }
 
   const exportedFunctions = [
-    "_yw_mmd_bullet_create_world",
-    "_yw_mmd_bullet_destroy_world",
-    "_yw_mmd_bullet_ensure_step_buffers",
-    "_yw_mmd_bullet_begin_model",
-    "_yw_mmd_bullet_add_rigid_body",
-    "_yw_mmd_bullet_add_joint",
-    "_yw_mmd_bullet_commit_model",
-    "_yw_mmd_bullet_model_identity",
-    "_yw_mmd_bullet_set_tuning",
-    "_yw_mmd_bullet_reset_world",
-    "_yw_mmd_bullet_reset_pose_sync",
-    "_yw_mmd_bullet_step",
-    "_yw_mmd_bullet_input_translations",
-    "_yw_mmd_bullet_input_rotations",
-    "_yw_mmd_bullet_input_world_matrices",
-    "_yw_mmd_bullet_output_translations",
-    "_yw_mmd_bullet_output_rotations",
-    "_yw_mmd_bullet_output_world_matrices",
-    "_yw_mmd_bullet_bone_physics_toggles",
-    "_yw_mmd_bullet_updated_bone_indices",
-    "_yw_mmd_bullet_debug_contact_count",
-    "_yw_mmd_bullet_debug_contact_pair_count",
-    "_yw_mmd_bullet_debug_contact_pairs",
-    "_yw_mmd_bullet_debug_rigid_body_count",
-    "_yw_mmd_bullet_debug_rigid_body_world_matrices"
+    "_mmd_bullet_create_world",
+    "_mmd_bullet_destroy_world",
+    "_mmd_bullet_ensure_step_buffers",
+    "_mmd_bullet_begin_model",
+    "_mmd_bullet_add_rigid_body",
+    "_mmd_bullet_add_joint",
+    "_mmd_bullet_commit_model",
+    "_mmd_bullet_model_identity",
+    "_mmd_bullet_set_tuning",
+    "_mmd_bullet_reset_world",
+    "_mmd_bullet_reset_pose_sync",
+    "_mmd_bullet_step",
+    "_mmd_bullet_input_translations",
+    "_mmd_bullet_input_rotations",
+    "_mmd_bullet_input_world_matrices",
+    "_mmd_bullet_output_translations",
+    "_mmd_bullet_output_rotations",
+    "_mmd_bullet_output_world_matrices",
+    "_mmd_bullet_bone_physics_toggles",
+    "_mmd_bullet_updated_bone_indices",
+    "_mmd_bullet_debug_contact_count",
+    "_mmd_bullet_debug_contact_pair_count",
+    "_mmd_bullet_debug_contact_pairs",
+    "_mmd_bullet_debug_rigid_body_count",
+    "_mmd_bullet_debug_rigid_body_world_matrices"
   ];
 
   const args = [
@@ -222,7 +222,7 @@ async function main() {
     "-DNDEBUG",
     "-Wno-deprecated",
     "-sMODULARIZE=1",
-    "-sEXPORT_NAME=YwMmdBullet",
+    "-sEXPORT_NAME=MmdBullet",
     "-sENVIRONMENT=web,node",
     "-sINITIAL_MEMORY=67108864",
     `-sEXPORTED_FUNCTIONS=${JSON.stringify(exportedFunctions)}`,

@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 import { createCustomBulletMmdPhysicsBackend } from "../dist/physics/index.js";
 
-const scriptPath = resolve(process.argv[2] ?? "dist/physics/mmd/yw_mmd_bullet.js");
+const scriptPath = resolve(process.argv[2] ?? "dist/physics/mmd/mmd_bullet.js");
 const scriptSource = await readFile(scriptPath, "utf8");
 const moduleRecord = { exports: {} };
 const sandbox = {

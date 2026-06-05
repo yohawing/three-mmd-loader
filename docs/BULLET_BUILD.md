@@ -14,7 +14,7 @@ const mmdBullet = await loadCustomBulletMmdModule();
 const physicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 ```
 
-`loadCustomBulletMmdModule()` resolves `./mmd/yw_mmd_bullet.js` relative to the
+`loadCustomBulletMmdModule()` resolves `./mmd/mmd_bullet.js` relative to the
 published `dist/physics/` module. `npm run build` copies that asset into
 `dist/physics/mmd/`.
 
@@ -34,8 +34,8 @@ npm run smoke:bullet:mmd
 `npm run build:bullet` compiles the MMD-optimized browser target. It uses
 `native/bullet-mmd/mmd_bindings.cc` and outputs:
 
-- `native/bullet-mmd/dist/yw_mmd_bullet.js`
-- `native/bullet-mmd/dist/yw_mmd_bullet.wasm`
+- `native/bullet-mmd/dist/mmd_bullet.js`
+- `native/bullet-mmd/dist/mmd_bullet.wasm`
 
 ## MMD-optimized backend path
 
@@ -59,7 +59,7 @@ The Bullet target uses a fixed 64 MiB Wasm heap. That mirrors the existing
 Ammo.js deployment constraint and keeps the direct-buffer typed array views
 stable for the runtime.
 
-The current MMD target exports the `yw_mmd_bullet_*` C ABI and
+The current MMD target exports the `mmd_bullet_*` C ABI and
 `createCustomBulletMmdPhysicsBackend(...)` wraps it as a direct-buffer backend.
 Rigid bodies are uploaded to native code when the runtime step context changes,
 then per-frame execution stays on the direct-buffer path. Joint upload and
@@ -83,7 +83,7 @@ because that path still needs an intermediate local-pose compose pass.
 Use `compare:bullet:mmd:local` when checking whether the custom Bullet MMD
 backend still tracks the stable Ammo.js behavior. The script compares
 `AmmoMmdPhysicsBackend` using the npm `ammo.js` package against
-`createCustomBulletMmdPhysicsBackend(...)` using `dist/physics/mmd/yw_mmd_bullet.js`.
+`createCustomBulletMmdPhysicsBackend(...)` using `dist/physics/mmd/mmd_bullet.js`.
 
 ```powershell
 npm run build

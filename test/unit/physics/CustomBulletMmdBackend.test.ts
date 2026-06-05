@@ -64,9 +64,9 @@ describe("Custom Bullet MMD backend", () => {
   });
 
   it("resolves the package-local MMD Bullet script URL", () => {
-    expect(customBulletMmdScriptPath).toBe("./mmd/yw_mmd_bullet.js");
+    expect(customBulletMmdScriptPath).toBe("./mmd/mmd_bullet.js");
     expect(resolveCustomBulletMmdScriptUrl("https://example.test/pkg/dist/physics/index.js")).toBe(
-      "https://example.test/pkg/dist/physics/mmd/yw_mmd_bullet.js"
+      "https://example.test/pkg/dist/physics/mmd/mmd_bullet.js"
     );
   });
 
@@ -457,29 +457,29 @@ function createFakeModule(): CustomBulletMmdModule & {
     HEAPF32: heapF32,
     HEAPU8: heapU8,
     HEAPU32: heapU32,
-    _yw_mmd_bullet_create_world: () => world,
-    _yw_mmd_bullet_destroy_world: () => {
+    _mmd_bullet_create_world: () => world,
+    _mmd_bullet_destroy_world: () => {
       world = 0;
     },
-    _yw_mmd_bullet_ensure_step_buffers: () => 1,
-    _yw_mmd_bullet_begin_model: (_world, _rigidBodyCount, modelIdentity) => {
+    _mmd_bullet_ensure_step_buffers: () => 1,
+    _mmd_bullet_begin_model: (_world, _rigidBodyCount, modelIdentity) => {
       uploadCount += 1;
       nativeModelIdentity = modelIdentity;
       return 1;
     },
-    _yw_mmd_bullet_add_rigid_body: (
-      ...args: Parameters<CustomBulletMmdModule["_yw_mmd_bullet_add_rigid_body"]>
+    _mmd_bullet_add_rigid_body: (
+      ...args: Parameters<CustomBulletMmdModule["_mmd_bullet_add_rigid_body"]>
     ) => {
       rigidBodyUploads.push({ group: args[24], mask: args[25] });
       return 1;
     },
-    _yw_mmd_bullet_add_joint: () => {
+    _mmd_bullet_add_joint: () => {
       jointUploadCount += 1;
       return 1;
     },
-    _yw_mmd_bullet_commit_model: () => 1,
-    _yw_mmd_bullet_model_identity: () => nativeModelIdentity,
-    _yw_mmd_bullet_set_tuning: (
+    _mmd_bullet_commit_model: () => 1,
+    _mmd_bullet_model_identity: () => nativeModelIdentity,
+    _mmd_bullet_set_tuning: (
       _world,
       fixedTimeStep,
       maxSubSteps,
@@ -502,26 +502,26 @@ function createFakeModule(): CustomBulletMmdModule & {
       });
       return 1;
     },
-    _yw_mmd_bullet_reset_world: () => undefined,
-    _yw_mmd_bullet_reset_pose_sync: (_world, catchUpSteps) => {
+    _mmd_bullet_reset_world: () => undefined,
+    _mmd_bullet_reset_pose_sync: (_world, catchUpSteps) => {
       resetPoseCatchUpSteps.push(catchUpSteps);
       return 1;
     },
-    _yw_mmd_bullet_step: () => {
+    _mmd_bullet_step: () => {
       heapF32.set(heapF32.subarray(pointers.inputTranslations / 4, pointers.inputTranslations / 4 + 3), pointers.outputTranslations / 4);
       heapF32.set(heapF32.subarray(pointers.inputRotations / 4, pointers.inputRotations / 4 + 4), pointers.outputRotations / 4);
       heapF32.set(heapF32.subarray(pointers.inputWorldMatrices / 4, pointers.inputWorldMatrices / 4 + 16), pointers.outputWorldMatrices / 4);
       heapU32[pointers.updated / 4] = 0;
       return 1;
     },
-    _yw_mmd_bullet_input_translations: () => pointers.inputTranslations,
-    _yw_mmd_bullet_input_rotations: () => pointers.inputRotations,
-    _yw_mmd_bullet_input_world_matrices: () => pointers.inputWorldMatrices,
-    _yw_mmd_bullet_output_translations: () => pointers.outputTranslations,
-    _yw_mmd_bullet_output_rotations: () => pointers.outputRotations,
-    _yw_mmd_bullet_output_world_matrices: () => pointers.outputWorldMatrices,
-    _yw_mmd_bullet_bone_physics_toggles: () => pointers.toggles,
-    _yw_mmd_bullet_updated_bone_indices: () => pointers.updated,
+    _mmd_bullet_input_translations: () => pointers.inputTranslations,
+    _mmd_bullet_input_rotations: () => pointers.inputRotations,
+    _mmd_bullet_input_world_matrices: () => pointers.inputWorldMatrices,
+    _mmd_bullet_output_translations: () => pointers.outputTranslations,
+    _mmd_bullet_output_rotations: () => pointers.outputRotations,
+    _mmd_bullet_output_world_matrices: () => pointers.outputWorldMatrices,
+    _mmd_bullet_bone_physics_toggles: () => pointers.toggles,
+    _mmd_bullet_updated_bone_indices: () => pointers.updated,
     uploadCount: () => uploadCount,
     jointUploadCount: () => jointUploadCount,
     rigidBodyUploads: () => rigidBodyUploads,

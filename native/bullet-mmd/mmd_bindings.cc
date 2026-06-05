@@ -90,7 +90,7 @@ struct YwMmdJointConfig {
     btVector3 springAngular = btVector3(0, 0, 0);
 };
 
-struct YwMmdBulletWorld {
+struct MmdBulletWorld {
     btDefaultCollisionConfiguration *configuration = nullptr;
     btCollisionDispatcher *dispatcher = nullptr;
     btDbvtBroadphase *broadphase = nullptr;
@@ -139,7 +139,7 @@ bool ensureBuffer(T *&buffer, int count)
     return true;
 }
 
-bool ensureStepBuffers(YwMmdBulletWorld *world, int boneCount)
+bool ensureStepBuffers(MmdBulletWorld *world, int boneCount)
 {
     if (!world || boneCount < 0) {
         return false;
@@ -161,7 +161,7 @@ bool ensureStepBuffers(YwMmdBulletWorld *world, int boneCount)
     return true;
 }
 
-void freeStepBuffers(YwMmdBulletWorld *world)
+void freeStepBuffers(MmdBulletWorld *world)
 {
     if (!world) {
         return;
@@ -278,7 +278,7 @@ btCollisionShape *createShape(const YwMmdRigidBodyConfig &config)
     return new btSphereShape(safeShapeSize(config.size.x()));
 }
 
-void applyCollisionMargin(YwMmdBulletWorld *state)
+void applyCollisionMargin(MmdBulletWorld *state)
 {
     if (!state || state->collisionMargin < btScalar(0)) {
         return;
@@ -290,7 +290,7 @@ void applyCollisionMargin(YwMmdBulletWorld *state)
     }
 }
 
-btTransform readBoneWorldTransform(const YwMmdBulletWorld *state, int boneIndex)
+btTransform readBoneWorldTransform(const MmdBulletWorld *state, int boneIndex)
 {
     btTransform transform;
     transform.setIdentity();
@@ -307,7 +307,7 @@ btTransform readBoneWorldTransform(const YwMmdBulletWorld *state, int boneIndex)
     return transform;
 }
 
-btTransform readOutputBoneWorldTransform(const YwMmdBulletWorld *state, int boneIndex)
+btTransform readOutputBoneWorldTransform(const MmdBulletWorld *state, int boneIndex)
 {
     btTransform transform;
     transform.setIdentity();
@@ -324,7 +324,7 @@ btTransform readOutputBoneWorldTransform(const YwMmdBulletWorld *state, int bone
     return transform;
 }
 
-btTransform readBoneLocalInputTransform(const YwMmdBulletWorld *state, int boneIndex)
+btTransform readBoneLocalInputTransform(const MmdBulletWorld *state, int boneIndex)
 {
     btTransform transform;
     transform.setIdentity();
@@ -347,7 +347,7 @@ btTransform readBoneLocalInputTransform(const YwMmdBulletWorld *state, int boneI
     return transform;
 }
 
-btTransform currentBoneWorldTransform(const YwMmdBulletWorld *state, const YwMmdRigidBodyConfig &config)
+btTransform currentBoneWorldTransform(const MmdBulletWorld *state, const YwMmdRigidBodyConfig &config)
 {
     if (config.parentBoneIndex >= 0 && config.parentBoneIndex < state->boneCount) {
         return readOutputBoneWorldTransform(state, config.parentBoneIndex) *
@@ -356,7 +356,7 @@ btTransform currentBoneWorldTransform(const YwMmdBulletWorld *state, const YwMmd
     return readBoneWorldTransform(state, config.boneIndex);
 }
 
-btTransform bodyInputTransform(const YwMmdBulletWorld *state, const YwMmdRigidBodyConfig &config)
+btTransform bodyInputTransform(const MmdBulletWorld *state, const YwMmdRigidBodyConfig &config)
 {
     if (config.boneIndex >= 0) {
         btTransform offset;
@@ -422,7 +422,7 @@ void writeMmdQuaternion(float *target, int boneIndex, const btQuaternion &physic
     target[boneIndex * 4 + 3] = value.w();
 }
 
-bool shouldReportContactManifold(const YwMmdBulletWorld *state, const btPersistentManifold *manifold)
+bool shouldReportContactManifold(const MmdBulletWorld *state, const btPersistentManifold *manifold)
 {
     if (!state || !manifold) {
         return false;
@@ -439,7 +439,7 @@ bool shouldReportContactManifold(const YwMmdBulletWorld *state, const btPersiste
         state->rigidBodies[indexB].config.motionType != MOTION_STATIC;
 }
 
-void clearRigidBodies(YwMmdBulletWorld *state)
+void clearRigidBodies(MmdBulletWorld *state)
 {
     if (!state) {
         return;
@@ -491,7 +491,7 @@ int collisionFilterMask(const YwMmdRigidBodyConfig &config)
     return config.mask & 0xffff;
 }
 
-bool isBodyPhysicsEnabled(const YwMmdBulletWorld *state, const YwMmdRigidBodyConfig &config);
+bool isBodyPhysicsEnabled(const MmdBulletWorld *state, const YwMmdRigidBodyConfig &config);
 
 bool isDynamicRigidBody(const YwMmdRigidBodyConfig &config)
 {
@@ -507,7 +507,7 @@ void resetRigidBodyVelocity(btRigidBody *body)
     body->setAngularVelocity(btVector3(0, 0, 0));
 }
 
-void setRigidBodyWorldTransform(YwMmdBulletWorld *state, YwMmdRigidBodyBinding &binding, const btTransform &transform)
+void setRigidBodyWorldTransform(MmdBulletWorld *state, YwMmdRigidBodyBinding &binding, const btTransform &transform)
 {
     binding.body->setCenterOfMassTransform(transform);
     binding.body->getMotionState()->setWorldTransform(transform);
@@ -517,7 +517,7 @@ void setRigidBodyWorldTransform(YwMmdBulletWorld *state, YwMmdRigidBodyBinding &
     }
 }
 
-void refreshRigidBodyBroadphasePairs(YwMmdBulletWorld *state, btRigidBody *body)
+void refreshRigidBodyBroadphasePairs(MmdBulletWorld *state, btRigidBody *body)
 {
     if (!state || !state->world || !state->broadphase || !state->dispatcher || !body) {
         return;
@@ -530,7 +530,7 @@ void refreshRigidBodyBroadphasePairs(YwMmdBulletWorld *state, btRigidBody *body)
     state->world->refreshBroadphaseProxy(body);
 }
 
-void setRigidBodyCollisionFlags(YwMmdBulletWorld *state, btRigidBody *body, int flags)
+void setRigidBodyCollisionFlags(MmdBulletWorld *state, btRigidBody *body, int flags)
 {
     if (!body || body->getCollisionFlags() == flags) {
         return;
@@ -539,7 +539,7 @@ void setRigidBodyCollisionFlags(YwMmdBulletWorld *state, btRigidBody *body, int 
     refreshRigidBodyBroadphasePairs(state, body);
 }
 
-bool makeTemporalKinematic(YwMmdBulletWorld *state, YwMmdRigidBodyBinding &binding)
+bool makeTemporalKinematic(MmdBulletWorld *state, YwMmdRigidBodyBinding &binding)
 {
     if (!isDynamicRigidBody(binding.config)) {
         return false;
@@ -549,7 +549,7 @@ bool makeTemporalKinematic(YwMmdBulletWorld *state, YwMmdRigidBodyBinding &bindi
     return true;
 }
 
-void restoreTemporalKinematicBodies(YwMmdBulletWorld *state)
+void restoreTemporalKinematicBodies(MmdBulletWorld *state)
 {
     if (!state) {
         return;
@@ -566,7 +566,7 @@ void restoreTemporalKinematicBodies(YwMmdBulletWorld *state)
     }
 }
 
-bool shouldUseDisabledTargetTransform(YwMmdBulletWorld *state, const YwMmdRigidBodyBinding &binding)
+bool shouldUseDisabledTargetTransform(MmdBulletWorld *state, const YwMmdRigidBodyBinding &binding)
 {
     if (!state || binding.config.motionType == MOTION_STATIC || binding.config.boneIndex < 0) {
         return false;
@@ -616,7 +616,7 @@ void driveRigidBodyTowardTransform(YwMmdRigidBodyBinding &binding, const btTrans
     }
 }
 
-bool commitRigidBodies(YwMmdBulletWorld *state)
+bool commitRigidBodies(MmdBulletWorld *state)
 {
     if (!state || !state->world) {
         return false;
@@ -657,7 +657,7 @@ bool commitRigidBodies(YwMmdBulletWorld *state)
     return true;
 }
 
-int rigidBodyBoneDepth(const YwMmdBulletWorld *state, int bodyIndex)
+int rigidBodyBoneDepth(const MmdBulletWorld *state, int bodyIndex)
 {
     if (!state ||
         bodyIndex < 0 ||
@@ -667,7 +667,7 @@ int rigidBodyBoneDepth(const YwMmdBulletWorld *state, int bodyIndex)
     return state->rigidBodies[bodyIndex].config.boneDepth;
 }
 
-void buildRigidBodySyncOrder(YwMmdBulletWorld *state)
+void buildRigidBodySyncOrder(MmdBulletWorld *state)
 {
     if (!state) {
         return;
@@ -685,7 +685,7 @@ void buildRigidBodySyncOrder(YwMmdBulletWorld *state)
         });
 }
 
-void promotePhysicsWithBoneChildren(YwMmdBulletWorld *state)
+void promotePhysicsWithBoneChildren(MmdBulletWorld *state)
 {
     if (!state) {
         return;
@@ -779,7 +779,7 @@ void configureSpringAxis(
     }
 }
 
-bool commitJoints(YwMmdBulletWorld *state)
+bool commitJoints(MmdBulletWorld *state)
 {
     if (!state || !state->world) {
         return false;
@@ -819,7 +819,7 @@ bool commitJoints(YwMmdBulletWorld *state)
     return true;
 }
 
-bool isBodyPhysicsEnabled(const YwMmdBulletWorld *state, const YwMmdRigidBodyConfig &config)
+bool isBodyPhysicsEnabled(const MmdBulletWorld *state, const YwMmdRigidBodyConfig &config)
 {
     if (!state || !state->bonePhysicsToggles || config.boneIndex < 0 || config.boneIndex >= state->boneCount) {
         return true;
@@ -827,7 +827,7 @@ bool isBodyPhysicsEnabled(const YwMmdBulletWorld *state, const YwMmdRigidBodyCon
     return state->bonePhysicsToggles[config.boneIndex] != 0;
 }
 
-void syncAllBodiesToInputPose(YwMmdBulletWorld *state)
+void syncAllBodiesToInputPose(MmdBulletWorld *state)
 {
     if (!state) {
         return;
@@ -856,7 +856,7 @@ btTransform removeRigidBodyOffsetFromBoneWorld(const btTransform &bodyWorld, con
     return boneWorld;
 }
 
-btTransform boneWorldToLocal(const YwMmdBulletWorld *state, const YwMmdRigidBodyConfig &config, const btTransform &boneWorld)
+btTransform boneWorldToLocal(const MmdBulletWorld *state, const YwMmdRigidBodyConfig &config, const btTransform &boneWorld)
 {
     if (!state || config.parentBoneIndex < 0 || config.parentBoneIndex >= state->boneCount) {
         return boneWorld;
@@ -869,9 +869,9 @@ btTransform boneWorldToLocal(const YwMmdBulletWorld *state, const YwMmdRigidBody
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE
-YwMmdBulletWorld *yw_mmd_bullet_create_world()
+MmdBulletWorld *mmd_bullet_create_world()
 {
-    YwMmdBulletWorld *state = new YwMmdBulletWorld();
+    MmdBulletWorld *state = new MmdBulletWorld();
     state->configuration = new btDefaultCollisionConfiguration();
     state->dispatcher = new btCollisionDispatcher(state->configuration);
     state->broadphase = new btDbvtBroadphase();
@@ -890,7 +890,7 @@ YwMmdBulletWorld *yw_mmd_bullet_create_world()
 }
 
 EMSCRIPTEN_KEEPALIVE
-void yw_mmd_bullet_destroy_world(YwMmdBulletWorld *state)
+void mmd_bullet_destroy_world(MmdBulletWorld *state)
 {
     if (!state) {
         return;
@@ -906,7 +906,7 @@ void yw_mmd_bullet_destroy_world(YwMmdBulletWorld *state)
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_begin_model(YwMmdBulletWorld *state, int rigidBodyCount, int modelIdentity)
+int mmd_bullet_begin_model(MmdBulletWorld *state, int rigidBodyCount, int modelIdentity)
 {
     if (!state || rigidBodyCount < 0) {
         return 0;
@@ -918,8 +918,8 @@ int yw_mmd_bullet_begin_model(YwMmdBulletWorld *state, int rigidBodyCount, int m
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_add_rigid_body(
-    YwMmdBulletWorld *state,
+int mmd_bullet_add_rigid_body(
+    MmdBulletWorld *state,
     int boneIndex,
     int parentBoneIndex,
     int boneDepth,
@@ -971,8 +971,8 @@ int yw_mmd_bullet_add_rigid_body(
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_add_joint(
-    YwMmdBulletWorld *state,
+int mmd_bullet_add_joint(
+    MmdBulletWorld *state,
     int rigidBodyIndexA,
     int rigidBodyIndexB,
     float translationX,
@@ -1024,7 +1024,7 @@ int yw_mmd_bullet_add_joint(
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_commit_model(YwMmdBulletWorld *state)
+int mmd_bullet_commit_model(MmdBulletWorld *state)
 {
     if (!commitRigidBodies(state)) {
         return 0;
@@ -1035,14 +1035,14 @@ int yw_mmd_bullet_commit_model(YwMmdBulletWorld *state)
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_model_identity(YwMmdBulletWorld *state)
+int mmd_bullet_model_identity(MmdBulletWorld *state)
 {
     return state ? static_cast<int>(reinterpret_cast<intptr_t>(state->modelIdentity)) : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_set_tuning(
-    YwMmdBulletWorld *state,
+int mmd_bullet_set_tuning(
+    MmdBulletWorld *state,
     float fixedTimeStep,
     int maxSubSteps,
     int resetCatchUpSteps,
@@ -1080,13 +1080,13 @@ int yw_mmd_bullet_set_tuning(
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_ensure_step_buffers(YwMmdBulletWorld *state, int boneCount)
+int mmd_bullet_ensure_step_buffers(MmdBulletWorld *state, int boneCount)
 {
     return ensureStepBuffers(state, boneCount) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-void yw_mmd_bullet_reset_world(YwMmdBulletWorld *state)
+void mmd_bullet_reset_world(MmdBulletWorld *state)
 {
     if (state && state->world) {
         state->world->clearForces();
@@ -1095,7 +1095,7 @@ void yw_mmd_bullet_reset_world(YwMmdBulletWorld *state)
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_reset_pose_sync(YwMmdBulletWorld *state, int catchUpSteps)
+int mmd_bullet_reset_pose_sync(MmdBulletWorld *state, int catchUpSteps)
 {
     if (!state || !state->world || state->boneCount <= 0) {
         return 0;
@@ -1111,8 +1111,8 @@ int yw_mmd_bullet_reset_pose_sync(YwMmdBulletWorld *state, int catchUpSteps)
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_step(
-    YwMmdBulletWorld *state,
+int mmd_bullet_step(
+    MmdBulletWorld *state,
     double seconds,
     double deltaSeconds,
     double frame,
@@ -1236,24 +1236,24 @@ int yw_mmd_bullet_step(
 }
 
 EMSCRIPTEN_KEEPALIVE
-float *yw_mmd_bullet_input_translations(YwMmdBulletWorld *state) { return state ? state->inputTranslations : nullptr; }
+float *mmd_bullet_input_translations(MmdBulletWorld *state) { return state ? state->inputTranslations : nullptr; }
 EMSCRIPTEN_KEEPALIVE
-float *yw_mmd_bullet_input_rotations(YwMmdBulletWorld *state) { return state ? state->inputRotations : nullptr; }
+float *mmd_bullet_input_rotations(MmdBulletWorld *state) { return state ? state->inputRotations : nullptr; }
 EMSCRIPTEN_KEEPALIVE
-float *yw_mmd_bullet_input_world_matrices(YwMmdBulletWorld *state) { return state ? state->inputWorldMatrices : nullptr; }
+float *mmd_bullet_input_world_matrices(MmdBulletWorld *state) { return state ? state->inputWorldMatrices : nullptr; }
 EMSCRIPTEN_KEEPALIVE
-float *yw_mmd_bullet_output_translations(YwMmdBulletWorld *state) { return state ? state->outputTranslations : nullptr; }
+float *mmd_bullet_output_translations(MmdBulletWorld *state) { return state ? state->outputTranslations : nullptr; }
 EMSCRIPTEN_KEEPALIVE
-float *yw_mmd_bullet_output_rotations(YwMmdBulletWorld *state) { return state ? state->outputRotations : nullptr; }
+float *mmd_bullet_output_rotations(MmdBulletWorld *state) { return state ? state->outputRotations : nullptr; }
 EMSCRIPTEN_KEEPALIVE
-float *yw_mmd_bullet_output_world_matrices(YwMmdBulletWorld *state) { return state ? state->outputWorldMatrices : nullptr; }
+float *mmd_bullet_output_world_matrices(MmdBulletWorld *state) { return state ? state->outputWorldMatrices : nullptr; }
 EMSCRIPTEN_KEEPALIVE
-unsigned char *yw_mmd_bullet_bone_physics_toggles(YwMmdBulletWorld *state) { return state ? state->bonePhysicsToggles : nullptr; }
+unsigned char *mmd_bullet_bone_physics_toggles(MmdBulletWorld *state) { return state ? state->bonePhysicsToggles : nullptr; }
 EMSCRIPTEN_KEEPALIVE
-unsigned int *yw_mmd_bullet_updated_bone_indices(YwMmdBulletWorld *state) { return state ? state->updatedBoneIndices : nullptr; }
+unsigned int *mmd_bullet_updated_bone_indices(MmdBulletWorld *state) { return state ? state->updatedBoneIndices : nullptr; }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_debug_contact_count(YwMmdBulletWorld *state)
+int mmd_bullet_debug_contact_count(MmdBulletWorld *state)
 {
     if (!state || !state->world || !state->world->getDispatcher()) {
         return 0;
@@ -1278,7 +1278,7 @@ int yw_mmd_bullet_debug_contact_count(YwMmdBulletWorld *state)
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_debug_contact_pair_count(YwMmdBulletWorld *state)
+int mmd_bullet_debug_contact_pair_count(MmdBulletWorld *state)
 {
     if (!state || !state->world || !state->world->getDispatcher()) {
         return 0;
@@ -1304,12 +1304,12 @@ int yw_mmd_bullet_debug_contact_pair_count(YwMmdBulletWorld *state)
 }
 
 EMSCRIPTEN_KEEPALIVE
-float *yw_mmd_bullet_debug_contact_pairs(YwMmdBulletWorld *state)
+float *mmd_bullet_debug_contact_pairs(MmdBulletWorld *state)
 {
     if (!state || !state->world || !state->world->getDispatcher()) {
         return nullptr;
     }
-    const int pairCount = yw_mmd_bullet_debug_contact_pair_count(state);
+    const int pairCount = mmd_bullet_debug_contact_pair_count(state);
     if (pairCount <= 0) {
         std::free(state->contactDebugData);
         state->contactDebugData = nullptr;
@@ -1345,13 +1345,13 @@ float *yw_mmd_bullet_debug_contact_pairs(YwMmdBulletWorld *state)
 }
 
 EMSCRIPTEN_KEEPALIVE
-int yw_mmd_bullet_debug_rigid_body_count(YwMmdBulletWorld *state)
+int mmd_bullet_debug_rigid_body_count(MmdBulletWorld *state)
 {
     return state ? static_cast<int>(state->rigidBodies.size()) : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-float *yw_mmd_bullet_debug_rigid_body_world_matrices(YwMmdBulletWorld *state)
+float *mmd_bullet_debug_rigid_body_world_matrices(MmdBulletWorld *state)
 {
     if (!state) {
         return nullptr;
