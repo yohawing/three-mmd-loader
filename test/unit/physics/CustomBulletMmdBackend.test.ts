@@ -29,7 +29,7 @@ describe("Custom Bullet MMD backend", () => {
   });
 
   it("cleans broadphase pairs after native kinematic flag changes", () => {
-    const source = readFileSync(resolve(process.cwd(), "native/bullet/mmd_bindings.cc"), "utf8");
+    const source = readFileSync(resolve(process.cwd(), "native/bullet-mmd/mmd_bindings.cc"), "utf8");
 
     expect(source).toContain("cleanProxyFromPairs(proxy, state->dispatcher)");
     expect(source).toContain("state->world->refreshBroadphaseProxy(body)");
@@ -42,7 +42,7 @@ describe("Custom Bullet MMD backend", () => {
   });
 
   it("preserves Bullet kinematic interpolation when moving animated colliders", () => {
-    const source = readFileSync(resolve(process.cwd(), "native/bullet/mmd_bindings.cc"), "utf8");
+    const source = readFileSync(resolve(process.cwd(), "native/bullet-mmd/mmd_bindings.cc"), "utf8");
     const helper = source.slice(
       source.indexOf("void setRigidBodyWorldTransform"),
       source.indexOf("void refreshRigidBodyBroadphasePairs")
@@ -54,7 +54,7 @@ describe("Custom Bullet MMD backend", () => {
   });
 
   it("uses Babylon MMD wasm stepping defaults", () => {
-    const nativeSource = readFileSync(resolve(process.cwd(), "native/bullet/mmd_bindings.cc"), "utf8");
+    const nativeSource = readFileSync(resolve(process.cwd(), "native/bullet-mmd/mmd_bindings.cc"), "utf8");
     const browserSource = readFileSync(resolve(process.cwd(), "src/physics/customBulletMmd.ts"), "utf8");
 
     expect(nativeSource).toContain("DEFAULT_FIXED_TIME_STEP = btScalar(1.0 / 60.0)");

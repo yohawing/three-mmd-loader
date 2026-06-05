@@ -8,7 +8,7 @@ const outDir = join(root, "dist", "physics", "mmd");
 
 const candidates = [
   process.env.THREE_MMD_LOADER_BULLET_MMD_JS,
-  join(root, "native", "bullet", "dist", "yw_mmd_bullet.js")
+  join(root, "native", "bullet-mmd", "dist", "yw_mmd_bullet.js")
 ].filter(Boolean);
 
 async function pathExists(path) {

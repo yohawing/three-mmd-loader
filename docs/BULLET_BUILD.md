@@ -32,10 +32,10 @@ npm run smoke:bullet:mmd
 ```
 
 `npm run build:bullet` compiles the MMD-optimized browser target. It uses
-`native/bullet/mmd_bindings.cc` and outputs:
+`native/bullet-mmd/mmd_bindings.cc` and outputs:
 
-- `native/bullet/dist/yw_mmd_bullet.js`
-- `native/bullet/dist/yw_mmd_bullet.wasm`
+- `native/bullet-mmd/dist/yw_mmd_bullet.js`
+- `native/bullet-mmd/dist/yw_mmd_bullet.wasm`
 
 ## MMD-optimized backend path
 
