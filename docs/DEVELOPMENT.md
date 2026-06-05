@@ -23,7 +23,7 @@ another package manager.
 
 `npm run build` copies the locally generated mmd-anim WASM wrapper into
 `dist`; it does not rebuild the wrapper. Rebuild it before `npm run build` when
-the generated wrapper is missing, or when the `third_party/mmd-anim` submodule
+the generated wrapper is missing, or when the `native/third_party/mmd-anim` submodule
 or WASM export surface changed:
 
 ```bash
@@ -31,13 +31,13 @@ npm run build:mmd-anim
 ```
 
 `build:mmd-anim` runs `node scripts/build-mmd-anim-wasm.mjs`, builds
-`third_party/mmd-anim/crates/mmd-anim-wasm` with `wasm-pack`, and synchronizes
+`native/third_party/mmd-anim/crates/mmd-anim-wasm` with `wasm-pack`, and synchronizes
 the generated `mmd_anim_wasm.*` files into `src/parser/wasm/generated/`.
 
 Initialize the submodule before rebuilding:
 
 ```bash
-git submodule update --init --recursive third_party/mmd-anim
+git submodule update --init --recursive native/third_party/mmd-anim
 ```
 
 The npm tarball contains the generated WASM files only through `dist/**`.

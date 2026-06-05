@@ -2,7 +2,7 @@
 
 `native/` is reserved for native dependencies that are built or copied as part
 of this package. The parser/runtime WASM wrapper now comes from the
-`third_party/mmd-anim` submodule and is synchronized by
+`native/third_party/mmd-anim` submodule and is synchronized by
 `npm run build:mmd-anim`.
 
 Current native content:

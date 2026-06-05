@@ -35,7 +35,7 @@ npm run smoke:types
 npm pack --dry-run --json
 ```
 
-If the `third_party/mmd-anim` submodule or the WASM export surface changed,
+If the `native/third_party/mmd-anim` submodule or the WASM export surface changed,
 rebuild the WASM wrapper before the normal build:
 
 ```bash

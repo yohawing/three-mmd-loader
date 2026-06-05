@@ -197,7 +197,7 @@ function resolveMmdAnimWasmRoot() {
   if (existsSync(join(distRoot, "mmd_anim_wasm.js"))) {
     return distRoot;
   }
-  const submoduleRoot = resolve(root, "third_party", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
+  const submoduleRoot = resolve(root, "native", "third_party", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
   return existsSync(join(submoduleRoot, "mmd_anim_wasm.js")) ? submoduleRoot : undefined;
 }
 
