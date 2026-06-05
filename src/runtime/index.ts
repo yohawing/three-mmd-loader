@@ -7,8 +7,8 @@ export {
   parseMmdAnimWasmFormatJson
 } from "./mmdAnimRuntime.js";
 export { loadMmdAnimWasmVmd, loadMmdAnimWasmVpd, mmdAnimWasmVmdDtoToAnimation, mmdAnimWasmVpdDtoToPose } from "./mmdAnimWasmParser.js";
-export { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack, sampleMmdSelfShadowTrack, sampleMmdSelfShadowTrackInto } from "./animation.js";
-export type { SelfShadowState, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
+export { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack, sampleMmdLightTrackInto, sampleMmdSelfShadowTrack, sampleMmdSelfShadowTrackInto } from "./animation.js";
+export type { CameraState, LightState, SelfShadowState, VmdCameraFrame, VmdLightFrame, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
 export type {
   MmdAnimRuntimeOptions,
   MmdAnimRuntimeWasmClip,

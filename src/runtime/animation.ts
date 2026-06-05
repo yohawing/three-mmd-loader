@@ -180,23 +180,29 @@ export function sampleMmdLightTrack(
   frames: readonly VmdLightFrame[],
   frame: number
 ): LightState | undefined {
+  return sampleMmdLightTrackInto(frames, frame, {
+    color: [0, 0, 0],
+    direction: [0, 0, 0]
+  });
+}
+
+export function sampleMmdLightTrackInto(
+  frames: readonly VmdLightFrame[],
+  frame: number,
+  target: LightState
+): LightState | undefined {
   const pair = sampleFramePair(frames, frame);
   if (!pair) {
     return undefined;
   }
   const { previous, next, t } = pair;
-  return {
-    color: [
-      lerp(previous.color[0], next.color[0], t),
-      lerp(previous.color[1], next.color[1], t),
-      lerp(previous.color[2], next.color[2], t)
-    ],
-    direction: [
-      lerp(previous.direction[0], next.direction[0], t),
-      lerp(previous.direction[1], next.direction[1], t),
-      lerp(previous.direction[2], next.direction[2], t)
-    ]
-  };
+  target.color[0] = lerp(previous.color[0], next.color[0], t);
+  target.color[1] = lerp(previous.color[1], next.color[1], t);
+  target.color[2] = lerp(previous.color[2], next.color[2], t);
+  target.direction[0] = lerp(previous.direction[0], next.direction[0], t);
+  target.direction[1] = lerp(previous.direction[1], next.direction[1], t);
+  target.direction[2] = lerp(previous.direction[2], next.direction[2], t);
+  return target;
 }
 
 export function sampleMmdSelfShadowTrack(

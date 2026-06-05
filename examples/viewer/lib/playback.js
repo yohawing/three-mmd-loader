@@ -4,7 +4,10 @@ import { applyCameraMotion } from "./camera-loading.js";
 import { updateColliderHelpers, updateDebugFps } from "./debug.js";
 import { currentMmdFrame, currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
 import { sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
-import { applyMmdSelfShadowStateToThreeDirectionalLight } from "../../../dist/three/index.js";
+import {
+  applyMmdSelfShadowStateToThreeDirectionalLight,
+  syncMmdSpecularDirection
+} from "../../../dist/three/index.js";
 import { fitShadowCameraToObject } from "./scene-setup.js";
 
 export function render() {
@@ -43,6 +46,7 @@ export function evaluateRuntime(options) {
     updateOptions.physics = options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0);
     state.currentModel.update(currentMmdSeconds(), updateOptions);
   }
+  applyLightMotion();
   if (state.currentModel?.mesh) {
     fitShadowCameraToObject(state.currentModel.mesh);
   }
@@ -51,6 +55,33 @@ export function evaluateRuntime(options) {
     dom.timeline.value = state.elapsedSeconds;
   }
   updatePlaybackDisplay();
+}
+
+function applyLightMotion() {
+  const lightState = state.currentModel?.runtime?.lightState?.();
+  if (!lightState || !state.keyLight) {
+    return;
+  }
+  state.keyLight.color.setRGB(lightState.color[0], lightState.color[1], lightState.color[2]);
+  const direction = state.lightDirectionScratch.set(
+    lightState.direction[0],
+    lightState.direction[1],
+    -lightState.direction[2]
+  );
+  if (direction.lengthSq() > 0) {
+    direction.normalize();
+    const target = state.controls.target;
+    state.keyLight.target.position.copy(target);
+    state.keyLight.position.copy(target).addScaledVector(direction, 5);
+    state.keyLight.target.updateMatrixWorld();
+    state.keyLight.updateMatrixWorld();
+  }
+  if (state.currentModel?.mesh?.material) {
+    syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+  }
+  if (state.currentBackground?.mesh?.material) {
+    syncMmdSpecularDirection(state.currentBackground.mesh.material, state.keyLight);
+  }
 }
 
 function applySelfShadowMotion() {

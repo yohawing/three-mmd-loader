@@ -64,6 +64,22 @@ export interface MmdRuntime {
   clearAnimation(): void;
 
   /**
+   * Returns the current VMD camera state when the assigned animation has camera frames.
+   *
+   * The returned state is volatile and may be reused by later evaluate / tick /
+   * seek / reset calls.
+   */
+  cameraState(): import("../parser/model/modelTypes.js").CameraState | undefined;
+
+  /**
+   * Returns the current VMD light state when the assigned animation has light frames.
+   *
+   * The returned state is volatile and may be reused by later evaluate / tick /
+   * seek / reset calls.
+   */
+  lightState(): import("../parser/model/modelTypes.js").LightState | undefined;
+
+  /**
    * @deprecated Prefer seek / resetPose / clearAnimation for finer control.
    * The returned state is volatile; use frameState() for a retained snapshot.
    */

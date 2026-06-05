@@ -1,8 +1,9 @@
 import * as THREE from "three";
 
-import type { MmdAnimation } from "../parser/model/modelTypes.js";
+import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
 import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
 import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
+import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./animation.js";
 import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
 import { applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics } from "./physics.js";
 import type { PrePhysicsScratch } from "./physics.js";
@@ -162,6 +163,18 @@ export class MmdAnimRuntime implements MmdRuntime {
   private readonly scratchLocalMatrix = new THREE.Matrix4();
   private readonly scratchParentInverseMatrix = new THREE.Matrix4();
   private readonly scratchParentBoneIndices: number[] = [];
+  private readonly scratchCameraState: CameraState = {
+    distance: 0,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    fov: 1,
+    perspective: true
+  };
+  private readonly scratchCameraFrameHint = { index: 0 };
+  private readonly scratchLightState: LightState = {
+    color: [0, 0, 0],
+    direction: [0, 0, 0]
+  };
   private readonly scratchExternalPhysicsInput = {
     translations: new Float32Array(0),
     rotations: new Float32Array(0),
@@ -190,6 +203,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   private wasmClip: MmdAnimRuntimeWasmClip | undefined;
   private ownsWasmClip = false;
   private mesh: THREE.SkinnedMesh | undefined;
+  private mmdAnimation: MmdAnimation | undefined;
   private externalPhysicsData: RuntimeExternalPhysicsData | undefined;
   private previousEvaluateSeconds: number | undefined;
   private physicsDisabled = false;
@@ -288,6 +302,30 @@ export class MmdAnimRuntime implements MmdRuntime {
   clearAnimation(): void {
     this.releaseOwnedClip();
     this.wasmClip = undefined;
+    this.mmdAnimation = undefined;
+    this.scratchCameraFrameHint.index = 0;
+  }
+
+  cameraState(): CameraState | undefined {
+    const frames = this.mmdAnimation?.cameraFrames;
+    if (!frames || frames.length === 0) {
+      this.scratchCameraFrameHint.index = 0;
+      return undefined;
+    }
+    return sampleMmdCameraTrackInto(
+      frames,
+      this.state.frame,
+      this.scratchCameraState,
+      this.scratchCameraFrameHint
+    );
+  }
+
+  lightState(): LightState | undefined {
+    const frames = this.mmdAnimation?.lightFrames;
+    if (!frames || frames.length === 0) {
+      return undefined;
+    }
+    return sampleMmdLightTrackInto(frames, this.state.frame, this.scratchLightState);
   }
 
   reset(seconds = 0): MmdFrameState {
@@ -305,6 +343,8 @@ export class MmdAnimRuntime implements MmdRuntime {
       throw new TypeError("MmdAnimRuntime animation must be an MmdAnimation");
     }
     this.mesh = mesh;
+    this.mmdAnimation = animation;
+    this.scratchCameraFrameHint.index = 0;
     writeParentBoneIndices(mesh.skeleton.bones, this.scratchParentBoneIndices);
     this.externalPhysicsData =
       this.physicsMode === "external" && this.physicsBackend
@@ -314,7 +354,8 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.previousEvaluateSeconds = undefined;
     this.physicsDisabled = false;
     if (!(animation.bytes instanceof Uint8Array) || animation.bytes.byteLength === 0) {
-      this.clearAnimation();
+      this.releaseOwnedClip();
+      this.wasmClip = undefined;
       return;
     }
     const clipFactory = this.wasm?.WasmMmdClip?.fromVmdBytesForModel;

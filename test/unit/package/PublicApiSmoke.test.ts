@@ -20,6 +20,7 @@ import {
   MmdAnimRuntime,
   ThreeMmdLoader,
   sampleMmdCameraTrackInto,
+  sampleMmdLightTrackInto,
   sampleMmdSelfShadowTrackInto,
   createAmmoMmdPhysicsBackend,
   applyMmdCameraStateToThreeCamera,
@@ -136,6 +137,10 @@ center
   it("exports Three.js adapter camera helpers from the public barrel", () => {
     expect(applyMmdCameraStateToThreeCamera).toBeTypeOf("function");
     expect(sampleMmdCameraTrackInto).toBeTypeOf("function");
+  });
+
+  it("exports runtime light helpers from the public barrel", () => {
+    expect(sampleMmdLightTrackInto).toBeTypeOf("function");
   });
 
   it("exports Three.js adapter self-shadow helpers from the public barrel", () => {

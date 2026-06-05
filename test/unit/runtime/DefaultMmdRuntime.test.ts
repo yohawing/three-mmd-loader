@@ -39,6 +39,50 @@ describe("DefaultMmdRuntime", () => {
     });
   });
 
+  it("exposes camera and light state from the current animation", () => {
+    const runtime = new DefaultMmdRuntime();
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.bind(new THREE.Skeleton([]));
+    const animation = createEmptyMmdAnimation();
+    animation.cameraFrames.push(
+      {
+        frame: 0,
+        distance: 10,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        fov: 45,
+        perspective: true
+      },
+      {
+        frame: 30,
+        distance: 20,
+        position: [30, 0, 0],
+        rotation: [0, 1, 0],
+        fov: 60,
+        perspective: false
+      }
+    );
+    animation.lightFrames.push(
+      { frame: 0, color: [0, 0, 1], direction: [1, 0, 0] },
+      { frame: 30, color: [1, 0.5, 0.5], direction: [-1, -1, 1] }
+    );
+
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0.5, { physics: false });
+
+    expect(runtime.cameraState()).toMatchObject({
+      distance: 15,
+      position: [15, 0, 0],
+      rotation: [0, 0.5, 0],
+      fov: 52.5,
+      perspective: true
+    });
+    expect(runtime.lightState()).toEqual({
+      color: [0.5, 0.25, 0.75],
+      direction: [0, -0.5, 0.5]
+    });
+  });
+
   it("keeps tick render sync on the hot path allocation-free", async () => {
     const source = await readFile("src/runtime/core.ts", "utf8");
 

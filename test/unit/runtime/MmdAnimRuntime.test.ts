@@ -69,6 +69,48 @@ describe("MmdAnimRuntime", () => {
     expect(wasm.createdRuntimes[0]?.lastFrame).toBe(0);
   });
 
+  it("exposes camera and light state even when the wasm clip is empty", () => {
+    const runtime = MmdAnimRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]));
+    const animation = createMmdAnimation(new Uint8Array());
+    animation.cameraFrames.push(
+      {
+        frame: 0,
+        distance: 10,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        fov: 45,
+        perspective: true
+      },
+      {
+        frame: 30,
+        distance: 20,
+        position: [30, 0, 0],
+        rotation: [0, 1, 0],
+        fov: 60,
+        perspective: false
+      }
+    );
+    animation.lightFrames.push(
+      { frame: 0, color: [0, 0, 1], direction: [1, 0, 0] },
+      { frame: 30, color: [1, 0.5, 0.5], direction: [-1, -1, 1] }
+    );
+
+    runtime.setAnimation(animation, createSingleBoneMesh());
+    runtime.evaluate(0.5);
+
+    expect(runtime.cameraState()).toMatchObject({
+      distance: 15,
+      position: [15, 0, 0],
+      rotation: [0, 0.5, 0],
+      fov: 52.5,
+      perspective: true
+    });
+    expect(runtime.lightState()).toEqual({
+      color: [0.5, 0.25, 0.75],
+      direction: [0, -0.5, 0.5]
+    });
+  });
+
   it("steps external physics after wasm pose evaluation", () => {
     const backend = new TranslatingPhysicsBackend([4, 5, 6]);
     const runtime = MmdAnimRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]), {

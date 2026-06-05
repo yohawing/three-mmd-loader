@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import type { MmdAnimation } from "../parser/model/modelTypes.js";
+import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
 import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
 import type { MmdDirectBufferPhysicsBackend, MmdPhysicsBackend, MmdPhysicsStepBuffers, MmdPhysicsStepContext } from "../physics/index.js";
-import { applyMmdAnimation, isMmdAnimation } from "./animation.js";
+import { applyMmdAnimation, isMmdAnimation, sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./animation.js";
 import { applyAppendTransforms, reapplyAppendTransformsForSources } from "./append.js";
 import { createCcdIkStaticBones, readIkChains, solvePreparedIk } from "./ik-bridge.js";
 import type { SolvePreparedIkScratch } from "./ik-bridge.js";
@@ -66,6 +66,18 @@ export class DefaultMmdRuntime implements MmdRuntime {
   };
   private readonly scratchSingleIkChain: CcdIkPreparedChain[] = [];
   private readonly scratchChangedIkBoneIndices = new Set<number>();
+  private readonly scratchCameraState: CameraState = {
+    distance: 0,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    fov: 1,
+    perspective: true
+  };
+  private readonly scratchCameraFrameHint = { index: 0 };
+  private readonly scratchLightState: LightState = {
+    color: [0, 0, 0],
+    direction: [0, 0, 0]
+  };
   private readonly scratchStatefulSpringTranslations: Array<[number, number, number]> = [];
   private readonly scratchExternalPhysicsInput = {
     translations: new Float32Array(0),
@@ -178,6 +190,29 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.currentIkPropertyFrame = undefined;
     this.currentIkPropertyFrameIndex = -1;
     this.disabledIkBoneNames.clear();
+    this.scratchCameraFrameHint.index = 0;
+  }
+
+  cameraState(): CameraState | undefined {
+    const frames = this.mmdAnimation?.cameraFrames;
+    if (!frames || frames.length === 0) {
+      this.scratchCameraFrameHint.index = 0;
+      return undefined;
+    }
+    return sampleMmdCameraTrackInto(
+      frames,
+      this.state.frame,
+      this.scratchCameraState,
+      this.scratchCameraFrameHint
+    );
+  }
+
+  lightState(): LightState | undefined {
+    const frames = this.mmdAnimation?.lightFrames;
+    if (!frames || frames.length === 0) {
+      return undefined;
+    }
+    return sampleMmdLightTrackInto(frames, this.state.frame, this.scratchLightState);
   }
 
   /**
@@ -200,6 +235,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.currentIkPropertyFrame = undefined;
     this.currentIkPropertyFrameIndex = -1;
     this.disabledIkBoneNames.clear();
+    this.scratchCameraFrameHint.index = 0;
     this.debugStages = createEmptyDebugStages();
     this.previousEvaluateSeconds = undefined;
     this.physicsDisabled = false;

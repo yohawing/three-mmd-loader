@@ -58,16 +58,14 @@ export function clearCameraMotion() {
 
 export function applyCameraMotion() {
   const cameraMotion = state.currentCameraMotion;
-  if (!cameraMotion || cameraMotion.frames.length === 0) {
-    return;
-  }
-  const frameNumber = currentMmdFrame();
-  const sampled = sampleMmdCameraTrackInto(
-    cameraMotion.frames,
-    frameNumber,
-    state.cameraStateScratch,
-    cameraMotion.frameIndexHint
-  );
+  const sampled = cameraMotion && cameraMotion.frames.length > 0
+    ? sampleMmdCameraTrackInto(
+        cameraMotion.frames,
+        currentMmdFrame(),
+        state.cameraStateScratch,
+        cameraMotion.frameIndexHint
+      )
+    : state.currentModel?.runtime?.cameraState?.();
   if (!sampled) {
     return;
   }
