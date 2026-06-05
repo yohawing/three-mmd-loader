@@ -2,7 +2,7 @@
 
 Three.js 上で MMD モデルとモーションを読み込み・再生するためのライブラリです。
 
-English: [README.md](../README.md)　- [デモサイト](https://three.mmd.yohawing.com/)
+[English](../README.md) / [デモサイト](https://three.mmd.yohawing.com/)
 
 ![three-mmd-loader viewer screenshot](./assets/screenshots.png)
 
@@ -29,16 +29,18 @@ English: [README.md](../README.md)　- [デモサイト](https://three.mmd.yohaw
 | 機能 | 状態 |
 | --- | --- |
 | Parser | ✅ PMX / PMD / VMD / VPD TypeScript parser |
-| BDEF1/2/4 skinning | ✅ |
-| SDEF skinning | ⚠️ shader path はあり / parity 要検証 |
-| QDEF skinning | ❌ Dual Quaternion Skinning 未実装 |
+| Deform / skinning | ✅ BDEF1/2/4, SDEF, QDEF |
+| MMD マテリアル / Toon シェーダー | ✅ Toon、AlphaBlend 判定、描画順 |
 | 付与変形 (append transform) | ✅ PMX layer 順 |
-| IK link-local / parent-local clamp | ⚠️ 単軸固定は対応 / 複数軸は部分対応 |
+| IK link angle limits | ✅ PMX / PMD link limits + parent-local Euler clamp |
 | VMD Camera | ✅ Runtime sampling + Three.js helper、perspective/orthographic 切替 |
-| VMD Light | ⚠️ 解析は対応 / runtime 適用の parity 要検証 |
+| VMD Light | ✅ Runtime sampling + viewer directional light 適用 |
 | Self Shadow | ✅ Three.js shadow-map 経路 + VMD self-shadow sampling |
-| 物理 (Ammo backend) | ✅ Ammo.jsを使用。  |
+| 物理 | ✅ MMD Bullet backend / Ammo.js backend は deprecated 互換経路 |
 | Soft Body | ⚠️ PMX データは解析 / runtime simulation は未実装 |
+
+PMX の既定ランタイムと WASM parser には
+[yohawing/mmd-anim](https://github.com/yohawing/mmd-anim) を使用しています。
 
 ## Acknowledgements
 
@@ -64,66 +66,30 @@ import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
 const loader = new ThreeMmdLoader();
 const model = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path は fetch で解決)
 scene.add(model.root);
-
-const remoteModel = await loader.loadModel("/models/example.pmx");
-scene.add(remoteModel.root);
 ```
-
-`model.root` は scene にそのまま追加できる root で、base mesh と生成された
-outline / render-order proxy mesh を含みます。proxy を生成しない場合は
-`{ outline: false }` または `{ materialRenderOrder: false }` を渡します。
-テクスチャ解決の警告は `model.diagnostics.textures` で確認できます。
 
 ## 使い方 - アニメーション
 
 ```ts
+import * as THREE from "three";
+import { applyMmdCameraStateToThreeCamera } from "@yohawing/three-mmd-loader";
+
 const model = await loader.loadModel(modelSource);
 const { animation } = await loader.loadAnimation(vmdSource);
 model.setAnimation(animation);
 
+const perspectiveCamera = new THREE.PerspectiveCamera();
+
 // 毎フレーム。
 model.update(currentSeconds);
-```
-
-## 使い方 - カメラモーション
-
-```ts
-import {
-  applyMmdCameraStateToThreeCamera,
-  sampleMmdCameraTrackInto
-} from "@yohawing/three-mmd-loader";
-
-const { animation } = await loader.loadAnimation(cameraVmdSource);
-const mmdFrameRate = 30; // MMD の 60 FPS モードでは 60 を指定。
-const quantizeToMmdFrame = true; // 無制限 / 小数フレーム評価では false。
-const cameraStateScratch = {
-  distance: 0,
-  position: [0, 0, 0] as [number, number, number],
-  rotation: [0, 0, 0] as [number, number, number],
-  fov: 1,
-  perspective: true
-};
-
-// 毎フレーム。選択した MMD フレーム時間を渡す。
-const frame = currentSeconds * mmdFrameRate;
-const cameraState = sampleMmdCameraTrackInto(
-  animation.cameraFrames,
-  quantizeToMmdFrame ? Math.floor(frame + 1e-6) : frame,
-  cameraStateScratch
-);
+const cameraState = model.runtime.cameraState();
 if (cameraState) {
-  applyMmdCameraStateToThreeCamera(camera, cameraState);
+  const activeCamera = applyMmdCameraStateToThreeCamera(perspectiveCamera, cameraState, {
+    aspect: renderer.domElement.clientWidth / renderer.domElement.clientHeight
+  });
+  renderer.render(scene, activeCamera);
 }
 ```
-
-`applyMmdCameraStateToThreeCamera(...)` は MMD カメラ座標を Three.js 用に
-変換します。MMD カメラの回転規約、距離、roll、FOV、perspective /
-orthographic frame の切替を含みます。example viewer では同じ再生設定を
-URL query で切り替えられます。
-
-- `?mmdFrameRate=60`: MMD フレーム時間を 60 FPS として評価。
-- `?mmdFrameQuantize=false`: 小数フレームを維持して無制限再生寄りに評価。
-- query なしでは 30 FPS、MMD フレームに quantize する再生が既定。
 
 ## 使い方 - ポーズ (VPD)
 
@@ -136,23 +102,25 @@ model.setAnimation(animation);
 ## 使い方 - 物理
 
 物理は `MmdPhysicsBackend` で抽象化されていて、物理ライブラリを変更可能にしてあります。
-現状の実装は Ammo.js (Bullet Physics) を使用しています。
+ブラウザ向けの推奨 backend は、direct Wasm buffer を使う MMD 最適化 Bullet backend です。
+Ammo.js backend は互換用として残していますが、deprecated であり、今後の標準導線からは外します。
 
 ```ts
 import {
   createAmmoMmdPhysicsBackend,
-  createDisabledMmdPhysicsBackend
+  createCustomBulletMmdPhysicsBackend,
+  loadCustomBulletMmdModule
 } from "@yohawing/three-mmd-loader/physics";
 
-// シミュレーションなしの fallback。
-const disabledPhysicsBackend = createDisabledMmdPhysicsBackend();
+// 推奨: direct Wasm buffer を使う MMD 最適化 Bullet backend。
+const mmdBullet = await loadCustomBulletMmdModule();
+const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 
-// Ammo.js backend。
+// Deprecated 互換経路: Ammo.js backend。
 const Ammo = await import("ammo.js").then((m) => m.default ?? m);
-const physicsBackend = createAmmoMmdPhysicsBackend(Ammo);
+const legacyPhysicsBackend = createAmmoMmdPhysicsBackend(Ammo);
 ```
 
 ## Development
 
-テスト、script、fixture、release check などの開発メモは
-[DEVELOPMENT.md](./DEVELOPMENT.md) にあります。
+[DEVELOPMENT.md](./DEVELOPMENT.md) を参照してください。

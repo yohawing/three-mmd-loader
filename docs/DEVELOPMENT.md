@@ -7,7 +7,8 @@ scripts used while developing `@yohawing/three-mmd-loader`.
 
 - Node.js 22 or 24.
 - npm with the committed `package-lock.json`.
-- Optional: Rust and wasm-pack when rebuilding the mmd-anim WASM wrapper.
+- Optional: Rust and wasm-pack when rebuilding the mmd-anim / Yw MMD WASM wrapper.
+- Optional: Emscripten `emcc` when rebuilding the MMD Bullet browser backend.
 - Optional: Playwright browser dependencies for visual regression scripts.
 
 Install dependencies with:
@@ -19,28 +20,75 @@ npm ci
 CI and release workflows also use `npm ci`, so do not update dependencies with
 another package manager.
 
-## WASM Wrapper Build
+## Native WASM Builds
 
-`npm run build` copies the locally generated mmd-anim WASM wrapper into
-`dist`; it does not rebuild the wrapper. Rebuild it before `npm run build` when
-the generated wrapper is missing, or when the `native/third_party/mmd-anim` submodule
-or WASM export surface changed:
+`npm run build` copies locally generated native browser artifacts into `dist`;
+it does not rebuild the mmd-anim / Yw MMD wrapper or the MMD Bullet backend.
+Rebuild the relevant native target first when a generated artifact is missing,
+or when its submodule, binding source, or export surface changed.
 
-```bash
-npm run build:mmd-anim
-```
+### mmd-anim / Yw MMD Parser Wrapper
 
-`build:mmd-anim` runs `node scripts/build-mmd-anim-wasm.mjs`, builds
-`native/third_party/mmd-anim/crates/mmd-anim-wasm` with `wasm-pack`, and synchronizes
-the generated `mmd_anim_wasm.*` files into `src/parser/wasm/generated/`.
-
-Initialize the submodule before rebuilding:
+The parser/runtime WASM wrapper is built from the `native/third_party/mmd-anim`
+submodule:
 
 ```bash
 git submodule update --init --recursive native/third_party/mmd-anim
+npm run build:mmd-anim
+npm run build
 ```
 
-The npm tarball contains the generated WASM files only through `dist/**`.
+`build:mmd-anim` runs `node scripts/build-mmd-anim-wasm.mjs`, builds
+`native/third_party/mmd-anim/crates/mmd-anim-wasm` with `wasm-pack`, and
+synchronizes the generated `mmd_anim_wasm.*` files into
+`src/parser/wasm/generated/`.
+
+The npm tarball contains these generated WASM files only through `dist/**`.
+
+### MMD Bullet Browser Backend
+
+The experimental direct-buffer Bullet backend is built from:
+
+- `native/third_party/bullet3`: upstream Bullet source submodule.
+- `native/bullet-mmd/mmd_bindings.cc`: MMD-specific browser binding source.
+
+Initialize Bullet and rebuild the browser backend with:
+
+```bash
+git submodule update --init --recursive native/third_party/bullet3
+npm run build:bullet
+npm run build
+```
+
+`build:bullet` compiles the MMD-optimized browser target through
+`node scripts/build-bullet-mmd-wasm.mjs`. It requires `emcc` on `PATH` and
+writes:
+
+- `native/bullet-mmd/dist/mmd_bullet.js`
+- `native/bullet-mmd/dist/mmd_bullet.wasm`
+
+`npm run build` then copies `mmd_bullet.js` into `dist/physics/mmd/`.
+`loadCustomBulletMmdModule()` resolves `./mmd/mmd_bullet.js` relative to the
+published `dist/physics/` module.
+
+Run the focused Bullet checks after rebuilding:
+
+```bash
+npm run compare:bullet:mmd
+npm run compare:bullet:mmd:local -- --frames 120
+npm run smoke:bullet:mmd
+```
+
+`compare:bullet:mmd` is a small synthetic smoke comparison. Use
+`compare:bullet:mmd:local` with a representative model and motion when checking
+whether `createCustomBulletMmdPhysicsBackend(...)` still tracks the stable
+Ammo.js baseline. Useful local options include `--model <path>`,
+`--motion <path>`, `--bullet <path>`, `--ammo-script npm|<path>`, `--json`, and
+`--fail-position-delta <value>`.
+
+The MMD Bullet target exports the `mmd_bullet_*` C ABI and uses a fixed 64 MiB
+WASM heap so runtime typed-array views over `Module.HEAPF32.buffer` and
+`Module.HEAPU8.buffer` stay stable during direct-buffer physics steps.
 
 ## PMX WASM ABI Shape
 
@@ -80,6 +128,10 @@ Command summary:
 | `npm test` | Runs the Vitest unit and integration suite. |
 | `npm run build` | Compiles TypeScript and copies bundled MMD toon BMP and WASM assets into `dist`. |
 | `npm run build:mmd-anim` | Rebuilds the mmd-anim WASM wrapper into `src/parser/wasm/generated/`. |
+| `npm run build:bullet` | Rebuilds the MMD Bullet browser backend into `native/bullet-mmd/dist/`. |
+| `npm run compare:bullet:mmd` | Runs the small synthetic Ammo.js vs MMD Bullet comparison. |
+| `npm run compare:bullet:mmd:local` | Compares Ammo.js vs MMD Bullet against a local model and optional motion. |
+| `npm run smoke:bullet:mmd` | Smoke-tests the built MMD Bullet browser backend. |
 | `npm run bench:wasm:perf -- <model> [repeat]` | Compares WASM and TypeScript fallback `loadModel` speed plus `loadModel + createThreeBufferGeometry` total time against a local PMX / PMD file. |
 | `npm run smoke:dist` | Verifies built package exports and key dist runtime paths. |
 | `npm run smoke:types` | Packs the library, installs it into a temporary TypeScript consumer, and verifies root/subpath imports with `tsc --noEmit`. |

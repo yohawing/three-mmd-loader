@@ -4,12 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.3.0] - 2026-06-06
+
 ### Added
 
+- Add the mmd-anim backed parser/runtime path and make the mmd-anim runtime the
+  default PMX runtime path.
+- Add experimental custom runtime support for plugging alternate model runtime
+  implementations into the Three.js loader.
+- Add VMD camera and light motion state sampling/application helpers.
+- Add Three.js shadow-map based self-shadow support with VMD self-shadow
+  sampling.
+- Add the experimental direct-buffer MMD Bullet browser backend.
 - Add the preferred `ThreeMmdModel.root`, `ThreeMmdModel.setAnimation(...)`,
   `ThreeMmdModel.update(...)`, `ThreeMmdModel.diagnostics.textures`,
   `ThreeMmdLoadModelOptions.outline`, and
   `ThreeMmdLoadModelOptions.materialRenderOrder` API surface.
+
+### Changed
+
+- Move native dependencies under `native/third_party/` and keep the MMD Bullet
+  binding source under `native/bullet-mmd/`.
+- Rename the MMD Bullet browser artifact and C ABI prefix to `mmd_bullet`.
+- Consolidate native WASM build notes into `docs/DEVELOPMENT.md`.
+
+### Fixed
+
+- Disable the stale Yw MMD core WASM loader path in favor of the mmd-anim
+  generated wrapper.
+- Avoid CI source submodule checkout issues.
+- Preserve parsed scene state across the custom runtime path.
 
 ### Deprecated
 
