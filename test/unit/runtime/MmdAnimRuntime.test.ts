@@ -8,7 +8,7 @@ import {
   exportMmdAnimWasmVpdPoseJsonBytes,
   parseMmdAnimWasmFormatJson
 } from "../../../src/index.js";
-import type { MmdAnimRuntimeWasmModule, MmdAnimation, MmdPhysicsBackend, MmdPhysicsStepContext, MmdPhysicsStepResult } from "../../../src/index.js";
+import type { MmdAnimRuntimeWasmModule, MmdAnimation, MmdPhysicsBackend, MmdPhysicsStepContext, MmdPhysicsStepResult, VmdBoneTrack } from "../../../src/index.js";
 
 describe("MmdAnimRuntime", () => {
   it("constructs an mmd-anim wasm model from PMX bytes and evaluates frame state", () => {
@@ -109,6 +109,20 @@ describe("MmdAnimRuntime", () => {
       color: [0.5, 0.25, 0.75],
       direction: [0, -0.5, 0.5]
     });
+  });
+
+  it("evaluates parsed model tracks when animation bytes are not VMD bytes", () => {
+    const wasm = createFakeWasmModule();
+    const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]));
+    const animation = createMmdAnimation(new TextEncoder().encode("Vocaloid Pose Data file"));
+    animation.boneTracks.center = createBoneTrack([7, 8, 9]);
+    const mesh = createSingleBoneMesh();
+
+    runtime.setAnimation(animation, mesh);
+    runtime.tick(0, { mesh, physics: false });
+
+    expect(wasm.createdClips).toEqual([]);
+    expect(renderedBoneWorldPosition(mesh, 0).toArray()).toEqual([7, 8, -9]);
   });
 
   it("steps external physics after wasm pose evaluation", () => {
@@ -300,6 +314,17 @@ function createMmdAnimation(bytes: Uint8Array): MmdAnimation {
     lightFrames: [],
     selfShadowFrames: [],
     propertyFrames: []
+  };
+}
+
+function createBoneTrack(translation: readonly [number, number, number]): VmdBoneTrack {
+  return {
+    packed: "bone",
+    frames: new Uint32Array([0]),
+    translations: new Float32Array(translation),
+    rotations: new Float32Array([0, 0, 0, 1]),
+    interpolations: new Float32Array(16),
+    physicsToggles: new Int8Array([-1])
   };
 }
 

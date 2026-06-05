@@ -4,6 +4,7 @@ import type { CameraState, LightState, MmdAnimation } from "../parser/model/mode
 import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
 import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
 import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./animation.js";
+import { DefaultMmdRuntime } from "./core.js";
 import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
 import { applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics } from "./physics.js";
 import type { PrePhysicsScratch } from "./physics.js";
@@ -204,6 +205,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   private ownsWasmClip = false;
   private mesh: THREE.SkinnedMesh | undefined;
   private mmdAnimation: MmdAnimation | undefined;
+  private parsedTrackRuntime: DefaultMmdRuntime | undefined;
   private externalPhysicsData: RuntimeExternalPhysicsData | undefined;
   private previousEvaluateSeconds: number | undefined;
   private physicsDisabled = false;
@@ -233,6 +235,10 @@ export class MmdAnimRuntime implements MmdRuntime {
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState {
     const previousSeconds = this.state.seconds;
     writeFrameState(this.state, seconds, this.frameRate);
+    if (this.parsedTrackRuntime) {
+      const state = this.parsedTrackRuntime.evaluate(seconds, options);
+      return copyFrameStateInto(this.evaluateReturnState, state);
+    }
     if (this.wasmClip) {
       this.wasmRuntime.evaluateClipFrame(this.wasmClip, this.state.frame);
     } else {
@@ -290,10 +296,15 @@ export class MmdAnimRuntime implements MmdRuntime {
 
   seek(seconds: number): MmdFrameState {
     writeFrameState(this.state, seconds, this.frameRate);
+    this.parsedTrackRuntime?.seek(seconds);
     return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
 
   resetPose(): void {
+    if (this.parsedTrackRuntime) {
+      this.parsedTrackRuntime.resetPose();
+      return;
+    }
     this.wasmRuntime.evaluateRestPose();
     this.copyWasmOutput();
     this.syncBoundMesh();
@@ -303,6 +314,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.releaseOwnedClip();
     this.wasmClip = undefined;
     this.mmdAnimation = undefined;
+    this.parsedTrackRuntime = undefined;
     this.scratchCameraFrameHint.index = 0;
   }
 
@@ -344,6 +356,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     }
     this.mesh = mesh;
     this.mmdAnimation = animation;
+    this.parsedTrackRuntime = undefined;
     this.scratchCameraFrameHint.index = 0;
     writeParentBoneIndices(mesh.skeleton.bones, this.scratchParentBoneIndices);
     this.externalPhysicsData =
@@ -353,6 +366,19 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.resetPhysicsState();
     this.previousEvaluateSeconds = undefined;
     this.physicsDisabled = false;
+    if (hasParsedModelTracks(animation) && !isLikelyVmdBytes(animation.bytes)) {
+      this.releaseOwnedClip();
+      this.wasmClip = undefined;
+      this.externalPhysicsData = undefined;
+      this.parsedTrackRuntime = new DefaultMmdRuntime({
+        frameRate: this.frameRate,
+        initialSeconds: this.state.seconds,
+        physics: this.physicsMode === "external" ? "external" : "none",
+        physicsBackend: this.physicsBackend
+      });
+      this.parsedTrackRuntime.setAnimation(animation, mesh);
+      return;
+    }
     if (!(animation.bytes instanceof Uint8Array) || animation.bytes.byteLength === 0) {
       this.releaseOwnedClip();
       this.wasmClip = undefined;
@@ -371,6 +397,9 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   debugState(): MmdRuntimeDebugState {
+    if (this.parsedTrackRuntime) {
+      return this.parsedTrackRuntime.debugState();
+    }
     return {
       stages: {
         vmdInterpolation: cloneDebugStage(this.debugStages.vmdInterpolation),
@@ -382,6 +411,9 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   debugRigidBodyWorldTransformsColumnMajor(): readonly (readonly number[])[] {
+    if (this.parsedTrackRuntime) {
+      return this.parsedTrackRuntime.debugRigidBodyWorldTransformsColumnMajor();
+    }
     return this.physicsBackend?.debugRigidBodyWorldTransformsColumnMajor?.() ?? [];
   }
 
@@ -602,6 +634,23 @@ function createWasmRuntime(
     throw new TypeError("MmdAnimRuntime requires wasm.WasmMmdRuntimeInstance");
   }
   return runtimeFactory.forModel?.(model) ?? new runtimeFactory(model, model.morphCount?.() ?? 0);
+}
+
+function hasParsedModelTracks(animation: MmdAnimation): boolean {
+  return Object.keys(animation.boneTracks).length > 0 || Object.keys(animation.morphTracks).length > 0;
+}
+
+function isLikelyVmdBytes(bytes: Uint8Array): boolean {
+  const header = "Vocaloid Motion Data";
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength < header.length) {
+    return false;
+  }
+  for (let index = 0; index < header.length; index += 1) {
+    if (bytes[index] !== header.charCodeAt(index)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function syncWorldMatricesToSkeleton(

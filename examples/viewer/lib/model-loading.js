@@ -525,9 +525,29 @@ async function createRuntimeFactory(physicsBackend) {
   }
   const wasm = await import("/__mmd_anim_wasm/mmd_anim_wasm.js");
   await wasm.default();
-  return ({ modelBytes }) => MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, {
-    frameRate: state.mmdFrameRate,
-    physics: "external",
-    physicsBackend
-  });
+  return ({ modelBytes }) => {
+    if (!isPmxBytes(modelBytes)) {
+      return new DefaultMmdRuntime({
+        frameRate: state.mmdFrameRate,
+        physics: "external",
+        physicsBackend
+      });
+    }
+    return MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, {
+      frameRate: state.mmdFrameRate,
+      physics: "external",
+      physicsBackend
+    });
+  };
+}
+
+function isPmxBytes(bytes) {
+  return (
+    bytes instanceof Uint8Array &&
+    bytes.byteLength >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4d &&
+    bytes[2] === 0x58 &&
+    bytes[3] === 0x20
+  );
 }

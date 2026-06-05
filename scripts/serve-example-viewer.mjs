@@ -193,8 +193,12 @@ function resolveMmdAnimWasmRoot() {
   if (process.env.MMD_ANIM_WASM_ROOT !== undefined) {
     return resolve(process.env.MMD_ANIM_WASM_ROOT);
   }
-  const defaultRoot = resolve(root, "third_party", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
-  return existsSync(join(defaultRoot, "mmd_anim_wasm.js")) ? defaultRoot : undefined;
+  const distRoot = resolve(root, "dist", "parser", "wasm", "generated");
+  if (existsSync(join(distRoot, "mmd_anim_wasm.js"))) {
+    return distRoot;
+  }
+  const submoduleRoot = resolve(root, "third_party", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
+  return existsSync(join(submoduleRoot, "mmd_anim_wasm.js")) ? submoduleRoot : undefined;
 }
 
 function createLocalAssetManifest() {
