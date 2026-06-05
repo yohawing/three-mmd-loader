@@ -10,6 +10,8 @@ const localFixturesPath = resolve(root, "test", "fixtures", "fixtures.local.json
 const localFixtureInventory = loadLocalFixtureInventory();
 const dataRoot = resolveDataRoot();
 const dataRoute = "/__mmd_data/";
+const mmdAnimWasmRoot = resolveMmdAnimWasmRoot();
+const mmdAnimWasmRoute = "/__mmd_anim_wasm/";
 const localAssetsRoute = "/__mmd_assets__/fixtures-local.json";
 const port = Number.parseInt(process.env.PORT ?? "3939", 10);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -62,6 +64,14 @@ const server = createServer(async (request, response) => {
       response.end(`${JSON.stringify(manifest, null, 2)}\n`);
       return;
     }
+    if (pathname === mmdAnimWasmRoute || pathname === `${mmdAnimWasmRoute}package.json`) {
+      response.writeHead(404, {
+        "Cache-Control": "no-store",
+        "Content-Type": "text/plain; charset=utf-8"
+      });
+      response.end("Not found");
+      return;
+    }
 
     const filePath = resolveRequestPath(pathname);
 
@@ -112,6 +122,11 @@ server.listen(port, host, () => {
     if (localFixtureInventory !== undefined) {
       console.log(`MMD local assets: ${localAssetsRoute} from ${localFixturesPath}`);
     }
+  }
+  if (mmdAnimWasmRoot === undefined) {
+    console.log(`mmd-anim WASM route disabled. Set MMD_ANIM_WASM_ROOT to serve MmdAnimRuntime.`);
+  } else {
+    console.log(`mmd-anim WASM route: ${mmdAnimWasmRoute} -> ${mmdAnimWasmRoot}`);
   }
 });
 
@@ -172,6 +187,18 @@ function resolveDataRoot() {
     return resolve(dirname(localFixturesPath), localFixtureInventory.basePath);
   }
   return undefined;
+}
+
+function resolveMmdAnimWasmRoot() {
+  if (process.env.MMD_ANIM_WASM_ROOT !== undefined) {
+    return resolve(process.env.MMD_ANIM_WASM_ROOT);
+  }
+  const distRoot = resolve(root, "dist", "parser", "wasm", "generated");
+  if (existsSync(join(distRoot, "mmd_anim_wasm.js"))) {
+    return distRoot;
+  }
+  const submoduleRoot = resolve(root, "third_party", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
+  return existsSync(join(submoduleRoot, "mmd_anim_wasm.js")) ? submoduleRoot : undefined;
 }
 
 function createLocalAssetManifest() {
@@ -332,6 +359,16 @@ function resolveRequestPath(pathname) {
     );
     return resolve(dataRoot, relativePath);
   }
+  if (pathname.startsWith(mmdAnimWasmRoute)) {
+    if (mmdAnimWasmRoot === undefined) {
+      return resolve(root, "__mmd_anim_wasm_not_configured__");
+    }
+    const relativePath = normalize(decodeURIComponent(pathname.slice(mmdAnimWasmRoute.length))).replace(
+      /^[/\\]+/,
+      ""
+    );
+    return resolve(mmdAnimWasmRoot, relativePath);
+  }
   if (pathname === "/") {
     return resolve(viewerRoot, "index.html");
   }
@@ -352,7 +389,8 @@ function isAllowedPath(filePath) {
   return (
     isPathInside(filePath, root) ||
     isPathInside(filePath, viewerRoot) ||
-    (dataRoot !== undefined && isPathInside(filePath, dataRoot))
+    (dataRoot !== undefined && isPathInside(filePath, dataRoot)) ||
+    (mmdAnimWasmRoot !== undefined && isPathInside(filePath, mmdAnimWasmRoot))
   );
 }
 

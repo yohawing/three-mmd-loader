@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -10,15 +10,15 @@ import {
   type CustomBulletMmdModule
 } from "../../../src/physics/index.js";
 
+const bulletSixDofConstraintPath = resolve(
+  process.cwd(),
+  "native/third_party/bullet3/src/BulletDynamics/ConstraintSolver/btGeneric6DofConstraint.cpp"
+);
+const bulletSourceIt = existsSync(bulletSixDofConstraintPath) ? it : it.skip;
+
 describe("Custom Bullet MMD backend", () => {
-  it("keeps the MMD 6DoF torque decoupling patch applied", () => {
-    const source = readFileSync(
-      resolve(
-        process.cwd(),
-        "native/third_party/bullet3/src/BulletDynamics/ConstraintSolver/btGeneric6DofConstraint.cpp"
-      ),
-      "utf8"
-    );
+  bulletSourceIt("keeps the MMD 6DoF torque decoupling patch applied", () => {
+    const source = readFileSync(bulletSixDofConstraintPath, "utf8");
 
     expect(source).toContain(
       "btVector3 c = m_calculatedTransformA.getOrigin() - transA.getOrigin();"

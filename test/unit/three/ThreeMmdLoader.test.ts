@@ -4,11 +4,12 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { FallbackCore, MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
+import { MmdAnimRuntime, FallbackCore, MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
   MmdCore,
   MmdModel,
+  MmdRuntime,
   ModelSource,
   ThreeMmdLoaderOptions,
   ThreeMmdTextureLoader
@@ -55,6 +56,9 @@ describe("ThreeMmdLoader", () => {
     expect(() => new ThreeMmdLoader({ runtime: 30 as unknown as ThreeMmdLoaderOptions["runtime"] })).toThrow(
       "ThreeMmdLoader runtime options must be an object"
     );
+    expect(() => new ThreeMmdLoader({ runtimeFactory: {} as ThreeMmdLoaderOptions["runtimeFactory"] })).toThrow(
+      "ThreeMmdLoader runtimeFactory must be a function"
+    );
     expect(
       () =>
         new ThreeMmdLoader({
@@ -95,6 +99,31 @@ describe("ThreeMmdLoader", () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining("ThreeMmdModel.textureDiagnostics is deprecated")
     );
+  });
+
+  it("uses the bundled mmd-anim runtime by default for PMX models", async () => {
+    const loader = new ThreeMmdLoader();
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(model.runtime).toBeInstanceOf(MmdAnimRuntime);
+  });
+
+  it("allows a runtimeFactory to create the per-model runtime from PMX bytes and mesh", async () => {
+    const runtime = createStubRuntime();
+    const runtimeFactory = vi.fn(() => runtime);
+    const loader = new ThreeMmdLoader({ runtimeFactory });
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(runtimeFactory).toHaveBeenCalledWith({
+      modelBytes: source,
+      mesh: model.mesh,
+      source: { kind: "bytes", byteLength: source.byteLength }
+    });
+    expect(model.runtime).toBe(runtime);
   });
 
   it("uses the configured core for model loading", async () => {
@@ -821,6 +850,28 @@ function createMinimalPmxModelBytes(options: {
     text("");
     i32(options.triangle ? 3 : 0);
   }
+}
+
+function createStubRuntime(): MmdRuntime {
+  const state = { seconds: 0, frame: 0, frameRate: 30 };
+  return {
+    setAnimation: vi.fn(),
+    evaluate: vi.fn(() => state),
+    tick: vi.fn(() => state),
+    seek: vi.fn(() => state),
+    resetPose: vi.fn(),
+    clearAnimation: vi.fn(),
+    reset: vi.fn(() => state),
+    frameState: vi.fn(() => ({ ...state })),
+    debugState: vi.fn(() => ({
+      stages: {
+        vmdInterpolation: { worldMatricesColumnMajor: [], morphWeights: [] },
+        appendTransform: { worldMatricesColumnMajor: [], morphWeights: [] },
+        ik: { worldMatricesColumnMajor: [], morphWeights: [] },
+        physics: { worldMatricesColumnMajor: [], morphWeights: [] }
+      }
+    }))
+  };
 }
 
 function createIkFlagCore(): MmdCore {

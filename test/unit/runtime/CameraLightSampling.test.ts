@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack, sampleMmdSelfShadowTrack, sampleMmdSelfShadowTrackInto } from "../../../src/index.js";
+import { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack, sampleMmdLightTrackInto, sampleMmdSelfShadowTrack, sampleMmdSelfShadowTrackInto } from "../../../src/index.js";
 import type { VmdCameraFrame, VmdLightFrame, VmdSelfShadowFrame } from "../../../src/parser/model/modelTypes.js";
 
 describe("camera and light runtime sampling", () => {
@@ -89,6 +89,21 @@ describe("camera and light runtime sampling", () => {
     const light = sampleMmdLightTrack(createLightFrames(), 5);
 
     expect(light).toEqual({
+      color: [0.5, 0.25, 0.75],
+      direction: [0, -0.5, 0.5]
+    });
+  });
+
+  it("samples VMD light frames into a caller-owned scratch object", () => {
+    const target = {
+      color: [0, 0, 0] as [number, number, number],
+      direction: [0, 0, 0] as [number, number, number]
+    };
+
+    const light = sampleMmdLightTrackInto(createLightFrames(), 5, target);
+
+    expect(light).toBe(target);
+    expect(target).toEqual({
       color: [0.5, 0.25, 0.75],
       direction: [0, -0.5, 0.5]
     });

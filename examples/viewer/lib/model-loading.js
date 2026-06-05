@@ -5,6 +5,7 @@ import {
   normalizeMmdRelativePath,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
+import { MmdAnimRuntime, DefaultMmdRuntime } from "../../../dist/runtime/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
 import { createPhysicsBackend, disposeActivePhysicsBackend } from "./ammo-bootstrap.js";
@@ -21,6 +22,7 @@ import { createViewerLoadProfile, describeViewerSource } from "./performance.js"
 import { currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
 import { fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
+import { viewerConfig } from "./viewer-config.js";
 
 export async function loadModelFromUrl(url) {
   const profile = createViewerLoadProfile(`url:${url}`);
@@ -495,10 +497,12 @@ export async function createUrlTextureLoader(modelUrl) {
 export async function createModelLoader(extraOptions = {}) {
   const runtimeOptions = extraOptions.runtime ?? {};
   const physicsBackend = await createPhysicsBackend();
+  const runtimeFactory = extraOptions.runtimeFactory ?? await createRuntimeFactory(physicsBackend);
   return new ThreeMmdLoader({
     ...extraOptions,
     ddsLoader: extraOptions.ddsLoader ?? new DDSLoader(),
     geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
+    runtimeFactory,
     runtime: {
       ...runtimeOptions,
       frameRate: state.mmdFrameRate,
@@ -506,4 +510,44 @@ export async function createModelLoader(extraOptions = {}) {
       physicsBackend
     }
   });
+}
+
+async function createRuntimeFactory(physicsBackend) {
+  if (viewerConfig.runtime === "js") {
+    return () => new DefaultMmdRuntime({
+      frameRate: state.mmdFrameRate,
+      physics: "external",
+      physicsBackend
+    });
+  }
+  if (viewerConfig.runtime !== "mmd-anim") {
+    return undefined;
+  }
+  const wasm = await import("/__mmd_anim_wasm/mmd_anim_wasm.js");
+  await wasm.default();
+  return ({ modelBytes }) => {
+    if (!isPmxBytes(modelBytes)) {
+      return new DefaultMmdRuntime({
+        frameRate: state.mmdFrameRate,
+        physics: "external",
+        physicsBackend
+      });
+    }
+    return MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, {
+      frameRate: state.mmdFrameRate,
+      physics: "external",
+      physicsBackend
+    });
+  };
+}
+
+function isPmxBytes(bytes) {
+  return (
+    bytes instanceof Uint8Array &&
+    bytes.byteLength >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4d &&
+    bytes[2] === 0x58 &&
+    bytes[3] === 0x20
+  );
 }

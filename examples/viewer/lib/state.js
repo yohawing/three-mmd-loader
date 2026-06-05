@@ -90,6 +90,7 @@ export const state = {
   cameraEulerScratch: new THREE.Euler(),
   cameraQuaternionScratch: new THREE.Quaternion(),
   cameraUpScratch: new THREE.Vector3(),
+  lightDirectionScratch: new THREE.Vector3(),
   selfShadowBoundsScratch: new THREE.Box3(),
   selfShadowStateScratch: {
     mode: 1,

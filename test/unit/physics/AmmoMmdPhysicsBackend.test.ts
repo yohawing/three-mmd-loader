@@ -457,11 +457,11 @@ describe("AmmoMmdPhysicsBackend source guards", () => {
     expect(source).toContain("constraint.setStiffness(constraintAxis, stiffness);");
   });
 
-  it("documents the local dynamicWithBone visual-sync override separately from nanoem parity", async () => {
+  it("documents the local dynamicWithBone visual-sync override separately from reference parity", async () => {
     const source = await readFile("src/physics/ammoMmdPhysicsBackend.ts", "utf8");
 
     expect(source).toContain("const DYNAMIC_WITH_BONE_TRANSLATION_FEEDBACK_SCALE = 0;");
-    expect(source).toContain("nanoem and Babylon-MMD preserve dynamic-with-bone translation");
+    expect(source).toContain("Reference MMD runtimes preserve dynamic-with-bone translation");
   });
 });
 

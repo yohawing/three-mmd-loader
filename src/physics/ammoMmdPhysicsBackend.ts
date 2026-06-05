@@ -377,7 +377,7 @@ const DEFAULT_SPLIT_IMPULSE = true;
 const DEFAULT_SPLIT_IMPULSE_PENETRATION_THRESHOLD = -0.04;
 const DEFAULT_RESET_CATCH_UP_STEPS = 8;
 const DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_SCALE = 1;
-// nanoem and Babylon-MMD preserve dynamic-with-bone translation and only feed
+// Reference MMD runtimes preserve dynamic-with-bone translation and only feed
 // simulation rotation back to the bone. Set this option above zero explicitly
 // for visual correction when collider/bone separation is more important than
 // strict PhysicsWithBone parity.

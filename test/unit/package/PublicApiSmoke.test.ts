@@ -17,8 +17,10 @@ import {
 } from "../../../src/parser/index.js";
 import {
   DefaultMmdRuntime,
+  MmdAnimRuntime,
   ThreeMmdLoader,
   sampleMmdCameraTrackInto,
+  sampleMmdLightTrackInto,
   sampleMmdSelfShadowTrackInto,
   createAmmoMmdPhysicsBackend,
   applyMmdCameraStateToThreeCamera,
@@ -137,6 +139,10 @@ center
     expect(sampleMmdCameraTrackInto).toBeTypeOf("function");
   });
 
+  it("exports runtime light helpers from the public barrel", () => {
+    expect(sampleMmdLightTrackInto).toBeTypeOf("function");
+  });
+
   it("exports Three.js adapter self-shadow helpers from the public barrel", () => {
     expect(applyMmdSelfShadowStateToThreeDirectionalLight).toBeTypeOf("function");
     expect(configureMmdSelfShadowDirectionalLight).toBeTypeOf("function");
@@ -201,6 +207,11 @@ center
     await expect(loader.loadModel(new Uint8Array([1, 2, 3, 4]))).rejects.toThrow(
       "Unable to detect MMD model format"
     );
+  });
+
+  it("exports the experimental MmdAnimRuntime facade", () => {
+    expect(MmdAnimRuntime).toBeTypeOf("function");
+    expect("CustomRuntime" in publicApi).toBe(false);
   });
 
   it("runs the README minimal loader sample against the one-bone PMX fixture", async () => {

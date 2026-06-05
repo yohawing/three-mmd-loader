@@ -35,9 +35,13 @@ npm run smoke:types
 npm pack --dry-run --json
 ```
 
-The nanoem-backed WASM wrapper is currently not part of the default package
-build. Do not run `npm run build:wasm` as a release gate unless the release is
-explicitly re-enabling the WASM core path.
+If the `third_party/mmd-anim` submodule or the WASM export surface changed,
+rebuild the WASM wrapper before the normal build:
+
+```bash
+npm run build:mmd-anim
+npm run build
+```
 
 ## 3. Commit
 

@@ -1,10 +1,12 @@
 import * as THREE from "three";
 
+import * as mmdAnimWasm from "../parser/wasm/generated/mmd_anim_wasm.js";
 import { FallbackCore, initCore } from "../parser/wasm/index.js";
 import { parseVpd } from "../parser/index.js";
 import type { MmdAnimation, MmdCore, MmdPose, VmdBoneTrack } from "../parser/model/modelTypes.js";
-import { DefaultMmdRuntime } from "../runtime/index.js";
+import { MmdAnimRuntime, DefaultMmdRuntime } from "../runtime/index.js";
 import type {
+  MmdAnimRuntimeWasmModule,
   DefaultMmdRuntimeOptions,
   MmdFrameState,
   MmdRuntime,
@@ -178,8 +180,10 @@ export interface ThreeMmdLoaderOptions {
   readonly ddsLoader?: ThreeMmdTextureLoader;
   /** Enables geometry-aware texture alpha checks. Defaults to off, except when outlines require it internally. */
   readonly geometryAwareAlpha?: boolean;
-  /** Options forwarded to the per-model DefaultMmdRuntime. */
+  /** Options forwarded to the per-model runtime. */
   readonly runtime?: DefaultMmdRuntimeOptions;
+  /** Creates a per-model runtime. When omitted, the bundled mmd-anim runtime is used for PMX. */
+  readonly runtimeFactory?: (context: ThreeMmdRuntimeFactoryContext) => MmdRuntime;
   /** Parser core override. When omitted, the loader uses the TypeScript parser core. */
   readonly core?: MmdCore | Promise<MmdCore>;
   /** Overrides fetch for string ModelSource values. */
@@ -188,6 +192,12 @@ export interface ThreeMmdLoaderOptions {
   readonly performance?: boolean | LoaderPerformanceOptions;
   /** Receives recoverable parser-core failures before falling back to the TypeScript parser. */
   readonly onCoreFallback?: (event: ThreeMmdCoreFallbackEvent) => void;
+}
+
+export interface ThreeMmdRuntimeFactoryContext {
+  readonly modelBytes: Uint8Array;
+  readonly mesh: THREE.SkinnedMesh;
+  readonly source: ThreeMmdModelSourceDescriptor;
 }
 
 export interface ThreeMmdCoreFallbackEvent {
@@ -306,6 +316,7 @@ export class ThreeMmdLoader {
   private fallbackCore: FallbackCore | undefined;
   private readonly useExplicitCore: boolean;
   private coreDiagnostic: ThreeMmdCoreDiagnostic;
+  private implicitMmdAnimWasmReady = false;
 
   constructor(readonly options: ThreeMmdLoaderOptions = {}) {
     validateLoaderOptions(options);
@@ -372,10 +383,15 @@ export class ThreeMmdLoader {
           mesh.frustumCulled = options.frustumCulled;
         }
         profile?.mark("materials");
+        const sourceDescriptor = createModelSourceDescriptor(source, bytes.byteLength);
         const model = createThreeMmdModel({
           mesh,
-          runtime: new DefaultMmdRuntime(this.options.runtime),
-          source: createModelSourceDescriptor(source, bytes.byteLength),
+          runtime: this.createRuntime({
+            modelBytes: bytes,
+            mesh,
+            source: sourceDescriptor
+          }),
+          source: sourceDescriptor,
           sourceDiagnostic,
           coreDiagnostic,
           textureDiagnostics,
@@ -404,6 +420,34 @@ export class ThreeMmdLoader {
     }
   }
 
+  private createRuntime(context: ThreeMmdRuntimeFactoryContext): MmdRuntime {
+    const explicitRuntime = this.options.runtimeFactory?.(context);
+    if (explicitRuntime) {
+      return explicitRuntime;
+    }
+    if (this.canCreateImplicitMmdAnimRuntime(context)) {
+      try {
+        return MmdAnimRuntime.fromPmxBytes(
+          mmdAnimWasm as unknown as MmdAnimRuntimeWasmModule,
+          context.modelBytes,
+          normalizeMmdAnimRuntimeOptions(this.options.runtime)
+        );
+      } catch {
+        return new DefaultMmdRuntime(this.options.runtime);
+      }
+    }
+    return new DefaultMmdRuntime(this.options.runtime);
+  }
+
+  private canCreateImplicitMmdAnimRuntime(context: ThreeMmdRuntimeFactoryContext): boolean {
+    return (
+      this.implicitMmdAnimWasmReady &&
+      !this.useExplicitCore &&
+      isPmxBytes(context.modelBytes) &&
+      this.options.runtime?.physics !== "stateful-spring"
+    );
+  }
+
   private getCore(): Promise<MmdCore> {
     this.corePromise ??= this.initCoreWithObservableFallback();
     return this.corePromise;
@@ -419,8 +463,10 @@ export class ThreeMmdLoader {
           operation: "initCore",
           reason: "WASM core disabled; using TypeScript fallback parser."
         };
+        this.implicitMmdAnimWasmReady = false;
       } else {
         this.coreDiagnostic = { kind: "wasm" };
+        this.implicitMmdAnimWasmReady = true;
       }
       return core;
     } catch (error) {
@@ -430,6 +476,7 @@ export class ThreeMmdLoader {
         operation: "initCore",
         reason: formatDiagnosticReason(error)
       };
+      this.implicitMmdAnimWasmReady = false;
       this.fallbackCore ??= new FallbackCore();
       return this.fallbackCore;
     }
@@ -945,6 +992,27 @@ function normalizeMeshMaterials(
   });
 }
 
+function normalizeMmdAnimRuntimeOptions(
+  options: DefaultMmdRuntimeOptions | undefined
+): Parameters<typeof MmdAnimRuntime.fromPmxBytes>[2] {
+  return {
+    frameRate: options?.frameRate,
+    initialSeconds: options?.initialSeconds,
+    physics: options?.physics === "external" ? "external" : "none",
+    physicsBackend: options?.physicsBackend
+  };
+}
+
+function isPmxBytes(bytes: Uint8Array): boolean {
+  return (
+    bytes.byteLength >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4d &&
+    bytes[2] === 0x58 &&
+    bytes[3] === 0x20
+  );
+}
+
 function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
   if (typeof options !== "object" || options === null || Array.isArray(options)) {
     throw new TypeError("ThreeMmdLoader options must be an object");
@@ -1010,6 +1078,10 @@ function validateLoaderOptions(options: ThreeMmdLoaderOptions): void {
 
   if (options.onCoreFallback !== undefined && typeof options.onCoreFallback !== "function") {
     throw new TypeError("ThreeMmdLoader onCoreFallback must be a function");
+  }
+
+  if (options.runtimeFactory !== undefined && typeof options.runtimeFactory !== "function") {
+    throw new TypeError("ThreeMmdLoader runtimeFactory must be a function");
   }
 
   if (options.fetch !== undefined && typeof options.fetch !== "function") {
