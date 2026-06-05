@@ -2,12 +2,13 @@ import { clearAudioSource, isAudioElement, loadAudioFile, switchAudioEntry } fro
 import { bindAssetLibraryControls, initializeAssetLibrary } from "./lib/asset-library.js";
 import { clearBackground, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
 import { clearCameraMotion, loadCameraFile, loadCameraFromUrl, switchCameraEntry } from "./lib/camera-loading.js";
+import { bindCreditPopupControls } from "./lib/credits.js";
 import { createViewerDebugApi, refreshDebugPanelState, setDebugMaterialMode, setOutlineHidden, setSelfShadowEnabled, toggleColliderHelpers } from "./lib/debug.js";
 import { dom, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/ammo-bootstrap.js";
 import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
-import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
+import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setupScene } from "./lib/scene-setup.js";
 import { debugEnabled, hasCurrentMotion, state } from "./lib/state.js";
@@ -59,6 +60,7 @@ function bindControls() {
   document.querySelector("#choose-background")?.addEventListener("click", () => dom.backgroundFolderInput?.click());
   document.querySelector("#choose-camera")?.addEventListener("click", () => dom.cameraFileInput?.click());
   bindAssetLibraryControls();
+  bindCreditPopupControls();
   bindDebugControls();
   dom.modelFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
@@ -81,9 +83,7 @@ function bindControls() {
   dom.motionFileInput?.addEventListener("change", (event) => {
     const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
     if (file) {
-      state.currentMotionVmdFiles = [file];
-      updateMotionSwitcher(file);
-      void loadMotion(file);
+      void loadSelectedMotionFile(file);
     }
   });
   dom.poseFileInput?.addEventListener("change", (event) => {
@@ -192,6 +192,17 @@ function bindControls() {
   bindDropTarget();
   updatePlaybackDisplay();
   updateStageState();
+}
+
+async function loadSelectedMotionFile(file) {
+  const { motionFiles, cameraFiles } = await classifyVmdFiles([file]);
+  if (cameraFiles.length > 0 && motionFiles.length === 0) {
+    await loadCameraFile(cameraFiles[0]);
+    return;
+  }
+  state.currentMotionVmdFiles = [file];
+  updateMotionSwitcher(file);
+  await loadMotion(file);
 }
 
 function bindDebugControls() {

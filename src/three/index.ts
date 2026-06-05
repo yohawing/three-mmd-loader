@@ -735,6 +735,8 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     format: modelData.metadata.format,
     name: modelData.metadata.name,
     englishName: modelData.metadata.englishName,
+    comment: modelData.metadata.comment,
+    englishComment: modelData.metadata.englishComment,
     diagnostics: modelData.metadata.diagnostics.map((diagnostic) => ({ ...diagnostic })),
     rigidBodyCount: modelData.rigidBodies.length,
     jointCount: modelData.joints.length

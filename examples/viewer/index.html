@@ -176,6 +176,20 @@
           </summary>
           <div class="debug-menu-panel" role="menu" aria-label="Debug panel">
             <h2 class="debug-title">Debug</h2>
+            <div class="debug-metrics" aria-label="Debug performance metrics">
+              <div class="debug-metric">
+                <span>FPS</span>
+                <output id="debug-fps-value" aria-label="Frames per second">--</output>
+              </div>
+              <div class="debug-metric">
+                <span>Frame</span>
+                <output id="debug-frame-time-value" aria-label="Frame time">--</output>
+              </div>
+              <div class="debug-metric">
+                <span>Memory</span>
+                <output id="debug-memory-value" aria-label="JavaScript memory">--</output>
+              </div>
+            </div>
             <div class="debug-actions">
               <label class="debug-toggle">
                 <span>Colliders</span>
@@ -213,6 +227,16 @@
         <div class="loading-indicator" id="loading-indicator" role="status" aria-live="polite" hidden>
           <span class="loading-spinner" aria-hidden="true"></span>
           <span id="loading-message">Loading</span>
+        </div>
+        <div class="credit-popup" id="credit-popup" role="dialog" aria-labelledby="credit-title" hidden>
+          <header class="credit-header">
+            <h2 id="credit-title" data-i18n="credit.title">Credits</h2>
+            <button id="credit-close" class="credit-close" type="button" aria-label="Close credits" data-i18n-aria="aria.closeCredits">
+              <span class="material-symbols-rounded" aria-hidden="true">close</span>
+            </button>
+          </header>
+          <p class="credit-model" id="credit-model"></p>
+          <p class="credit-comment" id="credit-comment"></p>
         </div>
       </section>
 

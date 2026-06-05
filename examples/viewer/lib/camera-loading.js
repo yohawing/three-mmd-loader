@@ -17,11 +17,7 @@ export async function loadCameraFromUrl(url) {
   try {
     setStatus(`Loading camera: ${labelFromUrl(url)}`, "loading");
     const animation = parseVmd(await fetchBytes(url));
-    return await loadCameraAnimation(animation, labelFromUrl(url), {
-      id: `url:${url}`,
-      name: labelFromUrl(url),
-      source: url
-    });
+    return await loadCameraAnimation(animation, labelFromUrl(url), createCameraSwitcherEntry(url, labelFromUrl(url)));
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
     return false;
@@ -32,13 +28,10 @@ export async function loadCameraFile(file) {
   try {
     setStatus(`Loading camera: ${file.name}`, "loading");
     const animation = parseVmd(new Uint8Array(await file.arrayBuffer()));
-    await loadCameraAnimation(animation, file.name, {
-      id: `file:${file.name}:${file.lastModified}`,
-      name: file.name,
-      source: file
-    });
+    return await loadCameraAnimation(animation, file.name, createCameraSwitcherEntry(file, file.name));
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
+    return false;
   }
 }
 
@@ -89,7 +82,7 @@ export function applyCameraMotion() {
   }
 }
 
-async function loadCameraAnimation(animation, label, entry) {
+export async function loadCameraAnimation(animation, label, entry) {
   if (animation.cameraFrames.length === 0) {
     setStatus("Selected VMD has no camera frames.", "error");
     return false;
@@ -118,6 +111,24 @@ async function loadCameraAnimation(animation, label, entry) {
   state.controls.update();
   state.renderer.render(state.scene, state.camera);
   return true;
+}
+
+export function createCameraSwitcherEntry(source, label) {
+  if (source instanceof window.File) {
+    return {
+      id: `file:${source.name}:${source.lastModified}`,
+      name: label,
+      source
+    };
+  }
+  if (typeof source === "string") {
+    return {
+      id: `url:${source}`,
+      name: label,
+      source
+    };
+  }
+  return undefined;
 }
 
 function syncTimelineRangeToCurrentMotion() {

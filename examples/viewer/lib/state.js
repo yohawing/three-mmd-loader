@@ -122,6 +122,9 @@ export const state = {
   debugMaterialMode: "default",
   debugOutlineHidden: false,
   debugSelfShadowEnabled: initialSelfShadowEnabled,
+  debugFpsSampleSeconds: 0,
+  debugFpsSampleFrames: 0,
+  debugFrameTimeSampleMs: 0,
   restPoseAnimation: {
     kind: "vmd",
     metadata: {

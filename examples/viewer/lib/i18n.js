@@ -9,6 +9,7 @@ const dictionaries = {
     "aria.volume": "Volume",
     "aria.mute": "Mute",
     "aria.deletePreset": "Delete preset",
+    "aria.closeCredits": "Close credits",
     "menu.preset": "Preset",
     "menu.fixture": "Fixture",
     "menu.current": "Current",
@@ -29,7 +30,8 @@ const dictionaries = {
     "drop.sub": "Model textures are resolved when a folder is selected.",
     "about.desc": "A browser-based viewer for MikuMikuDance (MMD) models and motions, built on three-mmd-loader.",
     "about.local": "All files stay in your browser — nothing is uploaded to any server.",
-    "about.copyright": "This site hosts no models or motions. You are responsible for following the usage terms and copyright of every file you load."
+    "about.copyright": "This site hosts no models or motions. You are responsible for following the usage terms and copyright of every file you load.",
+    "credit.title": "Credits"
   },
   ja: {
     "aria.menu": "メニュー",
@@ -38,6 +40,7 @@ const dictionaries = {
     "aria.volume": "音量",
     "aria.mute": "ミュート",
     "aria.deletePreset": "プリセットを削除",
+    "aria.closeCredits": "クレジットを閉じる",
     "menu.preset": "プリセット",
     "menu.fixture": "フィクスチャ",
     "menu.current": "現在",
@@ -58,7 +61,8 @@ const dictionaries = {
     "drop.sub": "フォルダを選ぶとモデルのテクスチャも解決されます。",
     "about.desc": "three-mmd-loader を使った、ブラウザで動く MikuMikuDance (MMD) モデル・モーションビューアです。",
     "about.local": "ファイルはすべてブラウザ内で処理され、サーバーには一切アップロードされません。",
-    "about.copyright": "本サイトはモデルやモーションを配布していません。読み込む各ファイルの利用規約・著作権の遵守は利用者の責任です。"
+    "about.copyright": "本サイトはモデルやモーションを配布していません。読み込む各ファイルの利用規約・著作権の遵守は利用者の責任です。",
+    "credit.title": "クレジット"
   },
   zh: {
     "aria.menu": "菜单",
@@ -67,6 +71,7 @@ const dictionaries = {
     "aria.volume": "音量",
     "aria.mute": "静音",
     "aria.deletePreset": "删除预设",
+    "aria.closeCredits": "关闭署名信息",
     "menu.preset": "预设",
     "menu.fixture": "测试素材",
     "menu.current": "当前",
@@ -87,7 +92,8 @@ const dictionaries = {
     "drop.sub": "选择文件夹后会自动解析模型贴图。",
     "about.desc": "基于 three-mmd-loader 的浏览器端 MikuMikuDance (MMD) 模型与动作查看器。",
     "about.local": "所有文件均在浏览器内处理，不会上传到任何服务器。",
-    "about.copyright": "本站不提供任何模型或动作文件。您需自行遵守所加载文件的使用条款与版权规定。"
+    "about.copyright": "本站不提供任何模型或动作文件。您需自行遵守所加载文件的使用条款与版权规定。",
+    "credit.title": "署名信息"
   }
 };
 

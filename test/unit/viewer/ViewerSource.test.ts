@@ -28,6 +28,45 @@ describe("example viewer source", () => {
     expect(styles).toContain(".top-bar.is-warning .status");
   });
 
+  it("shows dismissible model credits from loaded PMX and PMD metadata comments", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const creditsSource = await readFile("examples/viewer/lib/credits.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const i18nSource = await readFile("examples/viewer/lib/i18n.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+    const threeSource = await readFile("src/three/index.ts", "utf8");
+
+    expect(threeSource).toContain("comment: modelData.metadata.comment");
+    expect(threeSource).toContain("englishComment: modelData.metadata.englishComment");
+    expect(html).toContain('id="credit-popup"');
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('id="credit-close"');
+    expect(html).toContain("close</span>");
+    expect(domSource).toContain('creditPopup: document.querySelector("#credit-popup")');
+    expect(domSource).toContain('creditCommentText: document.querySelector("#credit-comment")');
+    expect(domSource).toContain('creditCloseButton: document.querySelector("#credit-close")');
+    expect(mainSource).toContain("bindCreditPopupControls()");
+    expect(modelSource).toContain("showModelCredits(state.currentModel, label)");
+    expect(modelSource).toContain("showModelCredits(state.currentModel, modelFile.name)");
+    expect(modelSource).toContain("hideCreditPopup()");
+    expect(creditsSource).toContain("export function bindCreditPopupControls()");
+    expect(creditsSource).toContain('dom.creditCloseButton?.addEventListener("click", hideCreditPopup)');
+    expect(creditsSource).toContain("metadata?.comment");
+    expect(creditsSource).toContain("metadata?.englishComment");
+    expect(creditsSource).toContain("const code = char.charCodeAt(0)");
+    expect(creditsSource).toContain('char !== "\\n" && char !== "\\r" && char !== "\\t"');
+    expect(creditsSource).toContain("dom.creditPopup.hidden = false");
+    expect(creditsSource).toContain("dom.creditPopup.hidden = true");
+    expect(i18nSource).toContain('"credit.title": "Credits"');
+    expect(i18nSource).toContain('"aria.closeCredits": "Close credits"');
+    expect(styles).toContain(".credit-popup");
+    expect(styles).toContain(".credit-popup[hidden]");
+    expect(styles).toContain(".credit-close");
+    expect(styles).toContain("white-space: pre-wrap");
+  });
+
   it("keeps same-folder PMX variants in a switcher instead of reloading them during folder drops", async () => {
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
@@ -77,6 +116,7 @@ describe("example viewer source", () => {
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+    const cameraSource = await readFile("examples/viewer/lib/camera-loading.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const html = await readFile("examples/viewer/index.html", "utf8");
 
@@ -86,24 +126,35 @@ describe("example viewer source", () => {
     expect(domSource).toContain('motionSwitcher: document.querySelector("#motion-switcher")');
     expect(domSource).not.toContain("motionNameText");
     expect(stateSource).toContain("currentMotionVmdFiles: []");
-    expect(mainSource).toContain("state.currentMotionVmdFiles = [file]");
+    expect(mainSource).toContain("async function loadSelectedMotionFile(file)");
+    expect(mainSource).toContain("const { motionFiles, cameraFiles } = await classifyVmdFiles([file])");
+    expect(mainSource).toContain("await loadCameraFile(cameraFiles[0])");
     expect(mainSource).toContain("motionFileKey(file) === dom.motionSwitcher.value");
-    expect(modelSource).toContain("state.currentMotionVmdFiles = vmdFiles");
+    expect(modelSource).toContain("const { motionFiles, cameraFiles } = await classifyVmdFiles(vmdFiles)");
+    expect(modelSource).toContain("state.currentMotionVmdFiles = motionFiles");
     expect(motionSource).toContain("export const findVmdFiles = findMmdMotionFiles");
     expect(motionSource).toContain("findMmdMotionFiles");
+    expect(motionSource).toContain("parseVmdSectionInventory");
+    expect(motionSource).toContain("export async function classifyVmdFiles(files)");
+    expect(motionSource).toContain("counts.cameras > 0 && counts.bones === 0 && counts.morphs === 0");
+    expect(motionSource).toContain("return await loadCameraAnimation(animation, label, createCameraSwitcherEntry(source, label))");
     expect(motionSource).toContain("export async function switchMotion(file)");
     expect(motionSource).toContain('setStatus(`Switching motion to ${file.name}`, "loading")');
     expect(motionSource).toContain("createMotionSwitcherEntry(source, label)");
     expect(motionSource).toContain('id: `url:${source}`');
     expect(motionSource).toContain("option.value = motionFileKey(file)");
     expect(motionSource).toContain("dom.motionControl.hidden = state.currentMotionVmdFiles.length === 0");
+    expect(cameraSource).toContain("export async function loadCameraAnimation(animation, label, entry)");
+    expect(cameraSource).toContain("export function createCameraSwitcherEntry(source, label)");
 
     const dropHandler = modelSource.slice(
       modelSource.indexOf("function handleDroppedFiles"),
       modelSource.indexOf("async function collectDroppedFiles")
     );
     expect(dropHandler).toContain("const vmdFiles = findVmdFiles(files)");
-    expect(dropHandler).toContain("await loadMotion(vmdFiles[0])");
+    expect(dropHandler).toContain("else if (vmdFiles.length === 0)");
+    expect(dropHandler).toContain("await loadMotion(motionFiles[0])");
+    expect(dropHandler).toContain("await loadCameraFile(cameraFiles[0])");
     expect(dropHandler).toContain("vmdFiles.includes(file)");
     expect(dropHandler).not.toContain('lowerName.endsWith(".vmd")');
     expect(dropHandler).not.toContain("await loadMotion(file)");
@@ -199,6 +250,13 @@ describe("example viewer source", () => {
     expect(serverSource).toContain('const localAssetsRoute = "/__mmd_assets__/fixtures-local.json"');
     expect(serverSource).toContain('Location: `/${url.search}`');
     expect(serverSource).toContain("createLocalAssetManifest");
+    expect(serverSource).toContain('import { parseVmdSectionInventory } from "../dist/parser/index.js"');
+    expect(serverSource).toContain("const vmdEntries = splitVmdAssetEntries(byExtension.vmd)");
+    expect(serverSource).toContain("const motions = vmdEntries.motions");
+    expect(serverSource).toContain("function isCameraOnlyVmdFixturePath(fixturePath)");
+    expect(serverSource).toContain("counts.cameras > 0 && counts.bones === 0 && counts.morphs === 0");
+    expect(serverSource).toContain("function dedupeAssetsByUrl(assets)");
+    expect(serverSource).not.toContain(": motions;");
     expect(serverSource).toContain("backgrounds");
     expect(serverSource).toContain("backgroundPmx");
     expect(serverSource).toContain("backgroundPmd");
@@ -398,6 +456,12 @@ describe("example viewer source", () => {
     expect(html).toContain('id="debug-normals-toggle"');
     expect(html).toContain('id="debug-outline-off-toggle"');
     expect(html).toContain('id="debug-self-shadow-toggle"');
+    expect(html).toContain('id="debug-fps-value"');
+    expect(html).toContain('id="debug-frame-time-value"');
+    expect(html).toContain('id="debug-memory-value"');
+    expect(html).toContain("FPS");
+    expect(html).toContain("Frame");
+    expect(html).toContain("Memory");
     expect(html).not.toContain('id="debug-toon-off-toggle"');
     expect(html).not.toContain("Toon off");
     expect(html).not.toContain('id="debug-max-sub-steps"');
@@ -419,6 +483,9 @@ describe("example viewer source", () => {
     expect(domSource).toContain('debugNormalsToggle: document.querySelector("#debug-normals-toggle")');
     expect(domSource).toContain('debugOutlineOffToggle: document.querySelector("#debug-outline-off-toggle")');
     expect(domSource).toContain('debugSelfShadowToggle: document.querySelector("#debug-self-shadow-toggle")');
+    expect(domSource).toContain('debugFpsValue: document.querySelector("#debug-fps-value")');
+    expect(domSource).toContain('debugFrameTimeValue: document.querySelector("#debug-frame-time-value")');
+    expect(domSource).toContain('debugMemoryValue: document.querySelector("#debug-memory-value")');
     expect(domSource).not.toContain('debugToonOffToggle: document.querySelector("#debug-toon-off-toggle")');
     expect(domSource).not.toContain('debugMaxSubStepsInput: document.querySelector("#debug-max-sub-steps")');
     expect(domSource).not.toContain('debugDynamicWithBoneFeedbackInput: document.querySelector("#debug-dynamic-with-bone-feedback")');
@@ -436,6 +503,9 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("if (value === null)");
     expect(stateSource).toContain('debugMaterialMode: "default"');
     expect(stateSource).toContain("debugOutlineHidden: false");
+    expect(stateSource).toContain("debugFpsSampleSeconds: 0");
+    expect(stateSource).toContain("debugFpsSampleFrames: 0");
+    expect(stateSource).toContain("debugFrameTimeSampleMs: 0");
     expect(mainSource).toContain("if (!debugEnabled)");
     expect(mainSource).toContain("dom.debugMenu.hidden = false");
     expect(mainSource).toContain("window.mmdDebug = viewerApi.debug");
@@ -453,8 +523,18 @@ describe("example viewer source", () => {
     expect(mainSource).not.toContain("setSplitImpulsePenetrationThreshold(dom.debugSplitImpulsePenetrationThresholdInput.value)");
     expect(mainSource).not.toContain("dom.debugRefreshStateButton");
     expect(playbackSource).toContain("updateColliderHelpers()");
+    expect(playbackSource).toContain("updateDebugFps(delta)");
     expect(debugSource).toContain("export function toggleColliderHelpers()");
     expect(debugSource).toContain("export function setDebugMaterialMode(mode)");
+    expect(debugSource).not.toContain('import Stats from "three/addons/libs/stats.module.js"');
+    expect(debugSource).toContain("export function updateDebugFps(deltaSeconds)");
+    expect(debugSource).toContain("state.debugFpsSampleSeconds += deltaSeconds");
+    expect(debugSource).toContain("state.debugFrameTimeSampleMs += deltaSeconds * 1000");
+    expect(debugSource).toContain("dom.debugFpsValue.textContent = fps.toFixed(1)");
+    expect(debugSource).toContain("dom.debugFrameTimeValue.textContent = `${frameTimeMs.toFixed(1)} ms`");
+    expect(debugSource).toContain("function formatDebugMemory()");
+    expect(debugSource).toContain("window.performance?.memory");
+    expect(debugSource).toContain("usedJSHeapSize");
     expect(debugSource).not.toContain("toonOff");
     expect(debugSource).not.toContain("function applyToonOffMaterial()");
     expect(debugSource).not.toContain("currentBodyDebugMeshes");
@@ -484,6 +564,9 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("mmd collider group");
     expect(debugSource).toContain("state.showDebugColliders = state.debugCollidersVisible");
     expect(styles).toContain(".debug-menu[hidden]");
+    expect(styles).toContain(".debug-metrics");
+    expect(styles).toContain(".debug-metric");
+    expect(styles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
     expect(styles).not.toContain(".debug-number");
     expect(styles).not.toContain("#debug-refresh-state");
     expect(styles).not.toContain("#debug-state-output");

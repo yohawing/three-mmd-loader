@@ -1,7 +1,7 @@
 import { dom, setStatus, updatePlayToggle, updatePlaybackDisplay } from "./dom.js";
 import { hasActiveAudioSource, isAudioElement } from "./audio-loading.js";
 import { applyCameraMotion } from "./camera-loading.js";
-import { updateColliderHelpers } from "./debug.js";
+import { updateColliderHelpers, updateDebugFps } from "./debug.js";
 import { currentMmdFrame, currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
 import { sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
 import { applyMmdSelfShadowStateToThreeDirectionalLight } from "../../../dist/three/index.js";
@@ -10,6 +10,7 @@ import { fitShadowCameraToObject } from "./scene-setup.js";
 export function render() {
   state.frameTimer.update();
   const delta = state.frameTimer.getDelta();
+  updateDebugFps(delta);
   if (state.isPlaying && !state.isSeeking && hasActiveAudioSource()) {
     syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
   } else if (state.isPlaying && !state.isSeeking) {

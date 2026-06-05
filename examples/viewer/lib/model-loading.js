@@ -9,11 +9,13 @@ import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
 import { createPhysicsBackend, disposeActivePhysicsBackend } from "./ammo-bootstrap.js";
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
+import { loadCameraFile } from "./camera-loading.js";
+import { hideCreditPopup, showModelCredits } from "./credits.js";
 import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, setOutlineHidden, showColliderHelpers } from "./debug.js";
 import { reportTextureDiagnostics } from "./diagnostics.js";
 import { dom, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStageState, updateTransportState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
-import { loadMotion, loadPose, findVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
+import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
 import { currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
@@ -97,6 +99,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     loadProfile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
+    showModelCredits(state.currentModel, label);
     updateStageState();
     if (state.debugOutlineHidden) {
       setOutlineHidden(true);
@@ -174,6 +177,7 @@ export async function loadModelFolder(files) {
     profile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
+    showModelCredits(state.currentModel, modelFile.name);
     updateStageState();
     if (state.debugOutlineHidden) {
       setOutlineHidden(true);
@@ -235,6 +239,7 @@ export async function switchFolderModel(modelFile) {
     profile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
+    showModelCredits(state.currentModel, modelFile.name);
     updateStageState();
     if (state.debugOutlineHidden) {
       setOutlineHidden(true);
@@ -262,6 +267,7 @@ export function clearModel(options = {}) {
     disposeModelResources(state.currentModel);
   }
   state.currentModel = undefined;
+  hideCreditPopup();
   disposeActivePhysicsBackend();
   if (!options.preserveMotion) {
     state.currentMotion = undefined;
@@ -305,14 +311,15 @@ export async function handleDroppedFiles(dataTransfer) {
   const files = await collectDroppedFiles(dataTransfer);
   const modelFile = findModelFile(files);
   const vmdFiles = findVmdFiles(files);
+  const { motionFiles, cameraFiles } = await classifyVmdFiles(vmdFiles);
   const shouldLoadModelFolder =
     modelFile && files.some((file) => file.webkitRelativePath?.includes("/"));
-  if (vmdFiles.length > 0) {
-    state.currentMotionVmdFiles = vmdFiles;
-    updateMotionSwitcher(vmdFiles[0]);
+  if (motionFiles.length > 0) {
+    state.currentMotionVmdFiles = motionFiles;
+    updateMotionSwitcher(motionFiles[0]);
     state.pendingMotionSource = undefined;
     state.pendingMotionLabel = undefined;
-  } else {
+  } else if (vmdFiles.length === 0) {
     resetMotionSwitcherState();
   }
   if (shouldLoadModelFolder) {
@@ -320,10 +327,13 @@ export async function handleDroppedFiles(dataTransfer) {
   } else if (modelFile) {
     await loadModel(modelFile);
   }
-  if (vmdFiles.length > 0) {
-    state.currentMotionVmdFiles = vmdFiles;
-    updateMotionSwitcher(vmdFiles[0]);
-    await loadMotion(vmdFiles[0]);
+  if (motionFiles.length > 0) {
+    state.currentMotionVmdFiles = motionFiles;
+    updateMotionSwitcher(motionFiles[0]);
+    await loadMotion(motionFiles[0]);
+  }
+  if (cameraFiles.length > 0) {
+    await loadCameraFile(cameraFiles[0]);
   }
   for (const file of files) {
     if (file === modelFile || vmdFiles.includes(file)) {

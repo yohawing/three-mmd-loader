@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { dom } from "./dom.js";
 import { normalizeMaterials } from "./dispose.js";
 import { evaluateRuntime } from "./playback.js";
-import { state } from "./state.js";
+import { debugEnabled, state } from "./state.js";
 
 export function createViewerDebugApi() {
   return {
@@ -356,6 +356,44 @@ export function refreshDebugPanelState() {
       String(state.debugSelfShadowEnabled)
     );
   }
+}
+
+export function updateDebugFps(deltaSeconds) {
+  if (!debugEnabled || !dom.debugFpsValue || deltaSeconds <= 0) {
+    return;
+  }
+  state.debugFpsSampleSeconds += deltaSeconds;
+  state.debugFpsSampleFrames += 1;
+  state.debugFrameTimeSampleMs += deltaSeconds * 1000;
+  if (state.debugFpsSampleSeconds < 0.5) {
+    return;
+  }
+  const fps = state.debugFpsSampleFrames / state.debugFpsSampleSeconds;
+  dom.debugFpsValue.textContent = fps.toFixed(1);
+  if (dom.debugFrameTimeValue) {
+    const frameTimeMs = state.debugFrameTimeSampleMs / state.debugFpsSampleFrames;
+    dom.debugFrameTimeValue.textContent = `${frameTimeMs.toFixed(1)} ms`;
+  }
+  if (dom.debugMemoryValue) {
+    dom.debugMemoryValue.textContent = formatDebugMemory();
+  }
+  state.debugFpsSampleSeconds = 0;
+  state.debugFpsSampleFrames = 0;
+  state.debugFrameTimeSampleMs = 0;
+}
+
+function formatDebugMemory() {
+  const memory = window.performance?.memory;
+  if (!memory || !Number.isFinite(memory.usedJSHeapSize)) {
+    return "--";
+  }
+  const usedMb = memory.usedJSHeapSize / 1048576;
+  const limitMb = Number.isFinite(memory.jsHeapSizeLimit)
+    ? memory.jsHeapSizeLimit / 1048576
+    : undefined;
+  return limitMb === undefined
+    ? `${usedMb.toFixed(1)} MB`
+    : `${usedMb.toFixed(1)} / ${limitMb.toFixed(0)} MB`;
 }
 
 export function updateColliderHelpers() {

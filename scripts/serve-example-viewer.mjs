@@ -2,6 +2,7 @@ import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { basename, dirname, extname, join, normalize, relative, resolve, sep } from "node:path";
+import { parseVmdSectionInventory } from "../dist/parser/index.js";
 
 const root = process.cwd();
 const viewerRoot = resolve(root, "examples", "viewer");
@@ -183,19 +184,20 @@ function createLocalAssetManifest() {
     ...createAssetEntries("pmx", byExtension.pmx),
     ...createAssetEntries("pmd", byExtension.pmd)
   ];
-  const motions = createAssetEntries("vmd", byExtension.vmd);
+  const vmdEntries = splitVmdAssetEntries(byExtension.vmd);
+  const motions = vmdEntries.motions;
   const poses = createAssetEntries("vpd", byExtension.vpd);
   const backgrounds = [
     ...createAssetEntries("backgroundPmx", byExtension.backgroundPmx),
     ...createAssetEntries("backgroundPmd", byExtension.backgroundPmd)
   ];
-  const cameraSourceEntries = Object.keys(byExtension.cameraVmd ?? {}).length > 0
-    ? createAssetEntries("cameraVmd", byExtension.cameraVmd)
-    : motions;
-  const cameras = cameraSourceEntries.map((motion) => ({
-    ...motion,
-    id: `camera:${motion.id}`
-  }));
+  const cameras = dedupeAssetsByUrl([
+    ...createAssetEntries("cameraVmd", byExtension.cameraVmd),
+    ...vmdEntries.cameras.map((motion) => ({
+      ...motion,
+      id: `camera:${motion.id}`
+    }))
+  ]);
   const audios = [
     ...createAssetEntries("wav", byExtension.wav),
     ...createAssetEntries("mp3", byExtension.mp3),
@@ -230,6 +232,43 @@ function createAssetEntries(extension, fixtureMap) {
       name: `${key} - ${basename(fixturePath)}`,
       url
     }];
+  });
+}
+
+function splitVmdAssetEntries(fixtureMap) {
+  const motions = [];
+  const cameras = [];
+  for (const entry of createAssetEntries("vmd", fixtureMap)) {
+    if (isCameraOnlyVmdFixturePath(fixtureMap?.[entry.key])) {
+      cameras.push(entry);
+    } else {
+      motions.push(entry);
+    }
+  }
+  return { motions, cameras };
+}
+
+function isCameraOnlyVmdFixturePath(fixturePath) {
+  const filePath = resolveFixturePath(fixturePath);
+  if (filePath === undefined || !isPathInside(filePath, dataRoot)) {
+    return false;
+  }
+  try {
+    const counts = parseVmdSectionInventory(readFileSync(filePath)).counts;
+    return counts.cameras > 0 && counts.bones === 0 && counts.morphs === 0;
+  } catch {
+    return false;
+  }
+}
+
+function dedupeAssetsByUrl(assets) {
+  const seen = new Set();
+  return assets.filter((asset) => {
+    if (seen.has(asset.url)) {
+      return false;
+    }
+    seen.add(asset.url);
+    return true;
   });
 }
 

@@ -614,11 +614,19 @@ describe("ThreeMmdLoader", () => {
   it("loads a synthetic PMX model with empty geometry indices into a skinned mesh", async () => {
     const loader = new ThreeMmdLoader();
 
-    const model = await loader.loadModel(createMinimalPmxModelBytes({ materialCount: 1 }));
+    const model = await loader.loadModel(createMinimalPmxModelBytes({
+      materialCount: 1,
+      comment: "モデル利用規約",
+      englishComment: "Model credits"
+    }));
 
     expect(model.mesh.isSkinnedMesh).toBe(true);
     expect(model.mesh.skeleton.bones.length).toBeGreaterThanOrEqual(0);
     expect(model.mesh.geometry.index?.count ?? 0).toBe(0);
+    expect(model.mesh.userData.mmdModel).toEqual(expect.objectContaining({
+      comment: "モデル利用規約",
+      englishComment: "Model credits"
+    }));
   });
 
   it("loads a synthetic PMX model with empty materials into a skinned mesh", async () => {
@@ -705,6 +713,8 @@ function createMinimalPmxModelBytes(options: {
   readonly triangle?: boolean;
   readonly edge?: boolean;
   readonly materialFlags?: number;
+  readonly comment?: string;
+  readonly englishComment?: string;
 }): Uint8Array {
   const bytes: number[] = [];
   const encoder = new TextEncoder();
@@ -739,8 +749,8 @@ function createMinimalPmxModelBytes(options: {
   u8(1);
   text("synthetic empty mesh");
   text("SyntheticEmptyMesh");
-  text("");
-  text("");
+  text(options.comment ?? "");
+  text(options.englishComment ?? "");
   count(options.triangle ? 3 : 1);
   writeVertex([0, 0, 0]);
   if (options.triangle) {

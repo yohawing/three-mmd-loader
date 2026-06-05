@@ -498,7 +498,32 @@ select:focus-visible {
 
 .debug-actions {
     display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
+}
+
+.debug-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 4px 2px 8px;
+    border-bottom: 1px solid rgb(202 211 219 / 48%);
+}
+
+.debug-metric {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.debug-metric output {
+    overflow: hidden;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .debug-toggle {
@@ -775,6 +800,72 @@ select:focus-visible {
 
 .loading-indicator[hidden] {
     display: none;
+}
+
+.credit-popup {
+    position: absolute;
+    z-index: 4;
+    right: var(--chrome-gap);
+    bottom: calc(var(--chrome-gap) + var(--transport-height) + 12px);
+    display: grid;
+    gap: 8px;
+    width: min(420px, calc(100vw - 20px));
+    max-height: min(44vh, 360px);
+    padding: 10px 12px;
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius);
+    background: rgb(255 255 255 / 97%);
+    color: var(--text);
+    box-shadow: 0 16px 34px rgb(30 44 58 / 16%);
+}
+
+.credit-popup[hidden] {
+    display: none;
+}
+
+.credit-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 8px;
+    align-items: center;
+}
+
+.credit-header h2 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.credit-close {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    min-height: 28px;
+    padding: 0;
+}
+
+.credit-close .material-symbols-rounded {
+    font-size: 18px;
+}
+
+.credit-model {
+    margin: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.credit-comment {
+    min-height: 0;
+    margin: 0;
+    overflow: auto;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
 }
 
 .loading-spinner {
