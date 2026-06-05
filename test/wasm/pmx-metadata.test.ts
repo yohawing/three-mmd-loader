@@ -36,7 +36,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     const metadata = model.metadata();
 
     expect(core.healthCheck()).toBe(true);
-    expect(core.version()).toMatch(/\d+\.\d+\.\d+/);
+    expect(core.version()).toBe("0.0.0+ts-fallback");
     expect(metadata.version).toBeCloseTo(2.0);
     expect(metadata.encoding).toBe("utf-16-le");
     expect(metadata.name).toBe("テスト用モデル");

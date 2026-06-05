@@ -8,6 +8,8 @@ export default tseslint.config(
       "deploy/**",
       "native/bullet/dist/**",
       "native/third_party/**",
+      "scripts/local/oracle/**",
+      "third_party/**",
       "src/parser/wasm/generated/**"
     ]
   },

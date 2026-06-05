@@ -28,7 +28,7 @@ English: [README.md](../README.md)　- [デモサイト](https://three.mmd.yohaw
 
 | 機能 | 状態 |
 | --- | --- |
-| WASM Parser | ✅ PMX / PMD / VMD、TypeScript fallback あり |
+| Parser | ✅ PMX / PMD / VMD / VPD TypeScript parser |
 | BDEF1/2/4 skinning | ✅ |
 | SDEF skinning | ⚠️ shader path はあり / parity 要検証 |
 | QDEF skinning | ❌ Dual Quaternion Skinning 未実装 |

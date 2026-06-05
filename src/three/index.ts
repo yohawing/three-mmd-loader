@@ -180,13 +180,13 @@ export interface ThreeMmdLoaderOptions {
   readonly geometryAwareAlpha?: boolean;
   /** Options forwarded to the per-model DefaultMmdRuntime. */
   readonly runtime?: DefaultMmdRuntimeOptions;
-  /** Parser core override. When omitted, the loader initializes the bundled WASM core with TypeScript fallback. */
+  /** Parser core override. When omitted, the loader uses the TypeScript parser core. */
   readonly core?: MmdCore | Promise<MmdCore>;
   /** Overrides fetch for string ModelSource values. */
   readonly fetch?: ModelSourceFetch;
   /** Enables load-time performance marks and diagnostics. */
   readonly performance?: boolean | LoaderPerformanceOptions;
-  /** Receives recoverable WASM parser failures before falling back to the TypeScript parser. */
+  /** Receives recoverable parser-core failures before falling back to the TypeScript parser. */
   readonly onCoreFallback?: (event: ThreeMmdCoreFallbackEvent) => void;
 }
 
@@ -412,7 +412,16 @@ export class ThreeMmdLoader {
   private async initCoreWithObservableFallback(): Promise<MmdCore> {
     try {
       const core = await initCore();
-      this.coreDiagnostic = { kind: "wasm" };
+      if (core instanceof FallbackCore) {
+        this.fallbackCore = core;
+        this.coreDiagnostic = {
+          kind: "fallback",
+          operation: "initCore",
+          reason: "WASM core disabled; using TypeScript fallback parser."
+        };
+      } else {
+        this.coreDiagnostic = { kind: "wasm" };
+      }
       return core;
     } catch (error) {
       this.options.onCoreFallback?.({ operation: "initCore", error });

@@ -35,13 +35,9 @@ npm run smoke:types
 npm pack --dry-run --json
 ```
 
-If files under `native/**` or the WASM export surface changed, rebuild the WASM
-wrapper before the normal build:
-
-```bash
-npm run build:wasm
-npm run build
-```
+The nanoem-backed WASM wrapper is currently not part of the default package
+build. Do not run `npm run build:wasm` as a release gate unless the release is
+explicitly re-enabling the WASM core path.
 
 ## 3. Commit
 

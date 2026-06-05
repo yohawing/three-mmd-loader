@@ -30,7 +30,7 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 
 | Feature | Status |
 | --- | --- |
-| WASM Parser | ✅ PMX / PMD / VMD with TypeScript fallback |
+| Parser | ✅ PMX / PMD / VMD / VPD TypeScript parser |
 | BDEF1/2/4 skinning | ✅ |
 | SDEF skinning | ⚠️ Shader path exists; verify parity |
 | QDEF skinning | ❌ Dual Quaternion Skinning not implemented |
