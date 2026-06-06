@@ -6,6 +6,7 @@ import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.
 import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./animation.js";
 import { DefaultMmdRuntime } from "./core.js";
 import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
+import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
 import { applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics } from "./physics.js";
 import type { PrePhysicsScratch } from "./physics.js";
 import type {
@@ -448,6 +449,7 @@ export class MmdAnimRuntime implements MmdRuntime {
       this.scratchParentInverseMatrix
     );
     syncMorphWeights(mesh, this.morphWeights);
+    syncMorphSplitTargetInfluences(mesh);
   }
 
   private captureDebugStage(stage: keyof MmdRuntimeDebugState["stages"]): void {

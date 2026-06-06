@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import type { MaterialRuntimeState, MmdModel } from "../parser/model/modelTypes.js";
+import { syncMorphSplitTargetInfluences } from "../runtime/morphSplitSync.js";
 import { syncMmdMaterialStates } from "./material/material-sync.js";
 import { mmdMaterialSuppressesColorAtAlpha } from "./material/material-metadata.js";
 import { syncMmdOutlineMaterialStates } from "./outline.js";
@@ -126,6 +127,7 @@ function syncThreeMmdRuntimeToMeshInternal(
 ): void {
   syncRuntimeBoneTransforms(model, mesh, runtime.boneMatrices());
   syncRuntimeMorphWeights(mesh, runtime.morphWeights());
+  syncMorphSplitTargetInfluences(mesh);
   const visible = runtime.propertyState().visible;
   mesh.visible = visible;
   const materialStates = runtime.materialStates();

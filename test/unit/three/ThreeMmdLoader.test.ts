@@ -15,6 +15,7 @@ import type {
   ThreeMmdTextureLoader
 } from "../../../src/index.js";
 import * as Textures from "../../../src/three/textures.js";
+import { syncMorphSplitTargetInfluences } from "../../../src/runtime/morphSplitSync.js";
 
 describe("ThreeMmdLoader", () => {
   afterEach(() => {
@@ -377,6 +378,11 @@ describe("ThreeMmdLoader", () => {
     }
     sourceInfluences[0] = 0.25;
     sourceInfluences[1] = 0.75;
+    syncMorphSplitTargetInfluences(model.mesh);
+    expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.[0])).toEqual([0.25, 0.75]);
+
+    sourceInfluences[0] = 0.5;
+    sourceInfluences[1] = 1;
     bodyMeshes.forEach((mesh) => {
       const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
       if (!material) {
@@ -391,7 +397,7 @@ describe("ThreeMmdLoader", () => {
         null
       );
     });
-    expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.[0])).toEqual([0.25, 0.75]);
+    expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.[0])).toEqual([0.5, 1]);
   });
 
   it("applies load-time frustum culling to the mesh and generated proxy meshes", async () => {

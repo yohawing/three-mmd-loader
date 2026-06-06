@@ -9,6 +9,7 @@ import type { SolvePreparedIkScratch } from "./ik-bridge.js";
 import { CcdIkSolver } from "./ik/index.js";
 import type { CcdIkPreparedChain } from "./ik/index.js";
 import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
+import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
 import { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
 import type { PrePhysicsScratch } from "./physics.js";
 import type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeExternalPhysicsData, RuntimeRestTransform } from "./types.js";
@@ -410,8 +411,12 @@ export class DefaultMmdRuntime implements MmdRuntime {
 
 
   private applyCurrentMmdAnimation(frame: number): void {
+    const mesh = this.mesh;
+    if (!mesh) {
+      return;
+    }
     const result = applyMmdAnimation(
-      this.mesh,
+      mesh,
       this.mmdAnimation,
       this.restTransforms,
       this.preAppendTransforms,
@@ -419,6 +424,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
       frame
     );
     if (!result) return;
+    syncMorphSplitTargetInfluences(mesh);
     this.bonePhysicsToggles = result.bonePhysicsToggles;
   }
 
