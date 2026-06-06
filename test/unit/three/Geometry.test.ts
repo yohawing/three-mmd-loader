@@ -4,7 +4,7 @@ import {
   denseMorphProviderSymbol,
   type DenseMorphProvider
 } from "../../../src/parser/model/denseMorphProvider.js";
-import { createThreeBufferGeometry } from "../../../src/three/index.js";
+import { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "../../../src/three/index.js";
 import type { ThreeMmdGeometryBuffers, ThreeMmdGeometryMorph } from "../../../src/three/index.js";
 import type * as THREE from "three";
 
@@ -242,6 +242,65 @@ describe("createThreeBufferGeometry", () => {
       Array.from(geometry.morphAttributes.uv1?.[0]?.array ?? []),
       [0.1, 0.2, 0.3, 0.4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     );
+  });
+
+  it("splits material geometries so only affected groups carry morph target buffers", () => {
+    const buffers = createQuadBuffers();
+    const splitGeometries = createThreeMorphSplitGeometries(
+      buffers,
+      [
+        { faceCount: 1, materialIndex: 0 },
+        { faceCount: 1, materialIndex: 1 }
+      ],
+      [
+        { vertexOffsets: [{ vertexIndex: 2, position: [0.25, -0.5, 1.5] }] },
+        { groupOffsets: [{ morphIndex: 0, weight: 0.5 }] }
+      ]
+    );
+
+    expect(splitGeometries).toHaveLength(2);
+    expect(splitGeometries.map((split) => split.materialIndex)).toEqual([0, 1]);
+
+    const firstSplit = splitGeometries[0];
+    const secondSplit = splitGeometries[1];
+    if (!firstSplit || !secondSplit) {
+      throw new Error("Expected two split geometries");
+    }
+    const first = firstSplit.geometry;
+    const second = secondSplit.geometry;
+    expect(first.getAttribute("position").count).toBe(3);
+    expect(second.getAttribute("position").count).toBe(3);
+    expect(first.morphAttributes.position).toHaveLength(1);
+    expect(second.morphAttributes.position).toHaveLength(1);
+    expect(Array.from(firstSplit.morphTargetIndices)).toEqual([0]);
+    expect(Array.from(secondSplit.morphTargetIndices)).toEqual([0]);
+    expect(Array.from(first.morphAttributes.position?.[0]?.array ?? [])).toEqual([
+      0, 0, 0, 0, 0, 0, 0.25, -0.5, -1.5
+    ]);
+    expect(Array.from(second.morphAttributes.position?.[0]?.array ?? [])).toEqual([
+      0, 0, 0, 0.25, -0.5, -1.5, 0, 0, 0
+    ]);
+  });
+
+  it("keeps morph-free material split geometries plain", () => {
+    const buffers = createQuadBuffers();
+    const splitGeometries = createThreeMorphSplitGeometries(
+      buffers,
+      [
+        { faceCount: 1, materialIndex: 0 },
+        { faceCount: 1, materialIndex: 1 }
+      ],
+      [{ vertexOffsets: [{ vertexIndex: 1, position: [0.25, -0.5, 1.5] }] }]
+    );
+
+    expect(splitGeometries).toHaveLength(2);
+    const firstSplit = splitGeometries[0];
+    const secondSplit = splitGeometries[1];
+    if (!firstSplit || !secondSplit) {
+      throw new Error("Expected two split geometries");
+    }
+    expect(firstSplit.geometry.morphAttributes.position).toHaveLength(1);
+    expect(secondSplit.geometry.morphAttributes.position).toBeUndefined();
   });
 
   it("rejects malformed geometry buffers before creating Three.js attributes", () => {

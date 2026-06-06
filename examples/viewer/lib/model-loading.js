@@ -8,7 +8,7 @@ import {
 import { MmdAnimRuntime, DefaultMmdRuntime } from "../../../dist/runtime/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
-import { createPhysicsBackend, disposeActivePhysicsBackend } from "./ammo-bootstrap.js";
+import { createPhysicsBackend, disposeActivePhysicsBackend } from "./physics-backend.js";
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
 import { loadCameraFile } from "./camera-loading.js";
 import { hideCreditPopup, showModelCredits } from "./credits.js";

@@ -315,6 +315,9 @@ function createPresetEntries(cases, byExtension) {
     const audioUrl = dataUrlForFixturePath(
       byExtension?.[fixtureCase.audio?.extension]?.[fixtureCase.audio?.key]
     );
+    const audioOffsetFrame = parseAudioOffsetFrame(
+      fixtureCase.audioOffsetFrame ?? fixtureCase.audio?.offsetFrame
+    );
     if (modelUrl === undefined || motionUrl === undefined) {
       return [];
     }
@@ -325,9 +328,15 @@ function createPresetEntries(cases, byExtension) {
       motionUrl,
       ...(backgroundUrl ? { backgroundUrl } : {}),
       ...(cameraUrl ? { cameraUrl } : {}),
-      ...(audioUrl ? { audioUrl } : {})
+      ...(audioUrl ? { audioUrl } : {}),
+      ...(audioOffsetFrame !== undefined ? { audioOffsetFrame } : {})
     }];
   });
+}
+
+function parseAudioOffsetFrame(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
 }
 
 function dataUrlForFixturePath(fixturePath) {

@@ -17,7 +17,7 @@
         }
       }
     </script>
-    <!-- Shoelace UI spike (no-build, CDN autoloader). Vendor it like three/ammo if adopted. -->
+    <!-- Shoelace UI spike (no-build, CDN autoloader). Vendor it like three if adopted. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2/cdn/themes/light.css" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2/cdn/shoelace-autoloader.js"></script>
     <link rel="stylesheet" href="./styles.css" />
@@ -88,6 +88,10 @@
               <details class="load-category" id="audio-load-category">
                 <summary data-i18n="menu.audio">Audio</summary>
                 <button id="choose-audio" type="button" role="menuitem" data-i18n="action.loadFromFile">Load From File...</button>
+                <label class="asset-load-row audio-offset-control" id="audio-offset-control">
+                  <span data-i18n="audio.offsetFrame">Audio Offset</span>
+                  <input id="audio-offset-frame" type="text" inputmode="numeric" pattern="-?[0-9]*" value="0" aria-label="Audio offset frame" data-i18n-aria="aria.audioOffsetFrame" />
+                </label>
                 <div class="asset-load-row" hidden>
                   <label for="asset-audio-select" data-i18n="menu.fixture">Fixture</label>
                   <select id="asset-audio-select" aria-label="Local audio asset" hidden></select>

@@ -705,6 +705,38 @@ select:focus-visible {
     display: none;
 }
 
+.audio-offset-control {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+    padding-left: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.audio-offset-control[hidden] {
+    display: none;
+}
+
+.audio-offset-control span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#audio-offset-frame {
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    padding: 0 6px;
+    border: 1px solid var(--surface-border);
+    border-radius: 6px;
+    background: rgb(255 255 255 / 92%);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
 #volume-toggle {
     font-size: 18px;
 }
@@ -914,11 +946,15 @@ select:focus-visible {
     }
 
     .transport {
-        grid-template-columns: 88px 1fr;
+        grid-template-columns: 88px minmax(0, 1fr) auto;
     }
 
     .transport label {
         grid-column: 1 / -1;
+    }
+
+    .transport > .volume-control {
+        grid-column: auto;
     }
 }
 

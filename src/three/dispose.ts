@@ -17,17 +17,22 @@ export function disposeMmdModel(
   const disposedGeometries = new Set<THREE.BufferGeometry>();
   const disposedMaterials = new Set<THREE.Material>();
   const disposedTextures = new Set<THREE.Texture>();
+  const disposedSkeletons = new Set<THREE.Skeleton>();
   const textureOwnership = options.textures ?? "all";
   const root = model.root ?? model.object;
   root?.parent?.remove(root);
+  const bodyMeshes = Array.isArray(model.mesh.userData.mmdMorphSplitBodyMeshes)
+    ? model.mesh.userData.mmdMorphSplitBodyMeshes.filter(isSkinnedMesh)
+    : [];
   const meshes = [
     model.mesh,
+    ...bodyMeshes,
     ...(model.outlineMeshes ?? []),
     ...(model.renderOrderMeshes ?? [])
   ];
   for (const mesh of meshes) {
     mesh.parent?.remove(mesh);
-    disposeSkeletonResources(mesh.skeleton);
+    disposeSkeletonResources(mesh.skeleton, disposedSkeletons);
     if (mesh.geometry && !disposedGeometries.has(mesh.geometry)) {
       mesh.geometry.dispose();
       disposedGeometries.add(mesh.geometry);
@@ -48,6 +53,15 @@ export function disposeMmdModel(
       textureOwnership
     );
   }
+}
+
+function isSkinnedMesh(value: unknown): value is THREE.SkinnedMesh {
+  return (
+    value instanceof THREE.SkinnedMesh ||
+    (typeof value === "object" &&
+      value !== null &&
+      (value as { readonly isSkinnedMesh?: unknown }).isSkinnedMesh === true)
+  );
 }
 
 function disposeMaterialResources(
@@ -111,11 +125,15 @@ function disposeTexture(
   disposedTextures.add(texture);
 }
 
-function disposeSkeletonResources(skeleton: THREE.Skeleton | undefined): void {
-  if (!skeleton) {
+function disposeSkeletonResources(
+  skeleton: THREE.Skeleton | undefined,
+  disposedSkeletons: Set<THREE.Skeleton>
+): void {
+  if (!skeleton || disposedSkeletons.has(skeleton)) {
     return;
   }
   skeleton.dispose();
+  disposedSkeletons.add(skeleton);
 }
 
 function normalizeMaterials(material: THREE.Material | THREE.Material[]): THREE.Material[] {

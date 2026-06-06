@@ -34,6 +34,8 @@ export const dom = {
   volumeControl: document.querySelector("#volume-control"),
   volumeSlider: document.querySelector("#volume-slider"),
   volumeToggle: document.querySelector("#volume-toggle"),
+  audioOffsetControl: document.querySelector("#audio-offset-control"),
+  audioOffsetFrameInput: document.querySelector("#audio-offset-frame"),
   playToggle: document.querySelector("#play-toggle"),
   playToggleIcon: document.querySelector("#play-toggle")?.querySelector(".material-symbols-rounded"),
   loadMenu: document.querySelector("#load-menu"),

@@ -13,15 +13,17 @@ import type {
   MmdRuntimeEvaluateOptions,
   MmdRuntimeTickOptions
 } from "../runtime/index.js";
-import { createThreeBufferGeometry } from "./geometry.js";
+import { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "./geometry.js";
 import { createLoaderMmdModelDataFromModel } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
 import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 import {
   computeMmdMaterialRenderOrder,
+  mmdMaterialCastsShadow,
   mmdMaterialCastsSelfShadow,
   syncMmdModelShadowFlags
 } from "./material/material-metadata.js";
+import type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
 import { attachMmdSdefSkinning } from "./material/material-sdef.js";
 import type {
   MaterialTransparencyDiagnostic,
@@ -41,7 +43,7 @@ import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { ModelSourceDiagnostic, ModelSourceFetch } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
-export { createThreeBufferGeometry } from "./geometry.js";
+export { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "./geometry.js";
 export { applyMmdCameraStateToThreeCamera } from "./camera.js";
 export { disposeMmdModel } from "./dispose.js";
 export type { DisposeMmdModelOptions } from "./dispose.js";
@@ -124,6 +126,7 @@ export type {
   ThreeMmdGeometryBuffers,
   ThreeMmdGeometryMaterial,
   ThreeMmdGeometryMorph,
+  ThreeMmdMorphSplitGeometry,
   ThreeMmdMaterialGroup,
   ThreeMmdQdefBuffers,
   ThreeMmdSdefBuffers,
@@ -382,6 +385,7 @@ export class ThreeMmdLoader {
         if (options.frustumCulled !== undefined) {
           mesh.frustumCulled = options.frustumCulled;
         }
+        syncMorphSplitBodyMeshRenderState(mesh, modelData.materials);
         profile?.mark("materials");
         const sourceDescriptor = createModelSourceDescriptor(source, bytes.byteLength);
         const model = createThreeMmdModel({
@@ -603,11 +607,15 @@ function createThreeMmdModel(options: {
   readonly outlines: boolean;
   readonly renderOrderProxies: boolean;
 }): ThreeMmdModel {
+  const bodyMeshes = readMorphSplitBodyMeshes(options.mesh);
+  const outlineSources = bodyMeshes.length > 0 ? bodyMeshes : [options.mesh];
   const outlineMeshes = options.outlines
-    ? createMmdOutlineMeshes({
-        mesh: options.mesh,
-        materials: options.materials
-      })
+    ? outlineSources.flatMap((mesh) =>
+        createMmdOutlineMeshes({
+          mesh,
+          materials: options.materials
+        })
+      )
     : [];
   if (options.materials.some((material) => mmdMaterialCastsSelfShadow(material.flags))) {
     options.mesh.layers.enable(MMD_SELF_SHADOW_LAYER);
@@ -626,7 +634,7 @@ function createThreeMmdModel(options: {
         shadowOnly: !options.outlines
       })
     : [];
-  if (options.outlines && renderOrderMeshes.length > 0) {
+  if (renderOrderMeshes.length > 0 || bodyMeshes.length > 0) {
     options.mesh.geometry.setDrawRange(0, 0);
   }
   if (renderOrderMeshes.length > 0) {
@@ -634,7 +642,7 @@ function createThreeMmdModel(options: {
   }
   const object = new THREE.Group();
   object.name = options.mesh.name;
-  object.add(options.mesh, ...renderOrderMeshes, ...outlineMeshes);
+  object.add(options.mesh, ...bodyMeshes, ...renderOrderMeshes, ...outlineMeshes);
   const runtimeTickOptions: MutableMmdRuntimeTickOptions = { mesh: object };
   return {
     root: object,
@@ -710,6 +718,56 @@ function warnDeprecatedApi(name: string, replacement: string): void {
   );
 }
 
+function readMorphSplitBodyMeshes(mesh: THREE.SkinnedMesh): THREE.SkinnedMesh[] {
+  const bodyMeshes = mesh.userData.mmdMorphSplitBodyMeshes;
+  return Array.isArray(bodyMeshes)
+    ? bodyMeshes.filter((candidate): candidate is THREE.SkinnedMesh => isSkinnedMesh(candidate))
+    : [];
+}
+
+function isSkinnedMesh(value: unknown): value is THREE.SkinnedMesh {
+  return (
+    value instanceof THREE.SkinnedMesh ||
+    (typeof value === "object" &&
+      value !== null &&
+      (value as { readonly isSkinnedMesh?: unknown }).isSkinnedMesh === true)
+  );
+}
+
+function syncMorphSplitBodyMeshRenderState(
+  mesh: THREE.SkinnedMesh,
+  materials: readonly LoaderMmdModelData["materials"][number][]
+): void {
+  const bodyMeshes = readMorphSplitBodyMeshes(mesh);
+  if (bodyMeshes.length === 0) {
+    return;
+  }
+  const renderOrder = mesh.userData.mmdMaterialRenderOrder as
+    | readonly MmdMaterialRenderOrderEntry[]
+    | undefined;
+  const renderOrderByMaterial = new Map(
+    (renderOrder ?? []).map((entry) => [entry.materialIndex, entry.renderOrder])
+  );
+  for (const body of bodyMeshes) {
+    const materialIndex = (body.userData.mmdMorphSplitBody as
+      | { readonly materialIndex?: unknown }
+      | undefined)?.materialIndex;
+    if (typeof materialIndex !== "number") {
+      continue;
+    }
+    body.renderOrder = (renderOrderByMaterial.get(materialIndex) ?? materialIndex) * 2;
+    body.userData.mmdMaterialRenderOrder = [{
+      materialIndex,
+      bucket: renderOrder?.find((entry) => entry.materialIndex === materialIndex)?.bucket ?? "opaque",
+      renderOrder: 0
+    }];
+    body.frustumCulled = mesh.frustumCulled;
+    const material = materials[materialIndex];
+    body.castShadow = !!material && mmdMaterialCastsShadow(material.flags);
+    body.receiveShadow = !!material?.flags.selfShadow;
+  }
+}
+
 function createModelSourceDescriptor(
   source: ModelSource,
   byteLength: number
@@ -774,18 +832,42 @@ function formatDiagnosticReason(error: unknown): string {
 }
 
 function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
+  const splitGeometries = shouldCreateMorphSplitMeshes(modelData)
+    ? createThreeMorphSplitGeometries(modelData.geometry, modelData.materials, modelData.morphs)
+    : [];
   const geometry = createThreeBufferGeometry(
     modelData.geometry,
     modelData.materials,
-    modelData.morphs
+    splitGeometries.length > 0 ? [] : modelData.morphs
   );
   const materials = createThreeMmdMaterials(modelData.materials);
   if (geometry.userData.mmdSdef || geometry.userData.mmdQdef) {
     materials.forEach((material) => attachMmdSdefSkinning(material));
   }
   const mesh = new THREE.SkinnedMesh(geometry, materials.length === 1 ? materials[0] : materials);
+  const bodyMeshes = splitGeometries.map((split) => {
+    const body = new THREE.SkinnedMesh(split.geometry, materials);
+    body.name = `${modelData.metadata.englishName || modelData.metadata.name || "mmd"} material ${split.materialIndex}`;
+    body.frustumCulled = mesh.frustumCulled;
+    body.morphTargetDictionary = createMorphTargetDictionaryForIndices(
+      modelData.morphs,
+      split.morphTargetIndices
+    );
+    body.morphTargetInfluences = new Array(split.morphTargetIndices.length).fill(0);
+    body.userData.mmdMorphSplitBody = {
+      materialIndex: split.materialIndex,
+      morphTargetIndices: split.morphTargetIndices,
+      sourceVertexCount: split.sourceVertexCount,
+      vertexCount: split.vertexCount,
+      morphPositionAttributeCount: split.morphPositionAttributeCount
+    };
+    return body;
+  });
   mesh.morphTargetDictionary = createMorphTargetDictionary(modelData.morphs);
   mesh.morphTargetInfluences = new Array(modelData.morphs.length).fill(0);
+  bodyMeshes.forEach((body) => {
+    attachMorphSplitInfluenceSync(mesh, body);
+  });
   mesh.name = modelData.metadata.englishName || modelData.metadata.name;
   mesh.userData.mmdModel = {
     format: modelData.metadata.format,
@@ -840,6 +922,17 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     impulseOffsets: morph.impulseOffsets?.map((offset) => ({ ...offset }))
   }));
   mesh.userData.mmdIkChains = createRuntimeIkChains(modelData);
+  if (bodyMeshes.length > 0) {
+    mesh.userData.mmdMorphSplitBodyMeshes = bodyMeshes;
+    mesh.userData.mmdMorphSplit = {
+      sourceVertexCount: modelData.geometry.positions.length / 3,
+      bodyMeshCount: bodyMeshes.length,
+      splitVertexCount: bodyMeshes.reduce((sum, body) => {
+        const position = body.geometry.getAttribute("position");
+        return sum + (position?.count ?? 0);
+      }, 0)
+    };
+  }
 
   const skeleton = createThreeSkeleton(modelData.skeleton);
   skeleton.bones.forEach((bone, index) => {
@@ -868,7 +961,75 @@ function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
     }
   });
   mesh.bind(skeleton);
+  bodyMeshes.forEach((body) => {
+    body.bind(skeleton, mesh.bindMatrix);
+    attachMorphSplitInfluenceSync(mesh, body);
+  });
   return mesh;
+}
+
+function createMorphTargetDictionaryForIndices(
+  morphs: readonly LoaderMmdModelData["morphs"][number][],
+  morphTargetIndices: Uint16Array | Uint32Array
+): Record<string, number> {
+  const dictionary: Record<string, number> = {};
+  for (let localIndex = 0; localIndex < morphTargetIndices.length; localIndex += 1) {
+    const morph = morphs[morphTargetIndices[localIndex] ?? -1];
+    if (!morph) {
+      continue;
+    }
+    const primaryName = morph.name || morph.englishName;
+    const secondaryName = morph.englishName || morph.name;
+    if (primaryName) {
+      dictionary[primaryName] = localIndex;
+    }
+    if (secondaryName && dictionary[secondaryName] === undefined) {
+      dictionary[secondaryName] = localIndex;
+    }
+  }
+  return dictionary;
+}
+
+function attachMorphSplitInfluenceSync(
+  source: THREE.SkinnedMesh,
+  target: THREE.SkinnedMesh
+): void {
+  const split = target.userData.mmdMorphSplitBody as
+    | { readonly morphTargetIndices?: Uint16Array | Uint32Array }
+    | undefined;
+  const morphTargetIndices = split?.morphTargetIndices;
+  if (!morphTargetIndices || target.userData.mmdMorphSplitInfluenceSyncAttached) {
+    return;
+  }
+  const previousOnBeforeRender = target.onBeforeRender.bind(target);
+  target.onBeforeRender = (renderer, scene, camera, geometry, material, group) => {
+    previousOnBeforeRender(renderer, scene, camera, geometry, material, group);
+    const sourceInfluences = source.morphTargetInfluences;
+    const targetInfluences = target.morphTargetInfluences;
+    if (!sourceInfluences || !targetInfluences) {
+      return;
+    }
+    for (let index = 0; index < morphTargetIndices.length; index += 1) {
+      targetInfluences[index] = sourceInfluences[morphTargetIndices[index] ?? -1] ?? 0;
+    }
+  };
+  target.userData.mmdMorphSplitInfluenceSyncAttached = true;
+}
+
+function shouldCreateMorphSplitMeshes(modelData: LoaderMmdModelData): boolean {
+  const vertexCount = modelData.geometry.positions.length / 3;
+  const groups = modelData.geometry.materialGroups?.length ?? modelData.materials.length;
+  if (vertexCount <= 0 || groups <= 1) {
+    return false;
+  }
+  const morphTargetCount = modelData.morphs.filter(
+    (morph) => morph.type === "vertex" || morph.type === "uv" || morph.type === "additionalUv"
+  ).length;
+  if (morphTargetCount === 0) {
+    return false;
+  }
+  const estimatedDenseBytes = vertexCount * morphTargetCount * 3 * Float32Array.BYTES_PER_ELEMENT;
+  return estimatedDenseBytes >= 64 * 1024 * 1024;
 }
 
 function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {

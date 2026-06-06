@@ -409,9 +409,9 @@ function rendererHtml() {
             model.update(visualCase.timeSeconds, { physics: false });
           }
 
-          model.mesh.updateMatrixWorld(true);
+          model.root.updateMatrixWorld(true);
           if (config.render.shadow?.enabled === true) {
-            const shadowBounds = new THREE.Box3().setFromObject(model.mesh);
+            const shadowBounds = new THREE.Box3().setFromObject(model.root);
             fitMmdSelfShadowDirectionalLightToBox(scene.userData.mmdDirectionalLight, shadowBounds, {
               marginScale: config.render.shadow.directional?.marginScale ?? 0.06,
               minNear: config.render.shadow.directional?.minNear ?? 0.02,
@@ -425,7 +425,7 @@ function rendererHtml() {
               shadowIntensity: config.render.shadow.directional?.intensity ?? 0.55
             });
           }
-          const camera = createCamera(visualCase.camera, model.mesh, config.render.resolution);
+          const camera = createCamera(visualCase.camera, model.root, config.render.resolution);
           renderer.render(scene, camera);
           await new Promise(requestAnimationFrame);
           results.push({

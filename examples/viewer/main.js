@@ -1,4 +1,4 @@
-import { clearAudioSource, isAudioElement, loadAudioFile, switchAudioEntry } from "./lib/audio-loading.js";
+import { clearAudioSource, isAudioElement, loadAudioFile, setAudioOffsetFrame, switchAudioEntry } from "./lib/audio-loading.js";
 import { bindAssetLibraryControls, initializeAssetLibrary } from "./lib/asset-library.js";
 import { clearBackground, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
 import { clearCameraMotion, loadCameraFile, loadCameraFromUrl, switchCameraEntry } from "./lib/camera-loading.js";
@@ -6,7 +6,7 @@ import { bindCreditPopupControls } from "./lib/credits.js";
 import { createViewerDebugApi, refreshDebugPanelState, setDebugMaterialMode, setOutlineHidden, setSelfShadowEnabled, toggleColliderHelpers } from "./lib/debug.js";
 import { dom, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
-import { disposeActivePhysicsBackend } from "./lib/ammo-bootstrap.js";
+import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
 import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
@@ -148,6 +148,8 @@ function bindControls() {
   dom.timeline?.addEventListener("sl-change", endSeek);
   dom.volumeSlider?.addEventListener("sl-input", handleVolumeSliderInput);
   dom.volumeSlider?.addEventListener("sl-change", handleVolumeSliderInput);
+  dom.audioOffsetFrameInput?.addEventListener("input", handleAudioOffsetFrameInput);
+  dom.audioOffsetFrameInput?.addEventListener("change", commitAudioOffsetFrameInput);
   dom.volumeToggle?.addEventListener("click", () => {
     if (!isAudioElement(dom.bgmAudio)) return;
     dom.bgmAudio.muted = !dom.bgmAudio.muted;
@@ -287,6 +289,19 @@ function handleVolumeSliderInput() {
   applyVolumeState(volume, muted);
   persistVolume(volume, muted);
   updateVolumeIcon();
+}
+
+function handleAudioOffsetFrameInput() {
+  if (!(dom.audioOffsetFrameInput instanceof window.HTMLInputElement)) return;
+  setAudioOffsetFrame(dom.audioOffsetFrameInput.value, {
+    fallback: false,
+    updateInput: false
+  });
+}
+
+function commitAudioOffsetFrameInput() {
+  if (!(dom.audioOffsetFrameInput instanceof window.HTMLInputElement)) return;
+  setAudioOffsetFrame(dom.audioOffsetFrameInput.value);
 }
 
 function applyStoredVolume() {

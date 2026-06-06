@@ -153,6 +153,10 @@
           "$ref": "#/$defs/playbackSmokeAudioRef",
           "description": "Optional audio fixture to load with the viewer preset."
         },
+        "audioOffsetFrame": {
+          "type": "number",
+          "description": "Optional audio delay offset in MMD frames. Positive values delay audio relative to the motion."
+        },
         "oracle": {
           "$ref": "#/$defs/relativeFilePath",
           "description": "Optional path to a gitignored local comparison artifact, resolved from basePath."
@@ -261,6 +265,10 @@
         "key": {
           "type": "string",
           "minLength": 1
+        },
+        "offsetFrame": {
+          "type": "number",
+          "description": "Optional audio delay offset in MMD frames for this preset audio reference."
         }
       }
     }

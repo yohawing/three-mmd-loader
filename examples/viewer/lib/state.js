@@ -23,9 +23,7 @@ const initialSelfShadowEnabled = query.get("selfShadow") === "0" ? false : true;
 
 export const state = {
   hasLocalFixtures: false,
-  ammoScriptUrl: "/node_modules/ammo.js/ammo.js",
   customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js",
-  physicsBackendKind: query.get("physics") === "custom-bullet-mmd" ? "custom-bullet-mmd" : "ammo",
   physicsTuningOptions: {
     maxSubSteps: initialPhysicsMaxSubSteps,
     dynamicWithBoneRotationFeedbackScale: initialDynamicWithBoneFeedback,
@@ -36,8 +34,6 @@ export const state = {
   },
   showDebugColliders: query.has("collision") || query.has("debugCollision"),
   activePhysicsBackend: undefined,
-  ammoNamespace: undefined,
-  ammoScriptLoadPromise: undefined,
   customBulletMmdModule: undefined,
   customBulletMmdLoadPromise: undefined,
   animationLoader: new ThreeMmdLoader({ runtime: { frameRate: viewerConfig.mmdFrameRate } }),
@@ -81,6 +77,8 @@ export const state = {
   isPlaying: false,
   isSeeking: false,
   audioObjectUrl: undefined,
+  audioOffsetFrame: 0,
+  audioOffsetSeconds: 0,
   isSyncingAudioState: false,
   isSyncingAudioTime: false,
   audioSeekSyncTimer: undefined,

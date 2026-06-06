@@ -336,13 +336,62 @@ describe("ThreeMmdLoader", () => {
     expect(model.outlineMeshes).toEqual([]);
     expect(model.renderOrderMeshes).toHaveLength(1);
     expect(model.renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
-    expect(model.mesh.geometry.drawRange.count).toBe(Number.POSITIVE_INFINITY);
+    expect(model.mesh.geometry.drawRange.count).toBe(0);
     expect(model.mesh.castShadow).toBe(false);
     expect(model.renderOrderMeshes[0]?.material).toMatchObject({
       colorWrite: false,
       depthWrite: false
     });
     expect(model.root.children).toEqual([model.mesh, ...model.renderOrderMeshes]);
+  });
+
+  it("splits sparse large morph geometry into local body meshes without dense global morph targets", async () => {
+    const loader = new ThreeMmdLoader({ core: createSparseMorphStressCore() });
+
+    const model = await loader.loadModel(new Uint8Array([1]), {
+      outlines: false,
+      renderOrderProxies: false
+    });
+
+    const bodyMeshes = model.mesh.userData.mmdMorphSplitBodyMeshes as THREE.SkinnedMesh[];
+    expect(bodyMeshes).toHaveLength(2);
+    expect(model.mesh.geometry.morphAttributes.position).toBeUndefined();
+    expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
+    expect(model.object.children).toEqual([model.mesh, ...bodyMeshes]);
+    expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.length)).toEqual([1, 1]);
+    expect(bodyMeshes.map((mesh) => mesh.geometry.morphAttributes.position?.length ?? 0)).toEqual([
+      1,
+      1
+    ]);
+    expect(bodyMeshes.map((mesh) => mesh.renderOrder)).toEqual([0, 2]);
+    expect(bodyMeshes.map((mesh) => mesh.castShadow)).toEqual([true, false]);
+    expect(bodyMeshes.map((mesh) => mesh.receiveShadow)).toEqual([false, true]);
+    expect(bodyMeshes.map((mesh) => Array.from(mesh.userData.mmdMorphSplitBody.morphTargetIndices))).toEqual([
+      [0],
+      [1]
+    ]);
+
+    const sourceInfluences = model.mesh.morphTargetInfluences;
+    if (!sourceInfluences) {
+      throw new Error("Expected source morph influences");
+    }
+    sourceInfluences[0] = 0.25;
+    sourceInfluences[1] = 0.75;
+    bodyMeshes.forEach((mesh) => {
+      const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      if (!material) {
+        throw new Error("Expected split mesh material");
+      }
+      mesh.onBeforeRender(
+        {} as THREE.WebGLRenderer,
+        {} as THREE.Scene,
+        {} as THREE.Camera,
+        mesh.geometry,
+        material,
+        null
+      );
+    });
+    expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.[0])).toEqual([0.25, 0.75]);
   });
 
   it("applies load-time frustum culling to the mesh and generated proxy meshes", async () => {
@@ -889,6 +938,134 @@ function createIkFlagCore(): MmdCore {
       morphs: {}
     }),
     loadVpdAnimation: () => createEmptyMmdAnimation()
+  };
+}
+
+function createSparseMorphStressCore(): MmdCore {
+  const model = createSparseMorphStressModel();
+  return {
+    version: () => "sparse-morph-stress-core",
+    healthCheck: () => true,
+    loadModel: () => model,
+    loadVmd: () => createEmptyMmdAnimation(),
+    loadVpd: () => ({
+      kind: "vpd",
+      bytes: new Uint8Array(),
+      metadata: { modelFile: "", boneCount: 0, morphCount: 0 },
+      bones: {},
+      morphs: {}
+    }),
+    loadVpdAnimation: () => createEmptyMmdAnimation()
+  };
+}
+
+function createSparseMorphStressModel(): MmdModel {
+  const vertexCount = 6000;
+  const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const skinIndices = new Uint16Array(vertexCount * 4);
+  const skinWeights = new Float32Array(vertexCount * 4);
+  for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex += 1) {
+    const positionBase = vertexIndex * 3;
+    positions[positionBase] = vertexIndex % 100;
+    positions[positionBase + 1] = Math.floor(vertexIndex / 100);
+    normals[positionBase + 1] = 1;
+    const skinBase = vertexIndex * 4;
+    skinWeights[skinBase] = 1;
+  }
+  const morphs = Array.from({ length: 1000 }, (_, index) => ({
+    name: `morph${index}`,
+    englishName: `morph${index}`,
+    type: "vertex" as const,
+    vertexOffsets:
+      index === 0
+        ? [{ vertexIndex: 1, position: [0.1, 0, 0] as [number, number, number] }]
+        : index === 1
+          ? [{ vertexIndex: 3001, position: [0, 0.2, 0] as [number, number, number] }]
+          : [],
+    groupOffsets: [],
+    boneOffsets: [],
+    uvOffsets: [],
+    additionalUvOffsets: [],
+    materialOffsets: []
+  }));
+  return {
+    metadata: () => ({
+      format: "pmx",
+      version: 2,
+      encoding: "utf-8",
+      name: "sparse morph stress",
+      englishName: "SparseMorphStress",
+      comment: "",
+      englishComment: "",
+      counts: {
+        vertices: vertexCount,
+        faces: 2,
+        materials: 2,
+        bones: 1,
+        morphs: morphs.length,
+        displayFrames: 0,
+        rigidBodies: 0,
+        joints: 0,
+        softBodies: 0
+      },
+      indexSizes: { vertex: 2, texture: 1, material: 1, bone: 1, morph: 2, rigidBody: 1 },
+      additionalUvCount: 0,
+      diagnostics: []
+    }),
+    geometry: () => ({
+      positions,
+      normals,
+      uvs,
+      additionalUvs: [],
+      indices: new Uint16Array([0, 1, 2, 3000, 3001, 3002]),
+      materialGroups: [
+        { start: 0, count: 3, materialIndex: 0 },
+        { start: 3, count: 3, materialIndex: 1 }
+      ],
+      skinIndices,
+      skinWeights
+    }),
+    materials: () => [createStressMaterial(0), createStressMaterial(1)],
+    skeleton: () => ({
+      bones: [createIkFlagBone("root", -1, true)]
+    }),
+    morphs: () => morphs,
+    displayFrames: () => [],
+    rigidBodies: () => [],
+    joints: () => [],
+    softBodies: () => [],
+    embeddedTextures: () => []
+  };
+}
+
+function createStressMaterial(index: number): ReturnType<MmdModel["materials"]>[number] {
+  return {
+    name: `mat${index}`,
+    englishName: `mat${index}`,
+    texturePath: "",
+    sphereTexturePath: "",
+    sphereMode: "none",
+    toonTexturePath: "",
+    sharedToonIndex: undefined,
+    diffuse: [0.8, 0.8, 0.8, 1],
+    specular: [0, 0, 0],
+    specularPower: 1,
+    ambient: [0.2, 0.2, 0.2],
+    edgeColor: [0, 0, 0, 1],
+    edgeSize: 0,
+    flags: {
+      doubleSided: false,
+      groundShadow: false,
+      selfShadowMap: index === 0,
+      selfShadow: index === 1,
+      edge: false,
+      vertexColor: false,
+      pointDraw: false,
+      lineDraw: false
+    },
+    faceCount: 1
   };
 }
 

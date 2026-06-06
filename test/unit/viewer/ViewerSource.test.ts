@@ -8,9 +8,24 @@ describe("example viewer source", () => {
     const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");
 
     expect(modelSource).toContain("disposeModelResources(state.currentModel)");
+    expect(modelSource).toContain("state.scene.remove(state.currentModel.root)");
     expect(disposeSource).toContain('import { disposeMmdModel } from "../../../dist/three/index.js"');
     expect(disposeSource).toContain("disposeMmdModel(model)");
     expect(disposeSource).not.toContain("function collectMaterialTextures(material)");
+  });
+
+  it("adds loader root objects so split morph body meshes are rendered", async () => {
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
+    const realModelVisualSource = await readFile("scripts/visual-regression/render-real-models.mjs", "utf8");
+
+    expect(modelSource).toContain("state.scene.add(model.root)");
+    expect(modelSource).not.toContain("state.scene.add(\n    model.mesh");
+    expect(backgroundSource).toContain("state.scene.add(background.root)");
+    expect(backgroundSource).toContain("state.scene.remove(state.currentBackground.root)");
+    expect(realModelVisualSource).toContain("scene.add(model.root)");
+    expect(realModelVisualSource).toContain("createCamera(visualCase.camera, model.root");
+    expect(realModelVisualSource).not.toContain("scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes)");
   });
 
   it("surfaces texture diagnostics from loaded models", async () => {
@@ -424,12 +439,58 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);");
     expect(playbackSource).toContain("syncAudioToMotionTime(state.audioDriftSyncOptionsScratch)");
     expect(playbackSource).toContain("Math.abs(dom.bgmAudio.currentTime - targetTime) < 0.05");
+    expect(playbackSource).toContain("state.elapsedSeconds = Math.max(audioTime + state.audioOffsetSeconds, 0)");
+    expect(playbackSource).toContain("const offsetTargetTime = state.elapsedSeconds - state.audioOffsetSeconds");
     expect(playbackSource).toContain("state.isSyncingAudioTime = true;");
     expect(playbackSource).toContain("export function finishAudioTimeSync()");
     expect(mainSource).toContain("if (finishAudioTimeSync()) return;");
     expect(playbackSource).toContain("function hasTimelineSource()");
     expect(mainSource).toContain("function hasTimelineSource()");
     expect(mainSource).not.toContain("!state.isPlaying || !hasCurrentMotion()");
+  });
+
+  it("supports audio offset frames from the transport UI and fixture presets", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const audioSource = await readFile("examples/viewer/lib/audio-loading.js", "utf8");
+    const assetLibrarySource = await readFile("examples/viewer/lib/asset-library.js", "utf8");
+    const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
+    const fixtureSchema = await readFile("test/fixtures/fixtures.schema.json", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('id="audio-offset-control"');
+    expect(html).toContain('id="audio-offset-frame"');
+    expect(html).toContain('type="text"');
+    expect(html).toContain('inputmode="numeric"');
+    expect(html).toContain('pattern="-?[0-9]*"');
+    expect(html.indexOf('id="audio-load-category"')).toBeLessThan(html.indexOf('id="audio-offset-control"'));
+    expect(html.indexOf('id="audio-offset-control"')).toBeLessThan(html.indexOf('id="asset-audio-select"'));
+    expect(html.indexOf('id="audio-offset-control"')).toBeLessThan(html.indexOf('id="background-load-category"'));
+    expect(domSource).toContain('audioOffsetControl: document.querySelector("#audio-offset-control")');
+    expect(domSource).toContain('audioOffsetFrameInput: document.querySelector("#audio-offset-frame")');
+    expect(stateSource).toContain("audioOffsetFrame: 0");
+    expect(stateSource).toContain("audioOffsetSeconds: 0");
+    expect(mainSource).toContain("setAudioOffsetFrame");
+    expect(mainSource).toContain('dom.audioOffsetFrameInput?.addEventListener("input", handleAudioOffsetFrameInput)');
+    expect(mainSource).toContain('dom.audioOffsetFrameInput?.addEventListener("change", commitAudioOffsetFrameInput)');
+    expect(mainSource).toContain("fallback: false");
+    expect(mainSource).toContain("updateInput: false");
+    expect(audioSource).toContain("export function setAudioOffsetFrame(value, options = {})");
+    expect(audioSource).toContain("if (frame === undefined)");
+    expect(audioSource).toContain("state.audioOffsetSeconds = frame / state.mmdFrameRate");
+    expect(audioSource).toContain("const targetTime = state.elapsedSeconds - state.audioOffsetSeconds");
+    expect(audioSource).not.toContain("dom.audioOffsetControl.hidden = state.currentAudioEntries.length === 0");
+    expect(assetLibrarySource).toContain("audioOffsetFrame: state.audioOffsetFrame");
+    expect(assetLibrarySource).toContain("offsetFrame: preset.audioOffsetFrame ?? preset.audio?.offsetFrame");
+    expect(assetLibrarySource).toContain("offsetFrame: asset.audioOffsetFrame ?? asset.offsetFrame");
+    expect(serverSource).toContain("fixtureCase.audioOffsetFrame ?? fixtureCase.audio?.offsetFrame");
+    expect(serverSource).toContain("...(audioOffsetFrame !== undefined ? { audioOffsetFrame } : {})");
+    expect(fixtureSchema).toContain('"audioOffsetFrame"');
+    expect(fixtureSchema).toContain('"offsetFrame"');
+    expect(styles).toContain(".audio-offset-control");
+    expect(styles).toContain("#audio-offset-frame");
   });
 
   it("persists viewer volume and reapplies it after reload and audio metadata loads", async () => {
@@ -468,17 +529,23 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("selfShadowLightOptionsScratch");
   });
 
-  it("delegates Ammo script loading to the public physics browser loader", async () => {
-    const ammoSource = await readFile("examples/viewer/lib/ammo-bootstrap.js", "utf8");
+  it("uses the custom Bullet MMD backend without an Ammo viewer fallback", async () => {
+    const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
 
-    expect(ammoSource).toContain("loadAmmoNamespace");
-    expect(ammoSource).toContain("state.ammoScriptLoadPromise ??= loadAmmoNamespace(state.ammoScriptUrl)");
-    expect(stateSource).toContain('ammoScriptUrl: "/node_modules/ammo.js/ammo.js"');
     expect(stateSource).toContain('customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js"');
-    expect(ammoSource).toContain("dom.physicsErrorBanner.textContent = message");
-    expect(ammoSource).not.toContain("function loadAmmoScript");
-    expect(ammoSource).not.toContain("function getAmmoCandidate");
+    expect(stateSource).not.toContain("ammoScriptUrl");
+    expect(stateSource).not.toContain("physicsBackendKind");
+    expect(stateSource).not.toContain("ammoNamespace");
+    expect(physicsSource).toContain("loadCustomBulletMmdModule");
+    expect(physicsSource).toContain("createCustomBulletMmdPhysicsBackend");
+    expect(physicsSource).toContain("dom.physicsErrorBanner.textContent = message");
+    expect(physicsSource).not.toContain("loadAmmoNamespace");
+    expect(physicsSource).not.toContain("createAmmoMmdPhysicsBackend");
+    expect(mainSource).toContain('./lib/physics-backend.js');
+    expect(modelSource).toContain('./physics-backend.js');
   });
 
   it("profiles viewer model load stages only behind the perf query flag", async () => {

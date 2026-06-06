@@ -36,7 +36,9 @@ const assetCategories = {
   audios: {
     select: () => dom.assetAudioSelect,
     button: () => dom.assetAudioLoadButton,
-    load: (asset) => loadAudioFromUrl(asset.url, labelFromUrl(asset.url))
+    load: (asset) => loadAudioFromUrl(asset.url, labelFromUrl(asset.url), {
+      offsetFrame: asset.audioOffsetFrame ?? asset.offsetFrame
+    })
   },
   cameras: {
     select: () => dom.assetCameraSelect,
@@ -116,7 +118,9 @@ async function loadAssetPreset(preset) {
     return;
   }
   if (preset.audioUrl) {
-    if (!loadAudioFromUrl(preset.audioUrl, labelFromUrl(preset.audioUrl))) {
+    if (!loadAudioFromUrl(preset.audioUrl, labelFromUrl(preset.audioUrl), {
+      offsetFrame: preset.audioOffsetFrame ?? preset.audio?.offsetFrame
+    })) {
       return;
     }
   }
@@ -374,7 +378,7 @@ function createCurrentAssetPreset() {
     ...(modelUrl ? { modelUrl } : {}),
     ...(motionUrl ? { motionUrl } : {}),
     ...(backgroundUrl ? { backgroundUrl } : {}),
-    ...(audioUrl ? { audioUrl } : {}),
+    ...(audioUrl ? { audioUrl, audioOffsetFrame: state.audioOffsetFrame } : {}),
     ...(cameraUrl ? { cameraUrl } : {})
   };
 }

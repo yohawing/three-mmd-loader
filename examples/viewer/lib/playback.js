@@ -156,7 +156,7 @@ export function syncMotionToAudioTime(options) {
     return;
   }
   const audioTime = Number.isFinite(dom.bgmAudio.currentTime) ? dom.bgmAudio.currentTime : 0;
-  state.elapsedSeconds = audioTime;
+  state.elapsedSeconds = Math.max(audioTime + state.audioOffsetSeconds, 0);
   if (options?.evaluate !== false) {
     const evaluateOptions = state.runtimePhysicsDisabledOptionsScratch;
     evaluateOptions.physics = options?.physics ?? false;
@@ -174,7 +174,8 @@ export function syncAudioToMotionTime(options) {
     return;
   }
   const duration = Number.isFinite(dom.bgmAudio.duration) ? dom.bgmAudio.duration : undefined;
-  const targetTime = duration ? Math.min(state.elapsedSeconds, Math.max(duration - 0.001, 0)) : state.elapsedSeconds;
+  const offsetTargetTime = state.elapsedSeconds - state.audioOffsetSeconds;
+  const targetTime = duration ? Math.min(Math.max(offsetTargetTime, 0), Math.max(duration - 0.001, 0)) : Math.max(offsetTargetTime, 0);
   if (options?.onlyIfDrifted && Math.abs(dom.bgmAudio.currentTime - targetTime) < 0.05) {
     return;
   }
