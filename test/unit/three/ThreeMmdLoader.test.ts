@@ -400,6 +400,21 @@ describe("ThreeMmdLoader", () => {
     expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.[0])).toEqual([0.5, 1]);
   });
 
+  it("uses split body meshes directly instead of duplicate render-order proxies", async () => {
+    const loader = new ThreeMmdLoader({ core: createSparseMorphStressCore() });
+
+    const model = await loader.loadModel(new Uint8Array([1]), {
+      outlines: false
+    });
+
+    const bodyMeshes = model.mesh.userData.mmdMorphSplitBodyMeshes as THREE.SkinnedMesh[];
+    expect(bodyMeshes).toHaveLength(2);
+    expect(model.renderOrderMeshes).toEqual([]);
+    expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
+    expect(model.root.children).toEqual([model.mesh, ...bodyMeshes]);
+    expect(bodyMeshes.map((mesh) => mesh.renderOrder)).toEqual([0, 2]);
+  });
+
   it("applies load-time frustum culling to the mesh and generated proxy meshes", async () => {
     const loader = new ThreeMmdLoader();
 

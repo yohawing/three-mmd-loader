@@ -626,7 +626,7 @@ function createThreeMmdModel(options: {
   });
   // MMD-compatible material order and per-material shadow flags need body
   // proxies; outline proxies then interleave with the same material order.
-  const renderOrderMeshes = options.renderOrderProxies
+  const renderOrderMeshes = options.renderOrderProxies && bodyMeshes.length === 0
     ? createMmdMaterialRenderOrderMeshes({
         mesh: options.mesh,
         materials: options.materials

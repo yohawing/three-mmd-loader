@@ -8,7 +8,10 @@ test-results/
 src/parser/wasm/generated/.tmp/
 src/parser/wasm/generated/yw_mmd_core.js
 src/parser/wasm/generated/yw_mmd_core.wasm
-native/bullet-mmd/dist/
+!native/bullet-mmd/dist/
+native/bullet-mmd/dist/*
+!native/bullet-mmd/dist/mmd_bullet.js
+!native/bullet-mmd/dist/mmd_bullet.wasm
 !test-results/visual/
 test-results/visual/current/
 test-results/visual/baseline/

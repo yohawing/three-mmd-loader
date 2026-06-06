@@ -282,6 +282,30 @@ describe("createThreeBufferGeometry", () => {
     ]);
   });
 
+  it("preserves QDEF skinning flags on material split geometries", () => {
+    const splitGeometries = createThreeMorphSplitGeometries(
+      {
+        ...createQuadBuffers(),
+        qdef: { enabled: new Float32Array([0, 1, 0, 1]) }
+      },
+      [
+        { faceCount: 1, materialIndex: 0 },
+        { faceCount: 1, materialIndex: 1 }
+      ],
+      [{ vertexOffsets: [{ vertexIndex: 2, position: [0.25, -0.5, 1.5] }] }]
+    );
+
+    const first = splitGeometries.find((split) => split.materialIndex === 0)?.geometry;
+    const second = splitGeometries.find((split) => split.materialIndex === 1)?.geometry;
+    if (!first || !second) {
+      throw new Error("Expected two split geometries");
+    }
+    expectAttributeArray(first, "matricesQdefEnabled", [0, 1, 0]);
+    expectAttributeArray(second, "matricesQdefEnabled", [0, 0, 1]);
+    expect(first.userData.mmdQdef).toEqual({ vertexCount: 3 });
+    expect(second.userData.mmdQdef).toEqual({ vertexCount: 3 });
+  });
+
   it("keeps morph-free material split geometries plain", () => {
     const buffers = createQuadBuffers();
     const splitGeometries = createThreeMorphSplitGeometries(

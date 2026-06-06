@@ -21,6 +21,7 @@ export function disposeMmdModel(
   const textureOwnership = options.textures ?? "all";
   const root = model.root ?? model.object;
   root?.parent?.remove(root);
+  disposeRuntimeResources(model.runtime);
   const bodyMeshes = Array.isArray(model.mesh.userData.mmdMorphSplitBodyMeshes)
     ? model.mesh.userData.mmdMorphSplitBodyMeshes.filter(isSkinnedMesh)
     : [];
@@ -117,6 +118,7 @@ function disposeTexture(
     !texture ||
     disposedTextures.has(texture) ||
     textureOwnership === "none" ||
+    texture.userData.mmdFallbackToonGradient === true ||
     (textureOwnership === "owned" && texture.userData.mmdTextureOwnership !== "loader")
   ) {
     return;
@@ -134,6 +136,16 @@ function disposeSkeletonResources(
   }
   skeleton.dispose();
   disposedSkeletons.add(skeleton);
+}
+
+function disposeRuntimeResources(runtime: ThreeMmdModel["runtime"]): void {
+  if (!runtime) {
+    return;
+  }
+  const disposable = runtime as { dispose?: unknown };
+  if (typeof disposable.dispose === "function") {
+    disposable.dispose();
+  }
 }
 
 function normalizeMaterials(material: THREE.Material | THREE.Material[]): THREE.Material[] {

@@ -663,7 +663,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
         this.scratchPrePhysics
       );
     }
-    applyPhysicsOutputToSkeleton(mesh, context, result.updatedBoneCount);
+    applyPhysicsOutputToSkeleton(mesh, context, updatedBoneCount);
   }
 
   private resetPhysicsState(): void {

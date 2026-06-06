@@ -120,6 +120,78 @@ describe("disposeMmdModel", () => {
     expect(ownedTextureDispose).toHaveBeenCalledOnce();
   });
 
+  it("preserves the shared fallback toon gradient even in all-textures disposal mode", () => {
+    const geometry = new THREE.BufferGeometry();
+    const fallbackGradient = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    fallbackGradient.userData.mmdFallbackToonGradient = true;
+    const ownedTexture = new THREE.Texture();
+    const material = new THREE.MeshToonMaterial({ map: ownedTexture });
+    material.gradientMap = fallbackGradient;
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const root = new THREE.Group();
+    root.add(mesh);
+    const fallbackGradientDispose = vi.spyOn(fallbackGradient, "dispose");
+    const ownedTextureDispose = vi.spyOn(ownedTexture, "dispose");
+
+    disposeMmdModel({
+      root,
+      object: root,
+      mesh,
+      outlineMeshes: [],
+      renderOrderMeshes: [],
+      runtime: undefined as never,
+      source: { kind: "bytes", byteLength: 0 },
+      diagnostics: {
+        core: { kind: "provided" },
+        source: { kind: "bytes", byteLength: 0 },
+        textures: [],
+        materials: [],
+        performance: []
+      },
+      textureDiagnostics: [],
+      setAnimation() {},
+      update() {
+        return { seconds: 0, frame: 0, frameRate: 30 };
+      }
+    } satisfies ThreeMmdModel);
+
+    expect(ownedTextureDispose).toHaveBeenCalledOnce();
+    expect(fallbackGradientDispose).not.toHaveBeenCalled();
+  });
+
+  it("disposes runtime resources when the runtime exposes a disposer", () => {
+    const geometry = new THREE.BufferGeometry();
+    const material = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const root = new THREE.Group();
+    root.add(mesh);
+    const runtimeDispose = vi.fn();
+
+    disposeMmdModel({
+      root,
+      object: root,
+      mesh,
+      outlineMeshes: [],
+      renderOrderMeshes: [],
+      runtime: { dispose: runtimeDispose } as unknown as ThreeMmdModel["runtime"],
+      source: { kind: "bytes", byteLength: 0 },
+      diagnostics: {
+        core: { kind: "provided" },
+        source: { kind: "bytes", byteLength: 0 },
+        textures: [],
+        materials: [],
+        performance: []
+      },
+      textureDiagnostics: [],
+      setAnimation() {},
+      update() {
+        return { seconds: 0, frame: 0, frameRate: 30 };
+      }
+    } satisfies ThreeMmdModel);
+
+    expect(runtimeDispose).toHaveBeenCalledOnce();
+  });
+
   it("disposes split morph body meshes from the model root object", () => {
     const geometry = new THREE.BufferGeometry();
     const bodyGeometry = new THREE.BufferGeometry();

@@ -346,6 +346,11 @@ function createMaterialSplitBuffers(
           rw1: copySplitFloatAttribute(buffers.sdef.rw1, 3, localToSource)
         }
       : undefined,
+    qdef: buffers.qdef
+      ? {
+          enabled: copySplitFloatAttribute(buffers.qdef.enabled, 1, localToSource)
+        }
+      : undefined,
     materialGroups: [{ start: 0, count: group.count, materialIndex: group.materialIndex }]
   } satisfies ThreeMmdGeometryBuffers;
   if (vertexCount === 0) {

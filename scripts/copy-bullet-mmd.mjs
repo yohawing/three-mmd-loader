@@ -28,11 +28,14 @@ for (const candidate of candidates) {
   await mkdir(outDir, { recursive: true });
   await copyFile(source, join(outDir, basename(source)));
   const wasmSource = source.replace(/\.js$/i, ".wasm");
-  if (await pathExists(wasmSource)) {
-    await copyFile(wasmSource, join(outDir, basename(wasmSource)));
+  if (!(await pathExists(wasmSource))) {
+    throw new Error(`Bullet MMD wasm asset is missing next to ${source}: ${wasmSource}`);
   }
+  await copyFile(wasmSource, join(outDir, basename(wasmSource)));
   console.log(`Bullet MMD asset copied to dist/physics/mmd/ from ${source}`);
   process.exit(0);
 }
 
-console.warn("No Bullet MMD asset was found; skipping dist/physics/mmd copy.");
+throw new Error(
+  `No Bullet MMD asset was found. Build native/bullet-mmd/dist/mmd_bullet.js or set THREE_MMD_LOADER_BULLET_MMD_JS.`
+);
