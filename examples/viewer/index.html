@@ -124,34 +124,29 @@
 
         <div class="loaded-files" aria-label="Loaded files">
           <div class="loaded-file-control" id="model-control" hidden>
-            <select id="model-switcher" aria-label="Selected model"></select>
-            <button id="clear-model" class="clear-loaded-file" type="button" aria-label="Clear model">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="model-switcher" size="small" hoist aria-label="Selected model">
+              <sl-icon-button id="clear-model" slot="suffix" name="x-lg" label="Clear model" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
           <div class="loaded-file-control" id="motion-control" hidden>
-            <select id="motion-switcher" aria-label="Selected motion"></select>
-            <button id="clear-motion" class="clear-loaded-file" type="button" aria-label="Clear motion">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="motion-switcher" size="small" hoist aria-label="Selected motion">
+              <sl-icon-button id="clear-motion" slot="suffix" name="x-lg" label="Clear motion" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
           <div class="loaded-file-control" id="audio-control" hidden>
-            <select id="audio-switcher" aria-label="Selected audio"></select>
-            <button id="clear-audio" class="clear-loaded-file" type="button" aria-label="Clear audio">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="audio-switcher" size="small" hoist aria-label="Selected audio">
+              <sl-icon-button id="clear-audio" slot="suffix" name="x-lg" label="Clear audio" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
           <div class="loaded-file-control" id="background-control" hidden>
-            <select id="background-switcher" aria-label="Selected background"></select>
-            <button id="clear-background" class="clear-loaded-file" type="button" aria-label="Clear background">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="background-switcher" size="small" hoist aria-label="Selected background">
+              <sl-icon-button id="clear-background" slot="suffix" name="x-lg" label="Clear background" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
           <div class="loaded-file-control" id="camera-control" hidden>
-            <select id="camera-switcher" aria-label="Selected camera"></select>
-            <button id="clear-camera" class="clear-loaded-file" type="button" aria-label="Clear camera">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="camera-switcher" size="small" hoist aria-label="Selected camera">
+              <sl-icon-button id="clear-camera" slot="suffix" name="x-lg" label="Clear camera" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
         </div>
 
@@ -259,11 +254,13 @@
       </section>
 
       <footer class="transport" aria-label="Playback controls" hidden>
-        <button id="play-toggle" type="button" aria-label="Play">
-          <span class="material-symbols-rounded" aria-hidden="true">play_arrow</span>
-        </button>
+        <sl-icon-button id="play-toggle" name="play" label="Play"></sl-icon-button>
         <label>
-          <span id="frame-value">0</span>
+          <span class="frame-display" id="frame-value">
+            <input id="frame-current" type="text" inputmode="numeric" pattern="[0-9]*" value="0" aria-label="Current frame" data-i18n-aria="aria.currentFrame" />
+            <span class="frame-separator" aria-hidden="true">/</span>
+            <span id="frame-total">0</span>
+          </span>
           <sl-range id="timeline" min="0" max="10" value="0" step="0.001" tooltip="none"></sl-range>
         </label>
         <div class="volume-control" id="volume-control" hidden>

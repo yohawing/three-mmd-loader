@@ -1,7 +1,7 @@
 import { parseVmd, parseVmdSectionInventory } from "../../../dist/parser/index.js";
 import { findMmdMotionFiles, normalizeMmdRelativePath } from "../../../dist/three/index.js";
 
-import { dom, setStatus, updateChromeHeights, updatePlaybackDisplay, updateTransportState } from "./dom.js";
+import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateTransportState } from "./dom.js";
 import { animationDurationSeconds, state } from "./state.js";
 import { createCameraSwitcherEntry, loadCameraAnimation } from "./camera-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
@@ -159,20 +159,14 @@ export function clearMotion() {
 }
 
 export function updateMotionSwitcher(selectedFile) {
-  if (!(dom.motionSwitcher instanceof window.HTMLSelectElement)) {
-    return;
-  }
-
-  dom.motionSwitcher.replaceChildren(
-    ...state.currentMotionVmdFiles.map((file) => {
-      const option = document.createElement("option");
-      option.value = motionFileKey(file);
-      option.textContent = file.name;
-      return option;
-    })
+  setLoadedFileSwitcherOptions(
+    dom.motionSwitcher,
+    state.currentMotionVmdFiles.map((file) => ({
+      value: motionFileKey(file),
+      label: file.name
+    })),
+    selectedFile ? motionFileKey(selectedFile) : ""
   );
-  dom.motionSwitcher.value = selectedFile ? motionFileKey(selectedFile) : "";
-  dom.motionSwitcher.hidden = false;
   if (dom.motionControl) {
     dom.motionControl.hidden = state.currentMotionVmdFiles.length === 0;
   }
@@ -227,10 +221,7 @@ function isCameraOnlyVmdCounts(counts) {
 
 export function resetMotionSwitcherState() {
   state.currentMotionVmdFiles = [];
-  if (dom.motionSwitcher instanceof window.HTMLSelectElement) {
-    dom.motionSwitcher.replaceChildren();
-    dom.motionSwitcher.hidden = false;
-  }
+  clearLoadedFileSwitcher(dom.motionSwitcher);
   if (dom.motionControl) {
     dom.motionControl.hidden = true;
   }

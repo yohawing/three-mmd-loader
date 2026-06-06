@@ -14,7 +14,7 @@ import { loadCameraFile } from "./camera-loading.js";
 import { hideCreditPopup, showModelCredits } from "./credits.js";
 import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, setOutlineHidden, showColliderHelpers } from "./debug.js";
 import { reportTextureDiagnostics } from "./diagnostics.js";
-import { dom, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStageState, updateTransportState } from "./dom.js";
+import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStageState, updateTransportState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
 import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
@@ -432,20 +432,14 @@ function createModelSwitcherEntry(source, label) {
 }
 
 export function updateModelSwitcher(selectedFile) {
-  if (!(dom.modelSwitcher instanceof window.HTMLSelectElement)) {
-    return;
-  }
-
-  dom.modelSwitcher.replaceChildren(
-    ...state.currentFolderPmxFiles.map((file) => {
-      const option = document.createElement("option");
-      option.value = modelFileKey(file);
-      option.textContent = file.name;
-      return option;
-    })
+  setLoadedFileSwitcherOptions(
+    dom.modelSwitcher,
+    state.currentFolderPmxFiles.map((file) => ({
+      value: modelFileKey(file),
+      label: file.name
+    })),
+    modelFileKey(selectedFile)
   );
-  dom.modelSwitcher.value = modelFileKey(selectedFile);
-  dom.modelSwitcher.hidden = false;
   if (dom.modelControl) {
     dom.modelControl.hidden = state.currentFolderPmxFiles.length === 0;
   }
@@ -455,10 +449,7 @@ export function updateModelSwitcher(selectedFile) {
 export function resetFolderModelState() {
   state.currentFolderTextureMap = undefined;
   state.currentFolderPmxFiles = [];
-  if (dom.modelSwitcher instanceof window.HTMLSelectElement) {
-    dom.modelSwitcher.replaceChildren();
-    dom.modelSwitcher.hidden = false;
-  }
+  clearLoadedFileSwitcher(dom.modelSwitcher);
   if (dom.modelControl) {
     dom.modelControl.hidden = true;
   }

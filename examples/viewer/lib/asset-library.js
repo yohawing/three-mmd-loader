@@ -4,7 +4,7 @@ import { loadCameraFromUrl } from "./camera-loading.js";
 import { loadModelFromUrl } from "./model-loading.js";
 import { loadMotionFromUrl } from "./motion-loading.js";
 import { labelFromUrl } from "./url-label.js";
-import { dom, removeFixtureUi, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js";
+import { dom, loadedFileSwitcherValue, removeFixtureUi, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js";
 import { state } from "./state.js";
 
 const localAssetsUrl = "/__mmd_assets__/fixtures-local.json";
@@ -403,10 +403,8 @@ function selectedEntryUrl(entries, select) {
 }
 
 function selectedEntry(entries, select) {
-  if (!(select instanceof window.HTMLSelectElement)) {
-    return entries[0];
-  }
-  return entries.find((entry) => entry.id === select.value) ?? entries[0];
+  const value = loadedFileSwitcherValue(select);
+  return entries.find((entry) => entry.id === value) ?? entries[0];
 }
 
 function defaultPresetName(modelUrl, motionUrl) {

@@ -2,7 +2,7 @@ import { parseVmd } from "../../../dist/parser/index.js";
 import { sampleMmdCameraTrackInto } from "../../../dist/runtime/index.js";
 import { applyMmdCameraStateToThreeCamera } from "../../../dist/three/index.js";
 
-import { dom, setStatus, updatePlaybackDisplay, updateTransportState } from "./dom.js";
+import { dom, setLoadedFileSwitcherOptions, setStatus, updatePlaybackDisplay, updateTransportState } from "./dom.js";
 import { currentMmdFrame, currentMotionDurationSeconds, hasCurrentMotion } from "./state.js";
 import { state } from "./state.js";
 import { labelFromUrl } from "./url-label.js";
@@ -143,23 +143,17 @@ function syncTimelineRangeToCurrentMotion() {
 }
 
 function updateCameraSwitcher(selectedEntry) {
-  if (!(dom.cameraSwitcher instanceof window.HTMLSelectElement)) {
-    return;
-  }
   if (selectedEntry) {
     state.currentCameraEntries = [selectedEntry];
   }
-  dom.cameraSwitcher.replaceChildren(
-    ...state.currentCameraEntries.map((entry) => {
-      const option = document.createElement("option");
-      option.value = entry.id;
-      option.textContent = entry.name;
-      return option;
-    })
+  setLoadedFileSwitcherOptions(
+    dom.cameraSwitcher,
+    state.currentCameraEntries.map((entry) => ({
+      value: entry.id,
+      label: entry.name
+    })),
+    selectedEntry?.id
   );
-  if (selectedEntry) {
-    dom.cameraSwitcher.value = selectedEntry.id;
-  }
   if (dom.cameraControl) {
     dom.cameraControl.hidden = state.currentCameraEntries.length === 0;
   }

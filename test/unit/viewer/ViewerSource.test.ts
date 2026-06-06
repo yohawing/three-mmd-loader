@@ -104,9 +104,17 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("ikTolerance: viewerConfig.ikTolerance");
     expect(stateSource).toContain("ikMaxIterationsCap: viewerConfig.ikMaxIterationsCap");
     expect(html).toContain('id="model-switcher"');
+    expect(html).toContain('<sl-select id="model-switcher"');
+    expect(html).toContain('id="clear-model" slot="suffix"');
     expect(html).not.toContain('id="model-name"');
     expect(html).toContain('aria-label="Selected model"');
     expect(domSource).toContain('modelSwitcher: document.querySelector("#model-switcher")');
+    expect(domSource).toContain("export function setLoadedFileSwitcherOptions");
+    expect(domSource).toContain('document.createElement("sl-option")');
+    expect(domSource).toContain('switcher.classList.toggle("is-single-loaded-file", isSingleEntry)');
+    expect(domSource).toContain('setAttribute("slot", isSingleEntry ? "prefix" : "suffix")');
+    expect(domSource).toContain("export function clearLoadedFileSwitcher");
+    expect(domSource).toContain('switcher.classList.remove("is-single-loaded-file")');
     expect(domSource).not.toContain("modelNameText");
     expect(stateSource).toContain("currentFolderTextureMap: undefined");
     expect(stateSource).toContain("currentFolderPmxFiles: []");
@@ -123,8 +131,12 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("dom.modelControl.hidden = state.currentFolderPmxFiles.length === 0");
     expect(modelSource).toContain("preserveModelSwitcher: true");
     expect(modelSource).toContain("dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001)");
-    expect(mainSource).toContain("modelFileKey(file) === dom.modelSwitcher.value");
-    expect(styles).toContain(".loaded-file-control select");
+    expect(mainSource).toContain("const selectedValue = loadedFileSwitcherValue(dom.modelSwitcher)");
+    expect(mainSource).toContain("modelFileKey(file) === selectedValue");
+    expect(styles).toContain(".loaded-file-control sl-select");
+    expect(styles).toContain(".loaded-file-control sl-select::part(combobox)");
+    expect(styles).toContain(".loaded-file-control sl-select.is-single-loaded-file::part(expand-icon)");
+    expect(styles).toContain("display: none;");
 
     const dropHandler = modelSource.slice(
       modelSource.indexOf("function handleDroppedFiles"),
@@ -144,6 +156,8 @@ describe("example viewer source", () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
 
     expect(html).toContain('id="motion-switcher"');
+    expect(html).toContain('<sl-select id="motion-switcher"');
+    expect(html).toContain('id="clear-motion" slot="suffix"');
     expect(html).toContain('aria-label="Selected motion"');
     expect(html).not.toContain('id="motion-name"');
     expect(domSource).toContain('motionSwitcher: document.querySelector("#motion-switcher")');
@@ -152,7 +166,7 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("async function loadSelectedMotionFile(file)");
     expect(mainSource).toContain("const { motionFiles, cameraFiles } = await classifyVmdFiles([file])");
     expect(mainSource).toContain("await loadCameraFile(cameraFiles[0])");
-    expect(mainSource).toContain("motionFileKey(file) === dom.motionSwitcher.value");
+    expect(mainSource).toContain("motionFileKey(file) === selectedValue");
     expect(modelSource).toContain("const { motionFiles, cameraFiles } = await classifyVmdFiles(vmdFiles)");
     expect(modelSource).toContain("state.currentMotionVmdFiles = motionFiles");
     expect(motionSource).toContain("export const findVmdFiles = findMmdMotionFiles");
@@ -165,7 +179,7 @@ describe("example viewer source", () => {
     expect(motionSource).toContain('setStatus(`Switching motion to ${file.name}`, "loading")');
     expect(motionSource).toContain("createMotionSwitcherEntry(source, label)");
     expect(motionSource).toContain('id: `url:${source}`');
-    expect(motionSource).toContain("option.value = motionFileKey(file)");
+    expect(motionSource).toContain("setLoadedFileSwitcherOptions(");
     expect(motionSource).toContain("dom.motionControl.hidden = state.currentMotionVmdFiles.length === 0");
     expect(cameraSource).toContain("export async function loadCameraAnimation(animation, label, entry)");
     expect(cameraSource).toContain("export function createCameraSwitcherEntry(source, label)");
@@ -232,7 +246,7 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("bindAssetLibraryControls");
     expect(mainSource).toContain('dom.loadMenu?.querySelector("summary")?.addEventListener("click", toggleLoadMenu)');
     expect(mainSource).not.toContain('document.addEventListener("click"');
-    expect(mainSource).not.toContain('event.key === "Escape"');
+    expect(mainSource).not.toContain('document.addEventListener("keydown"');
     expect(assetLibrarySource).toContain('"/__mmd_assets__/fixtures-local.json"');
     expect(assetLibrarySource).toContain("selectionStorageKey");
     expect(assetLibrarySource).toContain("customPresetStorageKey");
@@ -359,8 +373,14 @@ describe("example viewer source", () => {
     expect(html).toContain('id="camera-switcher"');
     expect(html).toContain('id="audio-switcher"');
     expect(html).toContain('id="clear-background"');
+    expect(html).toContain('id="clear-background" slot="suffix"');
     expect(html).toContain('id="clear-camera"');
+    expect(html).toContain('id="clear-camera" slot="suffix"');
     expect(html).toContain('id="clear-audio"');
+    expect(html).toContain('id="clear-audio" slot="suffix"');
+    expect(mainSource).toContain('dom.audioSwitcher?.addEventListener("sl-change"');
+    expect(mainSource).toContain('dom.backgroundSwitcher?.addEventListener("sl-change"');
+    expect(mainSource).toContain('dom.cameraSwitcher?.addEventListener("sl-change"');
     expect(mainSource).toContain("loadBackgroundUrl: loadBackgroundFromUrl");
     expect(mainSource).toContain("loadCameraUrl: loadCameraFromUrl");
     expect(mainSource).toContain("clearBackground()");
@@ -369,8 +389,11 @@ describe("example viewer source", () => {
     expect(backgroundSource).toContain("disposeModelResources(state.currentBackground)");
     expect(backgroundSource).toContain("updateStageState()");
     expect(domSource).toContain("!state.currentModel && !state.currentBackground");
-    expect(domSource).toContain("let lastPlaybackDisplayText");
-    expect(domSource).toContain("if (text !== lastPlaybackDisplayText)");
+    expect(domSource).toContain("let lastPlaybackCurrentFrameText");
+    expect(domSource).toContain("let lastPlaybackTotalFrameText");
+    expect(domSource).toContain("const shouldForceFrameInput = options?.forceFrameInput === true");
+    expect(domSource).toContain("shouldForceFrameInput || (document.activeElement !== dom.frameCurrentInput");
+    expect(domSource).toContain("document.activeElement !== dom.frameCurrentInput");
     expect(cameraSource).toContain("state.currentCameraMotion = {");
     expect(cameraSource).toContain("syncTimelineRangeToCurrentMotion()");
     expect(cameraSource).toContain("currentMotionDurationSeconds()");
@@ -502,6 +525,81 @@ describe("example viewer source", () => {
     expect(fixtureSchema).toContain('"offsetFrame"');
     expect(styles).toContain(".audio-offset-control");
     expect(styles).toContain("#audio-offset-frame");
+  });
+
+  it("keeps the playback transport single-row without volume overflow on narrow viewports", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('<sl-icon-button id="play-toggle" name="play" label="Play"></sl-icon-button>');
+    expect(html).toContain('id="frame-current"');
+    expect(html).toContain('id="frame-total"');
+    expect(html).toContain('data-i18n-aria="aria.currentFrame"');
+    expect(html).not.toContain("play_arrow");
+    expect(domSource).toContain('playToggle: document.querySelector("#play-toggle")');
+    expect(domSource).toContain('frameCurrentInput: document.querySelector("#frame-current")');
+    expect(domSource).toContain('frameTotalText: document.querySelector("#frame-total")');
+    expect(domSource).not.toContain("playToggleIcon");
+    expect(domSource).toContain('const iconName = state.isPlaying ? "pause" : "play"');
+    expect(domSource).toContain("dom.playToggle.name = iconName");
+    expect(domSource).toContain("dom.playToggle.label = label");
+    expect(mainSource).toContain("updatePlayToggle, updateStageState");
+    expect(mainSource).toContain("updatePlayToggle();");
+    expect(styles).toContain("--transport-min-height: 40px");
+    expect(styles).toContain("min-height: var(--transport-min-height)");
+    expect(styles).not.toContain("min-height: var(--transport-height)");
+    expect(styles).toContain("grid-template-columns: 34px minmax(0, 1fr) max-content");
+    expect(styles).toContain("grid-template-columns: auto minmax(48px, 90px)");
+    expect(styles).toContain("grid-template-columns: auto minmax(48px, 54px)");
+    expect(styles).toContain("#play-toggle::part(base)");
+    expect(styles).toContain(".frame-display");
+    expect(styles).toContain(".frame-display input");
+    expect(styles).toContain("justify-self: end");
+    expect(styles).toContain(".transport sl-range {\n    width: 100%;\n    min-width: 0;");
+    expect(styles).toContain("#volume-slider {\n    width: 100%;\n    min-width: 0;");
+    expect(styles).toContain("@media (max-width: 920px)");
+    expect(styles).not.toContain("grid-column: 1 / -1");
+    expect(styles).not.toContain("grid-template-columns: 1fr");
+  });
+
+  it("seeks to an entered current frame from the transport frame input", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const i18nSource = await readFile("examples/viewer/lib/i18n.js", "utf8");
+
+    expect(i18nSource).toContain('"aria.currentFrame": "Current frame"');
+    expect(i18nSource).toContain('"aria.currentFrame": "現在フレーム"');
+    expect(mainSource).toContain("currentMotionDurationSeconds, debugEnabled");
+    expect(mainSource).toContain("let frameCurrentInputDirty = false");
+    expect(mainSource).toContain('dom.frameCurrentInput?.addEventListener("input", () => {');
+    expect(mainSource).toContain('dom.frameCurrentInput?.addEventListener("keydown", handleFrameCurrentKeydown)');
+    expect(mainSource).toContain('dom.frameCurrentInput?.addEventListener("change", commitFrameCurrentInput)');
+    expect(mainSource).toContain('dom.frameCurrentInput?.addEventListener("blur", handleFrameCurrentBlur)');
+    expect(mainSource).toContain('if (event.key === "Enter")');
+    expect(mainSource).toContain("if (frameCurrentInputDirty)");
+    expect(mainSource).toContain('} else if (event.key === "Escape")');
+    expect(mainSource).toContain("function handleFrameCurrentBlur()");
+    expect(mainSource).toContain("frameCurrentInputDirty = false");
+    expect(mainSource).toContain("updatePlaybackDisplay({ forceFrameInput: true })");
+    expect(mainSource).toContain("function seekToFrame(frame)");
+    expect(mainSource).toContain("const targetFrame = Math.min(Math.max(frame, 0), maxFrame)");
+    expect(mainSource).toContain("state.elapsedSeconds = targetFrame / state.mmdFrameRate");
+    expect(mainSource).toContain("dom.timeline.value = state.elapsedSeconds");
+    expect(mainSource).toContain('dom.timeline.setAttribute("value", String(state.elapsedSeconds))');
+    expect(mainSource).toContain("evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch)");
+    expect(mainSource).toContain("syncAudioToMotionTime()");
+    expect(domSource).toContain("dom.frameCurrentInput.value = currentText");
+    expect(domSource).toContain("dom.frameTotalText.textContent = totalText");
+  });
+
+  it("refreshes chrome height after the audio controls change transport height", async () => {
+    const audioSource = await readFile("examples/viewer/lib/audio-loading.js", "utf8");
+
+    expect(audioSource).toContain('import { dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js"');
+    expect(audioSource.indexOf("updateAudioOffsetInput();")).toBeLessThan(audioSource.indexOf("updatePresetSectionVisibility();"));
+    expect(audioSource.indexOf("updatePresetSectionVisibility();")).toBeLessThan(audioSource.indexOf("updateChromeHeights();"));
   });
 
   it("persists viewer volume and reapplies it after reload and audio metadata loads", async () => {

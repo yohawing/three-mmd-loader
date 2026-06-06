@@ -1,4 +1,4 @@
-import { dom, setStatus, updatePresetSectionVisibility } from "./dom.js";
+import { dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js";
 import { hasCurrentMotion, state } from "./state.js";
 
 export function loadAudioFile(file) {
@@ -111,23 +111,17 @@ export function hasActiveAudioSource() {
 }
 
 function updateAudioSwitcher(selectedEntry) {
-  if (!(dom.audioSwitcher instanceof window.HTMLSelectElement)) {
-    return;
-  }
   if (selectedEntry) {
     state.currentAudioEntries = [selectedEntry];
   }
-  dom.audioSwitcher.replaceChildren(
-    ...state.currentAudioEntries.map((entry) => {
-      const option = document.createElement("option");
-      option.value = entry.id;
-      option.textContent = entry.name;
-      return option;
-    })
+  setLoadedFileSwitcherOptions(
+    dom.audioSwitcher,
+    state.currentAudioEntries.map((entry) => ({
+      value: entry.id,
+      label: entry.name
+    })),
+    selectedEntry?.id
   );
-  if (selectedEntry) {
-    dom.audioSwitcher.value = selectedEntry.id;
-  }
   if (dom.audioControl) {
     dom.audioControl.hidden = state.currentAudioEntries.length === 0;
   }
@@ -136,6 +130,7 @@ function updateAudioSwitcher(selectedEntry) {
   }
   updateAudioOffsetInput();
   updatePresetSectionVisibility();
+  updateChromeHeights();
 }
 
 function parseAudioOffsetFrame(value, options) {

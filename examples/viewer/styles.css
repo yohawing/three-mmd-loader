@@ -11,6 +11,7 @@
     --radius: 8px;
     --chrome-gap: 10px;
     --transport-height: 40px;
+    --transport-min-height: 40px;
     font-family:
         Inter,
         ui-sans-serif,
@@ -58,8 +59,6 @@ summary {
 
 button,
 .asset-load-row select,
-.loaded-file-control select,
-.clear-loaded-file,
 .load-menu > summary {
     min-height: 30px;
     border: 1px solid var(--surface-border);
@@ -69,8 +68,7 @@ button,
     cursor: pointer;
 }
 
-.asset-load-row select,
-.loaded-file-control select {
+.asset-load-row select {
     background: rgb(255 255 255 / 92%);
     color: var(--text);
 }
@@ -606,9 +604,7 @@ select:focus-visible {
 }
 
 .loaded-file-control {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 28px;
-    gap: 3px;
+    display: block;
     align-items: center;
     max-width: min(19vw, 220px);
     min-width: 0;
@@ -618,27 +614,39 @@ select:focus-visible {
     display: none;
 }
 
-.loaded-file-control select {
+.loaded-file-control sl-select {
     width: 100%;
     min-width: 0;
-    height: 30px;
-    padding: 0 24px 0 8px;
-    background: rgb(255 255 255 / 92%);
-    color: var(--text);
     font-size: 12px;
 }
 
-.clear-loaded-file {
-    display: grid;
-    place-items: center;
-    width: 28px;
+.loaded-file-control sl-select::part(combobox) {
+    height: 30px;
     min-height: 30px;
-    padding: 0;
-    color: var(--text);
 }
 
-.clear-loaded-file .material-symbols-rounded {
-    font-size: 18px;
+.loaded-file-control sl-select::part(display-input) {
+    font-size: 12px;
+}
+
+.loaded-file-control sl-select.is-single-loaded-file::part(expand-icon) {
+    display: none;
+}
+
+.loaded-file-control sl-select.is-single-loaded-file::part(form-control-input) {
+    padding-inline-end: 8px;
+}
+
+.clear-loaded-file {
+    width: 24px;
+    height: 24px;
+    color: var(--text);
+    font-size: 16px;
+}
+
+.clear-loaded-file::part(base) {
+    width: 24px;
+    height: 24px;
 }
 
 .transport {
@@ -646,10 +654,10 @@ select:focus-visible {
     bottom: var(--chrome-gap);
     left: var(--chrome-gap);
     display: grid;
-    grid-template-columns: 34px minmax(180px, 1fr) auto;
+    grid-template-columns: 34px minmax(0, 1fr) max-content;
     gap: 10px;
     align-items: center;
-    min-height: var(--transport-height);
+    min-height: var(--transport-min-height);
     padding: 4px 6px;
     border-radius: var(--radius);
     border: 1px solid var(--surface-border);
@@ -661,11 +669,14 @@ select:focus-visible {
 }
 
 #play-toggle {
-    display: grid;
-    place-items: center;
     width: 34px;
-    min-height: 34px;
-    padding: 0;
+    height: 34px;
+    font-size: 22px;
+}
+
+#play-toggle::part(base) {
+    width: 34px;
+    height: 34px;
 }
 
 .transport label {
@@ -673,6 +684,7 @@ select:focus-visible {
     grid-template-columns: auto minmax(0, 1fr);
     gap: 8px;
     align-items: center;
+    min-width: 0;
     color: var(--text-muted);
     font-size: 12px;
 }
@@ -684,21 +696,58 @@ select:focus-visible {
 
 .transport sl-range {
     width: 100%;
+    min-width: 0;
     --thumb-size: 15px;
     --track-height: 5px;
 }
 
-#frame-value {
-    min-width: 96px;
+.frame-display {
+    display: grid;
+    grid-template-columns: minmax(38px, 52px) auto minmax(0, auto);
+    gap: 3px;
+    align-items: center;
+    min-width: 86px;
     color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
+.frame-display input {
+    width: 100%;
+    min-width: 0;
+    height: 24px;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.frame-display input:hover,
+.frame-display input:focus {
+    border-color: var(--surface-border);
+    background: rgb(255 255 255 / 92%);
+}
+
+.frame-display input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.frame-separator,
+#frame-total {
+    color: var(--text-muted);
+}
+
 .volume-control {
     display: grid;
-    grid-template-columns: auto 90px;
+    grid-template-columns: auto minmax(48px, 90px);
     gap: 6px;
     align-items: center;
+    justify-self: end;
+    min-width: 0;
 }
 
 .volume-control[hidden] {
@@ -742,7 +791,8 @@ select:focus-visible {
 }
 
 #volume-slider {
-    width: 90px;
+    width: 100%;
+    min-width: 0;
 }
 
 .empty-state,
@@ -946,15 +996,7 @@ select:focus-visible {
     }
 
     .transport {
-        grid-template-columns: 88px minmax(0, 1fr) auto;
-    }
-
-    .transport label {
-        grid-column: 1 / -1;
-    }
-
-    .transport > .volume-control {
-        grid-column: auto;
+        grid-template-columns: 34px minmax(0, 1fr) max-content;
     }
 }
 
@@ -975,17 +1017,13 @@ select:focus-visible {
         max-width: min(30vw, 132px);
     }
 
-    .transport {
-        grid-template-columns: 1fr;
-    }
-
-    .transport label {
-        grid-template-columns: 1fr;
-        gap: 5px;
-    }
-
     #frame-value {
-        min-width: 0;
-        text-align: left;
+        min-width: 74px;
+    }
+}
+
+@media (max-width: 420px) {
+    .volume-control {
+        grid-template-columns: auto minmax(48px, 54px);
     }
 }
