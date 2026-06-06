@@ -20,6 +20,7 @@ const initialSplitImpulsePenetrationThreshold = parseDebugNumber(
   -0.04
 );
 const initialSelfShadowEnabled = query.get("selfShadow") === "0" ? false : true;
+const initialPhysicsEnabled = query.get("physics") === "0" ? false : true;
 
 export const state = {
   hasLocalFixtures: false,
@@ -32,11 +33,12 @@ export const state = {
     splitImpulse: initialSplitImpulse,
     splitImpulsePenetrationThreshold: initialSplitImpulsePenetrationThreshold
   },
+  physicsEnabled: initialPhysicsEnabled,
   showDebugColliders: query.has("collision") || query.has("debugCollision"),
   activePhysicsBackend: undefined,
   customBulletMmdModule: undefined,
   customBulletMmdLoadPromise: undefined,
-  animationLoader: new ThreeMmdLoader({ runtime: { frameRate: viewerConfig.mmdFrameRate } }),
+  animationLoader: new ThreeMmdLoader({ runtime: createViewerRuntimeOptions() }),
   frameTimer: new THREE.Timer(),
   renderer: undefined,
   scene: undefined,
@@ -62,6 +64,8 @@ export const state = {
   currentCameraEntries: [],
   mmdFrameRate: viewerConfig.mmdFrameRate,
   mmdFrameQuantize: viewerConfig.mmdFrameQuantize,
+  ikTolerance: viewerConfig.ikTolerance,
+  ikMaxIterationsCap: viewerConfig.ikMaxIterationsCap,
   assetLibrary: {
     presets: [],
     models: [],
@@ -148,6 +152,15 @@ export const state = {
 };
 
 state.frameTimer.connect(document);
+
+export function createViewerRuntimeOptions(extraOptions = {}) {
+  return {
+    ...extraOptions,
+    frameRate: viewerConfig.mmdFrameRate,
+    ikTolerance: viewerConfig.ikTolerance,
+    ikMaxIterationsCap: viewerConfig.ikMaxIterationsCap
+  };
+}
 
 export function persistViewportSettings() {
   try {

@@ -452,6 +452,19 @@ export class WasmMmdRuntimeInstance {
         _assertClass(clip, WasmMmdClip);
         wasm.wasmmmdruntimeinstance_evaluateClipFrame(this.__wbg_ptr, clip.__wbg_ptr, frame);
     }
+    /**
+     * @param {WasmMmdClip} clip
+     * @param {number} frame
+     * @param {number} ik_tolerance
+     * @param {number} ik_max_iterations_cap
+     */
+    evaluateClipFrameWithIkOptions(clip, frame, ik_tolerance, ik_max_iterations_cap) {
+        _assertClass(clip, WasmMmdClip);
+        const ret = wasm.wasmmmdruntimeinstance_evaluateClipFrameWithIkOptions(this.__wbg_ptr, clip.__wbg_ptr, frame, ik_tolerance, ik_max_iterations_cap);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
     evaluateRestPose() {
         wasm.wasmmmdruntimeinstance_evaluateRestPose(this.__wbg_ptr);
     }

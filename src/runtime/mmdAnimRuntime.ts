@@ -26,6 +26,8 @@ type MutableDebugStages = {
   -readonly [K in keyof MmdRuntimeDebugState["stages"]]: MmdAnimRuntimeDebugStageState;
 };
 
+const defaultMmdAnimIkTolerance = 1.0e-2;
+
 interface MmdAnimRuntimeDebugStageState {
   worldMatricesColumnMajor: number[];
   morphWeights: number[];
@@ -45,10 +47,18 @@ export interface MmdAnimRuntimeWasmClip {
 export interface MmdAnimRuntimeWasmRuntimeInstance {
   evaluateRestPose(): void;
   evaluateClipFrame(clip: MmdAnimRuntimeWasmClip, frame: number): void;
+  evaluateClipFrameWithIkOptions?(
+    clip: MmdAnimRuntimeWasmClip,
+    frame: number,
+    ikTolerance: number,
+    ikMaxIterationsCap: number
+  ): void;
   worldMatrixF32Len(): number;
   copyWorldMatrices(out: Float32Array): boolean;
+  worldMatricesView?(): Float32Array;
   morphWeightLen?(): number;
   copyMorphWeights?(out: Float32Array): boolean;
+  morphWeightsView?(): Float32Array;
   free?(): void;
 }
 
@@ -86,6 +96,10 @@ export interface MmdAnimRuntimeOptions {
   readonly physics?: "none" | "external";
   /** External physics backend used when physics is "external". */
   readonly physicsBackend?: MmdPhysicsBackend;
+  /** Optional IK solve tolerance override for mmd-anim WASM. Uses the wasm default when omitted. */
+  readonly ikTolerance?: number;
+  /** Optional IK max-iteration cap override for mmd-anim WASM. Uses the wasm default when omitted. */
+  readonly ikMaxIterationsCap?: number;
   /** Own and free the wasm model/runtime/created clips on dispose. Defaults to true. */
   readonly ownsWasmResources?: boolean;
 }
@@ -151,14 +165,16 @@ export class MmdAnimRuntime implements MmdRuntime {
   private readonly ownsWasmResources: boolean;
   private readonly physicsMode: "none" | "external";
   private readonly physicsBackend: MmdPhysicsBackend | undefined;
+  private readonly ikTolerance: number | undefined;
+  private readonly ikMaxIterationsCap: number | undefined;
   private readonly state: MutableFrameState;
   private readonly evaluateReturnState: MutableFrameState = {
     seconds: 0,
     frame: 0,
     frameRate: 30
   };
-  private readonly worldMatrices: Float32Array;
-  private readonly morphWeights: Float32Array;
+  private worldMatrices: Float32Array;
+  private morphWeights: Float32Array;
   private readonly debugStages: MutableDebugStages = createEmptyDebugStages();
   private readonly scratchWorldMatrices: THREE.Matrix4[] = [];
   private readonly scratchThreeWorldMatrix = new THREE.Matrix4();
@@ -219,6 +235,11 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.ownsWasmResources = options.ownsWasmResources ?? true;
     this.physicsMode = options.physics ?? "none";
     this.physicsBackend = options.physicsBackend;
+    this.ikTolerance = readNonNegativeOptionalNumber(options.ikTolerance, "MmdAnimRuntime ikTolerance");
+    this.ikMaxIterationsCap = readNonNegativeIntegerOptionalNumber(
+      options.ikMaxIterationsCap,
+      "MmdAnimRuntime ikMaxIterationsCap"
+    );
     this.wasmClip = options.clip;
     this.worldMatrices = new Float32Array(this.wasmRuntime.worldMatrixF32Len());
     this.morphWeights = new Float32Array(this.wasmRuntime.morphWeightLen?.() ?? this.wasmModel.morphCount?.() ?? 0);
@@ -241,7 +262,7 @@ export class MmdAnimRuntime implements MmdRuntime {
       return copyFrameStateInto(this.evaluateReturnState, state);
     }
     if (this.wasmClip) {
-      this.wasmRuntime.evaluateClipFrame(this.wasmClip, this.state.frame);
+      this.evaluateWasmClipFrame(this.wasmClip, this.state.frame);
     } else {
       this.wasmRuntime.evaluateRestPose();
     }
@@ -428,10 +449,39 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   private copyWasmOutput(): void {
-    if (!this.wasmRuntime.copyWorldMatrices(this.worldMatrices)) {
+    const worldMatricesView = this.wasmRuntime.worldMatricesView?.();
+    if (worldMatricesView) {
+      if (worldMatricesView.length < this.wasmRuntime.worldMatrixF32Len()) {
+        throw new RangeError("MmdAnimRuntime world matrix view is too short");
+      }
+      this.worldMatrices = worldMatricesView;
+    } else if (!this.wasmRuntime.copyWorldMatrices(this.worldMatrices)) {
       throw new RangeError("MmdAnimRuntime world matrix buffer is too short");
     }
-    this.wasmRuntime.copyMorphWeights?.(this.morphWeights);
+    const morphWeightsView = this.wasmRuntime.morphWeightsView?.();
+    if (morphWeightsView) {
+      this.morphWeights = morphWeightsView;
+    } else {
+      this.wasmRuntime.copyMorphWeights?.(this.morphWeights);
+    }
+  }
+
+  private evaluateWasmClipFrame(clip: MmdAnimRuntimeWasmClip, frame: number): void {
+    if (this.ikTolerance === undefined && this.ikMaxIterationsCap === undefined) {
+      this.wasmRuntime.evaluateClipFrame(clip, frame);
+      return;
+    }
+    const evaluateWithIkOptions = this.wasmRuntime.evaluateClipFrameWithIkOptions;
+    if (!evaluateWithIkOptions) {
+      throw new TypeError("mmd-anim wasm runtime does not expose evaluateClipFrameWithIkOptions");
+    }
+    evaluateWithIkOptions.call(
+      this.wasmRuntime,
+      clip,
+      frame,
+      this.ikTolerance ?? defaultMmdAnimIkTolerance,
+      this.ikMaxIterationsCap ?? 0
+    );
   }
 
   private syncBoundMesh(): void {
@@ -838,6 +888,30 @@ function writeFrameState(
   target.frame = seconds * frameRate;
   target.frameRate = frameRate;
   return target;
+}
+
+function readNonNegativeOptionalNumber(value: number | undefined, label: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`${label} must be a non-negative finite number`);
+  }
+  return value;
+}
+
+function readNonNegativeIntegerOptionalNumber(
+  value: number | undefined,
+  label: string
+): number | undefined {
+  const parsed = readNonNegativeOptionalNumber(value, label);
+  if (parsed === undefined) {
+    return undefined;
+  }
+  if (!Number.isInteger(parsed)) {
+    throw new RangeError(`${label} must be an integer`);
+  }
+  return parsed;
 }
 
 function copyFrameStateInto(

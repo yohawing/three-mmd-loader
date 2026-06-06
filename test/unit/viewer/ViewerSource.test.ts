@@ -93,9 +93,16 @@ describe("example viewer source", () => {
 
     expect(configSource).toContain('query.get("mmdFrameRate")');
     expect(configSource).toContain('query.get("mmdFrameQuantize")');
+    expect(configSource).toContain('readFirstQueryValue("ikTolerance", "ikTorelance")');
+    expect(configSource).toContain('"ikTorelance"');
+    expect(configSource).toContain('"ikMaxIterationsCap"');
+    expect(configSource).toContain('"ikMaxIter"');
+    expect(configSource).toContain('"maxIkIterations"');
     expect(stateSource).toContain("frameRate: viewerConfig.mmdFrameRate");
     expect(stateSource).toContain("mmdFrameRate: viewerConfig.mmdFrameRate");
     expect(stateSource).toContain("mmdFrameQuantize: viewerConfig.mmdFrameQuantize");
+    expect(stateSource).toContain("ikTolerance: viewerConfig.ikTolerance");
+    expect(stateSource).toContain("ikMaxIterationsCap: viewerConfig.ikMaxIterationsCap");
     expect(html).toContain('id="model-switcher"');
     expect(html).not.toContain('id="model-name"');
     expect(html).toContain('aria-label="Selected model"');
@@ -112,6 +119,7 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("export async function switchFolderModel(modelFile)");
     expect(modelSource).toContain('setStatus(`Switching to ${modelFile.name}`, "loading")');
     expect(modelSource).toContain("createModelLoader({ textureMap: state.currentFolderTextureMap })");
+    expect(modelSource).toContain("createViewerRuntimeOptions({");
     expect(modelSource).toContain("dom.modelControl.hidden = state.currentFolderPmxFiles.length === 0");
     expect(modelSource).toContain("preserveModelSwitcher: true");
     expect(modelSource).toContain("dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001)");
@@ -361,6 +369,8 @@ describe("example viewer source", () => {
     expect(backgroundSource).toContain("disposeModelResources(state.currentBackground)");
     expect(backgroundSource).toContain("updateStageState()");
     expect(domSource).toContain("!state.currentModel && !state.currentBackground");
+    expect(domSource).toContain("let lastPlaybackDisplayText");
+    expect(domSource).toContain("if (text !== lastPlaybackDisplayText)");
     expect(cameraSource).toContain("state.currentCameraMotion = {");
     expect(cameraSource).toContain("syncTimelineRangeToCurrentMotion()");
     expect(cameraSource).toContain("currentMotionDurationSeconds()");
@@ -376,7 +386,8 @@ describe("example viewer source", () => {
     expect(cameraSource).not.toContain("function cameraFrameAt");
     expect(playbackSource).toContain("applyCameraMotion()");
     expect(playbackSource).toContain("currentMmdSeconds()");
-    expect(modelSource).toContain("frameRate: state.mmdFrameRate");
+    expect(stateSource).toContain("frameRate: viewerConfig.mmdFrameRate");
+    expect(modelSource).toContain("MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, createViewerRuntimeOptions({");
     expect(stateSource).toContain("currentBackground: undefined");
     expect(stateSource).toContain("currentCameraMotion: undefined");
     expect(stateSource).toContain("mmdFrameQuantize");
@@ -541,6 +552,7 @@ describe("example viewer source", () => {
     expect(stateSource).not.toContain("ammoNamespace");
     expect(physicsSource).toContain("loadCustomBulletMmdModule");
     expect(physicsSource).toContain("createCustomBulletMmdPhysicsBackend");
+    expect(physicsSource).toContain("Physics disabled by viewer query parameter.");
     expect(physicsSource).toContain("dom.physicsErrorBanner.textContent = message");
     expect(physicsSource).not.toContain("loadAmmoNamespace");
     expect(physicsSource).not.toContain("createAmmoMmdPhysicsBackend");
@@ -622,6 +634,8 @@ describe("example viewer source", () => {
     expect(stateSource).toContain('new window.URLSearchParams(location.search).has("debug")');
     expect(stateSource).toContain('maxSubSteps: initialPhysicsMaxSubSteps');
     expect(stateSource).toContain('parseDebugInteger(query.get("maxSubSteps"), 5)');
+    expect(stateSource).toContain('query.get("physics") === "0" ? false : true');
+    expect(stateSource).toContain("physicsEnabled: initialPhysicsEnabled");
     expect(stateSource).toContain('solverIterations: initialSolverIterations');
     expect(stateSource).toContain('splitImpulsePenetrationThreshold: initialSplitImpulsePenetrationThreshold');
     expect(stateSource).toContain("if (value === null)");
@@ -647,6 +661,7 @@ describe("example viewer source", () => {
     expect(mainSource).not.toContain("setSplitImpulsePenetrationThreshold(dom.debugSplitImpulsePenetrationThresholdInput.value)");
     expect(mainSource).not.toContain("dom.debugRefreshStateButton");
     expect(playbackSource).toContain("updateColliderHelpers()");
+    expect(playbackSource).toContain("state.physicsEnabled &&");
     expect(playbackSource).toContain("updateDebugFps(delta)");
     expect(debugSource).toContain("export function toggleColliderHelpers()");
     expect(debugSource).toContain("export function setDebugMaterialMode(mode)");
@@ -656,6 +671,8 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("state.debugFrameTimeSampleMs += deltaSeconds * 1000");
     expect(debugSource).toContain("dom.debugFpsValue.textContent = fps.toFixed(1)");
     expect(debugSource).toContain("dom.debugFrameTimeValue.textContent = `${frameTimeMs.toFixed(1)} ms`");
+    expect(debugSource).toContain("physicsEnabled: state.physicsEnabled");
+    expect(debugSource).toContain("ikMaxIterationsCap: state.ikMaxIterationsCap ?? null");
     expect(debugSource).toContain("function formatDebugMemory()");
     expect(debugSource).toContain("window.performance?.memory");
     expect(debugSource).toContain("usedJSHeapSize");

@@ -1,5 +1,7 @@
 import { currentMmdFrame, currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
 
+let lastPlaybackDisplayText = "";
+
 export const dom = {
   canvas: document.querySelector("#viewer-canvas"),
   stage: document.querySelector(".stage"),
@@ -196,5 +198,9 @@ export function updatePlayToggle() {
 export function updatePlaybackDisplay() {
   const totalFrames = Math.round(currentMotionDurationSeconds() * state.mmdFrameRate);
   const currentFrame = Math.round(currentMmdFrame());
-  dom.frameValueText.textContent = `${currentFrame} / ${totalFrames}`;
+  const text = `${currentFrame} / ${totalFrames}`;
+  if (text !== lastPlaybackDisplayText) {
+    dom.frameValueText.textContent = text;
+    lastPlaybackDisplayText = text;
+  }
 }

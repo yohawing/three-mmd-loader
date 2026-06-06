@@ -36,6 +36,7 @@ export class WasmMmdRuntimeInstance {
     copySkinningMatrices(out: Float32Array): boolean;
     copyWorldMatrices(out: Float32Array): boolean;
     evaluateClipFrame(clip: WasmMmdClip, frame: number): void;
+    evaluateClipFrameWithIkOptions(clip: WasmMmdClip, frame: number, ik_tolerance: number, ik_max_iterations_cap: number): void;
     evaluateRestPose(): void;
     static forModel(model: WasmMmdModel): WasmMmdRuntimeInstance;
     ikEnabled(): Uint8Array;
@@ -271,6 +272,7 @@ export interface InitOutput {
     readonly wasmmmdruntimeinstance_copySkinningMatrices: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_copyWorldMatrices: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_evaluateClipFrame: (a: number, b: number, c: number) => void;
+    readonly wasmmmdruntimeinstance_evaluateClipFrameWithIkOptions: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly wasmmmdruntimeinstance_evaluateRestPose: (a: number) => void;
     readonly wasmmmdruntimeinstance_forModel: (a: number) => number;
     readonly wasmmmdruntimeinstance_ikEnabled: (a: number) => [number, number];

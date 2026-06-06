@@ -3,6 +3,13 @@ const query = new window.URLSearchParams(location.search);
 export const viewerConfig = {
   mmdFrameRate: readPositiveNumber(query.get("mmdFrameRate"), 30),
   mmdFrameQuantize: readBoolean(query.get("mmdFrameQuantize"), true),
+  ikTolerance: readNonNegativeOptionalNumber(readFirstQueryValue("ikTolerance", "ikTorelance")),
+  ikMaxIterationsCap: readNonNegativeOptionalInteger(readFirstQueryValue(
+    "ikMaxIterationsCap",
+    "ikMaxIterations",
+    "ikMaxIter",
+    "maxIkIterations"
+  )),
   runtime: readRuntimeMode(query.get("runtime"))
 };
 
@@ -26,6 +33,29 @@ function readBoolean(value, fallback) {
     return true;
   }
   return fallback;
+}
+
+function readFirstQueryValue(...names) {
+  for (const name of names) {
+    const value = query.get(name);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function readNonNegativeOptionalNumber(value) {
+  if (value === null || value.trim() === "") {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function readNonNegativeOptionalInteger(value) {
+  const parsed = readNonNegativeOptionalNumber(value);
+  return parsed === undefined || Number.isInteger(parsed) ? parsed : undefined;
 }
 
 function readRuntimeMode(value) {

@@ -43,6 +43,54 @@ describe("MmdAnimRuntime", () => {
     expect(renderedBoneWorldPosition(mesh, 0).toArray()).toEqual([1, 2, -3]);
   });
 
+  it("uses direct wasm output views without copying frame buffers when available", () => {
+    const wasm = createFakeWasmModule();
+    const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]));
+    const mesh = createSingleBoneMesh();
+
+    runtime.setAnimation(createMmdAnimation(new Uint8Array([0x30, 0x31])), mesh);
+    runtime.tick(1 / 30, { mesh, physics: false });
+
+    expect(wasm.createdRuntimes[0]?.copyWorldMatricesCalls).toBe(0);
+    expect(wasm.createdRuntimes[0]?.copyMorphWeightsCalls).toBe(0);
+    expect(renderedBoneWorldPosition(mesh, 0).toArray()).toEqual([1, 2, -3]);
+  });
+
+  it("passes optional IK solve overrides to mmd-anim wasm when configured", () => {
+    const wasm = createFakeWasmModule();
+    const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]), {
+      ikTolerance: 0.02,
+      ikMaxIterationsCap: 12
+    });
+    const mesh = createSingleBoneMesh();
+
+    runtime.setAnimation(createMmdAnimation(new Uint8Array([0x30, 0x31])), mesh);
+    runtime.tick(1 / 30, { mesh, physics: false });
+
+    expect(wasm.createdRuntimes[0]?.lastIkOptions).toEqual({
+      frame: 1,
+      tolerance: 0.02,
+      maxIterationsCap: 12
+    });
+  });
+
+  it("uses the wasm default IK tolerance when only the iteration cap is configured", () => {
+    const wasm = createFakeWasmModule();
+    const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]), {
+      ikMaxIterationsCap: 8
+    });
+    const mesh = createSingleBoneMesh();
+
+    runtime.setAnimation(createMmdAnimation(new Uint8Array([0x30, 0x31])), mesh);
+    runtime.tick(1 / 30, { mesh, physics: false });
+
+    expect(wasm.createdRuntimes[0]?.lastIkOptions).toEqual({
+      frame: 1,
+      tolerance: 1.0e-2,
+      maxIterationsCap: 8
+    });
+  });
+
   it("returns stable debug snapshots", () => {
     const runtime = MmdAnimRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]));
 
@@ -211,12 +259,18 @@ class FakeWasmClip {
 
 class FakeWasmRuntimeInstance {
   lastFrame = -1;
+  lastIkOptions:
+    | { frame: number; tolerance: number; maxIterationsCap: number }
+    | undefined;
+  copyWorldMatricesCalls = 0;
+  copyMorphWeightsCalls = 0;
   private readonly worldMatrices = new Float32Array([
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
     1, 2, 3, 1
   ]);
+  private readonly morphWeights = new Float32Array();
 
   constructor(_model: FakeWasmModel, _morphCount: number) {}
 
@@ -228,11 +282,22 @@ class FakeWasmRuntimeInstance {
     this.lastFrame = frame;
   }
 
+  evaluateClipFrameWithIkOptions(
+    _clip: FakeWasmClip,
+    frame: number,
+    tolerance: number,
+    maxIterationsCap: number
+  ): void {
+    this.lastFrame = frame;
+    this.lastIkOptions = { frame, tolerance, maxIterationsCap };
+  }
+
   worldMatrixF32Len(): number {
     return this.worldMatrices.length;
   }
 
   copyWorldMatrices(out: Float32Array): boolean {
+    this.copyWorldMatricesCalls += 1;
     if (out.length < this.worldMatrices.length) {
       return false;
     }
@@ -240,8 +305,25 @@ class FakeWasmRuntimeInstance {
     return true;
   }
 
+  worldMatricesView(): Float32Array {
+    return this.worldMatrices;
+  }
+
   morphWeightLen(): number {
-    return 0;
+    return this.morphWeights.length;
+  }
+
+  copyMorphWeights(out: Float32Array): boolean {
+    this.copyMorphWeightsCalls += 1;
+    if (out.length < this.morphWeights.length) {
+      return false;
+    }
+    out.set(this.morphWeights);
+    return true;
+  }
+
+  morphWeightsView(): Float32Array {
+    return this.morphWeights;
   }
 }
 

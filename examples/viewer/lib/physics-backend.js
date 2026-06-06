@@ -9,6 +9,12 @@ import { state } from "./state.js";
 
 export async function createPhysicsBackend() {
   disposeActivePhysicsBackend();
+  if (!state.physicsEnabled) {
+    state.activePhysicsBackend = createDisabledMmdPhysicsBackend({
+      reason: "Physics disabled by viewer query parameter."
+    });
+    return state.activePhysicsBackend;
+  }
   if (!state.customBulletMmdModule) {
     setStatus("Loading Bullet MMD physics engine...", "loading");
   }

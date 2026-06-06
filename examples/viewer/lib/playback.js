@@ -43,7 +43,8 @@ export function evaluateRuntime(options) {
   if (state.currentModel?.runtime) {
     const updateOptions = state.runtimeUpdateOptionsScratch;
     updateOptions.ik = options?.ik ?? hasCurrentMotion();
-    updateOptions.physics = options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0);
+    updateOptions.physics =
+      state.physicsEnabled && (options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0));
     state.currentModel.update(currentMmdSeconds(), updateOptions);
   }
   applyLightMotion();

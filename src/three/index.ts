@@ -1160,7 +1160,9 @@ function normalizeMmdAnimRuntimeOptions(
     frameRate: options?.frameRate,
     initialSeconds: options?.initialSeconds,
     physics: options?.physics === "external" ? "external" : "none",
-    physicsBackend: options?.physicsBackend
+    physicsBackend: options?.physicsBackend,
+    ikTolerance: options?.ikTolerance,
+    ikMaxIterationsCap: options?.ikMaxIterationsCap
   };
 }
 

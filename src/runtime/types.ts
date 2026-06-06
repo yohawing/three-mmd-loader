@@ -109,6 +109,10 @@ export interface DefaultMmdRuntimeOptions {
   readonly physics?: "none" | "stateful-spring" | "external";
   /** External physics backend used when physics is "external". */
   readonly physicsBackend?: import("../physics/index.js").MmdPhysicsBackend;
+  /** IK convergence tolerance forwarded to the bundled mmd-anim runtime. Defaults to the runtime default. */
+  readonly ikTolerance?: number;
+  /** Per-IK max iteration cap forwarded to the bundled mmd-anim runtime. Defaults to the runtime default. */
+  readonly ikMaxIterationsCap?: number;
 }
 
 export interface RuntimeRestTransform {

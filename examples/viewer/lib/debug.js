@@ -651,6 +651,7 @@ function createSmokeState() {
       : (typeof state.activePhysicsBackend?.debugContactCount === "function"
         ? state.activePhysicsBackend.debugContactCount()
         : null),
+    physicsEnabled: state.physicsEnabled,
     physicsMaxSubSteps: state.physicsTuningOptions.maxSubSteps,
     dynamicWithBoneRotationFeedbackScale:
       state.physicsTuningOptions.dynamicWithBoneRotationFeedbackScale,
@@ -658,6 +659,12 @@ function createSmokeState() {
     solverIterations: state.physicsTuningOptions.solverIterations,
     splitImpulse: state.physicsTuningOptions.splitImpulse,
     splitImpulsePenetrationThreshold: state.physicsTuningOptions.splitImpulsePenetrationThreshold,
+    runtime: {
+      mode: state.currentModel?.runtime?.constructor?.name ?? null,
+      frameRate: state.mmdFrameRate,
+      ikTolerance: state.ikTolerance ?? null,
+      ikMaxIterationsCap: state.ikMaxIterationsCap ?? null
+    },
     selfShadowEnabled: state.debugSelfShadowEnabled,
     keyLightCastShadow: state.keyLight?.castShadow ?? null,
     rendererShadowMapEnabled: state.renderer?.shadowMap?.enabled ?? null,

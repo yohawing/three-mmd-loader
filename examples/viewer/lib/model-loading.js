@@ -19,7 +19,7 @@ import { disposeModelResources } from "./dispose.js";
 import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
-import { currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
+import { createViewerRuntimeOptions, currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
 import { fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
 import { viewerConfig } from "./viewer-config.js";
@@ -503,22 +503,20 @@ export async function createModelLoader(extraOptions = {}) {
     ddsLoader: extraOptions.ddsLoader ?? new DDSLoader(),
     geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
     runtimeFactory,
-    runtime: {
+    runtime: createViewerRuntimeOptions({
       ...runtimeOptions,
-      frameRate: state.mmdFrameRate,
       physics: "external",
       physicsBackend
-    }
+    })
   });
 }
 
 async function createRuntimeFactory(physicsBackend) {
   if (viewerConfig.runtime === "js") {
-    return () => new DefaultMmdRuntime({
-      frameRate: state.mmdFrameRate,
+    return () => new DefaultMmdRuntime(createViewerRuntimeOptions({
       physics: "external",
       physicsBackend
-    });
+    }));
   }
   if (viewerConfig.runtime !== "mmd-anim") {
     return undefined;
@@ -527,17 +525,15 @@ async function createRuntimeFactory(physicsBackend) {
   await wasm.default();
   return ({ modelBytes }) => {
     if (!isPmxBytes(modelBytes)) {
-      return new DefaultMmdRuntime({
-        frameRate: state.mmdFrameRate,
+      return new DefaultMmdRuntime(createViewerRuntimeOptions({
         physics: "external",
         physicsBackend
-      });
+      }));
     }
-    return MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, {
-      frameRate: state.mmdFrameRate,
+    return MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, createViewerRuntimeOptions({
       physics: "external",
       physicsBackend
-    });
+    }));
   };
 }
 

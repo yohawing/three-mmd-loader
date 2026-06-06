@@ -111,6 +111,33 @@ describe("ThreeMmdLoader", () => {
     expect(model.runtime).toBeInstanceOf(MmdAnimRuntime);
   });
 
+  it("forwards IK solve options to the bundled mmd-anim runtime", async () => {
+    const runtime = createStubRuntime();
+    const fromPmxBytes = vi
+      .spyOn(MmdAnimRuntime, "fromPmxBytes")
+      .mockReturnValue(runtime as unknown as MmdAnimRuntime);
+    const loader = new ThreeMmdLoader({
+      runtime: {
+        frameRate: 60,
+        ikTolerance: 0.02,
+        ikMaxIterationsCap: 12
+      }
+    });
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(model.runtime).toBe(runtime);
+    expect(fromPmxBytes).toHaveBeenCalledWith(expect.any(Object), source, {
+      frameRate: 60,
+      initialSeconds: undefined,
+      physics: "none",
+      physicsBackend: undefined,
+      ikTolerance: 0.02,
+      ikMaxIterationsCap: 12
+    });
+  });
+
   it("allows a runtimeFactory to create the per-model runtime from PMX bytes and mesh", async () => {
     const runtime = createStubRuntime();
     const runtimeFactory = vi.fn(() => runtime);
