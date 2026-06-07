@@ -36,7 +36,7 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | VMD Camera | ✅ Runtime sampling + Three.js helper, perspective/orthographic switch |
 | VMD Light | ✅ Runtime sampling + viewer directional-light application |
 | Self Shadow | ✅ Three.js shadow-map path with VMD self-shadow sampling |
-| Physics | ✅ Custom-built Bullet Physics; Ammo.js backend is deprecated compatibility path |
+| Physics | ✅ MMD-optimized prebuilt Bullet Physics; Ammo.js backend is deprecated compatibility path |
 | Soft Body | ⚠️ PMX data parsed; runtime simulation not implemented |
 
 The default PMX runtime and WASM parser are backed by
@@ -105,10 +105,9 @@ model.setAnimation(animation);
 ## Usage - Physics
 
 Physics is abstracted behind `MmdPhysicsBackend` so the physics library can be
-swapped. The recommended browser backend is a custom-built Bullet Physics path
-with direct Wasm buffers. The Ammo.js backend remains available as a
-compatibility path, but it is deprecated and planned for removal from the
-default guidance.
+swapped. We recommend the MMD-optimized prebuilt Bullet Physics path. The
+Ammo.js backend remains available as a compatibility path, but it is deprecated
+and planned for removal from the default guidance.
 
 ```ts
 import {
@@ -116,7 +115,7 @@ import {
   loadCustomBulletMmdModule
 } from "@yohawing/three-mmd-loader/physics";
 
-// Recommended: custom-built Bullet Physics with direct Wasm buffers.
+// Recommended: MMD-optimized prebuilt Bullet Physics.
 const mmdBullet = await loadCustomBulletMmdModule();
 const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 ```
@@ -125,5 +124,5 @@ const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 
 Development notes for tests, scripts, and fixtures are in
 [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md), including mmd-anim / Yw MMD and
-custom Bullet Physics build notes. The release checklist is in
+MMD-optimized Bullet Physics build notes. The release checklist is in
 [docs/RELEASE.md](./docs/RELEASE.md).
