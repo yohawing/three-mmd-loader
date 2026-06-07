@@ -36,7 +36,7 @@ Three.js 上で MMD モデルとモーションを読み込み・再生するた
 | VMD Camera | ✅ Runtime sampling + Three.js helper、perspective/orthographic 切替 |
 | VMD Light | ✅ Runtime sampling + viewer directional light 適用 |
 | Self Shadow | ✅ Three.js shadow-map 経路 + VMD self-shadow sampling |
-| 物理 | ✅ MMD Bullet backend / Ammo.js backend は deprecated 互換経路 |
+| 物理 | ✅ カスタムビルドの Bullet Physics / Ammo.js backend は deprecated 互換経路 |
 | Soft Body | ⚠️ PMX データは解析 / runtime simulation は未実装 |
 
 PMX の既定ランタイムと WASM parser には
@@ -102,23 +102,18 @@ model.setAnimation(animation);
 ## 使い方 - 物理
 
 物理は `MmdPhysicsBackend` で抽象化されていて、物理ライブラリを変更可能にしてあります。
-ブラウザ向けの推奨 backend は、direct Wasm buffer を使う MMD 最適化 Bullet backend です。
+ブラウザ向けの推奨 backend は、direct Wasm buffer を使うカスタムビルドの Bullet Physics です。
 Ammo.js backend は互換用として残していますが、deprecated であり、今後の標準導線からは外します。
 
 ```ts
 import {
-  createAmmoMmdPhysicsBackend,
   createCustomBulletMmdPhysicsBackend,
   loadCustomBulletMmdModule
 } from "@yohawing/three-mmd-loader/physics";
 
-// 推奨: direct Wasm buffer を使う MMD 最適化 Bullet backend。
+// 推奨: direct Wasm buffer を使うカスタムビルドの Bullet Physics。
 const mmdBullet = await loadCustomBulletMmdModule();
 const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
-
-// Deprecated 互換経路: Ammo.js backend。
-const Ammo = await import("ammo.js").then((m) => m.default ?? m);
-const legacyPhysicsBackend = createAmmoMmdPhysicsBackend(Ammo);
 ```
 
 ## Development
