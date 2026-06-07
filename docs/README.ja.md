@@ -47,7 +47,7 @@ PMX の既定ランタイムと WASM parser には
 
 - [Babylon-MMD](https://github.com/noname0310/babylon-mmd)
 - [saba](https://github.com/benikabocha/saba)
-- [mmd-anim](https://github.com/yohawing/mmd-anim)
+- [nanoem](https://github.com/hkrn/nanoem)
 
 ---
 
