@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
   binding source under `native/bullet-mmd/`.
 - Rename the MMD Bullet browser artifact and C ABI prefix to `mmd_bullet`.
 - Consolidate native WASM build notes into `docs/DEVELOPMENT.md`.
+- Update the Vitest release test runner to 4.1.8 and clear the npm audit gate.
 
 ### Fixed
 
