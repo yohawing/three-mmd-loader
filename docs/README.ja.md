@@ -33,8 +33,7 @@ Three.js 上で MMD モデルとモーションを読み込み・再生するた
 | MMD マテリアル / Toon シェーダー | ✅ Toon、AlphaBlend 判定、描画順 |
 | 付与変形 (append transform) | ✅ PMX layer 順 |
 | IK link angle limits | ✅ PMX / PMD link limits + parent-local Euler clamp |
-| VMD Camera | ✅ Runtime sampling + Three.js helper、perspective/orthographic 切替 |
-| VMD Light | ✅ Runtime sampling + viewer directional light 適用 |
+| VMD Camera / Light | ✅ Three.js の Camera、DirectionalLight に適用 |
 | Self Shadow | ✅ Three.js shadow-map 経路 + VMD self-shadow sampling |
 | 物理 | ✅ MMD最適化ビルド済みのBullet Physics / Ammo.js backend は deprecated 互換経路 |
 | Soft Body | ⚠️ PMX データは解析 / runtime simulation は未実装 |

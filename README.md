@@ -33,8 +33,7 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | MMD material / toon shader | ✅ Toon textures, alpha blending decisions, and material render ordering |
 | Append transform | ✅ PMX layer order |
 | IK link angle limits | ✅ PMX / PMD link limits with parent-local Euler clamp |
-| VMD Camera | ✅ Runtime sampling + Three.js helper, perspective/orthographic switch |
-| VMD Light | ✅ Runtime sampling + viewer directional-light application |
+| VMD Camera / Light | ✅ Applies to Three.js Camera and DirectionalLight |
 | Self Shadow | ✅ Three.js shadow-map path with VMD self-shadow sampling |
 | Physics | ✅ MMD-optimized prebuilt Bullet Physics; Ammo.js backend is deprecated compatibility path |
 | Soft Body | ⚠️ PMX data parsed; runtime simulation not implemented |
