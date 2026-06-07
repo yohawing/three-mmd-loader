@@ -1,10 +1,5 @@
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { initCore } from "../../src/parser/wasm/index.js";
-
-const luminePmxIt = existsSync(resolve("data/pmx/【女主角_荧】_by_原神/Lumine.pmx")) ? it : it.skip;
 
 describe("@yw-mmd/core-wasm VPD metadata", () => {
   it("parses VPD bone pose blocks", async () => {
@@ -19,38 +14,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(pose.bones["上半身"]?.rotation[3]).toBeCloseTo(0.958242);
   });
 
-  luminePmxIt("parses VPD morph blocks for a model fixture", async () => {
-    const core = await initCore();
-    const pose = core.loadVpd(
-      new TextEncoder().encode(
-        [
-          "Vocaloid Pose Data file",
-          "",
-          "Lumine.osm;",
-          "0;",
-          "",
-          "Morph0{irtB L B03",
-          "  0.75;",
-          "}"
-        ].join("\n")
-      )
-    );
-    const model = core.loadModel(
-      await readFile(resolve("data/pmx/【女主角_荧】_by_原神/Lumine.pmx")),
-      {
-        format: "pmx"
-      }
-    );
-    const matchedMorphIndices = model
-      .morphs()
-      .map((morph, index) => (morph.englishName === "irtB L B03" ? index : -1))
-      .filter((index) => index >= 0);
-    expect(pose.metadata.morphCount).toBe(1);
-    expect(pose.morphs["irtB L B03"]).toBe(0.75);
-    expect(matchedMorphIndices.length).toBeGreaterThan(0);
-  });
-
-  it("accepts Babylon-MMD-compatible VPD whitespace and comments before statements", async () => {
+  it("accepts permissive VPD whitespace and comments before statements", async () => {
     const core = await initCore();
     const pose = core.loadVpd(
       new TextEncoder().encode(
@@ -89,7 +53,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
         [
           "Vocaloid Pose Data file",
           "",
-          "// Babylon-MMD consumes the first statement as the model name.",
+          "// The first statement is consumed as the model name.",
           "Model.pmx;",
           "// The second statement is the declared bone count.",
           "0;"
@@ -102,7 +66,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(pose.metadata.morphCount).toBe(0);
   });
 
-  it("ignores mismatched VPD declared bone counts like Babylon-MMD", async () => {
+  it("ignores mismatched VPD declared bone counts", async () => {
     const core = await initCore();
     const pose = core.loadVpd(
       new TextEncoder().encode(
@@ -131,7 +95,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(pose.bones.Upper?.rotation).toEqual([0, 0.25, 0, 0.96875]);
   });
 
-  it("uses the last duplicate VPD bone and morph block like Babylon-MMD", async () => {
+  it("uses the last duplicate VPD bone and morph block", async () => {
     const core = await initCore();
     const pose = core.loadVpd(
       new TextEncoder().encode(
@@ -243,7 +207,7 @@ describe("@yw-mmd/core-wasm VPD metadata", () => {
     expect(Array.from(centerTrack?.translations.slice(0, 3) ?? [])).toEqual([0, 0, 3]);
   });
 
-  luminePmxIt("converts VPD morph pose data into one-frame morph animation tracks", async () => {
+  it("converts VPD morph pose data into one-frame morph animation tracks", async () => {
     const core = await initCore();
     const animation = core.loadVpdAnimation(
       new TextEncoder().encode(

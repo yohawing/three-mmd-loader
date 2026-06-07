@@ -2,34 +2,17 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const manifestPath = path.resolve("scripts/visual-regression/cases.manifest.json");
 const realModelsManifestPath = path.resolve("scripts/visual-regression/real-models.manifest.json");
 const generatedPmxManifestPath = path.resolve("scripts/visual-regression/generated-pmx.manifest.json");
-
-interface VisualCase {
-  id: string;
-  features: string[];
-  thresholds: { mean: number; p95: number };
-  geometry: { kind: string };
-  material: Record<string, unknown> & { kind: string };
-  note: string;
-}
-
-interface VisualManifest {
-  note: string;
-  render: {
-    resolution: { width: number; height: number };
-    pixelRatio: number;
-  };
-  cases: VisualCase[];
-}
+const selfShadowManifestPath = path.resolve("scripts/visual-regression/self-shadow.manifest.json");
+const packageJsonPath = path.resolve("package.json");
 
 interface RealModelVisualCase {
   name: string;
   model: string;
   motion?: string;
   timeSeconds?: number;
-  camera: "front-fit" | {
+  camera: "front-fit" | "viewer-fit" | {
     position: number[];
     target: number[];
     fov: number;
@@ -50,10 +33,6 @@ interface RealModelVisualManifest {
   cases: RealModelVisualCase[];
 }
 
-function readManifest(): VisualManifest {
-  return JSON.parse(readFileSync(manifestPath, "utf8")) as VisualManifest;
-}
-
 function readRealModelsManifest(): RealModelVisualManifest {
   return JSON.parse(readFileSync(realModelsManifestPath, "utf8")) as RealModelVisualManifest;
 }
@@ -62,70 +41,39 @@ function readGeneratedPmxManifest(): RealModelVisualManifest {
   return JSON.parse(readFileSync(generatedPmxManifestPath, "utf8")) as RealModelVisualManifest;
 }
 
+interface SelfShadowVisualManifest extends RealModelVisualManifest {
+  comparisons: Array<{
+    name: string;
+    shadowOn: string;
+    shadowOff: string;
+    receiverRoi: { x: number; y: number; width: number; height: number };
+    thresholds: {
+      receiverMeanDarkeningMin: number;
+      receiverP95DarkeningMin: number;
+      shadowPixelRatioMin: number;
+      shadowOnMeanLuminanceMin?: number;
+      shadowOnP05LuminanceMin?: number;
+      outsideRoiMeanDeltaMax: number;
+    };
+  }>;
+}
+
+function readSelfShadowManifest(): SelfShadowVisualManifest {
+  return JSON.parse(readFileSync(selfShadowManifestPath, "utf8")) as SelfShadowVisualManifest;
+}
+
+function readPackageJson(): { scripts: Record<string, string> } {
+  return JSON.parse(readFileSync(packageJsonPath, "utf8")) as { scripts: Record<string, string> };
+}
+
 describe("visual regression cases manifest", () => {
-  it("describes the baseline policy without visual equivalence claims", () => {
-    const manifest = readManifest();
+  it("removes the synthetic shaderball profile from npm entrypoints", () => {
+    const scripts = readPackageJson().scripts;
+    const serializedScripts = JSON.stringify(scripts);
 
-    expect(manifest.note).toContain("baseline");
-    expect(manifest.note).toContain("regression detection only");
-    expect(manifest.note).toContain("not proof");
-    expect(JSON.stringify(manifest).toLowerCase()).not.toContain(["gol", "den"].join(""));
-  });
-
-  it("defines the expected MMD material visual cases", () => {
-    const manifest = readManifest();
-    const ids = manifest.cases.map(visualCase => visualCase.id);
-
-    expect(manifest.render.resolution).toEqual({ width: 512, height: 512 });
-    expect(manifest.render.pixelRatio).toBe(1);
-    expect(ids).toEqual([
-      "diffuse-sphere",
-      "textured-sphere",
-      "uv-orientation-plane",
-      "toon-sphere",
-      "sphere-multiply",
-      "sphere-add",
-      "alpha-cutout-plane",
-      "alpha-blend-overlap",
-      "render-order-overlap",
-      "outline-sphere"
-    ]);
-  });
-
-  it("keeps ids, feature coverage, geometry, material, and notes complete", () => {
-    const manifest = readManifest();
-    const ids = new Set<string>();
-    const requiredFeatures = [
-      "diffuse",
-      "texture",
-      "uv",
-      "toon",
-      "sphere-texture",
-      "multiply",
-      "add",
-      "alpha-test",
-      "blend",
-      "outline",
-      "render-order"
-    ];
-
-    for (const visualCase of manifest.cases) {
-      expect(visualCase.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
-      expect(ids.has(visualCase.id)).toBe(false);
-      ids.add(visualCase.id);
-
-      expect(visualCase.features.length).toBeGreaterThan(0);
-      expect(visualCase.thresholds.mean).toBeGreaterThan(0);
-      expect(visualCase.thresholds.p95).toBeGreaterThan(visualCase.thresholds.mean);
-      expect(visualCase.geometry.kind).toMatch(/^(sphere|plane|overlap-planes|outline-sphere|shaderball)$/);
-      expect(typeof visualCase.material.kind).toBe("string");
-      expect(visualCase.note).toContain("regression detection only");
-    }
-
-    const featureCoverage = new Set(manifest.cases.flatMap(visualCase => visualCase.features));
-    for (const feature of requiredFeatures) {
-      expect(featureCoverage.has(feature)).toBe(true);
-    }
+    expect(serializedScripts).not.toContain("render-cases.mjs");
+    expect(serializedScripts).not.toContain("shaderball");
+    expect(scripts["visual:smoke:generated-pmx"]).toContain("render:visual:generated-pmx");
   });
 });
 
@@ -180,11 +128,20 @@ describe("generated PMX visual regression manifest", () => {
     expect(names).toContain("mmd-material-morph-alpha-opaque-depth");
   });
 
-  it("includes texture alpha hair shadow regression cases", () => {
+  it("includes generated replacements for the removed shaderball coverage", () => {
     const manifest = readGeneratedPmxManifest();
     const names = manifest.cases.map(visualCase => visualCase.name);
 
     expect(names).toEqual(expect.arrayContaining([
+      "mmd-diffuse-lit-box",
+      "mmd-toon-ramp-lit-box",
+      "mmd-alpha-blend-overlap",
+      "mmd-texture-uv-orientation-plane",
+      "mmd-sphere-texture-multiply",
+      "mmd-sphere-texture-add",
+      "mmd-material-order-body-outline-interleave",
+      "mmd-outline-normal-silhouette",
+      "mmd-texture-alpha-used-uv-cutout",
       "mmd-png-hair-shadow-alpha-morph-blend",
       "mmd-tga-regular-hair-alpha-opaque",
       "mmd-tga-hair-shadow-overlay-alpha-blend"
@@ -209,5 +166,75 @@ describe("generated PMX visual regression manifest", () => {
       expect(visualCase.thresholds?.mean).toBeGreaterThan(0);
       expect(visualCase.thresholds?.p95).toBeGreaterThan(visualCase.thresholds?.mean ?? 0);
     }
+  });
+});
+
+describe("self-shadow visual regression manifest", () => {
+  it("defines paired cases that fail no-op and object-level-only self-shadow implementations", () => {
+    const manifest = readSelfShadowManifest();
+    const names = manifest.cases.map(visualCase => visualCase.name);
+
+    expect(manifest.note).toContain("no-op");
+    expect(manifest.render.resolution).toEqual({ width: 512, height: 512 });
+    expect(manifest.render.pixelRatio).toBe(1);
+    expect((manifest.render as unknown as { shadow?: { enabled?: boolean } }).shadow?.enabled).toBe(true);
+    expect(names).toEqual(expect.arrayContaining([
+      "mmd-self-shadow-body-on",
+      "mmd-self-shadow-body-caster-off",
+      "mmd-self-shadow-body-black-toon-on",
+      "mmd-self-shadow-body-black-toon-caster-off",
+      "mmd-self-shadow-body-vmd-off",
+      "mmd-self-shadow-body-vmd-on",
+      "mmd-self-shadow-on",
+      "mmd-self-shadow-caster-flag-off-mixed",
+      "mmd-self-shadow-receiver-flag-off-mixed",
+      "mmd-self-shadow-vmd-off",
+      "mmd-self-shadow-vmd-on",
+      "mmd-self-shadow-sdef-depth"
+    ]));
+  });
+
+  it("keeps self-shadow comparisons explicit and measurable", () => {
+    const manifest = readSelfShadowManifest();
+    const names = new Set(manifest.cases.map(visualCase => visualCase.name));
+
+    expect(manifest.comparisons.length).toBeGreaterThanOrEqual(3);
+    for (const comparison of manifest.comparisons) {
+      expect(comparison.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+      expect(names.has(comparison.shadowOn)).toBe(true);
+      expect(names.has(comparison.shadowOff)).toBe(true);
+      expect(comparison.shadowOn).not.toBe(comparison.shadowOff);
+      expect(comparison.receiverRoi.width).toBeGreaterThan(0);
+      expect(comparison.receiverRoi.height).toBeGreaterThan(0);
+      expect(comparison.thresholds.receiverMeanDarkeningMin).toBeGreaterThan(0);
+      expect(comparison.thresholds.receiverP95DarkeningMin).toBeGreaterThan(
+        comparison.thresholds.receiverMeanDarkeningMin
+      );
+      expect(comparison.thresholds.shadowPixelRatioMin).toBeGreaterThanOrEqual(0);
+      if (comparison.thresholds.shadowOnMeanLuminanceMin !== undefined) {
+        expect(comparison.thresholds.shadowOnMeanLuminanceMin).toBeGreaterThan(0);
+      }
+      if (comparison.thresholds.shadowOnP05LuminanceMin !== undefined) {
+        expect(comparison.thresholds.shadowOnP05LuminanceMin).toBeGreaterThan(0);
+      }
+      expect(comparison.thresholds.outsideRoiMeanDeltaMax).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("visual regression smoke scripts", () => {
+  it("exposes generated PMX and self-shadow smoke entrypoints", () => {
+    const scripts = readPackageJson().scripts;
+
+    expect(scripts["visual:smoke"]).toBeUndefined();
+    expect(scripts["visual:smoke:flip"]).toBeUndefined();
+    expect(scripts["visual:report"]).toBeUndefined();
+    expect(scripts["visual:report:flip"]).toBeUndefined();
+    expect(scripts["visual:smoke:generated-pmx"]).toContain("visual:report:generated-pmx");
+    expect(scripts["visual:smoke:generated-pmx:flip"]).toContain("visual:report:generated-pmx:flip");
+    expect(scripts["visual:report:generated-pmx:flip"]).toContain("--metric flip");
+    expect(scripts["visual:smoke:self-shadow"]).toContain("visual:report:self-shadow");
+    expect(scripts["visual:report:self-shadow"]).toContain("compute-shadow-metrics.mjs");
+    expect(scripts["render:visual:self-shadow:local"]).toContain("render-local-self-shadow-pair.mjs");
   });
 });

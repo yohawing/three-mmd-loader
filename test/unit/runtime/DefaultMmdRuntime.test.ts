@@ -1,10 +1,14 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
 import { DefaultMmdRuntime } from "../../../src/index.js";
 import type { MmdAnimation, VmdBoneFrame, VmdBoneTrack, VmdMorphFrame, VmdMorphTrack } from "../../../src/index.js";
 import type {
+  MmdDirectBufferPhysicsBackend,
   MmdPhysicsBackend,
+  MmdPhysicsStepBufferLayout,
+  MmdPhysicsStepBuffers,
   MmdPhysicsStepContext,
   MmdPhysicsStepResult
 } from "../../../src/physics/index.js";
@@ -33,6 +37,66 @@ describe("DefaultMmdRuntime", () => {
       frame: 75,
       frameRate: 60
     });
+  });
+
+  it("exposes camera and light state from the current animation", () => {
+    const runtime = new DefaultMmdRuntime();
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.bind(new THREE.Skeleton([]));
+    const animation = createEmptyMmdAnimation();
+    animation.cameraFrames.push(
+      {
+        frame: 0,
+        distance: 10,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        fov: 45,
+        perspective: true
+      },
+      {
+        frame: 30,
+        distance: 20,
+        position: [30, 0, 0],
+        rotation: [0, 1, 0],
+        fov: 60,
+        perspective: false
+      }
+    );
+    animation.lightFrames.push(
+      { frame: 0, color: [0, 0, 1], direction: [1, 0, 0] },
+      { frame: 30, color: [1, 0.5, 0.5], direction: [-1, -1, 1] }
+    );
+
+    runtime.setAnimation(animation, mesh);
+    runtime.evaluate(0.5, { physics: false });
+
+    expect(runtime.cameraState()).toMatchObject({
+      distance: 15,
+      position: [15, 0, 0],
+      rotation: [0, 0.5, 0],
+      fov: 52.5,
+      perspective: true
+    });
+    expect(runtime.lightState()).toEqual({
+      color: [0.5, 0.25, 0.75],
+      direction: [0, -0.5, 0.5]
+    });
+  });
+
+  it("keeps tick render sync on the hot path allocation-free", async () => {
+    const source = await readFile("src/runtime/core.ts", "utf8");
+
+    expect(source).not.toContain("function normalizeTickOptions");
+    expect(source).not.toContain("const { mesh, evaluateOptions } =");
+    expect(source).not.toContain("evaluate(seconds: number, options: MmdRuntimeEvaluateOptions = {})");
+    expect(source).not.toContain("this.state = createFrameState(seconds, this.frameRate);");
+    expect(source).not.toContain(".traverse((");
+    expect(source).toContain("let mesh: THREE.Object3D | null | undefined;");
+    expect(source).toContain("let evaluateOptions: MmdRuntimeEvaluateOptions | undefined;");
+    expect(source).toContain("evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions)");
+    expect(source).toContain("writeFrameState(this.state, seconds, this.frameRate);");
+    expect(source).toContain("return copyFrameStateInto(this.evaluateReturnState, this.state);");
+    expect(source).toContain("function updateSkinnedMeshSkeletons(");
   });
 
   it("ticks evaluation and syncs renderer-facing skeleton matrices", () => {
@@ -206,6 +270,18 @@ describe("DefaultMmdRuntime", () => {
       frame: 0,
       frameRate: 30
     });
+  });
+
+  it("documents volatile evaluate returns while keeping frameState snapshots stable", async () => {
+    const runtime = new DefaultMmdRuntime();
+    const evaluated = runtime.evaluate(0);
+
+    runtime.evaluate(1);
+
+    expect(evaluated.seconds).toBe(1);
+    const types = await readFile("src/runtime/types.ts", "utf8");
+    expect(types).toContain("The returned state is volatile");
+    expect(types).toContain("frameState() when you need to retain a stable snapshot");
   });
 
   it("expands group morph weights from model morph metadata", () => {
@@ -641,6 +717,55 @@ describe("DefaultMmdRuntime", () => {
     expect(runtime.debugState().stages.physics.worldMatricesColumnMajor[14]).toBe(3);
   });
 
+  it("writes external physics input directly into backend-owned step buffers", () => {
+    const bone = new THREE.Bone();
+    bone.name = "physics";
+    bone.userData.mmdBoneName = "physics";
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    mesh.userData.mmdPhysics = {
+      rigidBodies: [
+        {
+          name: "body",
+          boneIndex: 0,
+          group: 1,
+          mask: 0xffff,
+          shape: "sphere",
+          mode: "dynamic",
+          size: [0.5, 0.5, 0.5],
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          mass: 1,
+          linearDamping: 0,
+          angularDamping: 0,
+          restitution: 0,
+          friction: 0.5
+        }
+      ],
+      joints: []
+    };
+    const backend = new DirectBufferPhysicsBackend();
+    const runtime = new DefaultMmdRuntime({
+      physics: "external",
+      physicsBackend: backend
+    });
+
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
+    runtime.evaluate(1 / 30);
+
+    expect(backend.acquireCount).toBe(1);
+    expect(backend.lastContext?.inputTranslations).toBe(backend.buffers.inputTranslations);
+    expect(backend.lastContext?.inputRotations).toBe(backend.buffers.inputRotations);
+    expect(backend.lastContext?.inputWorldMatricesColumnMajor).toBe(
+      backend.buffers.inputWorldMatricesColumnMajor
+    );
+    expect(backend.lastContext?.output?.translations).toBe(backend.buffers.outputTranslations);
+    expect(backend.lastContext?.bonePhysicsToggles).toBe(backend.buffers.bonePhysicsToggles);
+    expect(backend.buffers.inputRotations[3]).toBe(1);
+    expect(bone.position.toArray()).toEqual([4, 5, -6]);
+  });
+
   it("skips and resets external physics when evaluate disables physics", () => {
     const bone = new THREE.Bone();
     bone.name = "physics";
@@ -915,6 +1040,45 @@ class InspectingPhysicsBackend implements MmdPhysicsBackend {
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
     this.lastContext = context;
     return { simulated: true };
+  }
+}
+
+class DirectBufferPhysicsBackend implements MmdDirectBufferPhysicsBackend {
+  readonly name = "direct-buffer";
+  readonly disabled = false;
+  readonly disposed = false;
+  readonly buffers: MmdPhysicsStepBuffers = {
+    inputTranslations: new Float32Array(3),
+    inputRotations: new Float32Array(4),
+    inputWorldMatricesColumnMajor: new Float32Array(16),
+    outputTranslations: new Float32Array(3),
+    outputRotations: new Float32Array(4),
+    outputWorldMatricesColumnMajor: new Float32Array(16),
+    bonePhysicsToggles: new Uint8Array(1),
+    updatedBoneIndices: new Uint32Array(1)
+  };
+  acquireCount = 0;
+  lastContext: MmdPhysicsStepContext | undefined;
+
+  acquireStepBuffers(layout: MmdPhysicsStepBufferLayout): MmdPhysicsStepBuffers | undefined {
+    this.acquireCount += 1;
+    expect(layout).toEqual({
+      boneCount: 1,
+      translationValueCount: 3,
+      rotationValueCount: 4,
+      worldMatrixValueCount: 16
+    });
+    return this.buffers;
+  }
+
+  step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
+    this.lastContext = context;
+    context.output?.translations?.set([4, 5, 6], 0);
+    context.output?.rotations?.set([0, 0, 0, 1], 0);
+    if (context.output?.updatedBoneIndices instanceof Uint32Array) {
+      context.output.updatedBoneIndices.set([0], 0);
+    }
+    return { simulated: true, updatedBoneCount: 1 };
   }
 }
 

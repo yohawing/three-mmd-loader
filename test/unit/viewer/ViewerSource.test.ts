@@ -8,7 +8,7 @@ describe("example viewer source", () => {
     const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");
 
     expect(modelSource).toContain("disposeModelResources(state.currentModel)");
-    expect(modelSource).toContain("state.scene.remove(state.currentModel.object)");
+    expect(modelSource).toContain("state.scene.remove(state.currentModel.root)");
     expect(disposeSource).toContain('import { disposeMmdModel } from "../../../dist/three/index.js"');
     expect(disposeSource).toContain("disposeMmdModel(model)");
     expect(disposeSource).not.toContain("function collectMaterialTextures(material)");
@@ -19,12 +19,12 @@ describe("example viewer source", () => {
     const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
     const realModelVisualSource = await readFile("scripts/visual-regression/render-real-models.mjs", "utf8");
 
-    expect(modelSource).toContain("state.scene.add(model.object)");
+    expect(modelSource).toContain("state.scene.add(model.root)");
     expect(modelSource).not.toContain("state.scene.add(\n    model.mesh");
-    expect(backgroundSource).toContain("state.scene.add(background.object)");
-    expect(backgroundSource).toContain("state.scene.remove(state.currentBackground.object)");
-    expect(realModelVisualSource).toContain("scene.add(model.object)");
-    expect(realModelVisualSource).toContain("createCamera(visualCase.camera, model.object");
+    expect(backgroundSource).toContain("state.scene.add(background.root)");
+    expect(backgroundSource).toContain("state.scene.remove(state.currentBackground.root)");
+    expect(realModelVisualSource).toContain("scene.add(model.root)");
+    expect(realModelVisualSource).toContain("createCamera(visualCase.camera, model.root");
     expect(realModelVisualSource).not.toContain("scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes)");
   });
 
@@ -35,12 +35,51 @@ describe("example viewer source", () => {
     const styles = await readFile("examples/viewer/styles.css", "utf8");
 
     expect(modelSource).toContain("reportTextureDiagnostics(state.currentModel)");
-    expect(diagnosticsSource).toContain("model.textureDiagnostics ?? []");
+    expect(diagnosticsSource).toContain("model.diagnostics?.textures ?? model.textureDiagnostics ?? []");
     expect(diagnosticsSource).toContain('globalThis.console.warn("[mmd-viewer] texture diagnostics:"');
     expect(diagnosticsSource).toContain('setStatus(');
     expect(diagnosticsSource).toContain('"warning"');
     expect(domSource).toContain("dom.topBar?.classList.toggle(\"is-warning\"");
     expect(styles).toContain(".top-bar.is-warning .status");
+  });
+
+  it("shows dismissible model credits from loaded PMX and PMD metadata comments", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const creditsSource = await readFile("examples/viewer/lib/credits.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const i18nSource = await readFile("examples/viewer/lib/i18n.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+    const threeSource = await readFile("src/three/index.ts", "utf8");
+
+    expect(threeSource).toContain("comment: modelData.metadata.comment");
+    expect(threeSource).toContain("englishComment: modelData.metadata.englishComment");
+    expect(html).toContain('id="credit-popup"');
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('id="credit-close"');
+    expect(html).toContain("close</span>");
+    expect(domSource).toContain('creditPopup: document.querySelector("#credit-popup")');
+    expect(domSource).toContain('creditCommentText: document.querySelector("#credit-comment")');
+    expect(domSource).toContain('creditCloseButton: document.querySelector("#credit-close")');
+    expect(mainSource).toContain("bindCreditPopupControls()");
+    expect(modelSource).toContain("showModelCredits(state.currentModel, label)");
+    expect(modelSource).toContain("showModelCredits(state.currentModel, modelFile.name)");
+    expect(modelSource).toContain("hideCreditPopup()");
+    expect(creditsSource).toContain("export function bindCreditPopupControls()");
+    expect(creditsSource).toContain('dom.creditCloseButton?.addEventListener("click", hideCreditPopup)');
+    expect(creditsSource).toContain("metadata?.comment");
+    expect(creditsSource).toContain("metadata?.englishComment");
+    expect(creditsSource).toContain("const code = char.charCodeAt(0)");
+    expect(creditsSource).toContain('char !== "\\n" && char !== "\\r" && char !== "\\t"');
+    expect(creditsSource).toContain("dom.creditPopup.hidden = false");
+    expect(creditsSource).toContain("dom.creditPopup.hidden = true");
+    expect(i18nSource).toContain('"credit.title": "Credits"');
+    expect(i18nSource).toContain('"aria.closeCredits": "Close credits"');
+    expect(styles).toContain(".credit-popup");
+    expect(styles).toContain(".credit-popup[hidden]");
+    expect(styles).toContain(".credit-close");
+    expect(styles).toContain("white-space: pre-wrap");
   });
 
   it("keeps same-folder PMX variants in a switcher instead of reloading them during folder drops", async () => {
@@ -54,13 +93,28 @@ describe("example viewer source", () => {
 
     expect(configSource).toContain('query.get("mmdFrameRate")');
     expect(configSource).toContain('query.get("mmdFrameQuantize")');
+    expect(configSource).toContain('readFirstQueryValue("ikTolerance", "ikTorelance")');
+    expect(configSource).toContain('"ikTorelance"');
+    expect(configSource).toContain('"ikMaxIterationsCap"');
+    expect(configSource).toContain('"ikMaxIter"');
+    expect(configSource).toContain('"maxIkIterations"');
     expect(stateSource).toContain("frameRate: viewerConfig.mmdFrameRate");
     expect(stateSource).toContain("mmdFrameRate: viewerConfig.mmdFrameRate");
     expect(stateSource).toContain("mmdFrameQuantize: viewerConfig.mmdFrameQuantize");
+    expect(stateSource).toContain("ikTolerance: viewerConfig.ikTolerance");
+    expect(stateSource).toContain("ikMaxIterationsCap: viewerConfig.ikMaxIterationsCap");
     expect(html).toContain('id="model-switcher"');
+    expect(html).toContain('<sl-select id="model-switcher"');
+    expect(html).toContain('id="clear-model" slot="suffix"');
     expect(html).not.toContain('id="model-name"');
     expect(html).toContain('aria-label="Selected model"');
     expect(domSource).toContain('modelSwitcher: document.querySelector("#model-switcher")');
+    expect(domSource).toContain("export function setLoadedFileSwitcherOptions");
+    expect(domSource).toContain('document.createElement("sl-option")');
+    expect(domSource).toContain('switcher.classList.toggle("is-single-loaded-file", isSingleEntry)');
+    expect(domSource).toContain('setAttribute("slot", isSingleEntry ? "prefix" : "suffix")');
+    expect(domSource).toContain("export function clearLoadedFileSwitcher");
+    expect(domSource).toContain('switcher.classList.remove("is-single-loaded-file")');
     expect(domSource).not.toContain("modelNameText");
     expect(stateSource).toContain("currentFolderTextureMap: undefined");
     expect(stateSource).toContain("currentFolderPmxFiles: []");
@@ -73,11 +127,16 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("export async function switchFolderModel(modelFile)");
     expect(modelSource).toContain('setStatus(`Switching to ${modelFile.name}`, "loading")');
     expect(modelSource).toContain("createModelLoader({ textureMap: state.currentFolderTextureMap })");
+    expect(modelSource).toContain("createViewerRuntimeOptions({");
     expect(modelSource).toContain("dom.modelControl.hidden = state.currentFolderPmxFiles.length === 0");
     expect(modelSource).toContain("preserveModelSwitcher: true");
     expect(modelSource).toContain("dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001)");
-    expect(mainSource).toContain("modelFileKey(file) === dom.modelSwitcher.value");
-    expect(styles).toContain(".loaded-file-control select");
+    expect(mainSource).toContain("const selectedValue = loadedFileSwitcherValue(dom.modelSwitcher)");
+    expect(mainSource).toContain("modelFileKey(file) === selectedValue");
+    expect(styles).toContain(".loaded-file-control sl-select");
+    expect(styles).toContain(".loaded-file-control sl-select::part(combobox)");
+    expect(styles).toContain(".loaded-file-control sl-select.is-single-loaded-file::part(expand-icon)");
+    expect(styles).toContain("display: none;");
 
     const dropHandler = modelSource.slice(
       modelSource.indexOf("function handleDroppedFiles"),
@@ -92,33 +151,47 @@ describe("example viewer source", () => {
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+    const cameraSource = await readFile("examples/viewer/lib/camera-loading.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const html = await readFile("examples/viewer/index.html", "utf8");
 
     expect(html).toContain('id="motion-switcher"');
+    expect(html).toContain('<sl-select id="motion-switcher"');
+    expect(html).toContain('id="clear-motion" slot="suffix"');
     expect(html).toContain('aria-label="Selected motion"');
     expect(html).not.toContain('id="motion-name"');
     expect(domSource).toContain('motionSwitcher: document.querySelector("#motion-switcher")');
     expect(domSource).not.toContain("motionNameText");
     expect(stateSource).toContain("currentMotionVmdFiles: []");
-    expect(mainSource).toContain("state.currentMotionVmdFiles = [file]");
-    expect(mainSource).toContain("motionFileKey(file) === dom.motionSwitcher.value");
-    expect(modelSource).toContain("state.currentMotionVmdFiles = vmdFiles");
+    expect(mainSource).toContain("async function loadSelectedMotionFile(file)");
+    expect(mainSource).toContain("const { motionFiles, cameraFiles } = await classifyVmdFiles([file])");
+    expect(mainSource).toContain("await loadCameraFile(cameraFiles[0])");
+    expect(mainSource).toContain("motionFileKey(file) === selectedValue");
+    expect(modelSource).toContain("const { motionFiles, cameraFiles } = await classifyVmdFiles(vmdFiles)");
+    expect(modelSource).toContain("state.currentMotionVmdFiles = motionFiles");
     expect(motionSource).toContain("export const findVmdFiles = findMmdMotionFiles");
     expect(motionSource).toContain("findMmdMotionFiles");
+    expect(motionSource).toContain("parseVmdSectionInventory");
+    expect(motionSource).toContain("export async function classifyVmdFiles(files)");
+    expect(motionSource).toContain("counts.cameras > 0 && counts.bones === 0 && counts.morphs === 0");
+    expect(motionSource).toContain("return await loadCameraAnimation(animation, label, createCameraSwitcherEntry(source, label))");
     expect(motionSource).toContain("export async function switchMotion(file)");
     expect(motionSource).toContain('setStatus(`Switching motion to ${file.name}`, "loading")');
     expect(motionSource).toContain("createMotionSwitcherEntry(source, label)");
     expect(motionSource).toContain('id: `url:${source}`');
-    expect(motionSource).toContain("option.value = motionFileKey(file)");
+    expect(motionSource).toContain("setLoadedFileSwitcherOptions(");
     expect(motionSource).toContain("dom.motionControl.hidden = state.currentMotionVmdFiles.length === 0");
+    expect(cameraSource).toContain("export async function loadCameraAnimation(animation, label, entry)");
+    expect(cameraSource).toContain("export function createCameraSwitcherEntry(source, label)");
 
     const dropHandler = modelSource.slice(
       modelSource.indexOf("function handleDroppedFiles"),
       modelSource.indexOf("async function collectDroppedFiles")
     );
     expect(dropHandler).toContain("const vmdFiles = findVmdFiles(files)");
-    expect(dropHandler).toContain("await loadMotion(vmdFiles[0])");
+    expect(dropHandler).toContain("else if (vmdFiles.length === 0)");
+    expect(dropHandler).toContain("await loadMotion(motionFiles[0])");
+    expect(dropHandler).toContain("await loadCameraFile(cameraFiles[0])");
     expect(dropHandler).toContain("vmdFiles.includes(file)");
     expect(dropHandler).not.toContain('lowerName.endsWith(".vmd")');
     expect(dropHandler).not.toContain("await loadMotion(file)");
@@ -173,7 +246,7 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("bindAssetLibraryControls");
     expect(mainSource).toContain('dom.loadMenu?.querySelector("summary")?.addEventListener("click", toggleLoadMenu)');
     expect(mainSource).not.toContain('document.addEventListener("click"');
-    expect(mainSource).not.toContain('event.key === "Escape"');
+    expect(mainSource).not.toContain('document.addEventListener("keydown"');
     expect(assetLibrarySource).toContain('"/__mmd_assets__/fixtures-local.json"');
     expect(assetLibrarySource).toContain("selectionStorageKey");
     expect(assetLibrarySource).toContain("customPresetStorageKey");
@@ -212,7 +285,15 @@ describe("example viewer source", () => {
     expect(serverSource).toContain('"fixtures.local.json"');
     expect(serverSource).toContain('const dataRoute = "/__mmd_data/"');
     expect(serverSource).toContain('const localAssetsRoute = "/__mmd_assets__/fixtures-local.json"');
+    expect(serverSource).toContain('Location: `/${url.search}`');
     expect(serverSource).toContain("createLocalAssetManifest");
+    expect(serverSource).toContain('import { parseVmdSectionInventory } from "../dist/parser/index.js"');
+    expect(serverSource).toContain("const vmdEntries = splitVmdAssetEntries(byExtension.vmd)");
+    expect(serverSource).toContain("const motions = vmdEntries.motions");
+    expect(serverSource).toContain("function isCameraOnlyVmdFixturePath(fixturePath)");
+    expect(serverSource).toContain("counts.cameras > 0 && counts.bones === 0 && counts.morphs === 0");
+    expect(serverSource).toContain("function dedupeAssetsByUrl(assets)");
+    expect(serverSource).not.toContain(": motions;");
     expect(serverSource).toContain("backgrounds");
     expect(serverSource).toContain("backgroundPmx");
     expect(serverSource).toContain("backgroundPmd");
@@ -231,6 +312,44 @@ describe("example viewer source", () => {
     expect(styles).toContain("@keyframes loading-spin");
   });
 
+  it("persists viewport grid and axis visibility controls from the load menu", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const sceneSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    const i18nSource = await readFile("examples/viewer/lib/i18n.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('id="viewport-settings-category"');
+    expect(html).toContain('data-i18n="menu.viewport"');
+    expect(html.indexOf('id="viewport-settings-category"')).toBeLessThan(html.indexOf('id="model-load-category"'));
+    expect(html).toContain('id="viewport-grid-toggle"');
+    expect(html).toContain('id="viewport-axes-toggle"');
+    expect(domSource).toContain('viewportGridToggle: document.querySelector("#viewport-grid-toggle")');
+    expect(domSource).toContain('viewportAxesToggle: document.querySelector("#viewport-axes-toggle")');
+    expect(stateSource).toContain('const viewportStorageKey = "three-mmd-loader.viewer.viewport.v1"');
+    expect(stateSource).toContain("const storedViewportSettings = readStoredViewportSettings()");
+    expect(stateSource).toContain("viewportGridVisible: storedViewportSettings.grid ?? true");
+    expect(stateSource).toContain("viewportAxesVisible: storedViewportSettings.axes ?? true");
+    expect(stateSource).toContain("export function persistViewportSettings()");
+    expect(sceneSource).toContain("state.gridHelper = new THREE.GridHelper");
+    expect(sceneSource).toContain("state.axesHelper = new THREE.AxesHelper");
+    expect(sceneSource).toContain("state.gridHelper.visible = state.viewportGridVisible");
+    expect(sceneSource).toContain("state.axesHelper.visible = state.viewportAxesVisible");
+    expect(sceneSource).toContain("export function setViewportGridVisible(visible)");
+    expect(sceneSource).toContain("export function setViewportAxesVisible(visible)");
+    expect(sceneSource).toContain("persistViewportSettings()");
+    expect(mainSource).toContain("bindViewportControls()");
+    expect(mainSource).toContain("setViewportGridVisible(dom.viewportGridToggle.checked)");
+    expect(mainSource).toContain("setViewportAxesVisible(dom.viewportAxesToggle.checked)");
+    expect(i18nSource).toContain('"menu.viewport": "Viewport"');
+    expect(i18nSource).toContain('"viewport.grid": "Grid"');
+    expect(i18nSource).toContain('"viewport.axes": "Axis"');
+    expect(styles).toContain(".viewport-settings");
+    expect(styles).toContain(".switch-toggle input:checked");
+  });
+
   it("decodes URL labels and keeps background and camera imports separate from the main model", async () => {
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
@@ -246,14 +365,22 @@ describe("example viewer source", () => {
     expect(urlLabelSource).toContain("decodeURIComponent(label)");
     expect(modelSource).toContain("await loadModel(bytes, label, () => createUrlTextureLoader(url), profile");
     expect(motionSource).toContain("await loadMotion(url, labelFromUrl(url))");
+    expect(backgroundSource).toContain("state.scene.add(background.root)");
+    expect(backgroundSource).toContain("state.scene.remove(state.currentBackground.root)");
     expect(html).toContain('id="choose-background"');
     expect(html).toContain('id="choose-camera"');
     expect(html).toContain('id="background-switcher"');
     expect(html).toContain('id="camera-switcher"');
     expect(html).toContain('id="audio-switcher"');
     expect(html).toContain('id="clear-background"');
+    expect(html).toContain('id="clear-background" slot="suffix"');
     expect(html).toContain('id="clear-camera"');
+    expect(html).toContain('id="clear-camera" slot="suffix"');
     expect(html).toContain('id="clear-audio"');
+    expect(html).toContain('id="clear-audio" slot="suffix"');
+    expect(mainSource).toContain('dom.audioSwitcher?.addEventListener("sl-change"');
+    expect(mainSource).toContain('dom.backgroundSwitcher?.addEventListener("sl-change"');
+    expect(mainSource).toContain('dom.cameraSwitcher?.addEventListener("sl-change"');
     expect(mainSource).toContain("loadBackgroundUrl: loadBackgroundFromUrl");
     expect(mainSource).toContain("loadCameraUrl: loadCameraFromUrl");
     expect(mainSource).toContain("clearBackground()");
@@ -262,6 +389,11 @@ describe("example viewer source", () => {
     expect(backgroundSource).toContain("disposeModelResources(state.currentBackground)");
     expect(backgroundSource).toContain("updateStageState()");
     expect(domSource).toContain("!state.currentModel && !state.currentBackground");
+    expect(domSource).toContain("let lastPlaybackCurrentFrameText");
+    expect(domSource).toContain("let lastPlaybackTotalFrameText");
+    expect(domSource).toContain("const shouldForceFrameInput = options?.forceFrameInput === true");
+    expect(domSource).toContain("shouldForceFrameInput || (document.activeElement !== dom.frameCurrentInput");
+    expect(domSource).toContain("document.activeElement !== dom.frameCurrentInput");
     expect(cameraSource).toContain("state.currentCameraMotion = {");
     expect(cameraSource).toContain("syncTimelineRangeToCurrentMotion()");
     expect(cameraSource).toContain("currentMotionDurationSeconds()");
@@ -277,7 +409,8 @@ describe("example viewer source", () => {
     expect(cameraSource).not.toContain("function cameraFrameAt");
     expect(playbackSource).toContain("applyCameraMotion()");
     expect(playbackSource).toContain("currentMmdSeconds()");
-    expect(modelSource).toContain("frameRate: state.mmdFrameRate");
+    expect(stateSource).toContain("frameRate: viewerConfig.mmdFrameRate");
+    expect(modelSource).toContain("MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, createViewerRuntimeOptions({");
     expect(stateSource).toContain("currentBackground: undefined");
     expect(stateSource).toContain("currentCameraMotion: undefined");
     expect(stateSource).toContain("mmdFrameQuantize");
@@ -292,13 +425,56 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("state.cameraApplyOptions = {");
   });
 
+  it("wires self-shadow rendering into the viewer renderer, light, and playback loop", async () => {
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const htmlSource = await readFile("examples/viewer/index.html", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const sceneSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+
+    expect(sceneSource).toContain("state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled");
+    expect(sceneSource).toContain("state.keyLight.castShadow = state.debugSelfShadowEnabled");
+    expect(sceneSource).toContain("configureMmdSelfShadowDirectionalLight");
+    expect(sceneSource).toContain("fitMmdSelfShadowDirectionalLightToBox");
+    expect(sceneSource).toContain("mapSize: 4096");
+    expect(sceneSource).toContain("shadowIntensity: 1.0");
+    expect(sceneSource).toContain("normalBias: 0.006");
+    expect(sceneSource).toContain("export function fitShadowCameraToObject(object)");
+    expect(sceneSource).toContain("state.selfShadowBoundsScratch.setFromObject(object)");
+    expect(sceneSource).toContain("marginScale: 0.06");
+    expect(stateSource).toContain("selfShadowStateScratch");
+    expect(stateSource).toContain("selfShadowBoundsScratch: new THREE.Box3()");
+    expect(stateSource).toContain("selfShadowFrameHint");
+    expect(stateSource).toContain("debugSelfShadowEnabled: initialSelfShadowEnabled");
+    expect(playbackSource).toContain("sampleMmdSelfShadowTrackInto");
+    expect(playbackSource).toContain("applyMmdSelfShadowStateToThreeDirectionalLight");
+    expect(playbackSource).toContain('from "../../../dist/runtime/index.js"');
+    expect(playbackSource).toContain('from "../../../dist/three/index.js"');
+    expect(playbackSource).toContain("applySelfShadowMotion()");
+    expect(playbackSource).toContain("fitShadowCameraToObject(state.currentModel.mesh)");
+    expect(playbackSource).toContain("state.keyLight.castShadow = true");
+    expect(playbackSource).toContain("!state.debugSelfShadowEnabled");
+    expect(playbackSource).toContain("state.selfShadowLightOptionsScratch");
+    expect(stateSource).toContain("shadowIntensity: 1.0");
+    expect(htmlSource).toContain('id="debug-self-shadow-toggle"');
+    expect(domSource).toContain('debugSelfShadowToggle: document.querySelector("#debug-self-shadow-toggle")');
+    expect(mainSource).toContain("setSelfShadowEnabled(dom.debugSelfShadowToggle.checked)");
+    expect(debugSource).toContain("export function setSelfShadowEnabled(enabled)");
+    expect(debugSource).toContain("state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled");
+    expect(debugSource).toContain("selfShadowEnabled: state.debugSelfShadowEnabled");
+  });
+
   it("keeps audio playback resume from seeking back to the start", async () => {
     const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
 
-    expect(playbackSource).toContain("syncMotionToAudioTime({ evaluate: false });");
-    expect(playbackSource).toContain("syncAudioToMotionTime({ onlyIfDrifted: true })");
+    expect(playbackSource).toContain("syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);");
+    expect(playbackSource).toContain("syncAudioToMotionTime(state.audioDriftSyncOptionsScratch)");
     expect(playbackSource).toContain("Math.abs(dom.bgmAudio.currentTime - targetTime) < 0.05");
+    expect(playbackSource).toContain("state.elapsedSeconds = Math.max(audioTime + state.audioOffsetSeconds, 0)");
+    expect(playbackSource).toContain("const offsetTargetTime = state.elapsedSeconds - state.audioOffsetSeconds");
     expect(playbackSource).toContain("state.isSyncingAudioTime = true;");
     expect(playbackSource).toContain("export function finishAudioTimeSync()");
     expect(mainSource).toContain("if (finishAudioTimeSync()) return;");
@@ -307,14 +483,179 @@ describe("example viewer source", () => {
     expect(mainSource).not.toContain("!state.isPlaying || !hasCurrentMotion()");
   });
 
-  it("delegates Ammo script loading to the public physics browser loader", async () => {
-    const ammoSource = await readFile("examples/viewer/lib/ammo-bootstrap.js", "utf8");
+  it("supports audio offset frames from the transport UI and fixture presets", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const audioSource = await readFile("examples/viewer/lib/audio-loading.js", "utf8");
+    const assetLibrarySource = await readFile("examples/viewer/lib/asset-library.js", "utf8");
+    const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
+    const fixtureSchema = await readFile("test/fixtures/fixtures.schema.json", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
 
-    expect(ammoSource).toContain("loadAmmoNamespace");
-    expect(ammoSource).toContain("state.ammoScriptLoadPromise ??= loadAmmoNamespace(state.ammoScriptUrl)");
-    expect(ammoSource).toContain("dom.physicsErrorBanner.textContent = message");
-    expect(ammoSource).not.toContain("function loadAmmoScript");
-    expect(ammoSource).not.toContain("function getAmmoCandidate");
+    expect(html).toContain('id="audio-offset-control"');
+    expect(html).toContain('id="audio-offset-frame"');
+    expect(html).toContain('type="text"');
+    expect(html).toContain('inputmode="numeric"');
+    expect(html).toContain('pattern="-?[0-9]*"');
+    expect(html.indexOf('id="audio-load-category"')).toBeLessThan(html.indexOf('id="audio-offset-control"'));
+    expect(html.indexOf('id="audio-offset-control"')).toBeLessThan(html.indexOf('id="asset-audio-select"'));
+    expect(html.indexOf('id="audio-offset-control"')).toBeLessThan(html.indexOf('id="background-load-category"'));
+    expect(domSource).toContain('audioOffsetControl: document.querySelector("#audio-offset-control")');
+    expect(domSource).toContain('audioOffsetFrameInput: document.querySelector("#audio-offset-frame")');
+    expect(stateSource).toContain("audioOffsetFrame: 0");
+    expect(stateSource).toContain("audioOffsetSeconds: 0");
+    expect(mainSource).toContain("setAudioOffsetFrame");
+    expect(mainSource).toContain('dom.audioOffsetFrameInput?.addEventListener("input", handleAudioOffsetFrameInput)');
+    expect(mainSource).toContain('dom.audioOffsetFrameInput?.addEventListener("change", commitAudioOffsetFrameInput)');
+    expect(mainSource).toContain("fallback: false");
+    expect(mainSource).toContain("updateInput: false");
+    expect(audioSource).toContain("export function setAudioOffsetFrame(value, options = {})");
+    expect(audioSource).toContain("if (frame === undefined)");
+    expect(audioSource).toContain("state.audioOffsetSeconds = frame / state.mmdFrameRate");
+    expect(audioSource).toContain("const targetTime = state.elapsedSeconds - state.audioOffsetSeconds");
+    expect(audioSource).not.toContain("dom.audioOffsetControl.hidden = state.currentAudioEntries.length === 0");
+    expect(assetLibrarySource).toContain("audioOffsetFrame: state.audioOffsetFrame");
+    expect(assetLibrarySource).toContain("offsetFrame: preset.audioOffsetFrame ?? preset.audio?.offsetFrame");
+    expect(assetLibrarySource).toContain("offsetFrame: asset.audioOffsetFrame ?? asset.offsetFrame");
+    expect(serverSource).toContain("fixtureCase.audioOffsetFrame ?? fixtureCase.audio?.offsetFrame");
+    expect(serverSource).toContain("...(audioOffsetFrame !== undefined ? { audioOffsetFrame } : {})");
+    expect(fixtureSchema).toContain('"audioOffsetFrame"');
+    expect(fixtureSchema).toContain('"offsetFrame"');
+    expect(styles).toContain(".audio-offset-control");
+    expect(styles).toContain("#audio-offset-frame");
+  });
+
+  it("keeps the playback transport single-row without volume overflow on narrow viewports", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('<sl-icon-button id="play-toggle" name="play" label="Play"></sl-icon-button>');
+    expect(html).toContain('id="frame-current"');
+    expect(html).toContain('id="frame-total"');
+    expect(html).toContain('data-i18n-aria="aria.currentFrame"');
+    expect(html).not.toContain("play_arrow");
+    expect(domSource).toContain('playToggle: document.querySelector("#play-toggle")');
+    expect(domSource).toContain('frameCurrentInput: document.querySelector("#frame-current")');
+    expect(domSource).toContain('frameTotalText: document.querySelector("#frame-total")');
+    expect(domSource).not.toContain("playToggleIcon");
+    expect(domSource).toContain('const iconName = state.isPlaying ? "pause" : "play"');
+    expect(domSource).toContain("dom.playToggle.name = iconName");
+    expect(domSource).toContain("dom.playToggle.label = label");
+    expect(mainSource).toContain("updatePlayToggle, updateStageState");
+    expect(mainSource).toContain("updatePlayToggle();");
+    expect(styles).toContain("--transport-min-height: 40px");
+    expect(styles).toContain("min-height: var(--transport-min-height)");
+    expect(styles).not.toContain("min-height: var(--transport-height)");
+    expect(styles).toContain("grid-template-columns: 34px minmax(0, 1fr) max-content");
+    expect(styles).toContain("grid-template-columns: auto minmax(48px, 90px)");
+    expect(styles).toContain("grid-template-columns: auto minmax(48px, 54px)");
+    expect(styles).toContain("#play-toggle::part(base)");
+    expect(styles).toContain(".frame-display");
+    expect(styles).toContain(".frame-display input");
+    expect(styles).toContain("justify-self: end");
+    expect(styles).toContain(".transport sl-range {\n    width: 100%;\n    min-width: 0;");
+    expect(styles).toContain("#volume-slider {\n    width: 100%;\n    min-width: 0;");
+    expect(styles).toContain("@media (max-width: 920px)");
+    expect(styles).not.toContain("grid-column: 1 / -1");
+    expect(styles).not.toContain("grid-template-columns: 1fr");
+  });
+
+  it("seeks to an entered current frame from the transport frame input", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const i18nSource = await readFile("examples/viewer/lib/i18n.js", "utf8");
+
+    expect(i18nSource).toContain('"aria.currentFrame": "Current frame"');
+    expect(i18nSource).toContain('"aria.currentFrame": "現在フレーム"');
+    expect(mainSource).toContain("currentMotionDurationSeconds, debugEnabled");
+    expect(mainSource).toContain("let frameCurrentInputDirty = false");
+    expect(mainSource).toContain('dom.frameCurrentInput?.addEventListener("input", () => {');
+    expect(mainSource).toContain('dom.frameCurrentInput?.addEventListener("keydown", handleFrameCurrentKeydown)');
+    expect(mainSource).toContain('dom.frameCurrentInput?.addEventListener("change", commitFrameCurrentInput)');
+    expect(mainSource).toContain('dom.frameCurrentInput?.addEventListener("blur", handleFrameCurrentBlur)');
+    expect(mainSource).toContain('if (event.key === "Enter")');
+    expect(mainSource).toContain("if (frameCurrentInputDirty)");
+    expect(mainSource).toContain('} else if (event.key === "Escape")');
+    expect(mainSource).toContain("function handleFrameCurrentBlur()");
+    expect(mainSource).toContain("frameCurrentInputDirty = false");
+    expect(mainSource).toContain("updatePlaybackDisplay({ forceFrameInput: true })");
+    expect(mainSource).toContain("function seekToFrame(frame)");
+    expect(mainSource).toContain("const targetFrame = Math.min(Math.max(frame, 0), maxFrame)");
+    expect(mainSource).toContain("state.elapsedSeconds = targetFrame / state.mmdFrameRate");
+    expect(mainSource).toContain("dom.timeline.value = state.elapsedSeconds");
+    expect(mainSource).toContain('dom.timeline.setAttribute("value", String(state.elapsedSeconds))');
+    expect(mainSource).toContain("evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch)");
+    expect(mainSource).toContain("syncAudioToMotionTime()");
+    expect(domSource).toContain("dom.frameCurrentInput.value = currentText");
+    expect(domSource).toContain("dom.frameTotalText.textContent = totalText");
+  });
+
+  it("refreshes chrome height after the audio controls change transport height", async () => {
+    const audioSource = await readFile("examples/viewer/lib/audio-loading.js", "utf8");
+
+    expect(audioSource).toContain('import { dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js"');
+    expect(audioSource.indexOf("updateAudioOffsetInput();")).toBeLessThan(audioSource.indexOf("updatePresetSectionVisibility();"));
+    expect(audioSource.indexOf("updatePresetSectionVisibility();")).toBeLessThan(audioSource.indexOf("updateChromeHeights();"));
+  });
+
+  it("persists viewer volume and reapplies it after reload and audio metadata loads", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+
+    expect(mainSource).toContain('const volumeStorageKey = "three-mmd-loader.viewer.volume.v1"');
+    expect(mainSource.indexOf("const volumeStorageKey")).toBeLessThan(mainSource.indexOf("initVolumeControls()"));
+    expect(mainSource).toContain('dom.volumeSlider?.addEventListener("sl-input", handleVolumeSliderInput)');
+    expect(mainSource).toContain('dom.volumeSlider?.addEventListener("sl-change", handleVolumeSliderInput)');
+    expect(mainSource).toContain("function applyStoredVolume()");
+    expect(mainSource).toContain("function applyVolumeState(volume, muted)");
+    expect(mainSource).toContain('dom.volumeSlider.setAttribute("value", String(clampedVolume))');
+    expect(mainSource).toContain("dom.volumeSlider.value = clampedVolume");
+    expect(mainSource).toContain("dom.volumeToggle.setAttribute(\"name\", iconName)");
+    expect(mainSource).toContain('dom.bgmAudio.addEventListener("loadedmetadata", () => {');
+    expect(mainSource).toContain("applyStoredVolume()");
+    expect(mainSource).toContain("window.localStorage.setItem(volumeStorageKey, JSON.stringify({");
+    expect(mainSource).toContain("volume: clampVolume(volume)");
+    expect(mainSource).toContain("function clampVolume(volume)");
+  });
+
+  it("keeps viewer runtime updates allocation-light on the render path", async () => {
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+
+    expect(playbackSource).toContain("export function evaluateRuntime(options)");
+    expect(playbackSource).not.toContain("export function evaluateRuntime(options = {})");
+    expect(playbackSource).not.toContain("state.currentModel.update(currentMmdSeconds(), {");
+    expect(playbackSource).not.toContain("applyMmdSelfShadowStateToThreeDirectionalLight(state.keyLight, selfShadowState, {");
+    expect(playbackSource).toContain("const updateOptions = state.runtimeUpdateOptionsScratch");
+    expect(playbackSource).toContain("state.currentModel.update(currentMmdSeconds(), updateOptions)");
+    expect(playbackSource).toContain("state.selfShadowLightOptionsScratch");
+    expect(stateSource).toContain("runtimeUpdateOptionsScratch");
+    expect(stateSource).toContain("runtimePhysicsDisabledOptionsScratch");
+    expect(stateSource).toContain("audioNoEvaluateOptionsScratch");
+    expect(stateSource).toContain("selfShadowLightOptionsScratch");
+  });
+
+  it("uses the custom Bullet MMD backend without an Ammo viewer fallback", async () => {
+    const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+
+    expect(stateSource).toContain('customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js"');
+    expect(stateSource).not.toContain("ammoScriptUrl");
+    expect(stateSource).not.toContain("physicsBackendKind");
+    expect(stateSource).not.toContain("ammoNamespace");
+    expect(physicsSource).toContain("loadCustomBulletMmdModule");
+    expect(physicsSource).toContain("createCustomBulletMmdPhysicsBackend");
+    expect(physicsSource).toContain("Physics disabled by viewer query parameter.");
+    expect(physicsSource).toContain("dom.physicsErrorBanner.textContent = message");
+    expect(physicsSource).not.toContain("loadAmmoNamespace");
+    expect(physicsSource).not.toContain("createAmmoMmdPhysicsBackend");
+    expect(mainSource).toContain('./lib/physics-backend.js');
+    expect(modelSource).toContain('./physics-backend.js');
   });
 
   it("profiles viewer model load stages only behind the perf query flag", async () => {
@@ -333,5 +674,163 @@ describe("example viewer source", () => {
     const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
 
     expect(serverSource).toContain('[".wasm", "application/wasm"]');
+  });
+
+  it("keeps the debug panel behind the debug query flag with collider controls", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('id="debug-menu" hidden');
+    expect(html).toContain('id="debug-colliders-toggle"');
+    expect(html).toContain('id="debug-normals-toggle"');
+    expect(html).toContain('id="debug-outline-off-toggle"');
+    expect(html).toContain('id="debug-self-shadow-toggle"');
+    expect(html).toContain('id="debug-fps-value"');
+    expect(html).toContain('id="debug-frame-time-value"');
+    expect(html).toContain('id="debug-memory-value"');
+    expect(html).toContain("FPS");
+    expect(html).toContain("Frame");
+    expect(html).toContain("Memory");
+    expect(html).not.toContain('id="debug-toon-off-toggle"');
+    expect(html).not.toContain("Toon off");
+    expect(html).not.toContain('id="debug-max-sub-steps"');
+    expect(html).not.toContain('id="debug-dynamic-with-bone-feedback"');
+    expect(html).not.toContain('id="debug-collision-margin"');
+    expect(html).not.toContain('id="debug-solver-iterations"');
+    expect(html).not.toContain('id="debug-split-impulse-toggle"');
+    expect(html).not.toContain('id="debug-split-impulse-threshold"');
+    expect(html).not.toContain('id="debug-refresh-state"');
+    expect(html).not.toContain('id="debug-state-output"');
+    expect(html).not.toContain("Refresh state");
+    expect(html).toContain('type="checkbox" role="switch"');
+    expect(html).toContain("bug_report");
+    expect(html).not.toContain("id=\"debug-normals\"");
+    expect(html).not.toContain("id=\"debug-toon-off\"");
+    expect(html).not.toContain("id=\"debug-outline-off\"");
+    expect(domSource).toContain('debugMenu: document.querySelector("#debug-menu")');
+    expect(domSource).toContain('debugCollidersToggle: document.querySelector("#debug-colliders-toggle")');
+    expect(domSource).toContain('debugNormalsToggle: document.querySelector("#debug-normals-toggle")');
+    expect(domSource).toContain('debugOutlineOffToggle: document.querySelector("#debug-outline-off-toggle")');
+    expect(domSource).toContain('debugSelfShadowToggle: document.querySelector("#debug-self-shadow-toggle")');
+    expect(domSource).toContain('debugFpsValue: document.querySelector("#debug-fps-value")');
+    expect(domSource).toContain('debugFrameTimeValue: document.querySelector("#debug-frame-time-value")');
+    expect(domSource).toContain('debugMemoryValue: document.querySelector("#debug-memory-value")');
+    expect(domSource).not.toContain('debugToonOffToggle: document.querySelector("#debug-toon-off-toggle")');
+    expect(domSource).not.toContain('debugMaxSubStepsInput: document.querySelector("#debug-max-sub-steps")');
+    expect(domSource).not.toContain('debugDynamicWithBoneFeedbackInput: document.querySelector("#debug-dynamic-with-bone-feedback")');
+    expect(domSource).not.toContain('debugCollisionMarginInput: document.querySelector("#debug-collision-margin")');
+    expect(domSource).not.toContain('debugSolverIterationsInput: document.querySelector("#debug-solver-iterations")');
+    expect(domSource).not.toContain('debugSplitImpulseToggle: document.querySelector("#debug-split-impulse-toggle")');
+    expect(domSource).not.toContain('debugSplitImpulsePenetrationThresholdInput: document.querySelector("#debug-split-impulse-threshold")');
+    expect(domSource).not.toContain('debugRefreshStateButton: document.querySelector("#debug-refresh-state")');
+    expect(domSource).not.toContain('debugStateOutput: document.querySelector("#debug-state-output")');
+    expect(stateSource).toContain('new window.URLSearchParams(location.search).has("debug")');
+    expect(stateSource).toContain('maxSubSteps: initialPhysicsMaxSubSteps');
+    expect(stateSource).toContain('parseDebugInteger(query.get("maxSubSteps"), 5)');
+    expect(stateSource).toContain('query.get("physics") === "0" ? false : true');
+    expect(stateSource).toContain("physicsEnabled: initialPhysicsEnabled");
+    expect(stateSource).toContain('solverIterations: initialSolverIterations');
+    expect(stateSource).toContain('splitImpulsePenetrationThreshold: initialSplitImpulsePenetrationThreshold');
+    expect(stateSource).toContain("if (value === null)");
+    expect(stateSource).toContain('debugMaterialMode: "default"');
+    expect(stateSource).toContain("debugOutlineHidden: false");
+    expect(stateSource).toContain("debugFpsSampleSeconds: 0");
+    expect(stateSource).toContain("debugFpsSampleFrames: 0");
+    expect(stateSource).toContain("debugFrameTimeSampleMs: 0");
+    expect(mainSource).toContain("if (!debugEnabled)");
+    expect(mainSource).toContain("dom.debugMenu.hidden = false");
+    expect(mainSource).toContain("window.mmdDebug = viewerApi.debug");
+    expect(mainSource).toContain("toggleColliderHelpers()");
+    expect(mainSource).toContain('setDebugMaterialMode(dom.debugNormalsToggle.checked ? "normals" : "default")');
+    expect(mainSource).toContain("setOutlineHidden(dom.debugOutlineOffToggle.checked)");
+    expect(mainSource).toContain("setSelfShadowEnabled(dom.debugSelfShadowToggle.checked)");
+    expect(mainSource).not.toContain("dom.debugToonOffToggle");
+    expect(mainSource).not.toContain('"toonOff"');
+    expect(mainSource).not.toContain("setPhysicsMaxSubSteps(dom.debugMaxSubStepsInput.value)");
+    expect(mainSource).not.toContain("setDynamicWithBoneRotationFeedbackScale(dom.debugDynamicWithBoneFeedbackInput.value)");
+    expect(mainSource).not.toContain("setCollisionMargin(dom.debugCollisionMarginInput.value)");
+    expect(mainSource).not.toContain("setSolverIterations(dom.debugSolverIterationsInput.value)");
+    expect(mainSource).not.toContain("setSplitImpulse(dom.debugSplitImpulseToggle.checked)");
+    expect(mainSource).not.toContain("setSplitImpulsePenetrationThreshold(dom.debugSplitImpulsePenetrationThresholdInput.value)");
+    expect(mainSource).not.toContain("dom.debugRefreshStateButton");
+    expect(playbackSource).toContain("updateColliderHelpers()");
+    expect(playbackSource).toContain("state.physicsEnabled &&");
+    expect(playbackSource).toContain("updateDebugFps(delta)");
+    expect(debugSource).toContain("export function toggleColliderHelpers()");
+    expect(debugSource).toContain("export function setDebugMaterialMode(mode)");
+    expect(debugSource).not.toContain('import Stats from "three/addons/libs/stats.module.js"');
+    expect(debugSource).toContain("export function updateDebugFps(deltaSeconds)");
+    expect(debugSource).toContain("state.debugFpsSampleSeconds += deltaSeconds");
+    expect(debugSource).toContain("state.debugFrameTimeSampleMs += deltaSeconds * 1000");
+    expect(debugSource).toContain("dom.debugFpsValue.textContent = fps.toFixed(1)");
+    expect(debugSource).toContain("dom.debugFrameTimeValue.textContent = `${frameTimeMs.toFixed(1)} ms`");
+    expect(debugSource).toContain("physicsEnabled: state.physicsEnabled");
+    expect(debugSource).toContain("ikMaxIterationsCap: state.ikMaxIterationsCap ?? null");
+    expect(debugSource).toContain("function formatDebugMemory()");
+    expect(debugSource).toContain("window.performance?.memory");
+    expect(debugSource).toContain("usedJSHeapSize");
+    expect(debugSource).not.toContain("toonOff");
+    expect(debugSource).not.toContain("function applyToonOffMaterial()");
+    expect(debugSource).not.toContain("currentBodyDebugMeshes");
+    expect(debugSource).toContain("...(state.currentModel.renderOrderMeshes ?? [])");
+    expect(debugSource).toContain("...(state.currentModel.outlineMeshes ?? [])");
+    expect(debugSource).toContain("export function setOutlineHidden(hidden)");
+    expect(debugSource).toContain("export function setPhysicsMaxSubSteps(value)");
+    expect(debugSource).toContain("export function setSolverIterations(value)");
+    expect(debugSource).toContain("export function setSplitImpulse(enabled)");
+    expect(debugSource).toContain("export function setSplitImpulsePenetrationThreshold(value)");
+    expect(debugSource).toContain("dumpRigidBodies(indices)");
+    expect(debugSource).toContain("dumpCollisionPair(indexA, indexB)");
+    expect(debugSource).toContain("function rigidBodyCollisionGroup(body)");
+    expect(debugSource).toContain("function rigidBodyCollisionMask(body)");
+    expect(debugSource).toContain("new THREE.LineSegments(");
+    expect(debugSource).toContain("function createColliderLineGeometry(body)");
+    expect(debugSource).toContain("function appendEllipseSegments(");
+    expect(debugSource).toContain("function colliderMaterialForGroup(collisionGroup, materialsByGroup)");
+    expect(debugSource).toContain("new THREE.LineBasicMaterial({");
+    expect(debugSource).not.toContain("wireframe: true");
+    expect(debugSource).toContain("function createRigidBodyRestMatrix(body)");
+    expect(debugSource).toContain("function setHelperMatrixFromMmdMatrix(helper, matrix)");
+    expect(debugSource).toContain("makeScale(1, 1, -1)");
+    expect(debugSource).toContain("helper.matrixWorldNeedsUpdate = true");
+    expect(debugSource).toContain("mmdRigidBodyRestMatrix");
+    expect(debugSource).toContain("mmdRigidBodyGroup");
+    expect(debugSource).toContain("mmd collider group");
+    expect(debugSource).toContain("state.showDebugColliders = state.debugCollidersVisible");
+    expect(styles).toContain(".debug-menu[hidden]");
+    expect(styles).toContain(".debug-metrics");
+    expect(styles).toContain(".debug-metric");
+    expect(styles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
+    expect(styles).not.toContain(".debug-number");
+    expect(styles).not.toContain("#debug-refresh-state");
+    expect(styles).not.toContain("#debug-state-output");
+    expect(styles).toContain(".debug-toggle input:checked");
+  });
+
+  it("does not keep transient debug console logs in the viewer", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const marker = "[mmd" + "-debug]";
+
+    expect(mainSource).not.toContain(marker);
+    expect(playbackSource).not.toContain(marker);
+  });
+
+  it("uses the non-deprecated Three.js frame timer in the viewer loop", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+
+    expect(stateSource).toContain("frameTimer: new THREE.Timer()");
+    expect(stateSource).toContain("state.frameTimer.connect(document)");
+    expect(mainSource).toContain("state.frameTimer.update()");
+    expect(playbackSource).toContain("state.frameTimer.update()");
+    expect(playbackSource).toContain("state.frameTimer.getDelta()");
+    expect(stateSource).not.toContain("new THREE.Clock()");
   });
 });

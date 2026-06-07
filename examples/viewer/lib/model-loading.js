@@ -5,20 +5,24 @@ import {
   normalizeMmdRelativePath,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
+import { MmdAnimRuntime, DefaultMmdRuntime } from "../../../dist/runtime/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
-import { createPhysicsBackend, disposeActivePhysicsBackend } from "./ammo-bootstrap.js";
+import { createPhysicsBackend, disposeActivePhysicsBackend } from "./physics-backend.js";
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
-import { restoreDebugMaterials } from "./debug.js";
+import { loadCameraFile } from "./camera-loading.js";
+import { hideCreditPopup, showModelCredits } from "./credits.js";
+import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, setOutlineHidden, showColliderHelpers } from "./debug.js";
 import { reportTextureDiagnostics } from "./diagnostics.js";
-import { dom, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStageState, updateTransportState } from "./dom.js";
+import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStageState, updateTransportState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
-import { loadMotion, loadPose, findVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
+import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
-import { currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
+import { createViewerRuntimeOptions, currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
 import { fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
+import { viewerConfig } from "./viewer-config.js";
 
 export async function loadModelFromUrl(url) {
   const profile = createViewerLoadProfile(`url:${url}`);
@@ -86,19 +90,27 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
-      state.currentModel.runtime?.setAnimation(state.currentMotion.animation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
       updateTransportState();
       syncPlaybackToCurrentAudioState();
     } else {
-      state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.restPoseAnimation);
     }
     loadProfile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
+    showModelCredits(state.currentModel, label);
     updateStageState();
+    if (state.debugOutlineHidden) {
+      setOutlineHidden(true);
+    }
+    if (state.showDebugColliders) {
+      showColliderHelpers();
+    }
     renderStillFrame();
+    refreshDebugPanelState();
     loadProfile?.mark("first-render");
     return true;
   } catch (error) {
@@ -156,19 +168,27 @@ export async function loadModelFolder(files) {
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
-      state.currentModel.runtime?.setAnimation(state.currentMotion.animation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
       updateTransportState();
       syncPlaybackToCurrentAudioState();
     } else {
-      state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.restPoseAnimation);
     }
     profile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
+    showModelCredits(state.currentModel, modelFile.name);
     updateStageState();
+    if (state.debugOutlineHidden) {
+      setOutlineHidden(true);
+    }
+    if (state.showDebugColliders) {
+      showColliderHelpers();
+    }
     renderStillFrame();
+    refreshDebugPanelState();
     profile?.mark("first-render");
   } catch (error) {
     profile?.mark("error");
@@ -210,19 +230,27 @@ export async function switchFolderModel(modelFile) {
     updatePlaybackDisplay();
     fitCameraToObject(state.currentModel.mesh);
     if (hasCurrentMotion()) {
-      state.currentModel.runtime?.setAnimation(state.currentMotion.animation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
       updateTransportState();
       syncPlaybackToCurrentAudioState();
     } else {
-      state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
+      state.currentModel.setAnimation(state.restPoseAnimation);
     }
     profile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
+    showModelCredits(state.currentModel, modelFile.name);
     updateStageState();
+    if (state.debugOutlineHidden) {
+      setOutlineHidden(true);
+    }
+    if (state.showDebugColliders) {
+      showColliderHelpers();
+    }
     renderStillFrame();
+    refreshDebugPanelState();
     profile?.mark("first-render");
   } catch (error) {
     profile?.mark("error");
@@ -234,12 +262,14 @@ export async function switchFolderModel(modelFile) {
 }
 
 export function clearModel(options = {}) {
+  hideColliderHelpers();
   restoreDebugMaterials();
   if (state.currentModel) {
-    state.scene.remove(state.currentModel.object);
+    state.scene.remove(state.currentModel.root);
     disposeModelResources(state.currentModel);
   }
   state.currentModel = undefined;
+  hideCreditPopup();
   disposeActivePhysicsBackend();
   if (!options.preserveMotion) {
     state.currentMotion = undefined;
@@ -261,7 +291,7 @@ export function clearModel(options = {}) {
 }
 
 function addModelToScene(model) {
-  state.scene.add(model.object);
+  state.scene.add(model.root);
 }
 
 export function bindDropTarget() {
@@ -283,14 +313,15 @@ export async function handleDroppedFiles(dataTransfer) {
   const files = await collectDroppedFiles(dataTransfer);
   const modelFile = findModelFile(files);
   const vmdFiles = findVmdFiles(files);
+  const { motionFiles, cameraFiles } = await classifyVmdFiles(vmdFiles);
   const shouldLoadModelFolder =
     modelFile && files.some((file) => file.webkitRelativePath?.includes("/"));
-  if (vmdFiles.length > 0) {
-    state.currentMotionVmdFiles = vmdFiles;
-    updateMotionSwitcher(vmdFiles[0]);
+  if (motionFiles.length > 0) {
+    state.currentMotionVmdFiles = motionFiles;
+    updateMotionSwitcher(motionFiles[0]);
     state.pendingMotionSource = undefined;
     state.pendingMotionLabel = undefined;
-  } else {
+  } else if (vmdFiles.length === 0) {
     resetMotionSwitcherState();
   }
   if (shouldLoadModelFolder) {
@@ -298,10 +329,13 @@ export async function handleDroppedFiles(dataTransfer) {
   } else if (modelFile) {
     await loadModel(modelFile);
   }
-  if (vmdFiles.length > 0) {
-    state.currentMotionVmdFiles = vmdFiles;
-    updateMotionSwitcher(vmdFiles[0]);
-    await loadMotion(vmdFiles[0]);
+  if (motionFiles.length > 0) {
+    state.currentMotionVmdFiles = motionFiles;
+    updateMotionSwitcher(motionFiles[0]);
+    await loadMotion(motionFiles[0]);
+  }
+  if (cameraFiles.length > 0) {
+    await loadCameraFile(cameraFiles[0]);
   }
   for (const file of files) {
     if (file === modelFile || vmdFiles.includes(file)) {
@@ -398,20 +432,14 @@ function createModelSwitcherEntry(source, label) {
 }
 
 export function updateModelSwitcher(selectedFile) {
-  if (!(dom.modelSwitcher instanceof window.HTMLSelectElement)) {
-    return;
-  }
-
-  dom.modelSwitcher.replaceChildren(
-    ...state.currentFolderPmxFiles.map((file) => {
-      const option = document.createElement("option");
-      option.value = modelFileKey(file);
-      option.textContent = file.name;
-      return option;
-    })
+  setLoadedFileSwitcherOptions(
+    dom.modelSwitcher,
+    state.currentFolderPmxFiles.map((file) => ({
+      value: modelFileKey(file),
+      label: file.name
+    })),
+    modelFileKey(selectedFile)
   );
-  dom.modelSwitcher.value = modelFileKey(selectedFile);
-  dom.modelSwitcher.hidden = false;
   if (dom.modelControl) {
     dom.modelControl.hidden = state.currentFolderPmxFiles.length === 0;
   }
@@ -421,10 +449,7 @@ export function updateModelSwitcher(selectedFile) {
 export function resetFolderModelState() {
   state.currentFolderTextureMap = undefined;
   state.currentFolderPmxFiles = [];
-  if (dom.modelSwitcher instanceof window.HTMLSelectElement) {
-    dom.modelSwitcher.replaceChildren();
-    dom.modelSwitcher.hidden = false;
-  }
+  clearLoadedFileSwitcher(dom.modelSwitcher);
   if (dom.modelControl) {
     dom.modelControl.hidden = true;
   }
@@ -463,15 +488,53 @@ export async function createUrlTextureLoader(modelUrl) {
 export async function createModelLoader(extraOptions = {}) {
   const runtimeOptions = extraOptions.runtime ?? {};
   const physicsBackend = await createPhysicsBackend();
+  const runtimeFactory = extraOptions.runtimeFactory ?? await createRuntimeFactory(physicsBackend);
   return new ThreeMmdLoader({
     ...extraOptions,
     ddsLoader: extraOptions.ddsLoader ?? new DDSLoader(),
     geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
-    runtime: {
+    runtimeFactory,
+    runtime: createViewerRuntimeOptions({
       ...runtimeOptions,
-      frameRate: state.mmdFrameRate,
       physics: "external",
       physicsBackend
-    }
+    })
   });
+}
+
+async function createRuntimeFactory(physicsBackend) {
+  if (viewerConfig.runtime === "js") {
+    return () => new DefaultMmdRuntime(createViewerRuntimeOptions({
+      physics: "external",
+      physicsBackend
+    }));
+  }
+  if (viewerConfig.runtime !== "mmd-anim") {
+    return undefined;
+  }
+  const wasm = await import("/__mmd_anim_wasm/mmd_anim_wasm.js");
+  await wasm.default();
+  return ({ modelBytes }) => {
+    if (!isPmxBytes(modelBytes)) {
+      return new DefaultMmdRuntime(createViewerRuntimeOptions({
+        physics: "external",
+        physicsBackend
+      }));
+    }
+    return MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, createViewerRuntimeOptions({
+      physics: "external",
+      physicsBackend
+    }));
+  };
+}
+
+function isPmxBytes(bytes) {
+  return (
+    bytes instanceof Uint8Array &&
+    bytes.byteLength >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4d &&
+    bytes[2] === 0x58 &&
+    bytes[3] === 0x20
+  );
 }

@@ -146,6 +146,10 @@ function validateGeometryShape(geometry: ThreeMmdGeometryBuffers): void {
     validateFloat32Buffer("SDEF_RW0", geometry.sdef.rw0, 3, vertexCount);
     validateFloat32Buffer("SDEF_RW1", geometry.sdef.rw1, 3, vertexCount);
   }
+
+  if (geometry.qdef) {
+    validateFloat32Buffer("QDEF_ENABLED", geometry.qdef.enabled, 1, vertexCount);
+  }
 }
 
 function validateMaterials(materials: readonly MaterialInfo[]): void {

@@ -1,34 +1,56 @@
-import type createYwMmdCoreModule from "./generated/yw_mmd_core.js";
 import type { InitCoreOptions, MmdCore } from "../model/modelTypes.js";
+import type * as MmdAnimWasmGenerated from "./generated/mmd_anim_wasm.js";
 import { FallbackCore } from "./FallbackCore.js";
-import { WasmBackedCore } from "./WasmBackedCore.js";
+import { MmdAnimBackedCore } from "./MmdAnimBackedCore.js";
 
 export type { InitCoreOptions, MmdCore, MmdModel } from "../model/modelTypes.js";
 export { FallbackCore } from "./FallbackCore.js";
 
-type CreateWasmModule = typeof createYwMmdCoreModule;
+type MmdAnimWasmModule = typeof MmdAnimWasmGenerated;
 
 export async function initCore(options: InitCoreOptions = {}): Promise<MmdCore> {
-  let createWasmModule: CreateWasmModule;
+  let mmdAnimWasm: MmdAnimWasmModule;
   try {
-    ({ default: createWasmModule } = await import("./generated/yw_mmd_core.js"));
+    mmdAnimWasm = await import("./generated/mmd_anim_wasm.js");
   } catch (error) {
-    throw new Error("WASM wrapper is missing. Run npm run build:wasm before initCore().", {
-      cause: error
-    });
+    throw new Error(
+      "mmd-anim wasm module is missing. Run npm run build:mmd-anim && npm run build before initCore().",
+      { cause: error }
+    );
   }
-  const wasm = await createWasmModule({
-    locateFile: (path) => {
-      if (options.wasmUrl && path.endsWith(".wasm")) {
-        return String(options.wasmUrl);
-      }
-      return new URL(`./generated/${path}`, import.meta.url).toString();
-    }
+  await initMmdAnimWasm(mmdAnimWasm, options);
+  return new MmdAnimBackedCore({
+    parsePmxModelJson: mmdAnimWasm.parsePmxModelJson,
+    parsePmxModelNonGeometryJson: mmdAnimWasm.parsePmxModelNonGeometryJson,
+    WasmPmxParsedModel: mmdAnimWasm.WasmPmxParsedModel,
+    WasmPmxGeometry: mmdAnimWasm.WasmPmxGeometry,
+    wasm_wrapper_version: mmdAnimWasm.wasm_wrapper_version
   });
-  if (wasm._yw_mmd_health_check() !== 1) {
-    throw new Error("yw-mmd Wasm health check failed");
+}
+
+async function initMmdAnimWasm(
+  mmdAnimWasm: MmdAnimWasmModule,
+  options: InitCoreOptions
+): Promise<void> {
+  if (options.wasmUrl != null) {
+    await mmdAnimWasm.default(options.wasmUrl as string | URL);
+    return;
   }
-  return new WasmBackedCore(wasm);
+  if (isNodeLikeRuntime()) {
+    const [{ readFile }, { fileURLToPath }] = await Promise.all([
+      import("node:fs/promises"),
+      import("node:url")
+    ]);
+    const wasmPath = fileURLToPath(new URL("./generated/mmd_anim_wasm_bg.wasm", import.meta.url));
+    const bytes = await readFile(wasmPath);
+    await mmdAnimWasm.default({ module_or_path: bytes });
+    return;
+  }
+  await mmdAnimWasm.default();
+}
+
+function isNodeLikeRuntime(): boolean {
+  return typeof process !== "undefined" && process.versions?.node !== undefined;
 }
 
 export async function initCoreWithFallback(options: InitCoreOptions = {}): Promise<MmdCore> {

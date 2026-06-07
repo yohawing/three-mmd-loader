@@ -15,9 +15,6 @@ on:
 permissions:
   contents: read
 
-env:
-  EMSDK_VERSION: "5.0.7"
-
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -30,8 +27,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -41,18 +36,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Setup Emscripten
-        run: |
-          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
-          "$RUNNER_TEMP/emsdk/emsdk" install "$EMSDK_VERSION"
-          "$RUNNER_TEMP/emsdk/emsdk" activate "$EMSDK_VERSION"
-          echo "EMSDK=$RUNNER_TEMP/emsdk" >> "$GITHUB_ENV"
-          echo "$RUNNER_TEMP/emsdk" >> "$GITHUB_PATH"
-          echo "$RUNNER_TEMP/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
-
-      - name: Build WASM wrapper
-        run: npm run build:wasm
 
       - name: Lint
         run: npm run lint
@@ -144,6 +127,32 @@ jobs:
       - name: Publish to npm
         run: npm publish ./*.tgz --access public
 
+      - name: Extract release notes from CHANGELOG
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+          const lines = changelog.split(/\r?\n/);
+          const heading = `## [${pkg.version}]`;
+          const start = lines.findIndex((line) => line.startsWith(heading));
+          if (start === -1) {
+            throw new Error(`CHANGELOG.md does not contain a ## [${pkg.version}] section.`);
+          }
+          const endOffset = lines
+            .slice(start + 1)
+            .findIndex((line) => line.startsWith('## ['));
+          const end = endOffset === -1 ? lines.length : start + 1 + endOffset;
+          const notes = lines.slice(start + 1, end).join('\n').trim();
+          if (!notes) {
+            throw new Error(`CHANGELOG.md section ## [${pkg.version}] is empty.`);
+          }
+
+          fs.writeFileSync('release-notes.md', `${notes}\n`);
+          NODE
+
       - name: Create or update GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -153,7 +162,8 @@ jobs:
           package_file="$(ls ./*.tgz | head -n 1)"
 
           if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --notes-file release-notes.md
             gh release upload "$tag" "$package_file" --clobber
           else
-            gh release create "$tag" "$package_file" --generate-notes --verify-tag
+            gh release create "$tag" "$package_file" --notes-file release-notes.md --verify-tag
           fi

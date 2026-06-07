@@ -27,8 +27,10 @@ describe("disposeMmdModel", () => {
     const skeleton = new THREE.Skeleton([new THREE.Bone()]);
     skeleton.boneTexture = boneTexture;
     mesh.bind(skeleton);
+    const root = new THREE.Group();
+    root.add(mesh, outlineMesh, renderOrderMesh);
     const scene = new THREE.Scene();
-    scene.add(mesh, outlineMesh, renderOrderMesh);
+    scene.add(root);
 
     const geometryDispose = vi.spyOn(geometry, "dispose");
     const outlineGeometryDispose = vi.spyOn(outlineGeometry, "dispose");
@@ -42,11 +44,25 @@ describe("disposeMmdModel", () => {
     const skeletonDispose = vi.spyOn(skeleton, "dispose");
 
     disposeMmdModel({
+      root,
+      object: root,
       mesh,
       outlineMeshes: [outlineMesh],
       renderOrderMeshes: [renderOrderMesh],
+      runtime: undefined as never,
       source: { kind: "bytes", byteLength: 0 },
-      textureDiagnostics: []
+      diagnostics: {
+        core: { kind: "provided" },
+        source: { kind: "bytes", byteLength: 0 },
+        textures: [],
+        materials: [],
+        performance: []
+      },
+      textureDiagnostics: [],
+      setAnimation() {},
+      update() {
+        return { seconds: 0, frame: 0, frameRate: 30 };
+      }
     } satisfies ThreeMmdModel);
 
     expect(scene.children).toHaveLength(0);
@@ -62,6 +78,120 @@ describe("disposeMmdModel", () => {
     expect(skeletonDispose).toHaveBeenCalledOnce();
   });
 
+  it("can preserve externally shared textures during model disposal", () => {
+    const geometry = new THREE.BufferGeometry();
+    const sharedTexture = new THREE.Texture();
+    const ownedTexture = new THREE.Texture();
+    ownedTexture.userData.mmdTextureOwnership = "loader";
+    const material = new THREE.MeshToonMaterial({ map: sharedTexture });
+    material.userData.ownedTexture = ownedTexture;
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const root = new THREE.Group();
+    root.add(mesh);
+    const sharedTextureDispose = vi.spyOn(sharedTexture, "dispose");
+    const ownedTextureDispose = vi.spyOn(ownedTexture, "dispose");
+
+    disposeMmdModel(
+      {
+        root,
+        object: root,
+        mesh,
+        outlineMeshes: [],
+        renderOrderMeshes: [],
+        runtime: undefined as never,
+        source: { kind: "bytes", byteLength: 0 },
+        diagnostics: {
+          core: { kind: "provided" },
+          source: { kind: "bytes", byteLength: 0 },
+          textures: [],
+          materials: [],
+          performance: []
+        },
+        textureDiagnostics: [],
+        setAnimation() {},
+        update() {
+          return { seconds: 0, frame: 0, frameRate: 30 };
+        }
+      } satisfies ThreeMmdModel,
+      { textures: "owned" }
+    );
+
+    expect(sharedTextureDispose).not.toHaveBeenCalled();
+    expect(ownedTextureDispose).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the shared fallback toon gradient even in all-textures disposal mode", () => {
+    const geometry = new THREE.BufferGeometry();
+    const fallbackGradient = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    fallbackGradient.userData.mmdFallbackToonGradient = true;
+    const ownedTexture = new THREE.Texture();
+    const material = new THREE.MeshToonMaterial({ map: ownedTexture });
+    material.gradientMap = fallbackGradient;
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const root = new THREE.Group();
+    root.add(mesh);
+    const fallbackGradientDispose = vi.spyOn(fallbackGradient, "dispose");
+    const ownedTextureDispose = vi.spyOn(ownedTexture, "dispose");
+
+    disposeMmdModel({
+      root,
+      object: root,
+      mesh,
+      outlineMeshes: [],
+      renderOrderMeshes: [],
+      runtime: undefined as never,
+      source: { kind: "bytes", byteLength: 0 },
+      diagnostics: {
+        core: { kind: "provided" },
+        source: { kind: "bytes", byteLength: 0 },
+        textures: [],
+        materials: [],
+        performance: []
+      },
+      textureDiagnostics: [],
+      setAnimation() {},
+      update() {
+        return { seconds: 0, frame: 0, frameRate: 30 };
+      }
+    } satisfies ThreeMmdModel);
+
+    expect(ownedTextureDispose).toHaveBeenCalledOnce();
+    expect(fallbackGradientDispose).not.toHaveBeenCalled();
+  });
+
+  it("disposes runtime resources when the runtime exposes a disposer", () => {
+    const geometry = new THREE.BufferGeometry();
+    const material = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const root = new THREE.Group();
+    root.add(mesh);
+    const runtimeDispose = vi.fn();
+
+    disposeMmdModel({
+      root,
+      object: root,
+      mesh,
+      outlineMeshes: [],
+      renderOrderMeshes: [],
+      runtime: { dispose: runtimeDispose } as unknown as ThreeMmdModel["runtime"],
+      source: { kind: "bytes", byteLength: 0 },
+      diagnostics: {
+        core: { kind: "provided" },
+        source: { kind: "bytes", byteLength: 0 },
+        textures: [],
+        materials: [],
+        performance: []
+      },
+      textureDiagnostics: [],
+      setAnimation() {},
+      update() {
+        return { seconds: 0, frame: 0, frameRate: 30 };
+      }
+    } satisfies ThreeMmdModel);
+
+    expect(runtimeDispose).toHaveBeenCalledOnce();
+  });
+
   it("disposes split morph body meshes from the model root object", () => {
     const geometry = new THREE.BufferGeometry();
     const bodyGeometry = new THREE.BufferGeometry();
@@ -73,10 +203,10 @@ describe("disposeMmdModel", () => {
     bodyMesh.bind(skeleton);
     mesh.userData.mmdMorphSplitBodyMeshes = [bodyMesh];
 
-    const object = new THREE.Group();
-    object.add(mesh, bodyMesh);
+    const root = new THREE.Group();
+    root.add(mesh, bodyMesh);
     const scene = new THREE.Scene();
-    scene.add(object);
+    scene.add(root);
 
     const geometryDispose = vi.spyOn(geometry, "dispose");
     const bodyGeometryDispose = vi.spyOn(bodyGeometry, "dispose");
@@ -84,16 +214,29 @@ describe("disposeMmdModel", () => {
     const skeletonDispose = vi.spyOn(skeleton, "dispose");
 
     disposeMmdModel({
-      object,
+      root,
+      object: root,
       mesh,
       outlineMeshes: [],
       renderOrderMeshes: [],
+      runtime: undefined as never,
       source: { kind: "bytes", byteLength: 0 },
-      textureDiagnostics: []
+      diagnostics: {
+        core: { kind: "provided" },
+        source: { kind: "bytes", byteLength: 0 },
+        textures: [],
+        materials: [],
+        performance: []
+      },
+      textureDiagnostics: [],
+      setAnimation() {},
+      update() {
+        return { seconds: 0, frame: 0, frameRate: 30 };
+      }
     } satisfies ThreeMmdModel);
 
     expect(scene.children).toHaveLength(0);
-    expect(object.children).toHaveLength(0);
+    expect(root.children).toHaveLength(0);
     expect(geometryDispose).toHaveBeenCalledOnce();
     expect(bodyGeometryDispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();

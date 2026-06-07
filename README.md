@@ -2,11 +2,9 @@
 
 A library for loading and playing back MMD models and motions on Three.js.
 
-日本語: [docs/README.ja.md](./docs/README.ja.md)
+[日本語](./docs/README.ja.md) / [Live demo](https://three.mmd.yohawing.com/)
 
 ![three-mmd-loader viewer screenshot](./docs/assets/screenshots.png)
-
-Live demo: [three.mmd.yohawing.com](https://three.mmd.yohawing.com/)
 
 Screenshot assets: model [Tda式初音ミク V4X by Tda](https://3d.nicovideo.jp/works/td30681),
 motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576784).
@@ -30,17 +28,18 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 
 | Feature | Status |
 | --- | --- |
-| WASM Parser | ✅ PMX / PMD / VMD with TypeScript fallback |
-| BDEF1/2/4 skinning | ✅ |
-| SDEF skinning | ⚠️ Shader path exists; verify parity |
-| QDEF skinning | ❌ Dual Quaternion Skinning not implemented |
+| Parser | ✅ PMX / PMD / VMD / VPD TypeScript parser |
+| Deform / skinning | ✅ BDEF1/2/4, SDEF, QDEF |
+| MMD material / toon shader | ✅ Toon textures, alpha blending decisions, and material render ordering |
 | Append transform | ✅ PMX layer order |
-| IK link-local / parent-local clamp | ⚠️ Single-axis fixed; multi-axis partial |
-| VMD Camera | ✅ Runtime sampling + Three.js helper, perspective/orthographic switch |
-| VMD Light | ⚠️ Parsed; runtime/application parity needs verification |
-| Self Shadow | ❌ Not implemented |
-| Physics (Ammo backend) | ✅ Uses Ammo.js |
+| IK link angle limits | ✅ PMX / PMD link limits with parent-local Euler clamp |
+| VMD Camera / Light | ✅ Applies to Three.js Camera and DirectionalLight |
+| Self Shadow | ✅ Three.js shadow-map path with VMD self-shadow sampling |
+| Physics | ✅ MMD-optimized prebuilt Bullet Physics; Ammo.js backend is deprecated compatibility path |
 | Soft Body | ⚠️ PMX data parsed; runtime simulation not implemented |
+
+The default PMX runtime and WASM parser are backed by
+[yohawing/mmd-anim](https://github.com/yohawing/mmd-anim).
 
 ## Acknowledgements
 
@@ -65,101 +64,64 @@ import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
 
 const loader = new ThreeMmdLoader();
 const model = await loader.loadModel(source); // Uint8Array | ArrayBuffer | File | string (URL/path resolved via fetch)
-scene.add(model.object);
-
-const remoteModel = await loader.loadModel("/models/example.pmx");
-scene.add(remoteModel.object);
+scene.add(model.root);
 ```
-
-`loadModel(...)` also returns `textureDiagnostics: TextureLoadDiagnostic[]`.
-Texture folder resolution failures and related recoverable texture issues are
-reported there with `level: "warning"`.
-
-`model.object` is the scene-ready root that contains the base mesh plus any
-generated outline and render-order proxy meshes. Pass `{ outlines: false }` to
-skip those proxies.
 
 ## Usage - Animation
 
 ```ts
+import * as THREE from "three";
+import { applyMmdCameraStateToThreeCamera } from "@yohawing/three-mmd-loader";
+
 const model = await loader.loadModel(modelSource);
 const { animation } = await loader.loadAnimation(vmdSource);
-model.runtime?.setAnimation(animation, model.mesh);
+model.setAnimation(animation);
+
+const perspectiveCamera = new THREE.PerspectiveCamera();
 
 // Per frame.
-model.runtime?.tick(currentSeconds, model.mesh);
-```
-
-## Usage - Camera Motion
-
-```ts
-import {
-  applyMmdCameraStateToThreeCamera,
-  sampleMmdCameraTrackInto
-} from "@yohawing/three-mmd-loader";
-
-const { animation } = await loader.loadAnimation(cameraVmdSource);
-const mmdFrameRate = 30; // Use 60 for MMD 60 FPS mode.
-const quantizeToMmdFrame = true; // Set false for unbounded/fractional-frame playback.
-const cameraStateScratch = {
-  distance: 0,
-  position: [0, 0, 0] as [number, number, number],
-  rotation: [0, 0, 0] as [number, number, number],
-  fov: 1,
-  perspective: true
-};
-
-// Per frame, using the selected MMD frame timeline.
-const frame = currentSeconds * mmdFrameRate;
-const cameraState = sampleMmdCameraTrackInto(
-  animation.cameraFrames,
-  quantizeToMmdFrame ? Math.floor(frame + 1e-6) : frame,
-  cameraStateScratch
-);
+model.update(currentSeconds);
+const cameraState = model.runtime.cameraState();
 if (cameraState) {
-  applyMmdCameraStateToThreeCamera(camera, cameraState);
+  const activeCamera = applyMmdCameraStateToThreeCamera(perspectiveCamera, cameraState, {
+    aspect: renderer.domElement.clientWidth / renderer.domElement.clientHeight
+  });
+  renderer.render(scene, activeCamera);
 }
 ```
 
 `applyMmdCameraStateToThreeCamera(...)` converts MMD camera coordinates for
-Three.js, including the MMD camera rotation convention, camera distance, roll,
-FOV, and perspective/orthographic frames. The example viewer exposes the same
-playback controls through URL query parameters:
-
-- `?mmdFrameRate=60` evaluates the MMD frame timeline at 60 FPS.
-- `?mmdFrameQuantize=false` keeps fractional frames for unbounded playback.
-- With no query parameters, the viewer defaults to 30 FPS and quantized MMD
-  frame playback.
+Three.js and returns the active camera.
 
 ## Usage - Pose (VPD)
 
 ```ts
 const { pose } = await loader.loadPose(vpdSource);
 const { animation } = await loader.loadPoseAnimation(vpdSource, "myPose");
-model.runtime?.setAnimation(animation, model.mesh);
+model.setAnimation(animation);
 ```
 
 ## Usage - Physics
 
 Physics is abstracted behind `MmdPhysicsBackend` so the physics library can be
-swapped. The current implementation uses Ammo.js (Bullet Physics).
+swapped. We recommend the MMD-optimized prebuilt Bullet Physics path. The
+Ammo.js backend remains available as a compatibility path, but it is deprecated
+and planned for removal from the default guidance.
 
 ```ts
 import {
-  createAmmoMmdPhysicsBackend,
-  createDisabledMmdPhysicsBackend
+  createCustomBulletMmdPhysicsBackend,
+  loadCustomBulletMmdModule
 } from "@yohawing/three-mmd-loader/physics";
 
-// No simulation fallback.
-const disabledPhysicsBackend = createDisabledMmdPhysicsBackend();
-
-// Ammo.js backend.
-const Ammo = await import("ammo.js").then((m) => m.default ?? m);
-const physicsBackend = createAmmoMmdPhysicsBackend(Ammo);
+// Recommended: MMD-optimized prebuilt Bullet Physics.
+const mmdBullet = await loadCustomBulletMmdModule();
+const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 ```
 
 ## Development
 
 Development notes for tests, scripts, and fixtures are in
-[docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md). The release checklist is in
+[docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md), including mmd-anim / Yw MMD and
+MMD-optimized Bullet Physics build notes. The release checklist is in
 [docs/RELEASE.md](./docs/RELEASE.md).

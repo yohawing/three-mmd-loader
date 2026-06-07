@@ -2,6 +2,7 @@ import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { basename, dirname, extname, join, normalize, relative, resolve, sep } from "node:path";
+import { parseVmdSectionInventory } from "../dist/parser/index.js";
 
 const root = process.cwd();
 const viewerRoot = resolve(root, "examples", "viewer");
@@ -9,6 +10,8 @@ const localFixturesPath = resolve(root, "test", "fixtures", "fixtures.local.json
 const localFixtureInventory = loadLocalFixtureInventory();
 const dataRoot = resolveDataRoot();
 const dataRoute = "/__mmd_data/";
+const mmdAnimWasmRoot = resolveMmdAnimWasmRoot();
+const mmdAnimWasmRoute = "/__mmd_anim_wasm/";
 const localAssetsRoute = "/__mmd_assets__/fixtures-local.json";
 const port = Number.parseInt(process.env.PORT ?? "3939", 10);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -37,7 +40,7 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? `${host}:${port}`}`);
     if (url.pathname === "/examples/viewer" || url.pathname === "/examples/viewer/") {
       response.writeHead(302, {
-        Location: "/"
+        Location: `/${url.search}`
       });
       response.end();
       return;
@@ -59,6 +62,14 @@ const server = createServer(async (request, response) => {
         "Content-Type": "application/json; charset=utf-8"
       });
       response.end(`${JSON.stringify(manifest, null, 2)}\n`);
+      return;
+    }
+    if (pathname === mmdAnimWasmRoute || pathname === `${mmdAnimWasmRoute}package.json`) {
+      response.writeHead(404, {
+        "Cache-Control": "no-store",
+        "Content-Type": "text/plain; charset=utf-8"
+      });
+      response.end("Not found");
       return;
     }
 
@@ -111,6 +122,11 @@ server.listen(port, host, () => {
     if (localFixtureInventory !== undefined) {
       console.log(`MMD local assets: ${localAssetsRoute} from ${localFixturesPath}`);
     }
+  }
+  if (mmdAnimWasmRoot === undefined) {
+    console.log(`mmd-anim WASM route disabled. Set MMD_ANIM_WASM_ROOT to serve MmdAnimRuntime.`);
+  } else {
+    console.log(`mmd-anim WASM route: ${mmdAnimWasmRoute} -> ${mmdAnimWasmRoot}`);
   }
 });
 
@@ -173,6 +189,18 @@ function resolveDataRoot() {
   return undefined;
 }
 
+function resolveMmdAnimWasmRoot() {
+  if (process.env.MMD_ANIM_WASM_ROOT !== undefined) {
+    return resolve(process.env.MMD_ANIM_WASM_ROOT);
+  }
+  const distRoot = resolve(root, "dist", "parser", "wasm", "generated");
+  if (existsSync(join(distRoot, "mmd_anim_wasm.js"))) {
+    return distRoot;
+  }
+  const submoduleRoot = resolve(root, "native", "third_party", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
+  return existsSync(join(submoduleRoot, "mmd_anim_wasm.js")) ? submoduleRoot : undefined;
+}
+
 function createLocalAssetManifest() {
   if (localFixtureInventory === undefined || dataRoot === undefined) {
     return undefined;
@@ -183,19 +211,20 @@ function createLocalAssetManifest() {
     ...createAssetEntries("pmx", byExtension.pmx),
     ...createAssetEntries("pmd", byExtension.pmd)
   ];
-  const motions = createAssetEntries("vmd", byExtension.vmd);
+  const vmdEntries = splitVmdAssetEntries(byExtension.vmd);
+  const motions = vmdEntries.motions;
   const poses = createAssetEntries("vpd", byExtension.vpd);
   const backgrounds = [
     ...createAssetEntries("backgroundPmx", byExtension.backgroundPmx),
     ...createAssetEntries("backgroundPmd", byExtension.backgroundPmd)
   ];
-  const cameraSourceEntries = Object.keys(byExtension.cameraVmd ?? {}).length > 0
-    ? createAssetEntries("cameraVmd", byExtension.cameraVmd)
-    : motions;
-  const cameras = cameraSourceEntries.map((motion) => ({
-    ...motion,
-    id: `camera:${motion.id}`
-  }));
+  const cameras = dedupeAssetsByUrl([
+    ...createAssetEntries("cameraVmd", byExtension.cameraVmd),
+    ...vmdEntries.cameras.map((motion) => ({
+      ...motion,
+      id: `camera:${motion.id}`
+    }))
+  ]);
   const audios = [
     ...createAssetEntries("wav", byExtension.wav),
     ...createAssetEntries("mp3", byExtension.mp3),
@@ -233,6 +262,43 @@ function createAssetEntries(extension, fixtureMap) {
   });
 }
 
+function splitVmdAssetEntries(fixtureMap) {
+  const motions = [];
+  const cameras = [];
+  for (const entry of createAssetEntries("vmd", fixtureMap)) {
+    if (isCameraOnlyVmdFixturePath(fixtureMap?.[entry.key])) {
+      cameras.push(entry);
+    } else {
+      motions.push(entry);
+    }
+  }
+  return { motions, cameras };
+}
+
+function isCameraOnlyVmdFixturePath(fixturePath) {
+  const filePath = resolveFixturePath(fixturePath);
+  if (filePath === undefined || !isPathInside(filePath, dataRoot)) {
+    return false;
+  }
+  try {
+    const counts = parseVmdSectionInventory(readFileSync(filePath)).counts;
+    return counts.cameras > 0 && counts.bones === 0 && counts.morphs === 0;
+  } catch {
+    return false;
+  }
+}
+
+function dedupeAssetsByUrl(assets) {
+  const seen = new Set();
+  return assets.filter((asset) => {
+    if (seen.has(asset.url)) {
+      return false;
+    }
+    seen.add(asset.url);
+    return true;
+  });
+}
+
 function createPresetEntries(cases, byExtension) {
   if (!Array.isArray(cases)) {
     return [];
@@ -249,6 +315,9 @@ function createPresetEntries(cases, byExtension) {
     const audioUrl = dataUrlForFixturePath(
       byExtension?.[fixtureCase.audio?.extension]?.[fixtureCase.audio?.key]
     );
+    const audioOffsetFrame = parseAudioOffsetFrame(
+      fixtureCase.audioOffsetFrame ?? fixtureCase.audio?.offsetFrame
+    );
     if (modelUrl === undefined || motionUrl === undefined) {
       return [];
     }
@@ -259,9 +328,15 @@ function createPresetEntries(cases, byExtension) {
       motionUrl,
       ...(backgroundUrl ? { backgroundUrl } : {}),
       ...(cameraUrl ? { cameraUrl } : {}),
-      ...(audioUrl ? { audioUrl } : {})
+      ...(audioUrl ? { audioUrl } : {}),
+      ...(audioOffsetFrame !== undefined ? { audioOffsetFrame } : {})
     }];
   });
+}
+
+function parseAudioOffsetFrame(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
 }
 
 function dataUrlForFixturePath(fixturePath) {
@@ -293,6 +368,16 @@ function resolveRequestPath(pathname) {
     );
     return resolve(dataRoot, relativePath);
   }
+  if (pathname.startsWith(mmdAnimWasmRoute)) {
+    if (mmdAnimWasmRoot === undefined) {
+      return resolve(root, "__mmd_anim_wasm_not_configured__");
+    }
+    const relativePath = normalize(decodeURIComponent(pathname.slice(mmdAnimWasmRoute.length))).replace(
+      /^[/\\]+/,
+      ""
+    );
+    return resolve(mmdAnimWasmRoot, relativePath);
+  }
   if (pathname === "/") {
     return resolve(viewerRoot, "index.html");
   }
@@ -313,7 +398,8 @@ function isAllowedPath(filePath) {
   return (
     isPathInside(filePath, root) ||
     isPathInside(filePath, viewerRoot) ||
-    (dataRoot !== undefined && isPathInside(filePath, dataRoot))
+    (dataRoot !== undefined && isPathInside(filePath, dataRoot)) ||
+    (mmdAnimWasmRoot !== undefined && isPathInside(filePath, mmdAnimWasmRoot))
   );
 }
 

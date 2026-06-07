@@ -55,6 +55,10 @@ export function mmdMaterialCastsShadow(flags: MaterialFlags): boolean {
   return flags.groundShadow || flags.selfShadowMap;
 }
 
+export function mmdMaterialCastsSelfShadow(flags: MaterialFlags): boolean {
+  return flags.selfShadowMap;
+}
+
 export function syncMmdModelShadowFlags(
   mesh: THREE.Object3D,
   materials: readonly MaterialInfo[]

@@ -12,5 +12,6 @@
     "declarationMap": false,
     "sourceMap": false
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/parser/wasm/WasmBackedCore.ts", "src/parser/wasm/wasmModelMetadata.ts"]
 }

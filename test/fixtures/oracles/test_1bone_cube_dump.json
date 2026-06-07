@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "kind": "yw-mmd-runtime-dump",
-  "backend": "wasm-js-provisional",
-  "coreVersion": "0.0.0+nanoem",
+  "kind": "three-mmd-loader-runtime-dump",
+  "backend": "js-provisional",
+  "coreVersion": "0.0.0+provisional",
   "coordinateSpace": "mmd-world",
   "matrixOrder": "column-major",
   "authoritative": false,
@@ -10,7 +10,7 @@
     {
       "level": "warning",
       "code": "ORACLE_BACKEND_NOT_NATIVE",
-      "message": "This dump uses the current JS runtime through the Wasm-backed core API. Replace this backend with native nanoem before treating it as an authoritative oracle."
+      "message": "This dump uses the current JS runtime through the Wasm-backed core API and is not an authoritative oracle."
     }
   ],
   "sources": {

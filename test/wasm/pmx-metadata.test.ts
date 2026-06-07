@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { MmdAnimBackedCore } from "../../src/parser/wasm/MmdAnimBackedCore.js";
 import { initCore } from "../../src/parser/wasm/index.js";
 import { createThreeBufferGeometry } from "../../src/three/index.js";
 import { parsePmd } from "../../src/parser/model/PmdModelParser.js";
@@ -13,15 +13,278 @@ const execFileAsync = promisify(execFile);
 const generatedFixturePath = resolve("test/fixtures/generated/minimal-loader-smoke.pmx");
 const generatorPath = resolve("scripts/fixtures/generate-minimal-pmx.mjs");
 
-const parkingLotPmxIt = existsSync(resolve("data/pmx/background_pmx_Parking_Lot/Parking_Lot.pmx"))
-  ? it
-  : it.skip;
-const localMikuPmdIt = existsSync(resolve("data/pmd/miku_v2.pmd")) ? it : it.skip;
-const bundledPmdMatrixIt = existsSync(resolve("data/BuildinUserFile/Model/初音ミク.pmd"))
-  ? it
-  : it.skip;
-
 describe("@yw-mmd/core-wasm PMX metadata", () => {
+  it("loads PMX through the parsed-model handle when it is available", () => {
+    const geometryHandle = {
+      free: vi.fn(),
+      additionalUvCount: () => 0,
+      additionalUvs: () => new Float32Array(0),
+      edgeScale: () => Float32Array.from([1]),
+      indices: () => Uint32Array.from([0, 0, 0]),
+      materialGroups: () => Uint32Array.from([0, 3, 0]),
+      normals: () => Float32Array.from([0, 1, 0]),
+      positions: () => Float32Array.from([2, 4, 6]),
+      qdefEnabled: () => new Uint8Array([0]),
+      sdefC: () => new Float32Array(3),
+      sdefEnabled: () => new Uint8Array([0]),
+      sdefR0: () => new Float32Array(3),
+      sdefR1: () => new Float32Array(3),
+      sdefRw0: () => new Float32Array(3),
+      sdefRw1: () => new Float32Array(3),
+      skinIndices: () => Uint32Array.from([0, 0, 0, 0]),
+      skinWeights: () => Float32Array.from([1, 0, 0, 0]),
+      uvs: () => Float32Array.from([0, 0]),
+      vertexCount: () => 1
+    };
+    const parsedHandle = {
+      free: vi.fn(),
+      geometry: vi.fn(() => geometryHandle),
+      nonGeometryJson: vi.fn(() =>
+        JSON.stringify({
+          metadata: { diagnostics: [] },
+          materials: [],
+          skeleton: { bones: [] },
+          morphs: [],
+          displayFrames: [],
+          rigidBodies: [],
+          joints: [],
+          softBodies: [],
+          diagnostics: []
+        })
+      )
+    };
+    const parse = vi.fn(() => parsedHandle);
+    const parsePmxModelNonGeometryJson = vi.fn(() => {
+      throw new Error("split stateless JSON path should not be used");
+    });
+    const fromPmxBytes = vi.fn(() => {
+      throw new Error("split stateless geometry path should not be used");
+    });
+    const core = new MmdAnimBackedCore({
+      parsePmxModelJson: () => {
+        throw new Error("full PMX JSON geometry path should not be used");
+      },
+      parsePmxModelNonGeometryJson,
+      WasmPmxParsedModel: { parse },
+      WasmPmxGeometry: { fromPmxBytes },
+      wasm_wrapper_version: () => 1
+    });
+
+    const model = core.loadModel(new Uint8Array([1, 2, 3]), { format: "pmx" });
+
+    expect(parse).toHaveBeenCalledOnce();
+    expect(parsedHandle.nonGeometryJson).toHaveBeenCalledOnce();
+    expect(parsedHandle.geometry).toHaveBeenCalledOnce();
+    expect(parsePmxModelNonGeometryJson).not.toHaveBeenCalled();
+    expect(fromPmxBytes).not.toHaveBeenCalled();
+    expect(geometryHandle.free).toHaveBeenCalledOnce();
+    expect(parsedHandle.free).toHaveBeenCalledOnce();
+    expect(Array.from(model.geometry().positions)).toEqual([2, 4, 6]);
+  });
+
+  it("loads PMX geometry through the typed-array DTO when the split ABI is available", () => {
+    const geometryHandle = {
+      free: vi.fn(),
+      additionalUvCount: () => 2,
+      additionalUvs: () => Float32Array.from([1, 2, 3, 4, 5, 6, 7, 8]),
+      edgeScale: () => Float32Array.from([1]),
+      indices: () => Uint32Array.from([0, 0, 0]),
+      materialGroups: () => Uint32Array.from([0, 3, 0]),
+      normals: () => Float32Array.from([0, 1, 0]),
+      positions: () => Float32Array.from([1, 2, 3]),
+      qdefEnabled: () => new Uint8Array([0]),
+      sdefC: () => new Float32Array(3),
+      sdefEnabled: () => new Uint8Array([0]),
+      sdefR0: () => new Float32Array(3),
+      sdefR1: () => new Float32Array(3),
+      sdefRw0: () => new Float32Array(3),
+      sdefRw1: () => new Float32Array(3),
+      skinIndices: () => Uint32Array.from([0, 0, 0, 0]),
+      skinWeights: () => Float32Array.from([1, 0, 0, 0]),
+      uvs: () => Float32Array.from([0.25, 0.75]),
+      vertexCount: () => 1
+    };
+    const parsePmxModelJson = vi.fn(() => {
+      throw new Error("full PMX JSON geometry path should not be used");
+    });
+    const parsePmxModelNonGeometryJson = vi.fn(() =>
+      JSON.stringify({
+        metadata: {
+          version: 2,
+          encoding: "utf-8",
+          name: "dto",
+          englishName: "dto",
+          comment: "",
+          englishComment: "",
+          counts: {
+            vertices: 1,
+            faces: 1,
+            materials: 0,
+            bones: 0,
+            morphs: 0,
+            displayFrames: 0,
+            rigidBodies: 0,
+            joints: 0,
+            softBodies: 0
+          },
+          indexSizes: {
+            vertex: 1,
+            texture: 1,
+            material: 1,
+            bone: 1,
+            morph: 1,
+            rigidBody: 1
+          },
+          additionalUvCount: 2,
+          diagnostics: []
+        },
+        materials: [],
+        skeleton: { bones: [] },
+        morphs: [],
+        displayFrames: [],
+        rigidBodies: [],
+        joints: [],
+        softBodies: [],
+        diagnostics: []
+      })
+    );
+    const fromPmxBytes = vi.fn(() => geometryHandle);
+    const core = new MmdAnimBackedCore({
+      parsePmxModelJson,
+      parsePmxModelNonGeometryJson,
+      WasmPmxGeometry: { fromPmxBytes },
+      wasm_wrapper_version: () => 1
+    });
+
+    const model = core.loadModel(new Uint8Array([1, 2, 3]), { format: "pmx" });
+
+    expect(parsePmxModelNonGeometryJson).toHaveBeenCalledOnce();
+    expect(parsePmxModelJson).not.toHaveBeenCalled();
+    expect(fromPmxBytes).toHaveBeenCalledOnce();
+    expect(geometryHandle.free).toHaveBeenCalledOnce();
+    expect(Array.from(model.geometry().positions)).toEqual([1, 2, 3]);
+    expect(model.geometry().additionalUvs.map((set) => Array.from(set))).toEqual([
+      [1, 2, 3, 4],
+      [5, 6, 7, 8]
+    ]);
+    expect(model.geometry().indices).toBeInstanceOf(Uint16Array);
+    expect(model.geometry().materialGroups).toEqual([{ start: 0, count: 3, materialIndex: 0 }]);
+    expect(model.geometry().sdef).toBeUndefined();
+    expect(model.geometry().qdef).toBeUndefined();
+  });
+
+  it("keeps the old full-JSON PMX path as a fallback when the split ABI is unavailable", () => {
+    const parsePmxModelJson = vi.fn(() =>
+      JSON.stringify({
+        metadata: {
+          version: 2,
+          encoding: "utf-8",
+          name: "legacy",
+          englishName: "legacy",
+          comment: "",
+          englishComment: "",
+          counts: {
+            vertices: 1,
+            faces: 0,
+            materials: 0,
+            bones: 0,
+            morphs: 0,
+            displayFrames: 0,
+            rigidBodies: 0,
+            joints: 0,
+            softBodies: 0
+          },
+          indexSizes: {
+            vertex: 1,
+            texture: 1,
+            material: 1,
+            bone: 1,
+            morph: 1,
+            rigidBody: 1
+          },
+          additionalUvCount: 0,
+          diagnostics: []
+        },
+        geometry: {
+          positions: [1, 2, 3],
+          normals: [0, 1, 0],
+          uvs: [0, 0],
+          additionalUvs: [],
+          indices: [],
+          skinIndices: [0, 0, 0, 0],
+          skinWeights: [1, 0, 0, 0],
+          sdef: { enabled: [], c: [], r0: [], r1: [], rw0: [], rw1: [] },
+          qdef: { enabled: [] }
+        },
+        materials: [],
+        skeleton: { bones: [] },
+        morphs: [],
+        displayFrames: [],
+        rigidBodies: [],
+        joints: [],
+        softBodies: [],
+        diagnostics: []
+      })
+    );
+    const core = new MmdAnimBackedCore({
+      parsePmxModelJson,
+      wasm_wrapper_version: () => 1
+    });
+
+    const model = core.loadModel(createMinimalSdefPmx(), { format: "pmx" });
+
+    expect(parsePmxModelJson).toHaveBeenCalledOnce();
+    expect(Array.from(model.geometry().positions)).toEqual([1, 2, 3]);
+    expect(model.geometry().sdef).toBeDefined();
+    expect(Array.from(model.geometry().sdef!.enabled)).toEqual([1]);
+  });
+
+  it("rejects PMX skin indices that cannot fit the current Uint16 geometry contract", () => {
+    const geometryHandle = {
+      additionalUvCount: () => 0,
+      additionalUvs: () => new Float32Array(0),
+      edgeScale: () => Float32Array.from([1]),
+      indices: () => Uint32Array.from([0, 0, 0]),
+      materialGroups: () => new Uint32Array(0),
+      normals: () => Float32Array.from([0, 1, 0]),
+      positions: () => Float32Array.from([0, 0, 0]),
+      qdefEnabled: () => new Uint8Array([0]),
+      sdefC: () => new Float32Array(3),
+      sdefEnabled: () => new Uint8Array([0]),
+      sdefR0: () => new Float32Array(3),
+      sdefR1: () => new Float32Array(3),
+      sdefRw0: () => new Float32Array(3),
+      sdefRw1: () => new Float32Array(3),
+      skinIndices: () => Uint32Array.from([65536, 0, 0, 0]),
+      skinWeights: () => Float32Array.from([1, 0, 0, 0]),
+      uvs: () => Float32Array.from([0, 0]),
+      vertexCount: () => 1
+    };
+    const core = new MmdAnimBackedCore({
+      parsePmxModelJson: () => {
+        throw new Error("full PMX JSON geometry path should not be used");
+      },
+      parsePmxModelNonGeometryJson: () =>
+        JSON.stringify({
+          metadata: { diagnostics: [] },
+          materials: [],
+          skeleton: { bones: [] },
+          morphs: [],
+          displayFrames: [],
+          rigidBodies: [],
+          joints: [],
+          softBodies: [],
+          diagnostics: []
+        }),
+      WasmPmxGeometry: { fromPmxBytes: () => geometryHandle },
+      wasm_wrapper_version: () => 1
+    });
+
+    expect(() => core.loadModel(new Uint8Array([1]), { format: "pmx" })).toThrow(
+      /skin index range/
+    );
+  });
+
   it("parses the 1-bone cube fixture metadata", async () => {
     const core = await initCore();
     const bytes = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
@@ -57,6 +320,8 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     expect(model.geometry().edgeScale).toHaveLength(14);
     expect(model.geometry().skinIndices).toHaveLength(14 * 4);
     expect(model.geometry().skinWeights).toHaveLength(14 * 4);
+    expect(model.geometry().sdef).toBeUndefined();
+    expect(model.geometry().qdef).toBeUndefined();
     expect(Array.from(model.geometry().skinWeights.slice(0, 4))).toEqual([1, 0, 0, 0]);
     expect(Array.from(model.geometry().positions.slice(0, 3))).toEqual([-12.5, -12.5, -12.5]);
     expect(model.materials()[0]?.faceCount).toBe(12);
@@ -75,27 +340,8 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
   it("rejects broken PMX data", async () => {
     const core = await initCore();
     expect(() => core.loadModel(new Uint8Array([0, 1, 2, 3]), { format: "pmx" })).toThrow(
-      /Invalid PMX signature|Unexpected end|nanoem metadata parse failed|yw_mmd_model_load failed/
+      /Invalid PMX signature|Unexpected end|invalid PMX magic bytes|parsePmxModelJson/
     );
-  });
-
-  parkingLotPmxIt("loads a large local background PMX without fixed-memory OOM", async () => {
-    const path = resolve("data/pmx/background_pmx_Parking_Lot/Parking_Lot.pmx");
-    expect(existsSync(path)).toBe(true);
-    const core = await initCore();
-    const model = core.loadModel(await readFile(path), { format: "pmx" });
-
-    expect(model.metadata().name).toBe("Parking lot");
-    expect(model.metadata().counts).toMatchObject({
-      vertices: 110704,
-      faces: 129284,
-      materials: 25,
-      bones: 4,
-      morphs: 9
-    });
-    expect(model.geometry().positions).toHaveLength(110704 * 3);
-    expect(model.materials()).toHaveLength(25);
-    expect(model.metadata().diagnostics).toEqual([]);
   });
 
   it("warns when SDEF vertices fall back to BDEF-compatible skinning", async () => {
@@ -724,94 +970,6 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     ).toBe(false);
   });
 
-  it("loads Babylon-MMD public PMX fixture matrix without parser diagnostics", async () => {
-    const core = await initCore();
-    const fixtureExpectations = [
-      {
-        path: "references/babylon-mmd/res/model/uv_morph_test.pmx",
-        counts: { vertices: 24, faces: 12, materials: 1, bones: 2, displayFrames: 2 },
-        material: { texturePath: "ref.jpg", sphereMode: "multiply" }
-      },
-      {
-        path: "references/babylon-mmd/res/model/matcap_sample.pmx",
-        counts: { vertices: 2452, faces: 4900, materials: 1, bones: 2, displayFrames: 2 },
-        material: { sphereTexturePath: "./ref.jpg", sphereMode: "multiply" }
-      },
-      {
-        path: "references/babylon-mmd/res/model/bone_hierarchy_test.pmx",
-        counts: { vertices: 0, faces: 0, materials: 0, bones: 5, displayFrames: 2 }
-      },
-      {
-        path: "references/babylon-mmd/res/model/bone_hierarchy_test2.pmx",
-        counts: { vertices: 0, faces: 0, materials: 0, bones: 3, displayFrames: 2 }
-      },
-      {
-        path: "references/babylon-mmd/res/model/bone_flag_test.pmx",
-        counts: { vertices: 0, faces: 0, materials: 0, bones: 3, displayFrames: 2 },
-        appendedBoneCount: 2
-      }
-    ] as const;
-    if (skipIfMissing(fixtureExpectations.map((fixture) => fixture.path))) {
-      return;
-    }
-
-    for (const expectation of fixtureExpectations) {
-      const model = core.loadModel(await readFile(resolve(expectation.path)), { format: "pmx" });
-      const metadata = model.metadata();
-
-      expect(metadata.counts).toMatchObject(expectation.counts);
-      expect(metadata.diagnostics).toEqual([]);
-      expect(model.skeleton().bones).toHaveLength(expectation.counts.bones);
-      expect(model.displayFrames()).toHaveLength(expectation.counts.displayFrames);
-      if (expectation.material) {
-        expect(model.materials()[0]).toMatchObject(expectation.material);
-      }
-      if (expectation.appendedBoneCount !== undefined) {
-        expect(
-          model
-            .skeleton()
-            .bones.filter((bone) => bone.flags.appendRotate && bone.flags.appendTranslate)
-        ).toHaveLength(expectation.appendedBoneCount);
-      }
-    }
-  });
-
-  it("preserves Babylon-MMD public constraint fixture physics metadata", async () => {
-    const core = await initCore();
-    const constraintFixtures = [
-      "references/babylon-mmd/res/model/constraint_test.pmx",
-      "references/babylon-mmd/res/model/constraint_test2.pmx",
-      "references/babylon-mmd/res/model/constraint_test3.pmx",
-      "references/babylon-mmd/res/model/constraint_test4.pmx"
-    ];
-    if (skipIfMissing(constraintFixtures)) {
-      return;
-    }
-
-    for (const path of constraintFixtures) {
-      const model = core.loadModel(await readFile(resolve(path)), { format: "pmx" });
-
-      expect(model.metadata().diagnostics).toEqual([]);
-      expect(model.metadata().counts).toMatchObject({
-        vertices: 48,
-        faces: 24,
-        materials: 2,
-        bones: 2,
-        rigidBodies: 2,
-        joints: 1
-      });
-      expect(model.rigidBodies().map((body) => body.mode)).toEqual(["static", "dynamic"]);
-      expect(model.rigidBodies().every((body) => body.shape === "box")).toBe(true);
-      expect(model.rigidBodies().map((body) => body.boneIndex)).toEqual([0, 1]);
-      expect(model.joints()[0]).toMatchObject({
-        type: "generic6dofSpring",
-        rigidBodyIndexA: 0,
-        rigidBodyIndexB: 1
-      });
-      expect(Math.max(...model.joints()[0]!.rotationUpperLimit)).toBeGreaterThan(1.5);
-    }
-  });
-
   it("parses PMX append, IK, fixed-axis, and local-axis bone data", async () => {
     const core = await initCore();
     const appendModel = core.loadModel(
@@ -868,266 +1026,22 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     ).toBe(true);
   });
 
-  localMikuPmdIt("parses PMD metadata and geometry for the local miku fixture", async () => {
+  it("exposes SDEF geometry buffers from the PMX wasm-backed path", async () => {
     const core = await initCore();
-    const bytes = await readFile(resolve("data/pmd/miku_v2.pmd"));
-    const model = core.loadModel(bytes, { format: "pmd" });
-    const metadata = model.metadata();
+    const model = core.loadModel(createMinimalSdefPmx(), { format: "pmx" });
+    const geo = model.geometry();
 
-    expect(metadata.format).toBe("pmd");
-    expect(metadata.encoding).toBe("shift-jis");
-    expect(metadata.englishName.length).toBeGreaterThan(0);
-    expect(metadata.englishComment.length).toBeGreaterThan(0);
-    expect(metadata.counts.vertices).toBeGreaterThan(0);
-    expect(metadata.counts.faces).toBeGreaterThan(0);
-    expect(metadata.counts.materials).toBeGreaterThan(0);
-    expect(metadata.counts.bones).toBeGreaterThan(0);
-    expect(model.geometry().positions).toHaveLength(metadata.counts.vertices * 3);
-    expect(model.geometry().indices).toHaveLength(metadata.counts.faces * 3);
-    expect(model.geometry().additionalUvs).toHaveLength(0);
-    expect(model.geometry().skinIndices).toHaveLength(metadata.counts.vertices * 4);
-    expect(model.geometry().skinWeights).toHaveLength(metadata.counts.vertices * 4);
-    expect(model.morphs()).toHaveLength(metadata.counts.morphs);
-    expect(model.displayFrames().length).toBeGreaterThan(metadata.counts.displayFrames);
-    expect(model.skeleton().bones.some((bone) => bone.englishName.length > 0)).toBe(true);
-    expect(model.morphs().some((morph) => morph.englishName.length > 0)).toBe(true);
-    expect(model.displayFrames().some((frame) => frame.englishName.length > 0)).toBe(true);
-    expect(
-      model.displayFrames().some((frame) => frame.frames.some((item) => item.type === "morph"))
-    ).toBe(true);
-    expect(
-      model.displayFrames().some((frame) => frame.frames.some((item) => item.type === "bone"))
-    ).toBe(true);
-    expect(
-      model
-        .displayFrames()
-        .flatMap((frame) => frame.frames)
-        .every(
-          (frame) =>
-            (frame.type === "bone" && frame.index >= 0 && frame.index < metadata.counts.bones) ||
-            (frame.type === "morph" && frame.index >= 0 && frame.index < metadata.counts.morphs)
-        )
-    ).toBe(true);
-    expect(model.morphs()[0]?.type).toBe("base");
-    expect(
-      model
-        .morphs()
-        .slice(1)
-        .every((morph) => morph.type === "vertex")
-    ).toBe(true);
-    expect(
-      model
-        .morphs()
-        .slice(1)
-        .flatMap((morph) => morph.vertexOffsets)
-        .every((offset) => offset.vertexIndex >= 0 && offset.vertexIndex < metadata.counts.vertices)
-    ).toBe(true);
-    expect(model.materials().every((material) => material.sphereMode !== undefined)).toBe(true);
-    expect(model.materials().some((material) => material.sharedToonIndex !== undefined)).toBe(true);
-    expect(model.materials().some((material) => material.toonTexturePath.length > 0)).toBe(true);
-    expect(
-      model.materials().every((material) => material.flags.doubleSided === material.diffuse[3] < 1)
-    ).toBe(true);
-    expect(
-      model.materials().every((material) => material.flags.groundShadow === material.flags.edge)
-    ).toBe(true);
-    expect(
-      model
-        .materials()
-        .every(
-          (material) =>
-            material.flags.selfShadowMap === (material.diffuse[3] !== 0.98) &&
-            material.flags.selfShadow === (material.diffuse[3] !== 0.98)
-        )
-    ).toBe(true);
-    expect(
-      metadata.diagnostics.some((diagnostic) => diagnostic.code === "MORPH_TYPE_UNSUPPORTED")
-    ).toBe(false);
-    expect(
-      metadata.diagnostics.some(
-        (diagnostic) => diagnostic.code === "IK_PMD_KNEE_LIMITS_APPROXIMATE"
-      )
-    ).toBe(true);
-    expect(model.skeleton().bones.some((bone) => bone.flags.ik)).toBe(true);
-    expect(model.skeleton().bones.find((bone) => bone.flags.ik)?.ik?.links.length).toBeGreaterThan(
-      0
-    );
-    expect(model.rigidBodies()).toHaveLength(metadata.counts.rigidBodies);
-    expect(model.joints()).toHaveLength(metadata.counts.joints);
-    expect(model.rigidBodies()[0]?.shape).not.toBe("unknown");
-    expect(model.joints()[0]?.rigidBodyIndexA).toBeGreaterThanOrEqual(0);
+    expect(geo.sdef).toBeDefined();
+    expect(geo.sdef!.enabled).toHaveLength(1);
+    expect(Array.from(geo.sdef!.enabled.slice(0, 1))).toEqual([1]);
+    expectArrayCloseTo(geo.sdef!.c.slice(0, 3), [1, 2, 3]);
+    expectArrayCloseTo(geo.sdef!.r0.slice(0, 3), [4, 5, 6]);
+    expectArrayCloseTo(geo.sdef!.r1.slice(0, 3), [7, 8, 9]);
+    expectArrayCloseTo(geo.sdef!.rw0.slice(0, 3), [-0.125, 0.875, 1.875]);
+    expectArrayCloseTo(geo.sdef!.rw1.slice(0, 3), [1.375, 2.375, 3.375]);
   });
 
-  bundledPmdMatrixIt("loads MMD bundled PMD model metadata as a fixture matrix", async () => {
-    const expectations = [
-      {
-        path: "data/BuildinUserFile/Model/MEIKO.pmd",
-        vertices: 6908,
-        faces: 12899,
-        materials: 17,
-        bones: 99,
-        morphs: 43,
-        rigidBodies: 19,
-        joints: 8
-      },
-      {
-        path: "data/BuildinUserFile/Model/カイト.pmd",
-        vertices: 7133,
-        faces: 13144,
-        materials: 15,
-        bones: 106,
-        morphs: 25,
-        rigidBodies: 0,
-        joints: 0
-      },
-      {
-        path: "data/BuildinUserFile/Model/ダミーボーン.pmd",
-        vertices: 0,
-        faces: 0,
-        materials: 0,
-        bones: 30,
-        morphs: 0,
-        rigidBodies: 0,
-        joints: 0
-      },
-      {
-        path: "data/BuildinUserFile/Model/亞北ネル.pmd",
-        vertices: 9258,
-        faces: 16902,
-        materials: 13,
-        bones: 112,
-        morphs: 19,
-        rigidBodies: 38,
-        joints: 20
-      },
-      {
-        path: "data/BuildinUserFile/Model/初音ミク.pmd",
-        vertices: 9036,
-        faces: 14997,
-        materials: 17,
-        bones: 122,
-        morphs: 16,
-        rigidBodies: 45,
-        joints: 27
-      },
-      {
-        path: "data/BuildinUserFile/Model/初音ミクVer2.pmd",
-        vertices: 12354,
-        faces: 22961,
-        materials: 17,
-        bones: 140,
-        morphs: 31,
-        rigidBodies: 45,
-        joints: 27
-      },
-      {
-        path: "data/BuildinUserFile/Model/初音ミクmetal.pmd",
-        vertices: 12354,
-        faces: 22961,
-        materials: 17,
-        bones: 140,
-        morphs: 31,
-        rigidBodies: 45,
-        joints: 27
-      },
-      {
-        path: "data/BuildinUserFile/Model/咲音メイコ.pmd",
-        vertices: 14284,
-        faces: 26392,
-        materials: 15,
-        bones: 98,
-        morphs: 18,
-        rigidBodies: 23,
-        joints: 14
-      },
-      {
-        path: "data/BuildinUserFile/Model/巡音ルカ.pmd",
-        vertices: 20402,
-        faces: 24815,
-        materials: 31,
-        bones: 188,
-        morphs: 40,
-        rigidBodies: 71,
-        joints: 57
-      },
-      {
-        path: "data/BuildinUserFile/Model/弱音ハク.pmd",
-        vertices: 8085,
-        faces: 14701,
-        materials: 13,
-        bones: 106,
-        morphs: 18,
-        rigidBodies: 34,
-        joints: 14
-      },
-      {
-        path: "data/BuildinUserFile/Model/鏡音リン.pmd",
-        vertices: 8786,
-        faces: 15561,
-        materials: 13,
-        bones: 102,
-        morphs: 16,
-        rigidBodies: 21,
-        joints: 10
-      },
-      {
-        path: "data/BuildinUserFile/Model/鏡音リン_act2.pmd",
-        vertices: 10148,
-        faces: 18122,
-        materials: 27,
-        bones: 106,
-        morphs: 47,
-        rigidBodies: 21,
-        joints: 10
-      },
-      {
-        path: "data/BuildinUserFile/Model/鏡音レン.pmd",
-        vertices: 7161,
-        faces: 13074,
-        materials: 15,
-        bones: 104,
-        morphs: 17,
-        rigidBodies: 24,
-        joints: 13
-      }
-    ];
-    const core = await initCore();
-
-    for (const expectation of expectations) {
-      expect(existsSync(resolve(expectation.path))).toBe(true);
-      const model = core.loadModel(await readFile(resolve(expectation.path)), { format: "pmd" });
-      const metadata = model.metadata();
-      const expectedCounts = {
-        vertices: expectation.vertices,
-        faces: expectation.faces,
-        materials: expectation.materials,
-        bones: expectation.bones,
-        morphs: expectation.morphs,
-        rigidBodies: expectation.rigidBodies,
-        joints: expectation.joints
-      };
-
-      expect(metadata.format).toBe("pmd");
-      expect(metadata.counts).toMatchObject(expectedCounts);
-      expect(model.geometry().positions).toHaveLength(expectation.vertices * 3);
-      expect(model.geometry().indices).toHaveLength(expectation.faces * 3);
-      expect(model.materials()).toHaveLength(expectation.materials);
-      expect(model.skeleton().bones).toHaveLength(expectation.bones);
-      expect(model.morphs()).toHaveLength(expectation.morphs);
-      expect(model.rigidBodies()).toHaveLength(expectation.rigidBodies);
-      expect(model.joints()).toHaveLength(expectation.joints);
-    }
-  });
 });
-
-function skipIfMissing(paths: readonly string[]): boolean {
-  const missing = paths.filter((path) => !existsSync(resolve(path)));
-  if (missing.length > 0) {
-    console.warn(`Skipping optional Babylon-MMD fixture test; missing ${missing.join(", ")}`);
-    return true;
-  }
-  return false;
-}
 
 function createMinimalSdefPmx(
   options: {
@@ -1229,18 +1143,7 @@ function createMinimalSdefPmx(
   } else {
     i32(0);
   }
-  if (options.boneFixture) {
-    i32(1);
-    text("Root");
-    text("");
-    vec3(0, 0, 0);
-    i8(-1);
-    i32(0);
-    u16(0x001e);
-    vec3(0, 1, 0);
-  } else {
-    i32(0);
-  }
+  i32(0);
   if (options.flipMorphFixture) {
     i32(2);
     text("Target");

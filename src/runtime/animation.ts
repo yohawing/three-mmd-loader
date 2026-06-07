@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { CameraState, LightState, MmdAnimation, VmdBoneFrame, VmdBoneTrack, VmdCameraFrame, VmdLightFrame, VmdMorphTrack } from "../parser/model/modelTypes.js";
+import type { CameraState, LightState, MmdAnimation, SelfShadowState, VmdBoneFrame, VmdBoneTrack, VmdCameraFrame, VmdLightFrame, VmdMorphTrack, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
 import { interpolateBezier, lerp, slerp, weightedThreeQuaternion } from "./math.js";
 import type { RuntimeMorph, RuntimeRestTransform } from "./types.js";
 import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
@@ -180,23 +180,79 @@ export function sampleMmdLightTrack(
   frames: readonly VmdLightFrame[],
   frame: number
 ): LightState | undefined {
+  return sampleMmdLightTrackInto(frames, frame, {
+    color: [0, 0, 0],
+    direction: [0, 0, 0]
+  });
+}
+
+export function sampleMmdLightTrackInto(
+  frames: readonly VmdLightFrame[],
+  frame: number,
+  target: LightState
+): LightState | undefined {
   const pair = sampleFramePair(frames, frame);
   if (!pair) {
     return undefined;
   }
   const { previous, next, t } = pair;
-  return {
-    color: [
-      lerp(previous.color[0], next.color[0], t),
-      lerp(previous.color[1], next.color[1], t),
-      lerp(previous.color[2], next.color[2], t)
-    ],
-    direction: [
-      lerp(previous.direction[0], next.direction[0], t),
-      lerp(previous.direction[1], next.direction[1], t),
-      lerp(previous.direction[2], next.direction[2], t)
-    ]
-  };
+  target.color[0] = lerp(previous.color[0], next.color[0], t);
+  target.color[1] = lerp(previous.color[1], next.color[1], t);
+  target.color[2] = lerp(previous.color[2], next.color[2], t);
+  target.direction[0] = lerp(previous.direction[0], next.direction[0], t);
+  target.direction[1] = lerp(previous.direction[1], next.direction[1], t);
+  target.direction[2] = lerp(previous.direction[2], next.direction[2], t);
+  return target;
+}
+
+export function sampleMmdSelfShadowTrack(
+  frames: readonly VmdSelfShadowFrame[],
+  frame: number
+): SelfShadowState | undefined {
+  if (frames.length === 0) {
+    return undefined;
+  }
+  if (frame < frames[0].frame) {
+    return frames[0];
+  }
+  let index = 0;
+  while (index + 1 < frames.length && frames[index + 1].frame <= frame) {
+    index += 1;
+  }
+  return frames[index] ?? frames[0];
+}
+
+export function sampleMmdSelfShadowTrackInto(
+  frames: readonly VmdSelfShadowFrame[],
+  frame: number,
+  target: SelfShadowState,
+  hint?: { index: number }
+): SelfShadowState | undefined {
+  if (frames.length === 0) {
+    return undefined;
+  }
+  let index = hint?.index ?? 0;
+  if (index >= frames.length || frames[index].frame > frame) {
+    index = 0;
+  }
+  if (frame < frames[0].frame) {
+    target.mode = frames[0].mode;
+    target.distance = frames[0].distance;
+    if (hint) {
+      hint.index = 0;
+    }
+    return target;
+  }
+  while (index + 1 < frames.length && frames[index + 1].frame <= frame) {
+    index += 1;
+  }
+  const current = frames[index] ?? frames[0];
+  target.mode = current.mode;
+  target.distance = current.distance;
+  if (hint) {
+    hint.index = index;
+  }
+  return target;
 }
 
 function sampleFramePair<T extends { readonly frame: number }>(

@@ -1,4 +1,4 @@
-import { dom, setStatus, updatePresetSectionVisibility } from "./dom.js";
+import { dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js";
 import { hasCurrentMotion, state } from "./state.js";
 
 export function loadAudioFile(file) {
@@ -16,19 +16,22 @@ export function loadAudioFile(file) {
   setStatus("", "ready");
 }
 
-export function loadAudioFromUrl(url, label = url.split("/").at(-1) ?? url) {
+export function loadAudioFromUrl(url, label = url.split("/").at(-1) ?? url, options = {}) {
   setAudioSource(url);
+  setAudioOffsetFrame(options.offsetFrame ?? 0, { sync: false });
   try {
     updateAudioSwitcher({
       id: `url:${url}`,
       name: decodeURIComponent(label),
-      src: url
+      src: url,
+      offsetFrame: state.audioOffsetFrame
     });
   } catch {
     updateAudioSwitcher({
       id: `url:${url}`,
       name: label,
-      src: url
+      src: url,
+      offsetFrame: state.audioOffsetFrame
     });
   }
   setStatus("", "ready");
@@ -40,6 +43,7 @@ export function switchAudioEntry(entry) {
     return;
   }
   setAudioSource(entry.src, { preserveEntries: true });
+  setAudioOffsetFrame(entry.offsetFrame ?? 0, { sync: false });
   updateAudioSwitcher(entry);
   setStatus("", "ready");
 }
@@ -69,8 +73,25 @@ export function clearAudioSource(options = {}) {
   }
   if (!options.preserveEntries) {
     state.currentAudioEntries = [];
+    setAudioOffsetFrame(0, { sync: false });
     updateAudioSwitcher();
   }
+}
+
+export function setAudioOffsetFrame(value, options = {}) {
+  const frame = parseAudioOffsetFrame(value, options);
+  if (frame === undefined) {
+    return false;
+  }
+  state.audioOffsetFrame = frame;
+  state.audioOffsetSeconds = frame / state.mmdFrameRate;
+  if (options.updateInput !== false) {
+    updateAudioOffsetInput();
+  }
+  if (options.sync !== false) {
+    syncAudioToCurrentMotionTime();
+  }
+  return true;
 }
 
 export function isAudioFile(file) {
@@ -90,28 +111,58 @@ export function hasActiveAudioSource() {
 }
 
 function updateAudioSwitcher(selectedEntry) {
-  if (!(dom.audioSwitcher instanceof window.HTMLSelectElement)) {
-    return;
-  }
   if (selectedEntry) {
     state.currentAudioEntries = [selectedEntry];
   }
-  dom.audioSwitcher.replaceChildren(
-    ...state.currentAudioEntries.map((entry) => {
-      const option = document.createElement("option");
-      option.value = entry.id;
-      option.textContent = entry.name;
-      return option;
-    })
+  setLoadedFileSwitcherOptions(
+    dom.audioSwitcher,
+    state.currentAudioEntries.map((entry) => ({
+      value: entry.id,
+      label: entry.name
+    })),
+    selectedEntry?.id
   );
-  if (selectedEntry) {
-    dom.audioSwitcher.value = selectedEntry.id;
-  }
   if (dom.audioControl) {
     dom.audioControl.hidden = state.currentAudioEntries.length === 0;
   }
   if (dom.volumeControl) {
     dom.volumeControl.hidden = state.currentAudioEntries.length === 0;
   }
+  updateAudioOffsetInput();
   updatePresetSectionVisibility();
+  updateChromeHeights();
+}
+
+function parseAudioOffsetFrame(value, options) {
+  const numeric = typeof value === "string" ? Number(value.trim()) : Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric;
+  }
+  return options?.fallback === false ? undefined : 0;
+}
+
+function updateAudioOffsetInput() {
+  if (dom.audioOffsetFrameInput instanceof window.HTMLInputElement) {
+    dom.audioOffsetFrameInput.value = String(state.audioOffsetFrame);
+  }
+}
+
+function syncAudioToCurrentMotionTime() {
+  if (!isAudioElement(dom.bgmAudio) || dom.bgmAudio.currentSrc.length === 0) {
+    return;
+  }
+  const duration = Number.isFinite(dom.bgmAudio.duration) ? dom.bgmAudio.duration : undefined;
+  const targetTime = state.elapsedSeconds - state.audioOffsetSeconds;
+  try {
+    dom.bgmAudio.currentTime = clampAudioTime(targetTime, duration);
+  } catch (error) {
+    window.console?.warn("[viewer] Failed to seek audio after offset update:", error);
+  }
+}
+
+function clampAudioTime(time, duration) {
+  if (duration !== undefined) {
+    return Math.min(Math.max(time, 0), Math.max(duration - 0.001, 0));
+  }
+  return Math.max(time, 0);
 }

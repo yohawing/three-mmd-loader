@@ -17,10 +17,17 @@ import {
 } from "../../../src/parser/index.js";
 import {
   DefaultMmdRuntime,
+  MmdAnimRuntime,
   ThreeMmdLoader,
   sampleMmdCameraTrackInto,
+  sampleMmdLightTrackInto,
+  sampleMmdSelfShadowTrackInto,
   createAmmoMmdPhysicsBackend,
   applyMmdCameraStateToThreeCamera,
+  applyMmdSelfShadowStateToThreeDirectionalLight,
+  configureMmdSelfShadowDirectionalLight,
+  fitMmdSelfShadowDirectionalLightToBox,
+  MMD_SELF_SHADOW_LAYER,
   createMmdTextureMapFromFiles,
   createThreeBufferGeometry,
   createThreeSkeleton,
@@ -30,11 +37,15 @@ import {
   findMmdModelFiles,
   findMmdMotionFiles,
   type AmmoNamespace,
+  createCustomBulletMmdPhysicsBackend,
+  customBulletMmdScriptPath,
   type MmdPhysicsStepContext,
   isModelSource,
+  loadCustomBulletMmdModule,
   loadAmmoNamespace,
   mmdWorldMatrixToThree,
   normalizeMmdRelativePath,
+  resolveCustomBulletMmdScriptUrl,
   resolveMappedTexture
 } from "../../../src/index.js";
 import * as publicApi from "../../../src/index.js";
@@ -128,6 +139,18 @@ center
     expect(sampleMmdCameraTrackInto).toBeTypeOf("function");
   });
 
+  it("exports runtime light helpers from the public barrel", () => {
+    expect(sampleMmdLightTrackInto).toBeTypeOf("function");
+  });
+
+  it("exports Three.js adapter self-shadow helpers from the public barrel", () => {
+    expect(applyMmdSelfShadowStateToThreeDirectionalLight).toBeTypeOf("function");
+    expect(configureMmdSelfShadowDirectionalLight).toBeTypeOf("function");
+    expect(fitMmdSelfShadowDirectionalLightToBox).toBeTypeOf("function");
+    expect(sampleMmdSelfShadowTrackInto).toBeTypeOf("function");
+    expect(MMD_SELF_SHADOW_LAYER).toBe(1);
+  });
+
   it("does not expose Three.js AnimationClip creation from the public barrel", () => {
     expect("createThreeAnimationClip" in publicApi).toBe(false);
     expect("createThreePoseAnimationClip" in publicApi).toBe(false);
@@ -186,6 +209,11 @@ center
     );
   });
 
+  it("exports the experimental MmdAnimRuntime facade", () => {
+    expect(MmdAnimRuntime).toBeTypeOf("function");
+    expect("CustomRuntime" in publicApi).toBe(false);
+  });
+
   it("runs the README minimal loader sample against the one-bone PMX fixture", async () => {
     const pmxBytes = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
     const loader = new ThreeMmdLoader();
@@ -214,6 +242,12 @@ center
 
   it("exports the browser Ammo namespace loader from the public barrel", () => {
     expect(loadAmmoNamespace).toBeTypeOf("function");
+    expect(loadCustomBulletMmdModule).toBeTypeOf("function");
+    expect(createCustomBulletMmdPhysicsBackend).toBeTypeOf("function");
+    expect(customBulletMmdScriptPath).toBe("./mmd/mmd_bullet.js");
+    expect(resolveCustomBulletMmdScriptUrl("https://example.test/pkg/dist/physics/index.js")).toBe(
+      "https://example.test/pkg/dist/physics/mmd/mmd_bullet.js"
+    );
   });
 
   it("loads a PMX model and disposes a concrete Ammo physics backend", async () => {

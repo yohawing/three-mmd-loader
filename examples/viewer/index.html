@@ -17,7 +17,7 @@
         }
       }
     </script>
-    <!-- Shoelace UI spike (no-build, CDN autoloader). Vendor it like three/ammo if adopted. -->
+    <!-- Shoelace UI spike (no-build, CDN autoloader). Vendor it like three if adopted. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2/cdn/themes/light.css" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2/cdn/shoelace-autoloader.js"></script>
     <link rel="stylesheet" href="./styles.css" />
@@ -50,6 +50,20 @@
                 </div>
               </section>
 
+              <details class="load-category" id="viewport-settings-category">
+                <summary data-i18n="menu.viewport">Viewport</summary>
+                <div class="viewport-settings">
+                  <label class="switch-toggle">
+                    <span data-i18n="viewport.grid">Grid</span>
+                    <input id="viewport-grid-toggle" type="checkbox" role="switch" checked />
+                  </label>
+                  <label class="switch-toggle">
+                    <span data-i18n="viewport.axes">Axis</span>
+                    <input id="viewport-axes-toggle" type="checkbox" role="switch" checked />
+                  </label>
+                </div>
+              </details>
+
               <details class="load-category" id="model-load-category" open>
                 <summary data-i18n="menu.model">Model</summary>
                 <button id="choose-model-folder" type="button" role="menuitem" data-i18n="action.loadFromFolder">Load From Folder...</button>
@@ -74,6 +88,10 @@
               <details class="load-category" id="audio-load-category">
                 <summary data-i18n="menu.audio">Audio</summary>
                 <button id="choose-audio" type="button" role="menuitem" data-i18n="action.loadFromFile">Load From File...</button>
+                <label class="asset-load-row audio-offset-control" id="audio-offset-control">
+                  <span data-i18n="audio.offsetFrame">Audio Offset</span>
+                  <input id="audio-offset-frame" type="text" inputmode="numeric" pattern="-?[0-9]*" value="0" aria-label="Audio offset frame" data-i18n-aria="aria.audioOffsetFrame" />
+                </label>
                 <div class="asset-load-row" hidden>
                   <label for="asset-audio-select" data-i18n="menu.fixture">Fixture</label>
                   <select id="asset-audio-select" aria-label="Local audio asset" hidden></select>
@@ -106,34 +124,29 @@
 
         <div class="loaded-files" aria-label="Loaded files">
           <div class="loaded-file-control" id="model-control" hidden>
-            <select id="model-switcher" aria-label="Selected model"></select>
-            <button id="clear-model" class="clear-loaded-file" type="button" aria-label="Clear model">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="model-switcher" size="small" hoist aria-label="Selected model">
+              <sl-icon-button id="clear-model" slot="suffix" name="x-lg" label="Clear model" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
           <div class="loaded-file-control" id="motion-control" hidden>
-            <select id="motion-switcher" aria-label="Selected motion"></select>
-            <button id="clear-motion" class="clear-loaded-file" type="button" aria-label="Clear motion">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="motion-switcher" size="small" hoist aria-label="Selected motion">
+              <sl-icon-button id="clear-motion" slot="suffix" name="x-lg" label="Clear motion" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
           <div class="loaded-file-control" id="audio-control" hidden>
-            <select id="audio-switcher" aria-label="Selected audio"></select>
-            <button id="clear-audio" class="clear-loaded-file" type="button" aria-label="Clear audio">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="audio-switcher" size="small" hoist aria-label="Selected audio">
+              <sl-icon-button id="clear-audio" slot="suffix" name="x-lg" label="Clear audio" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
           <div class="loaded-file-control" id="background-control" hidden>
-            <select id="background-switcher" aria-label="Selected background"></select>
-            <button id="clear-background" class="clear-loaded-file" type="button" aria-label="Clear background">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="background-switcher" size="small" hoist aria-label="Selected background">
+              <sl-icon-button id="clear-background" slot="suffix" name="x-lg" label="Clear background" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
           <div class="loaded-file-control" id="camera-control" hidden>
-            <select id="camera-switcher" aria-label="Selected camera"></select>
-            <button id="clear-camera" class="clear-loaded-file" type="button" aria-label="Clear camera">
-              <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            </button>
+            <sl-select id="camera-switcher" size="small" hoist aria-label="Selected camera">
+              <sl-icon-button id="clear-camera" slot="suffix" name="x-lg" label="Clear camera" class="clear-loaded-file"></sl-icon-button>
+            </sl-select>
           </div>
         </div>
 
@@ -170,6 +183,46 @@
             <p class="info-version">v<span id="app-version">0.0.0</span></p>
           </div>
         </details>
+        <details class="debug-menu" id="debug-menu" hidden>
+          <summary aria-label="Debug panel">
+            <span class="material-symbols-rounded" aria-hidden="true">bug_report</span>
+          </summary>
+          <div class="debug-menu-panel" role="menu" aria-label="Debug panel">
+            <h2 class="debug-title">Debug</h2>
+            <div class="debug-metrics" aria-label="Debug performance metrics">
+              <div class="debug-metric">
+                <span>FPS</span>
+                <output id="debug-fps-value" aria-label="Frames per second">--</output>
+              </div>
+              <div class="debug-metric">
+                <span>Frame</span>
+                <output id="debug-frame-time-value" aria-label="Frame time">--</output>
+              </div>
+              <div class="debug-metric">
+                <span>Memory</span>
+                <output id="debug-memory-value" aria-label="JavaScript memory">--</output>
+              </div>
+            </div>
+            <div class="debug-actions">
+              <label class="debug-toggle">
+                <span>Colliders</span>
+                <input id="debug-colliders-toggle" type="checkbox" role="switch" />
+              </label>
+              <label class="debug-toggle">
+                <span>Normals</span>
+                <input id="debug-normals-toggle" type="checkbox" role="switch" />
+              </label>
+              <label class="debug-toggle">
+                <span>Outline off</span>
+                <input id="debug-outline-off-toggle" type="checkbox" role="switch" />
+              </label>
+              <label class="debug-toggle">
+                <span>Self shadow</span>
+                <input id="debug-self-shadow-toggle" type="checkbox" role="switch" checked />
+              </label>
+            </div>
+          </div>
+        </details>
       </nav>
 
       <section class="stage" aria-label="MMD model viewport">
@@ -188,14 +241,26 @@
           <span class="loading-spinner" aria-hidden="true"></span>
           <span id="loading-message">Loading</span>
         </div>
+        <div class="credit-popup" id="credit-popup" role="dialog" aria-labelledby="credit-title" hidden>
+          <header class="credit-header">
+            <h2 id="credit-title" data-i18n="credit.title">Credits</h2>
+            <button id="credit-close" class="credit-close" type="button" aria-label="Close credits" data-i18n-aria="aria.closeCredits">
+              <span class="material-symbols-rounded" aria-hidden="true">close</span>
+            </button>
+          </header>
+          <p class="credit-model" id="credit-model"></p>
+          <p class="credit-comment" id="credit-comment"></p>
+        </div>
       </section>
 
       <footer class="transport" aria-label="Playback controls" hidden>
-        <button id="play-toggle" type="button" aria-label="Play">
-          <span class="material-symbols-rounded" aria-hidden="true">play_arrow</span>
-        </button>
+        <sl-icon-button id="play-toggle" name="play" label="Play"></sl-icon-button>
         <label>
-          <span id="frame-value">0</span>
+          <span class="frame-display" id="frame-value">
+            <input id="frame-current" type="text" inputmode="numeric" pattern="[0-9]*" value="0" aria-label="Current frame" data-i18n-aria="aria.currentFrame" />
+            <span class="frame-separator" aria-hidden="true">/</span>
+            <span id="frame-total">0</span>
+          </span>
           <sl-range id="timeline" min="0" max="10" value="0" step="0.001" tooltip="none"></sl-range>
         </label>
         <div class="volume-control" id="volume-control" hidden>

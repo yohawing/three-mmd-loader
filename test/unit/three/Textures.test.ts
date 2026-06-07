@@ -27,6 +27,22 @@ function createAlphaEvaluationGeometry(materialIndex = 0): THREE.BufferGeometry 
   return geometry;
 }
 
+function createFullWidthAlphaEvaluationGeometry(materialIndex = 0): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "uv",
+    new THREE.Float32BufferAttribute([
+      0, 0,
+      1, 0,
+      0, 0.25,
+      1, 0.25
+    ], 2)
+  );
+  geometry.setIndex([0, 1, 2, 1, 3, 2]);
+  geometry.addGroup(0, 6, materialIndex);
+  return geometry;
+}
+
 function createRgbaTexture(data: Uint8Array, width: number, height: number): THREE.DataTexture {
   return new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
 }
@@ -198,6 +214,21 @@ describe("MMD texture path utilities", () => {
 
     expect(evaluateMmdTextureAlphaGeometry(texture, createAlphaEvaluationGeometry(), 0)).not.toBe(
       "opaque"
+    );
+  });
+
+  it("classifies alpha on full-width wrapped UV rectangles instead of dropping degenerate samples", () => {
+    const rgba = new Uint8Array(4 * 4 * 4);
+    for (let index = 0; index < 4 * 4; index += 1) {
+      rgba[index * 4] = 255;
+      rgba[index * 4 + 1] = 255;
+      rgba[index * 4 + 2] = 255;
+      rgba[index * 4 + 3] = 100;
+    }
+    const texture = createRgbaTexture(rgba, 4, 4);
+
+    expect(evaluateMmdTextureAlphaGeometry(texture, createFullWidthAlphaEvaluationGeometry(), 0)).toBe(
+      "alphaBlend"
     );
   });
 

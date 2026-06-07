@@ -8,7 +8,10 @@ const dictionaries = {
     "aria.language": "Language",
     "aria.volume": "Volume",
     "aria.mute": "Mute",
+    "aria.currentFrame": "Current frame",
+    "aria.audioOffsetFrame": "Audio offset frame",
     "aria.deletePreset": "Delete preset",
+    "aria.closeCredits": "Close credits",
     "menu.preset": "Preset",
     "menu.fixture": "Fixture",
     "menu.current": "Current",
@@ -18,6 +21,10 @@ const dictionaries = {
     "menu.audio": "Audio",
     "menu.background": "Background",
     "menu.camera": "Camera",
+    "menu.viewport": "Viewport",
+    "viewport.grid": "Grid",
+    "viewport.axes": "Axis",
+    "audio.offsetFrame": "Audio Offset",
     "action.save": "Save",
     "action.load": "Load",
     "action.loadFromFile": "Load From File...",
@@ -29,7 +36,8 @@ const dictionaries = {
     "drop.sub": "Model textures are resolved when a folder is selected.",
     "about.desc": "A browser-based viewer for MikuMikuDance (MMD) models and motions, built on three-mmd-loader.",
     "about.local": "All files stay in your browser — nothing is uploaded to any server.",
-    "about.copyright": "This site hosts no models or motions. You are responsible for following the usage terms and copyright of every file you load."
+    "about.copyright": "This site hosts no models or motions. You are responsible for following the usage terms and copyright of every file you load.",
+    "credit.title": "Credits"
   },
   ja: {
     "aria.menu": "メニュー",
@@ -37,7 +45,10 @@ const dictionaries = {
     "aria.language": "言語",
     "aria.volume": "音量",
     "aria.mute": "ミュート",
+    "aria.currentFrame": "現在フレーム",
+    "aria.audioOffsetFrame": "音声オフセットフレーム",
     "aria.deletePreset": "プリセットを削除",
+    "aria.closeCredits": "クレジットを閉じる",
     "menu.preset": "プリセット",
     "menu.fixture": "フィクスチャ",
     "menu.current": "現在",
@@ -47,6 +58,10 @@ const dictionaries = {
     "menu.audio": "オーディオ",
     "menu.background": "背景",
     "menu.camera": "カメラ",
+    "menu.viewport": "ビューポート",
+    "viewport.grid": "グリッド",
+    "viewport.axes": "軸",
+    "audio.offsetFrame": "音声オフセット",
     "action.save": "保存",
     "action.load": "読み込み",
     "action.loadFromFile": "ファイルから読み込み...",
@@ -58,7 +73,8 @@ const dictionaries = {
     "drop.sub": "フォルダを選ぶとモデルのテクスチャも解決されます。",
     "about.desc": "three-mmd-loader を使った、ブラウザで動く MikuMikuDance (MMD) モデル・モーションビューアです。",
     "about.local": "ファイルはすべてブラウザ内で処理され、サーバーには一切アップロードされません。",
-    "about.copyright": "本サイトはモデルやモーションを配布していません。読み込む各ファイルの利用規約・著作権の遵守は利用者の責任です。"
+    "about.copyright": "本サイトはモデルやモーションを配布していません。読み込む各ファイルの利用規約・著作権の遵守は利用者の責任です。",
+    "credit.title": "クレジット"
   },
   zh: {
     "aria.menu": "菜单",
@@ -66,7 +82,10 @@ const dictionaries = {
     "aria.language": "语言",
     "aria.volume": "音量",
     "aria.mute": "静音",
+    "aria.currentFrame": "当前帧",
+    "aria.audioOffsetFrame": "音频偏移帧",
     "aria.deletePreset": "删除预设",
+    "aria.closeCredits": "关闭署名信息",
     "menu.preset": "预设",
     "menu.fixture": "测试素材",
     "menu.current": "当前",
@@ -76,6 +95,10 @@ const dictionaries = {
     "menu.audio": "音频",
     "menu.background": "背景",
     "menu.camera": "镜头",
+    "menu.viewport": "视口",
+    "viewport.grid": "网格",
+    "viewport.axes": "坐标轴",
+    "audio.offsetFrame": "音频偏移",
     "action.save": "保存",
     "action.load": "加载",
     "action.loadFromFile": "从文件加载...",
@@ -87,7 +110,8 @@ const dictionaries = {
     "drop.sub": "选择文件夹后会自动解析模型贴图。",
     "about.desc": "基于 three-mmd-loader 的浏览器端 MikuMikuDance (MMD) 模型与动作查看器。",
     "about.local": "所有文件均在浏览器内处理，不会上传到任何服务器。",
-    "about.copyright": "本站不提供任何模型或动作文件。您需自行遵守所加载文件的使用条款与版权规定。"
+    "about.copyright": "本站不提供任何模型或动作文件。您需自行遵守所加载文件的使用条款与版权规定。",
+    "credit.title": "署名信息"
   }
 };
 

@@ -2,7 +2,7 @@ import { parseVmd } from "../../../dist/parser/index.js";
 import { sampleMmdCameraTrackInto } from "../../../dist/runtime/index.js";
 import { applyMmdCameraStateToThreeCamera } from "../../../dist/three/index.js";
 
-import { dom, setStatus, updatePlaybackDisplay, updateTransportState } from "./dom.js";
+import { dom, setLoadedFileSwitcherOptions, setStatus, updatePlaybackDisplay, updateTransportState } from "./dom.js";
 import { currentMmdFrame, currentMotionDurationSeconds, hasCurrentMotion } from "./state.js";
 import { state } from "./state.js";
 import { labelFromUrl } from "./url-label.js";
@@ -17,11 +17,7 @@ export async function loadCameraFromUrl(url) {
   try {
     setStatus(`Loading camera: ${labelFromUrl(url)}`, "loading");
     const animation = parseVmd(await fetchBytes(url));
-    return await loadCameraAnimation(animation, labelFromUrl(url), {
-      id: `url:${url}`,
-      name: labelFromUrl(url),
-      source: url
-    });
+    return await loadCameraAnimation(animation, labelFromUrl(url), createCameraSwitcherEntry(url, labelFromUrl(url)));
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
     return false;
@@ -32,13 +28,10 @@ export async function loadCameraFile(file) {
   try {
     setStatus(`Loading camera: ${file.name}`, "loading");
     const animation = parseVmd(new Uint8Array(await file.arrayBuffer()));
-    await loadCameraAnimation(animation, file.name, {
-      id: `file:${file.name}:${file.lastModified}`,
-      name: file.name,
-      source: file
-    });
+    return await loadCameraAnimation(animation, file.name, createCameraSwitcherEntry(file, file.name));
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
+    return false;
   }
 }
 
@@ -65,16 +58,14 @@ export function clearCameraMotion() {
 
 export function applyCameraMotion() {
   const cameraMotion = state.currentCameraMotion;
-  if (!cameraMotion || cameraMotion.frames.length === 0) {
-    return;
-  }
-  const frameNumber = currentMmdFrame();
-  const sampled = sampleMmdCameraTrackInto(
-    cameraMotion.frames,
-    frameNumber,
-    state.cameraStateScratch,
-    cameraMotion.frameIndexHint
-  );
+  const sampled = cameraMotion && cameraMotion.frames.length > 0
+    ? sampleMmdCameraTrackInto(
+        cameraMotion.frames,
+        currentMmdFrame(),
+        state.cameraStateScratch,
+        cameraMotion.frameIndexHint
+      )
+    : state.currentModel?.runtime?.cameraState?.();
   if (!sampled) {
     return;
   }
@@ -89,7 +80,7 @@ export function applyCameraMotion() {
   }
 }
 
-async function loadCameraAnimation(animation, label, entry) {
+export async function loadCameraAnimation(animation, label, entry) {
   if (animation.cameraFrames.length === 0) {
     setStatus("Selected VMD has no camera frames.", "error");
     return false;
@@ -120,6 +111,24 @@ async function loadCameraAnimation(animation, label, entry) {
   return true;
 }
 
+export function createCameraSwitcherEntry(source, label) {
+  if (source instanceof window.File) {
+    return {
+      id: `file:${source.name}:${source.lastModified}`,
+      name: label,
+      source
+    };
+  }
+  if (typeof source === "string") {
+    return {
+      id: `url:${source}`,
+      name: label,
+      source
+    };
+  }
+  return undefined;
+}
+
 function syncTimelineRangeToCurrentMotion() {
   if (!dom.timeline) {
     return;
@@ -134,23 +143,17 @@ function syncTimelineRangeToCurrentMotion() {
 }
 
 function updateCameraSwitcher(selectedEntry) {
-  if (!(dom.cameraSwitcher instanceof window.HTMLSelectElement)) {
-    return;
-  }
   if (selectedEntry) {
     state.currentCameraEntries = [selectedEntry];
   }
-  dom.cameraSwitcher.replaceChildren(
-    ...state.currentCameraEntries.map((entry) => {
-      const option = document.createElement("option");
-      option.value = entry.id;
-      option.textContent = entry.name;
-      return option;
-    })
+  setLoadedFileSwitcherOptions(
+    dom.cameraSwitcher,
+    state.currentCameraEntries.map((entry) => ({
+      value: entry.id,
+      label: entry.name
+    })),
+    selectedEntry?.id
   );
-  if (selectedEntry) {
-    dom.cameraSwitcher.value = selectedEntry.id;
-  }
   if (dom.cameraControl) {
     dom.cameraControl.hidden = state.currentCameraEntries.length === 0;
   }

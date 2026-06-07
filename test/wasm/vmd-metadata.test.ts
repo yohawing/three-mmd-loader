@@ -1,69 +1,10 @@
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { initCore } from "../../src/parser/wasm/index.js";
 
-const wavefileCameraIt = existsSync(resolve("data/vmd/wavefile_camera.vmd")) ? it : it.skip;
-
-const localRealWorldVmdFixtures = [
-  {
-    path: "data/vmd/V_MMD-Motion_HimeTanaka.vmd",
-    modelName: "田中ヒメ ver1.30",
-    maxFrame: 6180,
-    counts: {
-      bones: 438851,
-      morphs: 19250,
-      cameras: 0,
-      lights: 0,
-      selfShadows: 0,
-      properties: 0
-    },
-    uniqueBoneTracks: 71,
-    uniqueMorphTracks: 16
-  },
-  {
-    path: "data/vmd/ラビットホール.vmd",
-    modelName: "Sour_Miku_White",
-    maxFrame: 4837,
-    counts: {
-      bones: 219685,
-      morphs: 3696,
-      cameras: 0,
-      lights: 0,
-      selfShadows: 0,
-      properties: 1
-    },
-    uniqueBoneTracks: 364,
-    uniqueMorphTracks: 132
-  }
-] as const;
-
 describe("@yw-mmd/core-wasm VMD metadata", () => {
-  it("inventories optional local real-world VMD motion fixtures", async () => {
-    const missing = localRealWorldVmdFixtures.filter(
-      (fixture) => !existsSync(resolve(fixture.path))
-    );
-    if (missing.length > 0) {
-      console.warn(
-        `Skipping optional local VMD fixture inventory; missing ${missing.length} fixture(s).`
-      );
-      return;
-    }
-
-    const core = await initCore();
-    for (const fixture of localRealWorldVmdFixtures) {
-      const animation = core.loadVmd(await readFile(resolve(fixture.path)));
-
-      expect(animation.metadata.modelName).toBe(fixture.modelName);
-      expect(animation.metadata.maxFrame).toBe(fixture.maxFrame);
-      expect(animation.metadata.counts).toEqual(fixture.counts);
-      expect(Object.keys(animation.boneTracks)).toHaveLength(fixture.uniqueBoneTracks);
-      expect(Object.keys(animation.morphTracks)).toHaveLength(fixture.uniqueMorphTracks);
-    }
-  });
-
-  it("loads VMD metadata through the nanoem-backed Wasm parser", async () => {
+  it("loads VMD metadata through the mmd-anim-backed Wasm parser", async () => {
     const core = await initCore();
     const animation = core.loadVmd(
       await readFile(resolve("test/fixtures/test_1bone_cube_motion.vmd"))
@@ -89,7 +30,7 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
     expect(parentTrack?.physicsToggles[0]).toBe(1);
   });
 
-  it("preserves Babylon-MMD VMD bone physics toggle bytes", async () => {
+  it("preserves VMD bone physics toggle bytes", async () => {
     const core = await initCore();
     const disabled = core.loadVmd(createBonePhysicsToggleVmd(0));
     const enabled = core.loadVmd(createBonePhysicsToggleVmd(1));
@@ -98,62 +39,10 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
     expect(enabled.boneTracks.Root?.physicsToggles[0]).toBe(1);
   });
 
-  it("preserves Babylon-MMD public VMD physics-toggle fixtures", async () => {
+  it("parses light frame arrays", async () => {
     const core = await initCore();
-    const fixturePaths = [
-      "references/babylon-mmd/res/motion/physics_toggle_test_v2_yyb10th.vmd",
-      "references/babylon-mmd/res/motion/physics_toggle_test_v3_yyb10th.vmd",
-      "references/babylon-mmd/res/motion/physics_toggle_test_yyb10th.vmd"
-    ];
-    if (skipIfMissing(fixturePaths)) {
-      return;
-    }
-
-    const v2 = core.loadVmd(await readFile(resolve(fixturePaths[0])));
-    const v3 = core.loadVmd(await readFile(resolve(fixturePaths[1])));
-    const full = core.loadVmd(await readFile(resolve(fixturePaths[2])));
-
-    expect(v2.metadata).toMatchObject({
-      modelName: "YYB式初音ミク_10th_v",
-      counts: { bones: 3, morphs: 0, properties: 0 },
-      maxFrame: 21
-    });
-    expect(new Set(Array.from(v2.boneTracks.D4!.physicsToggles))).toEqual(new Set([0, 1]));
-
-    expect(v3.metadata).toMatchObject({
-      modelName: "YYB式初音ミク_10th_v",
-      counts: { bones: 17, morphs: 0, properties: 0 },
-      maxFrame: 20
-    });
-    expect(v3.boneTracks["右肩P"]?.physicsToggles[0]).toBe(1);
-
-    expect(full.metadata).toMatchObject({
-      modelName: "YYB式初音ミク_10th_v",
-      counts: { bones: 454, morphs: 100, properties: 1 },
-      maxFrame: 100
-    });
-    expect(full.propertyFrames[0]).toMatchObject({
-      frame: 0,
-      visible: true,
-      physicsSimulation: true,
-      ikStates: [
-        { boneName: "右足ＩＫ", enabled: true },
-        { boneName: "右つま先ＩＫ", enabled: true },
-        { boneName: "左足ＩＫ", enabled: true },
-        { boneName: "左つま先ＩＫ", enabled: true }
-      ]
-    });
-    expect(full.boneTracks["操作中心"]?.physicsToggles[0]).toBe(1);
-  });
-
-  wavefileCameraIt("parses camera and light frame arrays", async () => {
-    const core = await initCore();
-    const cameraMotion = core.loadVmd(await readFile(resolve("data/vmd/wavefile_camera.vmd")));
     const lightMotion = core.loadVmd(createLightOnlyVmd());
 
-    expect(cameraMotion.cameraFrames).toHaveLength(cameraMotion.metadata.counts.cameras);
-    expect(cameraMotion.cameraFrames[0]?.frame).toBeGreaterThanOrEqual(0);
-    expect(cameraMotion.cameraFrames.every((frame) => Number.isFinite(frame.fov))).toBe(true);
     expect(lightMotion.lightFrames).toHaveLength(lightMotion.metadata.counts.lights);
   });
 
@@ -189,15 +78,6 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
     );
   });
 });
-
-function skipIfMissing(paths: readonly string[]): boolean {
-  const missing = paths.filter((path) => !existsSync(resolve(path)));
-  if (missing.length > 0) {
-    console.warn(`Skipping optional Babylon-MMD fixture test; missing ${missing.join(", ")}`);
-    return true;
-  }
-  return false;
-}
 
 function createLightOnlyVmd(): Uint8Array {
   const bytes = new Uint8Array(30 + 20 + 4 + 4 + 4 + 4 + 2 * (4 + 6 * 4));

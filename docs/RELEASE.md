@@ -35,11 +35,11 @@ npm run smoke:types
 npm pack --dry-run --json
 ```
 
-If files under `native/**` or the WASM export surface changed, rebuild the WASM
-wrapper before the normal build:
+If the `native/third_party/mmd-anim` submodule or the WASM export surface changed,
+rebuild the WASM wrapper before the normal build:
 
 ```bash
-npm run build:wasm
+npm run build:mmd-anim
 npm run build
 ```
 
@@ -110,7 +110,12 @@ Verify these workflow results:
   and TypeScript consumer smoke.
 - The publish job ran under the GitHub `npm` environment.
 - npm Trusted Publishing succeeded.
-- The GitHub Release exists for the tag and has the package artifact attached.
+- The GitHub Release exists for the tag, has the package artifact attached, and
+  uses the matching `CHANGELOG.md` version section as its release notes.
+
+The release workflow extracts the `## [X.Y.Z]` section from `CHANGELOG.md` for
+tag `vX.Y.Z`. If that section is missing, the workflow fails instead of
+publishing generic generated notes.
 
 Manual dispatch is also available, but use tag-triggered releases for normal
 publishing so the GitHub Release is tied to the version tag.

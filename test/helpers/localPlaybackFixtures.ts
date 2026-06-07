@@ -1,21 +1,21 @@
 import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import type { NativeNanoemOracleStageName } from "./nativeNanoemOracle.js";
-
 export interface LocalPlaybackFixturesResult {
   readonly skipReason?: string;
   readonly cases: readonly LocalPlaybackCase[];
   readonly skippedCases: readonly LocalPlaybackSkippedCase[];
 }
 
+export type LocalPlaybackStageName = "vmdInterpolation" | "appendTransform" | "ik" | "physics";
+
 export interface LocalPlaybackCase {
   readonly name: string;
   readonly modelPath: string;
   readonly motionPath: string;
   readonly cameraMotionPath?: string;
-  readonly oraclePath: string;
-  readonly stage: NativeNanoemOracleStageName;
+  readonly oraclePath?: string;
+  readonly stage: LocalPlaybackStageName;
   readonly frames: readonly number[];
   readonly watchBones: readonly string[];
   readonly matrixEpsilon: number;
@@ -59,9 +59,9 @@ interface PlaybackSmokeCaseConfig {
   readonly camera?: {
     readonly key: string;
   };
-  readonly oracle: string;
-  readonly oracleKind: "native-nanoem-runtime-dump";
-  readonly stage?: NativeNanoemOracleStageName;
+  readonly oracle?: string;
+  readonly oracleKind?: string;
+  readonly stage?: LocalPlaybackStageName;
   readonly frames: readonly number[];
   readonly watchBones: readonly string[];
   readonly matrixEpsilon?: number;
@@ -71,7 +71,7 @@ interface PlaybackSmokeCaseConfig {
 }
 
 const defaultInventoryPath = "test/fixtures/fixtures.local.json";
-const stageNames = new Set<NativeNanoemOracleStageName>([
+const stageNames = new Set<LocalPlaybackStageName>([
   "vmdInterpolation",
   "appendTransform",
   "ik",
@@ -120,7 +120,7 @@ export async function loadLocalPlaybackFixtures(
       resolvedCase.modelPath,
       resolvedCase.motionPath,
       ...(resolvedCase.cameraMotionPath ? [resolvedCase.cameraMotionPath] : []),
-      resolvedCase.oraclePath
+      ...(resolvedCase.oraclePath ? [resolvedCase.oraclePath] : [])
     ]);
     if (missingPath) {
       skippedCases.push({
@@ -172,7 +172,7 @@ function resolvePlaybackCase(
     modelPath: resolve(basePath, modelPath),
     motionPath: resolve(basePath, motionPath),
     cameraMotionPath: cameraMotionPath === undefined ? undefined : resolve(basePath, cameraMotionPath),
-    oraclePath: resolve(basePath, rawCase.oracle),
+    oraclePath: rawCase.oracle === undefined ? undefined : resolve(basePath, rawCase.oracle),
     stage: rawCase.stage ?? "physics",
     frames: rawCase.frames,
     watchBones: rawCase.watchBones,
@@ -244,9 +244,6 @@ function parsePlaybackCaseConfig(raw: unknown, label: string): PlaybackSmokeCase
   if (extension !== "pmx" && extension !== "pmd") {
     throw new Error(`${label}.model.extension must be pmx or pmd`);
   }
-  if (config.oracleKind !== "native-nanoem-runtime-dump") {
-    throw new Error(`${label}.oracleKind must be native-nanoem-runtime-dump`);
-  }
   return {
     name: readString(config.name, `${label}.name`),
     model: {
@@ -262,8 +259,12 @@ function parsePlaybackCaseConfig(raw: unknown, label: string): PlaybackSmokeCase
         : {
             key: readString(camera.key, `${label}.camera.key`)
           },
-    oracle: readString(config.oracle, `${label}.oracle`),
-    oracleKind: "native-nanoem-runtime-dump",
+    oracle:
+      config.oracle === undefined ? undefined : readString(config.oracle, `${label}.oracle`),
+    oracleKind:
+      config.oracleKind === undefined
+        ? undefined
+        : readString(config.oracleKind, `${label}.oracleKind`),
     stage,
     frames: readNumberArray(config.frames, `${label}.frames`),
     watchBones: readStringArray(config.watchBones, `${label}.watchBones`),
@@ -363,10 +364,10 @@ function readString(raw: unknown, label: string): string {
   return raw;
 }
 
-function readStage(raw: unknown, label: string): NativeNanoemOracleStageName {
+function readStage(raw: unknown, label: string): LocalPlaybackStageName {
   const stage = readString(raw, label);
-  if (!stageNames.has(stage as NativeNanoemOracleStageName)) {
+  if (!stageNames.has(stage as LocalPlaybackStageName)) {
     throw new Error(`${label} must be a known runtime stage`);
   }
-  return stage as NativeNanoemOracleStageName;
+  return stage as LocalPlaybackStageName;
 }

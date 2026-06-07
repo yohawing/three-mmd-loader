@@ -4,16 +4,18 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { FallbackCore, ThreeMmdLoader } from "../../../src/index.js";
+import { MmdAnimRuntime, FallbackCore, MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
   MmdCore,
   MmdModel,
+  MmdRuntime,
   ModelSource,
   ThreeMmdLoaderOptions,
   ThreeMmdTextureLoader
 } from "../../../src/index.js";
 import * as Textures from "../../../src/three/textures.js";
+import { syncMorphSplitTargetInfluences } from "../../../src/runtime/morphSplitSync.js";
 
 describe("ThreeMmdLoader", () => {
   afterEach(() => {
@@ -55,6 +57,9 @@ describe("ThreeMmdLoader", () => {
     expect(() => new ThreeMmdLoader({ runtime: 30 as unknown as ThreeMmdLoaderOptions["runtime"] })).toThrow(
       "ThreeMmdLoader runtime options must be an object"
     );
+    expect(() => new ThreeMmdLoader({ runtimeFactory: {} as ThreeMmdLoaderOptions["runtimeFactory"] })).toThrow(
+      "ThreeMmdLoader runtimeFactory must be a function"
+    );
     expect(
       () =>
         new ThreeMmdLoader({
@@ -64,6 +69,7 @@ describe("ThreeMmdLoader", () => {
   });
 
   it("loads a PMX model into a minimal Three.js skinned mesh", async () => {
+    const warn = vi.spyOn(globalThis.console, "warn").mockImplementation(() => undefined);
     const loader = new ThreeMmdLoader();
     const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
 
@@ -71,7 +77,9 @@ describe("ThreeMmdLoader", () => {
 
     expect(model.mesh.name).toBe("TestModel");
     expect(model.mesh.isSkinnedMesh).toBe(true);
+    expect(model.root).toBeInstanceOf(THREE.Group);
     expect(model.object).toBeInstanceOf(THREE.Group);
+    expect(model.object).toBe(model.root);
     expect(model.object.children).toEqual([
       model.mesh,
       ...model.renderOrderMeshes,
@@ -81,7 +89,69 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.geometry.getAttribute("position").count).toBe(14);
     expect(model.mesh.geometry.index?.count).toBe(36);
     expect(model.source).toEqual({ kind: "bytes", byteLength: source.byteLength });
+    expect(model.diagnostics.core.kind).toMatch(/fallback|wasm/);
+    expect(model.diagnostics.source).toEqual({ kind: "bytes", byteLength: source.byteLength });
+    expect(model.diagnostics.textures).toEqual([]);
+    expect(model.diagnostics.materials).toHaveLength(1);
+    expect(model.diagnostics.performance).toEqual([]);
     expect(model.textureDiagnostics).toEqual([]);
+    expect(model.runtime).toBeDefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("ThreeMmdModel.object is deprecated"));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("ThreeMmdModel.textureDiagnostics is deprecated")
+    );
+  });
+
+  it("uses the bundled mmd-anim runtime by default for PMX models", async () => {
+    const loader = new ThreeMmdLoader();
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(model.runtime).toBeInstanceOf(MmdAnimRuntime);
+  });
+
+  it("forwards IK solve options to the bundled mmd-anim runtime", async () => {
+    const runtime = createStubRuntime();
+    const fromPmxBytes = vi
+      .spyOn(MmdAnimRuntime, "fromPmxBytes")
+      .mockReturnValue(runtime as unknown as MmdAnimRuntime);
+    const loader = new ThreeMmdLoader({
+      runtime: {
+        frameRate: 60,
+        ikTolerance: 0.02,
+        ikMaxIterationsCap: 12
+      }
+    });
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(model.runtime).toBe(runtime);
+    expect(fromPmxBytes).toHaveBeenCalledWith(expect.any(Object), source, {
+      frameRate: 60,
+      initialSeconds: undefined,
+      physics: "none",
+      physicsBackend: undefined,
+      ikTolerance: 0.02,
+      ikMaxIterationsCap: 12
+    });
+  });
+
+  it("allows a runtimeFactory to create the per-model runtime from PMX bytes and mesh", async () => {
+    const runtime = createStubRuntime();
+    const runtimeFactory = vi.fn(() => runtime);
+    const loader = new ThreeMmdLoader({ runtimeFactory });
+    const source: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const model = await loader.loadModel(source);
+
+    expect(runtimeFactory).toHaveBeenCalledWith({
+      modelBytes: source,
+      mesh: model.mesh,
+      source: { kind: "bytes", byteLength: source.byteLength }
+    });
+    expect(model.runtime).toBe(runtime);
   });
 
   it("uses the configured core for model loading", async () => {
@@ -112,6 +182,34 @@ describe("ThreeMmdLoader", () => {
 
     expect(model.mesh.name).toBe("TestModel");
     expect(onCoreFallback).toHaveBeenCalledWith({ operation: "loadModel", error });
+    expect(model.diagnostics.core).toEqual({
+      kind: "fallback",
+      operation: "loadModel",
+      reason: "wasm parser unavailable"
+    });
+  });
+
+  it("resets core diagnostics after a later successful WASM-backed parse", async () => {
+    const error = new Error("wasm parser unavailable once");
+    const core = createIkFlagCore();
+    const loadModel = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw error;
+      })
+      .mockImplementation(() => createIkFlagModel());
+    const loader = new ThreeMmdLoader();
+    (loader as unknown as { corePromise: Promise<MmdCore> }).corePromise = Promise.resolve({
+      ...core,
+      loadModel
+    });
+    const fallbackSource: ModelSource = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
+
+    const fallbackModel = await loader.loadModel(fallbackSource);
+    const wasmModel = await loader.loadModel(new Uint8Array([1]));
+
+    expect(fallbackModel.diagnostics.core.kind).toBe("fallback");
+    expect(wasmModel.diagnostics.core).toEqual({ kind: "wasm" });
   });
 
   it("loads a PMX model from a string URL source", async () => {
@@ -130,7 +228,41 @@ describe("ThreeMmdLoader", () => {
       byteLength: bytes.byteLength,
       name: "minimal.pmx"
     });
+    expect(model.diagnostics.source).toEqual({
+      kind: "url",
+      url: "https://example.test/models/minimal.pmx",
+      status: 200,
+      ok: true,
+      byteLength: bytes.byteLength,
+      contentType: undefined,
+      contentLength: undefined
+    });
     expect(model.mesh.isSkinnedMesh).toBe(true);
+  });
+
+  it("uses per-load fetch options for string URL sources", async () => {
+    const bytes = createMinimalPmxModelBytes({ materialCount: 0 });
+    const signal = new AbortController().signal;
+    const customFetch = vi.fn(async () => new Response(bytes, {
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-length": String(bytes.byteLength)
+      }
+    }));
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel("https://example.test/models/minimal.pmx", {
+      fetch: customFetch,
+      signal
+    });
+
+    expect(customFetch).toHaveBeenCalledWith("https://example.test/models/minimal.pmx", { signal });
+    expect(model.diagnostics.source).toMatchObject({
+      kind: "url",
+      status: 200,
+      contentType: "application/octet-stream",
+      contentLength: bytes.byteLength
+    });
   });
 
   it("defaults to MMD-compatible outline and render-order proxies without added-event side effects", async () => {
@@ -145,7 +277,7 @@ describe("ThreeMmdLoader", () => {
     const scene = new THREE.Scene();
 
     expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
-    scene.add(model.object);
+    scene.add(model.root);
     expect(model.mesh.children.some((child) => child.userData.mmdOutlineProxy)).toBe(false);
     const outlineMeshes = model.outlineMeshes;
     expect(model.outlineMeshes).toBe(outlineMeshes);
@@ -157,7 +289,7 @@ describe("ThreeMmdLoader", () => {
     expect(renderOrderMeshes).toHaveLength(1);
     expect(renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
     expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
-    expect(model.object.children).toEqual([model.mesh, ...renderOrderMeshes, ...outlineMeshes]);
+    expect(model.root.children).toEqual([model.mesh, ...renderOrderMeshes, ...outlineMeshes]);
   });
 
   it("allows loadModel callers to disable generated render-order proxy meshes explicitly", async () => {
@@ -169,12 +301,52 @@ describe("ThreeMmdLoader", () => {
         triangle: true,
         edge: true
       }),
-      { renderOrderProxies: false }
+      { materialRenderOrder: false }
     );
 
     expect(model.renderOrderMeshes).toEqual([]);
     expect(model.mesh.geometry.drawRange.count).toBe(Number.POSITIVE_INFINITY);
-    expect(model.object.children).toEqual([model.mesh, ...model.outlineMeshes]);
+    expect(model.root.children).toEqual([model.mesh, ...model.outlineMeshes]);
+  });
+
+  it("keeps deprecated loadModel proxy option names as aliases", async () => {
+    const warn = vi.spyOn(globalThis.console, "warn").mockImplementation(() => undefined);
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        edge: true
+      }),
+      { outlines: false, renderOrderProxies: false }
+    );
+
+    expect(model.outlineMeshes).toEqual([]);
+    expect(model.renderOrderMeshes).toEqual([]);
+    expect(model.root.children).toEqual([model.mesh]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("ThreeMmdLoadModelOptions.outlines is deprecated")
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("ThreeMmdLoadModelOptions.renderOrderProxies is deprecated")
+    );
+  });
+
+  it("keeps self-shadow casters on the self-shadow layer when render-order proxies are disabled", async () => {
+    const loader = new ThreeMmdLoader();
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        materialFlags: 0x04
+      }),
+      { materialRenderOrder: false }
+    );
+
+    expect(model.renderOrderMeshes).toEqual([]);
+    expect(model.mesh.layers.mask & (1 << MMD_SELF_SHADOW_LAYER)).toBe(1 << MMD_SELF_SHADOW_LAYER);
   });
 
   it("allows loadModel callers to disable generated outline meshes explicitly", async () => {
@@ -186,12 +358,19 @@ describe("ThreeMmdLoader", () => {
         triangle: true,
         edge: true
       }),
-      { outlines: false }
+      { outline: false }
     );
 
     expect(model.outlineMeshes).toEqual([]);
-    expect(model.renderOrderMeshes).toEqual([]);
-    expect(model.object.children).toEqual([model.mesh]);
+    expect(model.renderOrderMeshes).toHaveLength(1);
+    expect(model.renderOrderMeshes[0]?.userData.mmdMaterialRenderProxy.materialIndex).toBe(0);
+    expect(model.mesh.geometry.drawRange.count).toBe(0);
+    expect(model.mesh.castShadow).toBe(false);
+    expect(model.renderOrderMeshes[0]?.material).toMatchObject({
+      colorWrite: false,
+      depthWrite: false
+    });
+    expect(model.root.children).toEqual([model.mesh, ...model.renderOrderMeshes]);
   });
 
   it("splits sparse large morph geometry into local body meshes without dense global morph targets", async () => {
@@ -226,6 +405,11 @@ describe("ThreeMmdLoader", () => {
     }
     sourceInfluences[0] = 0.25;
     sourceInfluences[1] = 0.75;
+    syncMorphSplitTargetInfluences(model.mesh);
+    expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.[0])).toEqual([0.25, 0.75]);
+
+    sourceInfluences[0] = 0.5;
+    sourceInfluences[1] = 1;
     bodyMeshes.forEach((mesh) => {
       const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
       if (!material) {
@@ -240,7 +424,22 @@ describe("ThreeMmdLoader", () => {
         null
       );
     });
-    expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.[0])).toEqual([0.25, 0.75]);
+    expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.[0])).toEqual([0.5, 1]);
+  });
+
+  it("uses split body meshes directly instead of duplicate render-order proxies", async () => {
+    const loader = new ThreeMmdLoader({ core: createSparseMorphStressCore() });
+
+    const model = await loader.loadModel(new Uint8Array([1]), {
+      outlines: false
+    });
+
+    const bodyMeshes = model.mesh.userData.mmdMorphSplitBodyMeshes as THREE.SkinnedMesh[];
+    expect(bodyMeshes).toHaveLength(2);
+    expect(model.renderOrderMeshes).toEqual([]);
+    expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
+    expect(model.root.children).toEqual([model.mesh, ...bodyMeshes]);
+    expect(bodyMeshes.map((mesh) => mesh.renderOrder)).toEqual([0, 2]);
   });
 
   it("applies load-time frustum culling to the mesh and generated proxy meshes", async () => {
@@ -270,10 +469,10 @@ describe("ThreeMmdLoader", () => {
       })
     );
 
-    model.object.position.set(1, 2, 3);
-    model.object.rotation.set(0, Math.PI / 2, 0);
-    model.object.scale.set(2, 2, 2);
-    model.object.updateMatrixWorld(true);
+    model.root.position.set(1, 2, 3);
+    model.root.rotation.set(0, Math.PI / 2, 0);
+    model.root.scale.set(2, 2, 2);
+    model.root.updateMatrixWorld(true);
 
     const basePosition = new THREE.Vector3();
     model.mesh.getWorldPosition(basePosition);
@@ -282,7 +481,7 @@ describe("ThreeMmdLoader", () => {
     for (const proxy of [...model.renderOrderMeshes, ...model.outlineMeshes]) {
       const proxyPosition = new THREE.Vector3();
       proxy.getWorldPosition(proxyPosition);
-      expect(proxy.parent).toBe(model.object);
+      expect(proxy.parent).toBe(model.root);
       expect(proxyPosition.toArray()).toEqual(basePosition.toArray());
       expect(proxy.matrixWorld.elements).toEqual(model.mesh.matrixWorld.elements);
     }
@@ -349,6 +548,58 @@ describe("ThreeMmdLoader", () => {
     expect(geometryAlphaSpy).toHaveBeenCalledOnce();
   });
 
+  it("reports material transparency diagnostics", async () => {
+    const data = new Uint8Array(4 * 4 * 4);
+    for (let index = 0; index < 4 * 4; index += 1) {
+      data[index * 4] = 255;
+      data[index * 4 + 1] = 255;
+      data[index * 4 + 2] = 255;
+      data[index * 4 + 3] = 100;
+    }
+    const texture = new THREE.DataTexture(data, 4, 4, THREE.RGBAFormat);
+    texture.userData.mmdTextureAlphaMode = "alphaBlend";
+    const textureLoader = createDataTextureLoader(texture);
+    const loader = new ThreeMmdLoader({
+      textureMap: { "tex.png": "resolved/tex.png" },
+      textureLoader
+    });
+
+    const model = await loader.loadModel(
+      createMinimalPmxModelBytes({
+        materialCount: 1,
+        triangle: true,
+        texturePath: "tex.png"
+      })
+    );
+
+    expect(model.diagnostics.materials[0]).toMatchObject({
+      materialIndex: 0,
+      pmxTransparencyMode: "opaque",
+      finalTransparencyMode: "alphaBlend",
+      reason: "texture-metadata"
+    });
+  });
+
+  it("records formal load performance diagnostics", async () => {
+    const onMeasure = vi.fn();
+    const loader = new ThreeMmdLoader({ performance: { onMeasure } });
+
+    const model = await loader.loadModel(createMinimalPmxModelBytes({ materialCount: 0 }));
+
+    expect(model.diagnostics.performance.map((measure) => measure.name)).toEqual([
+      "read-bytes",
+      "parse-model",
+      "create-mesh",
+      "load-textures",
+      "material-metadata",
+      "assemble-model",
+      "total"
+    ]);
+    expect(onMeasure).toHaveBeenCalledWith(
+      expect.objectContaining({ label: expect.stringContaining("bytes:"), name: "total" })
+    );
+  });
+
   it("does not enable internal geometry-aware alpha when outlines are disabled", async () => {
     const texture = createReadableAlphaDataTexture();
     const textureLoader = createDataTextureLoader(texture);
@@ -364,7 +615,7 @@ describe("ThreeMmdLoader", () => {
         triangle: true,
         texturePath: "tex.png"
       }),
-      { outlines: false }
+      { outline: false }
     );
 
     expect(geometryAlphaSpy).not.toHaveBeenCalled();
@@ -386,7 +637,7 @@ describe("ThreeMmdLoader", () => {
         triangle: true,
         texturePath: "tex.png"
       }),
-      { outlines: false }
+      { outline: false }
     );
 
     expect(geometryAlphaSpy).toHaveBeenCalledOnce();
@@ -445,12 +696,9 @@ describe("ThreeMmdLoader", () => {
     const animation = createEmptyMmdAnimation();
 
     expect(model.mesh.userData.mmdIkChains.length).toBeGreaterThan(0);
-    if (!model.runtime) {
-      throw new Error("Expected a runtime");
-    }
     expect(() => {
-      model.runtime?.setAnimation(animation, model.mesh);
-      model.runtime?.evaluate(1 / 30);
+      model.setAnimation(animation);
+      model.update(1 / 30, { physics: false });
     }).not.toThrow();
   });
 
@@ -492,11 +740,19 @@ describe("ThreeMmdLoader", () => {
   it("loads a synthetic PMX model with empty geometry indices into a skinned mesh", async () => {
     const loader = new ThreeMmdLoader();
 
-    const model = await loader.loadModel(createMinimalPmxModelBytes({ materialCount: 1 }));
+    const model = await loader.loadModel(createMinimalPmxModelBytes({
+      materialCount: 1,
+      comment: "モデル利用規約",
+      englishComment: "Model credits"
+    }));
 
     expect(model.mesh.isSkinnedMesh).toBe(true);
     expect(model.mesh.skeleton.bones.length).toBeGreaterThanOrEqual(0);
     expect(model.mesh.geometry.index?.count ?? 0).toBe(0);
+    expect(model.mesh.userData.mmdModel).toEqual(expect.objectContaining({
+      comment: "モデル利用規約",
+      englishComment: "Model credits"
+    }));
   });
 
   it("loads a synthetic PMX model with empty materials into a skinned mesh", async () => {
@@ -582,6 +838,9 @@ function createMinimalPmxModelBytes(options: {
   readonly texturePath?: string;
   readonly triangle?: boolean;
   readonly edge?: boolean;
+  readonly materialFlags?: number;
+  readonly comment?: string;
+  readonly englishComment?: string;
 }): Uint8Array {
   const bytes: number[] = [];
   const encoder = new TextEncoder();
@@ -616,8 +875,8 @@ function createMinimalPmxModelBytes(options: {
   u8(1);
   text("synthetic empty mesh");
   text("SyntheticEmptyMesh");
-  text("");
-  text("");
+  text(options.comment ?? "");
+  text(options.englishComment ?? "");
   count(options.triangle ? 3 : 1);
   writeVertex([0, 0, 0]);
   if (options.triangle) {
@@ -674,7 +933,7 @@ function createMinimalPmxModelBytes(options: {
     f32(0.2);
     f32(0.2);
     f32(0.2);
-    u8(options.edge ? 0x10 : 0);
+    u8(options.materialFlags ?? (options.edge ? 0x10 : 0));
     f32(0);
     f32(0);
     f32(0);
@@ -688,6 +947,28 @@ function createMinimalPmxModelBytes(options: {
     text("");
     i32(options.triangle ? 3 : 0);
   }
+}
+
+function createStubRuntime(): MmdRuntime {
+  const state = { seconds: 0, frame: 0, frameRate: 30 };
+  return {
+    setAnimation: vi.fn(),
+    evaluate: vi.fn(() => state),
+    tick: vi.fn(() => state),
+    seek: vi.fn(() => state),
+    resetPose: vi.fn(),
+    clearAnimation: vi.fn(),
+    reset: vi.fn(() => state),
+    frameState: vi.fn(() => ({ ...state })),
+    debugState: vi.fn(() => ({
+      stages: {
+        vmdInterpolation: { worldMatricesColumnMajor: [], morphWeights: [] },
+        appendTransform: { worldMatricesColumnMajor: [], morphWeights: [] },
+        ik: { worldMatricesColumnMajor: [], morphWeights: [] },
+        physics: { worldMatricesColumnMajor: [], morphWeights: [] }
+      }
+    }))
+  };
 }
 
 function createIkFlagCore(): MmdCore {

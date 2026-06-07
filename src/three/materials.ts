@@ -13,6 +13,7 @@ import {
   evaluateMmdDefaultMaterialTransparency,
   loadMmdDefaultMaterialTextureSet
 } from "./material/material-texture-set.js";
+import type { MmdDefaultMaterialTransparencyDiagnostic } from "./material/material-texture-set.js";
 import { createFallbackMmdMaterial, createTextureResolver } from "./textures.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 
@@ -27,6 +28,8 @@ export interface TextureLoadDiagnostic {
   readonly path: string;
   readonly sphereMode?: MaterialInfo["sphereMode"];
 }
+
+export type MaterialTransparencyDiagnostic = MmdDefaultMaterialTransparencyDiagnostic;
 
 export interface ThreeMmdTextureLoader {
   load(
@@ -47,6 +50,7 @@ export interface ThreeMmdMaterialTextureOptions {
   readonly geometry?: THREE.BufferGeometry;
   readonly morphs?: readonly MorphData[];
   readonly geometryAwareAlpha?: boolean;
+  readonly materialDiagnostics?: MaterialTransparencyDiagnostic[];
 }
 
 export type ThreeMmdSphereMappedToonMaterial = THREE.MeshToonMaterial & {
@@ -88,7 +92,8 @@ export async function applyThreeMmdMaterialTextures(
   mmdMaterials: readonly MaterialInfo[],
   options: ThreeMmdMaterialTextureOptions = {}
 ): Promise<TextureLoadDiagnostic[]> {
-  const diagnostics: TextureLoadDiagnostic[] = [];
+  const textureDiagnostics: TextureLoadDiagnostic[] = [];
+  const materialDiagnostics = options.materialDiagnostics;
   const resolver = createTextureResolver(
     options.textureResolver,
     options.textureMap ?? (options.modelUrl ? {} : undefined)
@@ -107,7 +112,7 @@ export async function applyThreeMmdMaterialTextures(
         materialIndex,
         options.modelUrl,
         resolver,
-        diagnostics,
+        textureDiagnostics,
         textureLoader,
         options.textureCache,
         options.ddsLoader
@@ -119,7 +124,12 @@ export async function applyThreeMmdMaterialTextures(
         material.gradientMap = gradientMap;
       }
       if (options.geometry) {
-        const { transparencyMode, textureTransparencyMode, morphAlphaTransparent } =
+        const {
+          transparencyMode,
+          textureTransparencyMode,
+          morphAlphaTransparent,
+          diagnostic
+        } =
           evaluateMmdDefaultMaterialTransparency(
             mmdMaterial,
             options.morphs ?? [],
@@ -140,6 +150,9 @@ export async function applyThreeMmdMaterialTextures(
         if (morphAlphaTransparent) {
           material.userData.mmdMaterial.morphAlphaTransparent = true;
         }
+        if (materialDiagnostics) {
+          materialDiagnostics[materialIndex] = diagnostic;
+        }
       }
       if (sphereTexture) {
         material.userData.mmdSphereTexture = sphereTexture;
@@ -153,5 +166,5 @@ export async function applyThreeMmdMaterialTextures(
     })
   );
 
-  return diagnostics;
+  return textureDiagnostics;
 }

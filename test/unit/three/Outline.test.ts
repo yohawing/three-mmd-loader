@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   computeMmdMaterialRenderOrder,
   createMmdMaterialRenderOrderMeshes,
-  createMmdOutlineMeshes
+  createMmdOutlineMeshes,
+  MMD_SELF_SHADOW_LAYER
 } from "../../../src/three/index.js";
 import type { MaterialInfo } from "../../../src/parser/model/modelTypes.js";
 
@@ -109,10 +110,11 @@ describe("MMD outline meshes", () => {
     geometry.addGroup(0, 3, 0);
     geometry.addGroup(3, 3, 1);
 
-    const mesh = new THREE.SkinnedMesh(geometry, [
+    const sourceMaterials = [
       new THREE.MeshToonMaterial(),
       new THREE.MeshToonMaterial()
-    ]);
+    ];
+    const mesh = new THREE.SkinnedMesh(geometry, sourceMaterials);
     const bone = new THREE.Bone();
     mesh.add(bone);
     mesh.bind(new THREE.Skeleton([bone]));
@@ -120,8 +122,8 @@ describe("MMD outline meshes", () => {
     const outlines = createMmdOutlineMeshes({
       mesh,
       materials: [
-        createMaterialInfo({ name: "first", edgeSize: 0.4 }),
-        createMaterialInfo({ name: "second", edgeSize: 0.6 })
+        createMaterialInfo({ name: "first", edgeSize: 0.4, flags: { ...createMaterialInfo().flags, selfShadowMap: true } }),
+        createMaterialInfo({ name: "second", edgeSize: 0.6, flags: { ...createMaterialInfo().flags, selfShadowMap: true } })
       ]
     });
 
@@ -139,17 +141,28 @@ describe("MMD outline meshes", () => {
     ]);
     expect(outlines[0]?.renderOrder).toBeLessThan(outlines[1]?.renderOrder ?? 0);
 
+    const secondMaterial = sourceMaterials[1];
+    expect(secondMaterial).toBeDefined();
+    if (!secondMaterial) {
+      throw new Error("missing second source material");
+    }
+    secondMaterial.side = THREE.DoubleSide;
     const materialMeshes = createMmdMaterialRenderOrderMeshes({
       mesh,
       materials: [
-        createMaterialInfo({ name: "first", edgeSize: 0.4 }),
-        createMaterialInfo({ name: "second", edgeSize: 0.6 })
+        createMaterialInfo({ name: "first", edgeSize: 0.4, flags: { ...createMaterialInfo().flags, selfShadowMap: true } }),
+        createMaterialInfo({ name: "second", edgeSize: 0.6, flags: { ...createMaterialInfo().flags, selfShadowMap: true } })
       ]
     });
     expect(materialMeshes.map((proxy) => proxy.renderOrder)).toEqual([0, 1]);
     expect(materialMeshes.map((proxy) => !Array.isArray(proxy.material) && proxy.material.transparent)).toEqual([
       false,
       false
+    ]);
+    expect(materialMeshes.every((proxy) => proxy.customDepthMaterial?.userData.mmdShadowDepthMaterial)).toBe(true);
+    expect(materialMeshes.map((proxy) => proxy.customDepthMaterial?.side)).toEqual([
+      THREE.FrontSide,
+      THREE.DoubleSide
     ]);
     expect(outlines.map((outline) => outline.renderOrder)).toEqual([2, 3]);
     expect(Math.max(...materialMeshes.map((proxy) => proxy.renderOrder))).toBeLessThan(
@@ -179,6 +192,39 @@ describe("MMD outline meshes", () => {
     expect(proxy?.material).toBe(material);
     expect(material.transparent).toBe(false);
     expect(material.opacity).toBe(1);
+  });
+
+  it("uses the PMX self-shadow-map flag for render-order proxy self-shadow layers", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
+    geometry.setIndex([0, 1, 2, 1, 3, 2]);
+    geometry.addGroup(0, 3, 0);
+    geometry.addGroup(3, 3, 1);
+    const mesh = new THREE.SkinnedMesh(geometry, [
+      new THREE.MeshToonMaterial(),
+      new THREE.MeshToonMaterial()
+    ]);
+    const bone = new THREE.Bone();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const materialMeshes = createMmdMaterialRenderOrderMeshes({
+      mesh,
+      materials: [
+        createMaterialInfo({ flags: { ...createMaterialInfo().flags, groundShadow: true } }),
+        createMaterialInfo({ flags: { ...createMaterialInfo().flags, selfShadowMap: true } })
+      ]
+    });
+
+    expect(materialMeshes.map((proxy) => proxy.castShadow)).toEqual([true, true]);
+    expect(materialMeshes.map((proxy) => !!proxy.customDepthMaterial)).toEqual([true, true]);
+    expect(materialMeshes.map((proxy) => proxy.layers.mask & (1 << MMD_SELF_SHADOW_LAYER))).toEqual([
+      0,
+      1 << MMD_SELF_SHADOW_LAYER
+    ]);
   });
 
   it("keeps PMX material definition order even when transparency buckets differ", () => {

@@ -1,7 +1,7 @@
 import { setStatus } from "./dom.js";
 
 export function reportTextureDiagnostics(model) {
-  const diagnostics = model.textureDiagnostics ?? [];
+  const diagnostics = model.diagnostics?.textures ?? model.textureDiagnostics ?? [];
   if (diagnostics.length === 0) {
     return;
   }

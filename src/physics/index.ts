@@ -6,6 +6,15 @@ export {
   type AmmoPhysicsBackendTuningOptions
 } from "./ammoMmdPhysicsBackend.js";
 export { loadAmmoNamespace, type AmmoBrowserLoaderOptions } from "./ammoBrowserLoader.js";
+export {
+  createCustomBulletMmdPhysicsBackend,
+  customBulletMmdScriptPath,
+  loadCustomBulletMmdModule,
+  resolveCustomBulletMmdScriptUrl,
+  type CustomBulletMmdLoaderOptions,
+  type CustomBulletMmdPhysicsBackendOptions,
+  type CustomBulletMmdModule
+} from "./customBulletMmd.js";
 
 export type MmdPhysicsDiagnosticLevel = "warning" | "error";
 
@@ -158,8 +167,10 @@ export interface MmdPhysicsOutputBuffers {
   readonly translations?: MmdPhysicsMutableNumericBuffer;
   readonly rotations?: MmdPhysicsMutableNumericBuffer;
   readonly worldMatricesColumnMajor?: MmdPhysicsMutableNumericBuffer;
-  readonly updatedBoneIndices?: number[];
+  readonly updatedBoneIndices?: MmdPhysicsMutableIndexBuffer;
 }
+
+export type MmdPhysicsMutableIndexBuffer = number[] | Uint32Array<ArrayBuffer>;
 
 export interface MmdPhysicsStepContext {
   readonly seconds: number;
@@ -211,8 +222,27 @@ export interface MmdPhysicsResetContext {
 
 export interface MmdPhysicsStepResult {
   readonly simulated: boolean;
+  readonly updatedBoneCount?: number;
   readonly diagnostics?: readonly MmdPhysicsDiagnostic[];
   readonly debug?: MmdPhysicsDebugSnapshot;
+}
+
+export interface MmdPhysicsStepBufferLayout {
+  readonly boneCount: number;
+  readonly translationValueCount: number;
+  readonly rotationValueCount: number;
+  readonly worldMatrixValueCount: number;
+}
+
+export interface MmdPhysicsStepBuffers {
+  readonly inputTranslations: Float32Array<ArrayBuffer>;
+  readonly inputRotations: Float32Array<ArrayBuffer>;
+  readonly inputWorldMatricesColumnMajor: Float32Array<ArrayBuffer>;
+  readonly outputTranslations: Float32Array<ArrayBuffer>;
+  readonly outputRotations: Float32Array<ArrayBuffer>;
+  readonly outputWorldMatricesColumnMajor: Float32Array<ArrayBuffer>;
+  readonly bonePhysicsToggles: Uint8Array<ArrayBuffer>;
+  readonly updatedBoneIndices?: MmdPhysicsMutableIndexBuffer;
 }
 
 export interface MmdPhysicsBackend {
@@ -224,6 +254,10 @@ export interface MmdPhysicsBackend {
   dispose?(): void;
   diagnostics?(): readonly MmdPhysicsDiagnostic[];
   debugRigidBodyWorldTransformsColumnMajor?(): readonly MmdPhysicsMatrix4ColumnMajorTuple[];
+}
+
+export interface MmdDirectBufferPhysicsBackend extends MmdPhysicsBackend {
+  acquireStepBuffers(layout: MmdPhysicsStepBufferLayout): MmdPhysicsStepBuffers | undefined;
 }
 
 export interface DisabledMmdPhysicsBackendOptions {
@@ -591,7 +625,7 @@ function validateToggleBuffer(
 }
 
 function validateIndexBuffer(
-  buffer: readonly number[],
+  buffer: ArrayLike<number>,
   maxExclusive: number,
   diagnostics: MmdPhysicsDiagnostic[],
   path: string

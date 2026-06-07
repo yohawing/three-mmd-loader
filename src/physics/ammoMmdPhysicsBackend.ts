@@ -111,6 +111,10 @@ export interface AmmoTransform {
   getOrigin(): AmmoVector3;
   setRotation?(rotation: AmmoQuaternion): void;
   getRotation?(): AmmoQuaternion | undefined;
+  getRotationX?(): number;
+  getRotationY?(): number;
+  getRotationZ?(): number;
+  getRotationW?(): number;
 }
 
 export interface AmmoMotionState {
@@ -168,6 +172,7 @@ export interface AmmoGeneric6DofConstraint {
   setAngularLowerLimit(value: AmmoVector3): void;
   setAngularUpperLimit(value: AmmoVector3): void;
   setParam?(parameter: number, value: number, axis: number): void;
+  setUseFrameOffset?(enabled: boolean): void;
   enableSpring?(index: number, enabled: boolean): void;
   setStiffness?(index: number, stiffness: number): void;
   setEquilibriumPoint?(index?: number): void;
@@ -372,7 +377,7 @@ const DEFAULT_SPLIT_IMPULSE = true;
 const DEFAULT_SPLIT_IMPULSE_PENETRATION_THRESHOLD = -0.04;
 const DEFAULT_RESET_CATCH_UP_STEPS = 8;
 const DYNAMIC_WITH_BONE_ROTATION_FEEDBACK_SCALE = 1;
-// nanoem and Babylon-MMD preserve dynamic-with-bone translation and only feed
+// Reference MMD runtimes preserve dynamic-with-bone translation and only feed
 // simulation rotation back to the bone. Set this option above zero explicitly
 // for visual correction when collider/bone separation is more important than
 // strict PhysicsWithBone parity.
@@ -540,9 +545,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
         const origin = bodyTransform.getOrigin();
         const physicsWorld = {
           position: [origin.x(), origin.y(), origin.z()] as [number, number, number],
-          rotation: bodyTransform.getRotation
-            ? (ammoQuaternionToTuple(bodyTransform.getRotation()) ?? [0, 0, 0, 1])
-            : ([0, 0, 0, 1] as [number, number, number, number])
+          rotation: this.readTransformRotation(bodyTransform, [0, 0, 0, 1])
         };
         const mmdWorld = physicsTransformToMmd(physicsWorld);
         return transformToColumnMajorMatrix(mmdWorld.position, mmdWorld.rotation);
@@ -554,7 +557,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
 
   debugPhysicsContacts(): AmmoMmdPhysicsContactDebug[] {
     const dispatcher = this.world?.getDispatcher?.();
-    if (!dispatcher || !this.ammo.getPointer) {
+    if (!dispatcher) {
       return [];
     }
     const bindingByPointer = new Map<
@@ -574,8 +577,13 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       if (contactCount <= 0) {
         continue;
       }
-      const bodyA = bindingByPointer.get(this.ammo.getPointer(manifold.getBody0()));
-      const bodyB = bindingByPointer.get(this.ammo.getPointer(manifold.getBody1()));
+      const bodyPointerA = ammoObjectPointer(this.ammo, manifold.getBody0());
+      const bodyPointerB = ammoObjectPointer(this.ammo, manifold.getBody1());
+      if (bodyPointerA === undefined || bodyPointerB === undefined) {
+        continue;
+      }
+      const bodyA = bindingByPointer.get(bodyPointerA);
+      const bodyB = bindingByPointer.get(bodyPointerB);
       if (!bodyA || !bodyB) {
         continue;
       }
@@ -757,7 +765,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
         rigidBody,
         shape,
         motionState,
-        rigidBodyPointer: Ammo.getPointer?.(rigidBody),
+        rigidBodyPointer: ammoObjectPointer(Ammo, rigidBody),
         body,
         effectiveMode: body.mode,
         baseCollisionFlags: rigidBody.getCollisionFlags?.(),
@@ -818,7 +826,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     } else {
       shape = new Ammo.btSphereShape(Math.max(body.size[0], MIN_SHAPE_SIZE));
     }
-    if (this.options.collisionMargin !== undefined) {
+    if (this.options.collisionMargin !== undefined && this.options.collisionMargin >= 0) {
       shape.setMargin?.(this.options.collisionMargin);
     }
     return shape;
@@ -927,6 +935,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       return undefined;
     }
     const constraint = new Constraint(bindingA.rigidBody, bindingB.rigidBody, frameA, frameB, true);
+    constraint.setUseFrameOffset?.(false);
     const limits = mmdJointLimitsToPhysics(joint);
     constraint.setLinearLowerLimit(
       this.registerWorldResource(this.vector(limits.translationLowerLimit))
@@ -1085,12 +1094,8 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     for (let axis = 0; axis < 3; axis++) {
       const stiffness = joint.springRotationFactor[axis];
       const constraintAxis = axis + 3;
-      if (stiffness !== 0) {
-        constraint.enableSpring(constraintAxis, true);
-        constraint.setStiffness(constraintAxis, stiffness);
-      } else {
-        constraint.enableSpring(constraintAxis, false);
-      }
+      constraint.enableSpring(constraintAxis, true);
+      constraint.setStiffness(constraintAxis, stiffness);
     }
   }
 
@@ -1214,9 +1219,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     try {
       rigidBody.getMotionState().getWorldTransform(currentTransform);
       const currentOrigin = currentTransform.getOrigin();
-      const currentRotation = currentTransform.getRotation
-        ? (ammoQuaternionToTuple(currentTransform.getRotation()) ?? [0, 0, 0, 1])
-        : ([0, 0, 0, 1] as [number, number, number, number]);
+      const currentRotation = this.readTransformRotation(currentTransform, [0, 0, 0, 1]);
       const forceFactor = 30;
       const linearVelocity = new Ammo.btVector3(
         (physicsTarget.position[0] - currentOrigin.x()) * forceFactor,
@@ -1365,9 +1368,7 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
     fallback: AmmoQuaternionTuple
   ): AmmoQuaternionTuple {
     const bodyTransform = this.getRigidBodyWorldTransform(rigidBody, transform);
-    const physicsRotation = bodyTransform.getRotation
-      ? ammoQuaternionToTuple(bodyTransform.getRotation())
-      : undefined;
+    const physicsRotation = this.readTransformRotation(bodyTransform);
     return physicsRotation ? mmdQuaternionToPhysics(physicsRotation) : fallback;
   }
 
@@ -1395,10 +1396,10 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
       const currentBoneWorld = worldCache.get(body.boneIndex);
       const physicsBodyWorld = {
         position: [origin.x(), origin.y(), origin.z()] as [number, number, number],
-        rotation: bodyTransform.getRotation
-          ? (ammoQuaternionToTuple(bodyTransform.getRotation()) ??
-            mmdQuaternionToPhysics(currentBoneWorld.rotation))
-          : mmdQuaternionToPhysics(currentBoneWorld.rotation)
+        rotation: this.readTransformRotation(
+          bodyTransform,
+          mmdQuaternionToPhysics(currentBoneWorld.rotation)
+        )
       };
       const bodyWorld = physicsTransformToMmd(physicsBodyWorld);
       const offset = bodyOffsetFromBoneRest(body, context);
@@ -1445,10 +1446,41 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
         body.boneIndex,
         transformToColumnMajorMatrix(boneWorld.position, boneWorld.rotation)
       );
-      context.output.updatedBoneIndices?.push(body.boneIndex);
+      if (Array.isArray(context.output.updatedBoneIndices)) {
+        context.output.updatedBoneIndices.push(body.boneIndex);
+      }
       worldCache.set(body.boneIndex, boneWorld);
     }
     this.destroy(transform);
+  }
+
+  private readTransformRotation(
+    transform: AmmoTransform,
+    fallback: AmmoQuaternionTuple
+  ): AmmoQuaternionTuple;
+  private readTransformRotation(transform: AmmoTransform): AmmoQuaternionTuple | undefined;
+  private readTransformRotation(
+    transform: AmmoTransform,
+    fallback?: AmmoQuaternionTuple
+  ): AmmoQuaternionTuple | undefined {
+    if (
+      transform.getRotationX &&
+      transform.getRotationY &&
+      transform.getRotationZ &&
+      transform.getRotationW
+    ) {
+      return [
+        transform.getRotationX(),
+        transform.getRotationY(),
+        transform.getRotationZ(),
+        transform.getRotationW()
+      ];
+    }
+    const rotation = transform.getRotation?.();
+    if (!rotation) {
+      return fallback;
+    }
+    return ammoQuaternionToTuple(rotation) ?? fallback;
   }
 
   private destroy(value: object | undefined): void {
@@ -1458,11 +1490,25 @@ export class AmmoMmdPhysicsBackend implements MmdPhysicsBackend {
   }
 
   private getRigidBodyWorldTransform(rigidBody: AmmoRigidBody, target: AmmoTransform): AmmoTransform {
-    if (rigidBody.getCenterOfMassTransform) {
-      return rigidBody.getCenterOfMassTransform();
+    const centerOfMassTransform = rigidBody.getCenterOfMassTransform?.();
+    if (this.hasReadableTransformOrigin(centerOfMassTransform)) {
+      return centerOfMassTransform;
     }
     rigidBody.getMotionState().getWorldTransform(target);
     return target;
+  }
+
+  private hasReadableTransformOrigin(
+    transform: AmmoTransform | null | undefined
+  ): transform is AmmoTransform {
+    const origin = transform?.getOrigin() as AmmoVector3 | null | undefined;
+    return (
+      origin !== null &&
+      origin !== undefined &&
+      typeof origin.x === "function" &&
+      typeof origin.y === "function" &&
+      typeof origin.z === "function"
+    );
   }
 
   private registerWorldResource<T extends object>(value: T): T {
@@ -1552,6 +1598,18 @@ function createAmmoStepContext(context: MmdPhysicsStepContext): AmmoStepContext 
     morphImpulses: context.morphImpulses,
     debug: context.debug
   };
+}
+
+function ammoObjectPointer(ammo: AmmoNamespace, value: object | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const exportedPointer = ammo.getPointer?.(value);
+  if (exportedPointer !== undefined) {
+    return exportedPointer;
+  }
+  const embindPointer = (value as { $$?: { ptr?: unknown } }).$$?.ptr;
+  return typeof embindPointer === "number" ? embindPointer : undefined;
 }
 
 function requireConcreteStepContext(context: MmdPhysicsStepContext): RequiredConcreteStepContext {

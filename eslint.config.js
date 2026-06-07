@@ -3,7 +3,14 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "deploy/**", "native/third_party/**", "src/parser/wasm/generated/**"]
+    ignores: [
+      "dist/**",
+      "deploy/**",
+      "native/bullet-mmd/dist/**",
+      "native/third_party/**",
+      "scripts/local/oracle/**",
+      "src/parser/wasm/generated/**"
+    ]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -28,6 +35,9 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         URL: "readonly",
+        TextDecoder: "readonly",
+        TextEncoder: "readonly",
+        WebAssembly: "readonly",
         console: "readonly",
         performance: "readonly",
         process: "readonly"
@@ -39,6 +49,7 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         HEAP32: "readonly",
+        HEAPU32: "readonly",
         HEAPF32: "readonly",
         HEAPU8: "readonly",
         HEAPU16: "readonly",

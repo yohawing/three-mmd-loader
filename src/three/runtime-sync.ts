@@ -1,8 +1,11 @@
 import * as THREE from "three";
 
 import type { MaterialRuntimeState, MmdModel } from "../parser/model/modelTypes.js";
+import { syncMorphSplitTargetInfluences } from "../runtime/morphSplitSync.js";
 import { syncMmdMaterialStates } from "./material/material-sync.js";
+import { mmdMaterialSuppressesColorAtAlpha } from "./material/material-metadata.js";
 import { syncMmdOutlineMaterialStates } from "./outline.js";
+import { clampColor } from "./utils.js";
 
 export type MmdWorldMatrixColumnMajorTuple = readonly [
   number,
@@ -124,13 +127,16 @@ function syncThreeMmdRuntimeToMeshInternal(
 ): void {
   syncRuntimeBoneTransforms(model, mesh, runtime.boneMatrices());
   syncRuntimeMorphWeights(mesh, runtime.morphWeights());
+  syncMorphSplitTargetInfluences(mesh);
   const visible = runtime.propertyState().visible;
   mesh.visible = visible;
   const materialStates = runtime.materialStates();
   syncMmdMaterialStates(mesh.material, materialStates);
   if (renderOrderMeshes) {
     for (let index = 0; index < renderOrderMeshes.length; index += 1) {
-      renderOrderMeshes[index].visible = visible;
+      const renderOrderMesh = renderOrderMeshes[index];
+      renderOrderMesh.visible = visible;
+      syncRenderOrderProxyMaterialState(renderOrderMesh, materialStates, index);
     }
   }
   if (outlineMeshes) {
@@ -148,6 +154,31 @@ function syncThreeMmdRuntimeToMeshInternal(
       syncMmdOutlineMaterialStates(child.material, materialStates);
     }
   }
+}
+
+function syncRenderOrderProxyMaterialState(
+  mesh: THREE.SkinnedMesh,
+  materialStates: readonly MaterialRuntimeState[],
+  fallbackIndex: number
+): void {
+  const metadata = mesh.userData.mmdMaterialRenderProxy as
+    | { readonly materialIndex?: number }
+    | undefined;
+  const materialIndex = metadata?.materialIndex ?? fallbackIndex;
+  const state = materialStates[materialIndex];
+  if (!state || Array.isArray(mesh.material) || !mesh.material.userData.mmdShadowOnlyRenderProxy) {
+    return;
+  }
+  const material = mesh.material;
+  material.opacity = clampColor(state.diffuse[3]);
+  const flags = material.userData.mmdMaterial?.flags;
+  const suppressColor = mmdMaterialSuppressesColorAtAlpha(material.opacity, flags);
+  const transparencyMode = material.userData.mmdMaterial?.transparencyMode;
+  material.visible = material.opacity > 0 || suppressColor;
+  material.transparent = transparencyMode === "alphaBlend" || material.opacity < 1;
+  material.colorWrite = false;
+  material.depthWrite = false;
+  material.needsUpdate = true;
 }
 
 function syncRuntimeMorphWeights(mesh: THREE.SkinnedMesh, weights: Float32Array): void {

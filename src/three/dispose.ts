@@ -2,11 +2,26 @@ import * as THREE from "three";
 
 import type { ThreeMmdModel } from "./index.js";
 
-export function disposeMmdModel(model: ThreeMmdModel): void {
+export interface DisposeMmdModelOptions {
+  /**
+   * Controls texture disposal. Defaults to "all" for backward compatibility.
+   * Use "none" when textures are shared outside the model.
+   */
+  readonly textures?: "all" | "owned" | "none";
+}
+
+export function disposeMmdModel(
+  model: ThreeMmdModel,
+  options: DisposeMmdModelOptions = {}
+): void {
   const disposedGeometries = new Set<THREE.BufferGeometry>();
   const disposedMaterials = new Set<THREE.Material>();
   const disposedTextures = new Set<THREE.Texture>();
   const disposedSkeletons = new Set<THREE.Skeleton>();
+  const textureOwnership = options.textures ?? "all";
+  const root = model.root ?? model.object;
+  root?.parent?.remove(root);
+  disposeRuntimeResources(model.runtime);
   const bodyMeshes = Array.isArray(model.mesh.userData.mmdMorphSplitBodyMeshes)
     ? model.mesh.userData.mmdMorphSplitBodyMeshes.filter(isSkinnedMesh)
     : [];
@@ -16,7 +31,6 @@ export function disposeMmdModel(model: ThreeMmdModel): void {
     ...(model.outlineMeshes ?? []),
     ...(model.renderOrderMeshes ?? [])
   ];
-  model.object?.parent?.remove(model.object);
   for (const mesh of meshes) {
     mesh.parent?.remove(mesh);
     disposeSkeletonResources(mesh.skeleton, disposedSkeletons);
@@ -25,8 +39,20 @@ export function disposeMmdModel(model: ThreeMmdModel): void {
       disposedGeometries.add(mesh.geometry);
     }
     for (const material of normalizeMaterials(mesh.material)) {
-      disposeMaterialResources(material, disposedMaterials, disposedTextures);
+      disposeMaterialResources(material, disposedMaterials, disposedTextures, textureOwnership);
     }
+    disposeMaterialResources(
+      mesh.customDepthMaterial,
+      disposedMaterials,
+      disposedTextures,
+      textureOwnership
+    );
+    disposeMaterialResources(
+      mesh.customDistanceMaterial,
+      disposedMaterials,
+      disposedTextures,
+      textureOwnership
+    );
   }
 }
 
@@ -40,12 +66,16 @@ function isSkinnedMesh(value: unknown): value is THREE.SkinnedMesh {
 }
 
 function disposeMaterialResources(
-  material: THREE.Material,
+  material: THREE.Material | undefined,
   disposedMaterials: Set<THREE.Material>,
-  disposedTextures: Set<THREE.Texture>
+  disposedTextures: Set<THREE.Texture>,
+  textureOwnership: NonNullable<DisposeMmdModelOptions["textures"]>
 ): void {
+  if (!material) {
+    return;
+  }
   for (const texture of collectMaterialTextures(material)) {
-    disposeTexture(texture, disposedTextures);
+    disposeTexture(texture, disposedTextures, textureOwnership);
   }
   if (!disposedMaterials.has(material)) {
     material.dispose();
@@ -81,9 +111,16 @@ function collectMaterialTextures(material: THREE.Material): THREE.Texture[] {
 
 function disposeTexture(
   texture: THREE.Texture | null | undefined,
-  disposedTextures: Set<THREE.Texture>
+  disposedTextures: Set<THREE.Texture>,
+  textureOwnership: NonNullable<DisposeMmdModelOptions["textures"]>
 ): void {
-  if (!texture || disposedTextures.has(texture)) {
+  if (
+    !texture ||
+    disposedTextures.has(texture) ||
+    textureOwnership === "none" ||
+    texture.userData.mmdFallbackToonGradient === true ||
+    (textureOwnership === "owned" && texture.userData.mmdTextureOwnership !== "loader")
+  ) {
     return;
   }
   texture.dispose();
@@ -99,6 +136,16 @@ function disposeSkeletonResources(
   }
   skeleton.dispose();
   disposedSkeletons.add(skeleton);
+}
+
+function disposeRuntimeResources(runtime: ThreeMmdModel["runtime"]): void {
+  if (!runtime) {
+    return;
+  }
+  const disposable = runtime as { dispose?: unknown };
+  if (typeof disposable.dispose === "function") {
+    disposable.dispose();
+  }
 }
 
 function normalizeMaterials(material: THREE.Material | THREE.Material[]): THREE.Material[] {

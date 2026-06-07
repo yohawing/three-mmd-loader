@@ -11,6 +11,84 @@
   },
   "cases": [
     {
+      "name": "mmd-diffuse-lit-box",
+      "model": "test/fixtures/generated/visual/mmd-diffuse-lit-box.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.06, 0.6, 3.3],
+        "target": [0.06, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-toon-ramp-lit-box",
+      "model": "test/fixtures/generated/visual/mmd-toon-ramp-lit-box.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.06, 0.6, 3.3],
+        "target": [0.06, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-alpha-blend-overlap",
+      "model": "test/fixtures/generated/visual/mmd-alpha-blend-overlap.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.04, 0.64, 3.4],
+        "target": [0.04, 0.64, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-texture-uv-orientation-plane",
+      "model": "test/fixtures/generated/visual/mmd-texture-uv-orientation-plane.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0, 0.58, 3.4],
+        "target": [0, 0.58, 0],
+        "fov": 24,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-sphere-texture-multiply",
+      "model": "test/fixtures/generated/visual/mmd-sphere-texture-multiply.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.06, 0.6, 3.3],
+        "target": [0.06, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-sphere-texture-add",
+      "model": "test/fixtures/generated/visual/mmd-sphere-texture-add.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.06, 0.6, 3.3],
+        "target": [0.06, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
       "name": "mmd-material-order-body-outline-interleave",
       "model": "test/fixtures/generated/visual/mmd-material-order-body-outline-interleave.pmx",
       "timeSeconds": 0,

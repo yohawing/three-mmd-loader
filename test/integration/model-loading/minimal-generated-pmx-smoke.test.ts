@@ -29,6 +29,6 @@ describe("minimal generated PMX loader smoke", () => {
       englishName: "GeneratedMinimalLoaderSmoke"
     });
     expect(model.mesh.morphTargetDictionary).toHaveProperty("tiny_raise");
-    expect(model.textureDiagnostics).toEqual([]);
+    expect(model.diagnostics.textures).toEqual([]);
   });
 });

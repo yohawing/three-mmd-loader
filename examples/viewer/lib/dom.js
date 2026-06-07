@@ -1,5 +1,8 @@
 import { currentMmdFrame, currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
 
+let lastPlaybackCurrentFrameText = "";
+let lastPlaybackTotalFrameText = "";
+
 export const dom = {
   canvas: document.querySelector("#viewer-canvas"),
   stage: document.querySelector(".stage"),
@@ -10,6 +13,10 @@ export const dom = {
   physicsErrorBanner: document.querySelector("#physics-error"),
   loadingIndicator: document.querySelector("#loading-indicator"),
   loadingMessageText: document.querySelector("#loading-message"),
+  creditPopup: document.querySelector("#credit-popup"),
+  creditModelText: document.querySelector("#credit-model"),
+  creditCommentText: document.querySelector("#credit-comment"),
+  creditCloseButton: document.querySelector("#credit-close"),
   modelControl: document.querySelector("#model-control"),
   modelSwitcher: document.querySelector("#model-switcher"),
   modelClearButton: document.querySelector("#clear-model"),
@@ -25,16 +32,27 @@ export const dom = {
   cameraControl: document.querySelector("#camera-control"),
   cameraSwitcher: document.querySelector("#camera-switcher"),
   cameraClearButton: document.querySelector("#clear-camera"),
-  frameValueText: document.querySelector("#frame-value"),
+  frameValue: document.querySelector("#frame-value"),
+  frameCurrentInput: document.querySelector("#frame-current"),
+  frameTotalText: document.querySelector("#frame-total"),
   timeline: document.querySelector("#timeline"),
   volumeControl: document.querySelector("#volume-control"),
   volumeSlider: document.querySelector("#volume-slider"),
   volumeToggle: document.querySelector("#volume-toggle"),
+  audioOffsetControl: document.querySelector("#audio-offset-control"),
+  audioOffsetFrameInput: document.querySelector("#audio-offset-frame"),
   playToggle: document.querySelector("#play-toggle"),
-  playToggleIcon: document.querySelector("#play-toggle")?.querySelector(".material-symbols-rounded"),
   loadMenu: document.querySelector("#load-menu"),
   loadMenuIcon: document.querySelector("#load-menu-icon"),
   languageSelect: document.querySelector("#language-select"),
+  debugMenu: document.querySelector("#debug-menu"),
+  debugCollidersToggle: document.querySelector("#debug-colliders-toggle"),
+  debugNormalsToggle: document.querySelector("#debug-normals-toggle"),
+  debugOutlineOffToggle: document.querySelector("#debug-outline-off-toggle"),
+  debugSelfShadowToggle: document.querySelector("#debug-self-shadow-toggle"),
+  debugFpsValue: document.querySelector("#debug-fps-value"),
+  debugFrameTimeValue: document.querySelector("#debug-frame-time-value"),
+  debugMemoryValue: document.querySelector("#debug-memory-value"),
   appVersionText: document.querySelector("#app-version"),
   assetPresetSection: document.querySelector("#asset-preset-section"),
   assetPresetSelect: document.querySelector("#asset-preset-select"),
@@ -51,6 +69,8 @@ export const dom = {
   assetAudioLoadButton: document.querySelector("#load-asset-audio"),
   assetCameraSelect: document.querySelector("#asset-camera-select"),
   assetCameraLoadButton: document.querySelector("#load-asset-camera"),
+  viewportGridToggle: document.querySelector("#viewport-grid-toggle"),
+  viewportAxesToggle: document.querySelector("#viewport-axes-toggle"),
   modelFolderInput: document.querySelector("#model-folder"),
   motionFileInput: document.querySelector("#motion-file"),
   poseFileInput: document.querySelector("#pose-file"),
@@ -73,6 +93,49 @@ export function setDisplayedText(element, text) {
     element.textContent = text;
     element.hidden = text.length === 0;
   }
+}
+
+export function loadedFileSwitcherValue(switcher) {
+  const value = typeof switcher?.value === "string" ? switcher.value : "";
+  return value || switcher?.getAttribute?.("value") || "";
+}
+
+export function setLoadedFileSwitcherOptions(switcher, entries, selectedValue) {
+  if (!switcher) {
+    return;
+  }
+  for (const option of Array.from(switcher.querySelectorAll("sl-option, option"))) {
+    option.remove();
+  }
+  switcher.prepend(
+    ...entries.map((entry) => {
+      const option = document.createElement("sl-option");
+      option.value = entry.value;
+      option.textContent = entry.label;
+      return option;
+    })
+  );
+  const value = selectedValue ?? entries[0]?.value ?? "";
+  const isSingleEntry = entries.length <= 1;
+  switcher.classList.toggle("is-single-loaded-file", isSingleEntry);
+  switcher.querySelector(".clear-loaded-file")?.setAttribute("slot", isSingleEntry ? "prefix" : "suffix");
+  switcher.value = value;
+  switcher.setAttribute("value", value);
+  switcher.hidden = false;
+}
+
+export function clearLoadedFileSwitcher(switcher) {
+  if (!switcher) {
+    return;
+  }
+  for (const option of Array.from(switcher.querySelectorAll("sl-option, option"))) {
+    option.remove();
+  }
+  switcher.value = "";
+  switcher.removeAttribute("value");
+  switcher.classList.remove("is-single-loaded-file");
+  switcher.querySelector(".clear-loaded-file")?.setAttribute("slot", "suffix");
+  switcher.hidden = false;
 }
 
 export function closeLoadMenu() {
@@ -171,14 +234,31 @@ export function updateChromeHeights() {
 }
 
 export function updatePlayToggle() {
-  if (dom.playToggleIcon) {
-    dom.playToggleIcon.textContent = state.isPlaying ? "pause" : "play_arrow";
+  const iconName = state.isPlaying ? "pause" : "play";
+  const label = state.isPlaying ? "Pause" : "Play";
+  if (dom.playToggle) {
+    dom.playToggle.name = iconName;
+    dom.playToggle.label = label;
+    dom.playToggle.setAttribute("name", iconName);
+    dom.playToggle.setAttribute("label", label);
   }
-  dom.playToggle?.setAttribute("aria-label", state.isPlaying ? "Pause" : "Play");
 }
 
-export function updatePlaybackDisplay() {
+export function updatePlaybackDisplay(options) {
   const totalFrames = Math.round(currentMotionDurationSeconds() * state.mmdFrameRate);
   const currentFrame = Math.round(currentMmdFrame());
-  dom.frameValueText.textContent = `${currentFrame} / ${totalFrames}`;
+  const currentText = String(currentFrame);
+  const totalText = String(totalFrames);
+  const shouldForceFrameInput = options?.forceFrameInput === true;
+  if (
+    dom.frameCurrentInput instanceof window.HTMLInputElement &&
+    (shouldForceFrameInput || (document.activeElement !== dom.frameCurrentInput && currentText !== lastPlaybackCurrentFrameText))
+  ) {
+    dom.frameCurrentInput.value = currentText;
+    lastPlaybackCurrentFrameText = currentText;
+  }
+  if (dom.frameTotalText && totalText !== lastPlaybackTotalFrameText) {
+    dom.frameTotalText.textContent = totalText;
+    lastPlaybackTotalFrameText = totalText;
+  }
 }

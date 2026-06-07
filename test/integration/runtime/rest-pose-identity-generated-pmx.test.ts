@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import { ThreeMmdLoader } from "../../../src/index.js";
+import { DefaultMmdRuntime, ThreeMmdLoader } from "../../../src/index.js";
 import type { MmdAnimation, VmdBoneFrame, VmdBoneTrack } from "../../../src/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -48,11 +48,9 @@ describe("generated PMX rest pose identity regression", () => {
 
   it("moves an IK effector to the animated IK target after one motion frame", async () => {
     const model = await loadGeneratedRestPoseModel("ik-chain");
-    const runtime = model.runtime;
-    expect(runtime).toBeDefined();
 
-    runtime?.setAnimation(createIkTargetMotionAnimation(), model.mesh);
-    runtime?.evaluate(1 / 30, { physics: false });
+    model.setAnimation(createIkTargetMotionAnimation());
+    model.runtime.evaluate(1 / 30, { physics: false });
     model.mesh.updateWorldMatrix(false, true);
 
     const targetPosition = findBone(model.mesh, "左足IK").getWorldPosition(new THREE.Vector3());
@@ -68,11 +66,9 @@ describe("generated PMX rest pose identity regression", () => {
 
   it("syncs viewer render skeleton matrices after IK evaluation", async () => {
     const model = await loadGeneratedRestPoseModel("ik-chain");
-    const runtime = model.runtime;
-    expect(runtime).toBeDefined();
 
-    runtime?.setAnimation(createIkTargetMotionAnimation(), model.mesh);
-    runtime?.tick(1 / 30, model.mesh, { physics: false });
+    model.setAnimation(createIkTargetMotionAnimation());
+    model.update(1 / 30, { physics: false });
 
     const targetPosition = renderedBoneWorldPosition(model.mesh, "左足IK");
     const effectorPosition = renderedBoneWorldPosition(model.mesh, "左足先");
@@ -92,15 +88,15 @@ async function loadGeneratedRestPoseModel(caseId: string) {
   ]);
 
   const bytes = await readFile(fixturePath);
-  const loader = new ThreeMmdLoader();
+  const loader = new ThreeMmdLoader({
+    runtimeFactory: () => new DefaultMmdRuntime()
+  });
   return loader.loadModel(bytes);
 }
 
 function evaluateRestPose(model: Awaited<ReturnType<ThreeMmdLoader["loadModel"]>>): void {
-  const runtime = model.runtime;
-  expect(runtime).toBeDefined();
-  runtime?.setAnimation(createEmptyMmdAnimation(), model.mesh);
-  runtime?.evaluate(0, { physics: false, ik: false });
+  model.setAnimation(createEmptyMmdAnimation());
+  model.runtime.evaluate(0, { physics: false, ik: false });
 }
 
 function findBone(mesh: THREE.SkinnedMesh, mmdName: string): THREE.Bone {

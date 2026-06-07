@@ -1,8 +1,9 @@
-import { parseVmd } from "../../../dist/parser/index.js";
+import { parseVmd, parseVmdSectionInventory } from "../../../dist/parser/index.js";
 import { findMmdMotionFiles, normalizeMmdRelativePath } from "../../../dist/three/index.js";
 
-import { dom, setStatus, updateChromeHeights, updatePlaybackDisplay, updateTransportState } from "./dom.js";
+import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateTransportState } from "./dom.js";
 import { animationDurationSeconds, state } from "./state.js";
+import { createCameraSwitcherEntry, loadCameraAnimation } from "./camera-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { labelFromUrl } from "./url-label.js";
 
@@ -41,6 +42,14 @@ async function readAnimationSourceBytes(source) {
 export async function loadMotion(source, label = source.name ?? "motion") {
   try {
     const switcherEntry = createMotionSwitcherEntry(source, label);
+    setStatus(`Loading motion: ${label}`, "loading");
+    const bytes = await readAnimationSourceBytes(source);
+    const animation = parseVmd(bytes);
+    if (isCameraOnlyVmdAnimation(animation)) {
+      state.pendingMotionSource = undefined;
+      state.pendingMotionLabel = undefined;
+      return await loadCameraAnimation(animation, label, createCameraSwitcherEntry(source, label));
+    }
     if (!state.currentModel) {
       state.pendingMotionSource = source;
       state.pendingMotionLabel = label;
@@ -48,18 +57,15 @@ export async function loadMotion(source, label = source.name ?? "motion") {
       setStatus("Motion queued", "ready");
       return true;
     }
-    setStatus(`Loading motion: ${label}`, "loading");
     state.pendingMotionSource = source;
     state.pendingMotionLabel = label;
-    const bytes = await readAnimationSourceBytes(source);
-    const animation = parseVmd(bytes);
     state.currentMotion = {
       source,
       name: animation.metadata.modelName,
       animation,
       durationSeconds: animationDurationSeconds(animation)
     };
-    state.currentModel.runtime?.setAnimation(animation, state.currentModel.mesh);
+    state.currentModel.setAnimation(animation);
     dom.timeline.max = Math.max(animationDurationSeconds(animation), state.currentCameraMotion?.durationSeconds ?? 0, 0.001);
     state.elapsedSeconds = 0;
     dom.timeline.value = 0;
@@ -89,7 +95,7 @@ export async function loadPose(source, label = source.name ?? "pose") {
       ...poseAnimation,
       durationSeconds: 1
     };
-    state.currentModel.runtime?.setAnimation(poseAnimation.animation, state.currentModel.mesh);
+    state.currentModel.setAnimation(poseAnimation);
     state.elapsedSeconds = 0;
     dom.timeline.max = 1;
     dom.timeline.value = 0;
@@ -104,6 +110,19 @@ export async function loadPose(source, label = source.name ?? "pose") {
 }
 
 export const findVmdFiles = findMmdMotionFiles;
+
+export async function classifyVmdFiles(files) {
+  const motionFiles = [];
+  const cameraFiles = [];
+  for (const file of files) {
+    if (await isCameraOnlyVmdSource(file)) {
+      cameraFiles.push(file);
+    } else {
+      motionFiles.push(file);
+    }
+  }
+  return { motionFiles, cameraFiles };
+}
 
 export function motionFileKey(file) {
   if (typeof file.id === "string") {
@@ -125,7 +144,7 @@ export function clearMotion() {
   state.pendingMotionSource = undefined;
   state.pendingMotionLabel = undefined;
   if (state.currentModel) {
-    state.currentModel.runtime?.setAnimation(state.restPoseAnimation, state.currentModel.mesh);
+    state.currentModel.setAnimation(state.restPoseAnimation);
   }
   if (dom.timeline) {
     dom.timeline.max = Math.max(state.currentCameraMotion?.durationSeconds ?? 0, 0.001);
@@ -140,20 +159,14 @@ export function clearMotion() {
 }
 
 export function updateMotionSwitcher(selectedFile) {
-  if (!(dom.motionSwitcher instanceof window.HTMLSelectElement)) {
-    return;
-  }
-
-  dom.motionSwitcher.replaceChildren(
-    ...state.currentMotionVmdFiles.map((file) => {
-      const option = document.createElement("option");
-      option.value = motionFileKey(file);
-      option.textContent = file.name;
-      return option;
-    })
+  setLoadedFileSwitcherOptions(
+    dom.motionSwitcher,
+    state.currentMotionVmdFiles.map((file) => ({
+      value: motionFileKey(file),
+      label: file.name
+    })),
+    selectedFile ? motionFileKey(selectedFile) : ""
   );
-  dom.motionSwitcher.value = selectedFile ? motionFileKey(selectedFile) : "";
-  dom.motionSwitcher.hidden = false;
   if (dom.motionControl) {
     dom.motionControl.hidden = state.currentMotionVmdFiles.length === 0;
   }
@@ -189,12 +202,26 @@ function createMotionSwitcherEntry(source, label) {
   return undefined;
 }
 
+function isCameraOnlyVmdAnimation(animation) {
+  return isCameraOnlyVmdCounts(animation.metadata?.counts);
+}
+
+async function isCameraOnlyVmdSource(source) {
+  try {
+    const inventory = parseVmdSectionInventory(await readAnimationSourceBytes(source));
+    return isCameraOnlyVmdCounts(inventory.counts);
+  } catch {
+    return false;
+  }
+}
+
+function isCameraOnlyVmdCounts(counts) {
+  return Boolean(counts && counts.cameras > 0 && counts.bones === 0 && counts.morphs === 0);
+}
+
 export function resetMotionSwitcherState() {
   state.currentMotionVmdFiles = [];
-  if (dom.motionSwitcher instanceof window.HTMLSelectElement) {
-    dom.motionSwitcher.replaceChildren();
-    dom.motionSwitcher.hidden = false;
-  }
+  clearLoadedFileSwitcher(dom.motionSwitcher);
   if (dom.motionControl) {
     dom.motionControl.hidden = true;
   }

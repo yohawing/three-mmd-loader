@@ -7,7 +7,7 @@ import {
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
 import { reportTextureDiagnostics } from "./diagnostics.js";
-import { dom, setStatus, updateStageState } from "./dom.js";
+import { dom, setLoadedFileSwitcherOptions, setStatus, updateStageState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
 import { renderStillFrame } from "./playback.js";
 import { state } from "./state.js";
@@ -60,7 +60,7 @@ async function loadBackground(source, label, loaderFactory, entry) {
     const background = await loader.loadModel(source, { frustumCulled: false });
     state.currentBackground = background;
     syncMmdSpecularDirection(background.mesh.material, state.keyLight);
-    state.scene.add(background.object);
+    state.scene.add(background.root);
     reportTextureDiagnostics(background);
     updateBackgroundSwitcher({
       ...entry,
@@ -83,7 +83,7 @@ export function clearBackground() {
     updateStageState();
     return;
   }
-  state.scene.remove(state.currentBackground.object);
+  state.scene.remove(state.currentBackground.root);
   disposeModelResources(state.currentBackground);
   state.currentBackground = undefined;
   state.currentBackgroundEntries = [];
@@ -92,23 +92,17 @@ export function clearBackground() {
 }
 
 function updateBackgroundSwitcher(selectedEntry) {
-  if (!(dom.backgroundSwitcher instanceof window.HTMLSelectElement)) {
-    return;
-  }
   if (selectedEntry) {
     state.currentBackgroundEntries = [selectedEntry];
   }
-  dom.backgroundSwitcher.replaceChildren(
-    ...state.currentBackgroundEntries.map((entry) => {
-      const option = document.createElement("option");
-      option.value = entry.id;
-      option.textContent = entry.name;
-      return option;
-    })
+  setLoadedFileSwitcherOptions(
+    dom.backgroundSwitcher,
+    state.currentBackgroundEntries.map((entry) => ({
+      value: entry.id,
+      label: entry.name
+    })),
+    selectedEntry?.id
   );
-  if (selectedEntry) {
-    dom.backgroundSwitcher.value = selectedEntry.id;
-  }
   if (dom.backgroundControl) {
     dom.backgroundControl.hidden = state.currentBackgroundEntries.length === 0;
   }

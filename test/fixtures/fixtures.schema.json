@@ -90,7 +90,7 @@
               "items": {
                 "$ref": "#/$defs/playbackSmokeCase"
               },
-              "description": "Optional local runtime playback comparisons against native nanoem oracle dumps."
+              "description": "Optional local runtime playback cases for developer-only stability checks."
             }
           }
         }
@@ -127,8 +127,6 @@
         "name",
         "model",
         "motion",
-        "oracle",
-        "oracleKind",
         "frames",
         "watchBones"
       ],
@@ -155,13 +153,17 @@
           "$ref": "#/$defs/playbackSmokeAudioRef",
           "description": "Optional audio fixture to load with the viewer preset."
         },
+        "audioOffsetFrame": {
+          "type": "number",
+          "description": "Optional audio delay offset in MMD frames. Positive values delay audio relative to the motion."
+        },
         "oracle": {
           "$ref": "#/$defs/relativeFilePath",
-          "description": "Path to a gitignored native nanoem oracle JSON, resolved from basePath."
+          "description": "Optional path to a gitignored local comparison artifact, resolved from basePath."
         },
         "oracleKind": {
           "type": "string",
-          "const": "native-nanoem-runtime-dump"
+          "minLength": 1
         },
         "stage": {
           "type": "string",
@@ -263,6 +265,10 @@
         "key": {
           "type": "string",
           "minLength": 1
+        },
+        "offsetFrame": {
+          "type": "number",
+          "description": "Optional audio delay offset in MMD frames for this preset audio reference."
         }
       }
     }

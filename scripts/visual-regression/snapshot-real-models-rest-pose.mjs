@@ -155,8 +155,8 @@ async function snapshotCase(visualCase, ThreeMmdLoader) {
     runtime: { physics: "none" }
   });
   const model = await loader.loadModel(bytes);
-  model.runtime?.setAnimation(createEmptyMmdClip("rest-pose"), model.mesh);
-  model.runtime?.evaluate(0, { physics: false, ik: false });
+  model.setAnimation(createEmptyMmdClip("rest-pose"));
+  model.update(0, { physics: false, ik: false });
   model.mesh.updateMatrixWorld(true);
 
   const bones = {};

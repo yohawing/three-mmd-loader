@@ -19,6 +19,24 @@ export interface MmdDefaultMaterialTransparencyOptions {
   readonly geometryAwareAlpha?: boolean;
 }
 
+export type MmdMaterialTransparencyReason =
+  | "pmx"
+  | "texture-metadata"
+  | "texture-alpha-scan"
+  | "geometry-alpha-scan"
+  | "morph-alpha"
+  | "name-heuristic";
+
+export interface MmdDefaultMaterialTransparencyDiagnostic {
+  readonly materialIndex: number;
+  readonly materialName: string;
+  readonly pmxTransparencyMode: MmdMaterialTransparencyMode;
+  readonly textureTransparencyMode?: MmdMaterialTransparencyMode;
+  readonly finalTransparencyMode: MmdMaterialTransparencyMode;
+  readonly morphAlphaTransparent: boolean;
+  readonly reason: MmdMaterialTransparencyReason;
+}
+
 const geometryAlphaCache = new WeakMap<
   THREE.Texture,
   WeakMap<THREE.BufferGeometry, Map<number, MmdMaterialTransparencyMode | undefined>>
@@ -87,6 +105,7 @@ export function evaluateMmdDefaultMaterialTransparency(
   readonly transparencyMode: MmdMaterialTransparencyMode;
   readonly textureTransparencyMode: MmdMaterialTransparencyMode | undefined;
   readonly morphAlphaTransparent: boolean;
+  readonly diagnostic: MmdDefaultMaterialTransparencyDiagnostic;
 } {
   const morphAlphaTransparent = mmdMaterialMorphCanAffectAlpha(morphs, materialIndex);
   const textureMetadataTransparencyMode = texture?.userData.mmdTextureAlphaMode as
@@ -116,6 +135,14 @@ export function evaluateMmdDefaultMaterialTransparency(
     rawTextureTransparencyMode === "alphaTest" && isLikelyMmdSoftAlphaOverlayMaterial(material)
       ? "alphaBlend"
       : rawTextureTransparencyMode;
+  const textureTransparencyReason =
+    shouldUseTextureMetadata && textureTransparencyMode !== undefined
+      ? "texture-metadata"
+      : texture && needsTextureTransparencyScan && textureTransparencyMode !== undefined
+        ? options.geometryAwareAlpha
+          ? "geometry-alpha-scan"
+          : "texture-alpha-scan"
+        : undefined;
   const baseTransparencyMode = mmdMaterialTransparencyMode(
     material,
     !!texture,
@@ -129,11 +156,60 @@ export function evaluateMmdDefaultMaterialTransparency(
           (options.geometryAwareAlpha || textureMetadataTransparencyMode !== undefined)
         ? textureTransparencyMode
         : "opaque";
+  const reason = getTransparencyReason({
+    pmxTransparencyMode,
+    textureTransparencyMode,
+    transparencyMode,
+    textureTransparencyReason,
+    morphAlphaTransparent,
+    promotedByNameHeuristic:
+      rawTextureTransparencyMode === "alphaTest" && textureTransparencyMode === "alphaBlend"
+  });
   return {
     transparencyMode,
     textureTransparencyMode,
-    morphAlphaTransparent
+    morphAlphaTransparent,
+    diagnostic: {
+      materialIndex,
+      materialName: material.englishName || material.name || `material_${materialIndex}`,
+      pmxTransparencyMode,
+      textureTransparencyMode,
+      finalTransparencyMode: transparencyMode,
+      morphAlphaTransparent,
+      reason
+    }
   };
+}
+
+function getTransparencyReason(options: {
+  readonly pmxTransparencyMode: MmdMaterialTransparencyMode;
+  readonly textureTransparencyMode: MmdMaterialTransparencyMode | undefined;
+  readonly transparencyMode: MmdMaterialTransparencyMode;
+  readonly textureTransparencyReason:
+    | "texture-metadata"
+    | "texture-alpha-scan"
+    | "geometry-alpha-scan"
+    | undefined;
+  readonly morphAlphaTransparent: boolean;
+  readonly promotedByNameHeuristic: boolean;
+}): MmdMaterialTransparencyReason {
+  if (options.transparencyMode !== "opaque" && options.pmxTransparencyMode !== "opaque") {
+    return "pmx";
+  }
+  if (options.promotedByNameHeuristic) {
+    return "name-heuristic";
+  }
+  if (
+    options.textureTransparencyMode !== undefined &&
+    options.textureTransparencyMode !== "opaque" &&
+    options.textureTransparencyReason
+  ) {
+    return options.textureTransparencyReason;
+  }
+  if (options.morphAlphaTransparent) {
+    return "morph-alpha";
+  }
+  return "pmx";
 }
 
 function isLikelyMmdAlphaOverlayMaterial(material: MaterialInfo): boolean {
