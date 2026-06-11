@@ -24,7 +24,7 @@ import { fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
 import { viewerConfig } from "./viewer-config.js";
 
-export async function loadModelFromUrl(url) {
+export async function loadModelFromUrl(url, loadOptions = {}) {
   const profile = createViewerLoadProfile(`url:${url}`);
   profile?.mark("start");
   const label = labelFromUrl(url);
@@ -32,11 +32,18 @@ export async function loadModelFromUrl(url) {
     setStatus(`Loading ${url}`, "loading");
     const bytes = await fetchBytes(url);
     profile?.mark("bytes");
-    return await loadModel(bytes, label, () => createUrlTextureLoader(url), profile, {
-      id: `url:${url}`,
-      name: label,
-      source: url
-    });
+    return await loadModel(
+      bytes,
+      label,
+      () => createUrlTextureLoader(url),
+      profile,
+      {
+        id: `url:${url}`,
+        name: label,
+        source: url
+      },
+      loadOptions
+    );
   } catch (error) {
     profile?.mark("error");
     profile?.measure("source-bytes", "start", "bytes");
@@ -55,13 +62,17 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-export async function loadModel(source, label = source.name ?? "model", modelLoader, profile, switcherEntry) {
+export async function loadModel(source, label = source.name ?? "model", modelLoader, profile, switcherEntry, loadOptions = {}) {
   const loadProfile = profile ?? createViewerLoadProfile(describeViewerSource(source, label));
   if (!profile) {
     loadProfile?.mark("start");
   }
   loadProfile?.mark("load-start");
   try {
+    if (loadOptions.shouldCommit && !loadOptions.shouldCommit()) {
+      loadProfile?.mark("cancelled");
+      return false;
+    }
     setStatus(`Loading model: ${label}`, "loading");
     resetFolderModelState();
     const preservedMotion = state.currentMotion;
@@ -75,7 +86,13 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
         ? await modelLoader()
         : await (modelLoader ?? createModelLoader());
     loadProfile?.mark("loader-ready");
-    state.currentModel = await resolvedModelLoader.loadModel(source, { frustumCulled: false });
+    const loadedModel = await resolvedModelLoader.loadModel(source, { frustumCulled: false });
+    if (loadOptions.shouldCommit && !loadOptions.shouldCommit()) {
+      disposeModelResources(loadedModel);
+      loadProfile?.mark("cancelled");
+      return false;
+    }
+    state.currentModel = loadedModel;
     loadProfile?.mark("model-loaded");
     syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
     addModelToScene(state.currentModel);

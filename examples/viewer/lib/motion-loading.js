@@ -2,7 +2,7 @@ import { parseVmd, parseVmdSectionInventory } from "../../../dist/parser/index.j
 import { findMmdMotionFiles, normalizeMmdRelativePath } from "../../../dist/three/index.js";
 
 import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateTransportState } from "./dom.js";
-import { animationDurationSeconds, state } from "./state.js";
+import { animationDurationSeconds, kurokoModelUrl, state } from "./state.js";
 import { createCameraSwitcherEntry, loadCameraAnimation } from "./camera-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { labelFromUrl } from "./url-label.js";
@@ -55,6 +55,7 @@ export async function loadMotion(source, label = source.name ?? "motion") {
       state.pendingMotionLabel = label;
       updateMotionSwitcherSelection(switcherEntry);
       setStatus("Motion queued", "ready");
+      void loadKurokoModelForQueuedMotion();
       return true;
     }
     state.pendingMotionSource = source;
@@ -200,6 +201,28 @@ function createMotionSwitcherEntry(source, label) {
     };
   }
   return undefined;
+}
+
+async function loadKurokoModelForQueuedMotion() {
+  if (state.kurokoModelLoadPromise) {
+    await state.kurokoModelLoadPromise;
+    return;
+  }
+  state.kurokoModelLoadPromise = import("./model-loading.js")
+    .then(({ loadModelFromUrl }) => loadModelFromUrl(kurokoModelUrl, {
+      shouldCommit: hasQueuedMotionWithoutModel
+    }))
+    .finally(() => {
+      state.kurokoModelLoadPromise = undefined;
+      if (!state.currentModel && state.pendingMotionSource) {
+        setStatus("Motion queued", "ready");
+      }
+    });
+  await state.kurokoModelLoadPromise;
+}
+
+function hasQueuedMotionWithoutModel() {
+  return !state.currentModel && state.pendingMotionSource !== undefined;
 }
 
 function isCameraOnlyVmdAnimation(animation) {

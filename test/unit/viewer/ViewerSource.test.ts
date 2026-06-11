@@ -363,7 +363,8 @@ describe("example viewer source", () => {
     const urlLabelSource = await readFile("examples/viewer/lib/url-label.js", "utf8");
 
     expect(urlLabelSource).toContain("decodeURIComponent(label)");
-    expect(modelSource).toContain("await loadModel(bytes, label, () => createUrlTextureLoader(url), profile");
+    expect(modelSource).toContain("export async function loadModelFromUrl(url, loadOptions = {})");
+    expect(modelSource).toContain("loadOptions.shouldCommit");
     expect(motionSource).toContain("await loadMotion(url, labelFromUrl(url))");
     expect(backgroundSource).toContain("state.scene.add(background.root)");
     expect(backgroundSource).toContain("state.scene.remove(state.currentBackground.root)");
@@ -531,7 +532,7 @@ describe("example viewer source", () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
-    const styles = await readFile("examples/viewer/styles.css", "utf8");
+    const styles = (await readFile("examples/viewer/styles.css", "utf8")).replaceAll("\r\n", "\n");
 
     expect(html).toContain('<sl-icon-button id="play-toggle" name="play" label="Play"></sl-icon-button>');
     expect(html).toContain('id="frame-current"');
@@ -832,5 +833,28 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("state.frameTimer.update()");
     expect(playbackSource).toContain("state.frameTimer.getDelta()");
     expect(stateSource).not.toContain("new THREE.Clock()");
+  });
+
+  it("auto-loads kuroko stand-in model when a non-camera VMD is loaded without a model", async () => {
+    const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
+
+    expect(stateSource).toContain("kurokoModelUrl");
+    expect(stateSource).toContain('"assets/yw_test_model.pmx"');
+    expect(stateSource).toContain("state.kurokoModelLoadPromise = undefined");
+    expect(motionSource).toContain('import("./model-loading.js")');
+    expect(motionSource).toContain("kurokoModelUrl");
+    expect(motionSource).toContain("loadModelFromUrl(kurokoModelUrl, {");
+    expect(motionSource).toContain("shouldCommit: hasQueuedMotionWithoutModel");
+    expect(motionSource).toContain("function hasQueuedMotionWithoutModel()");
+    expect(motionSource).toContain("state.pendingMotionSource !== undefined");
+    expect(motionSource).toContain('setStatus("Motion queued", "ready")');
+    expect(mainSource).toContain("kurokoModelUrl");
+    expect(mainSource).toContain("fetch(kurokoModelUrl)");
+    expect(mainSource).toContain(".catch(() => {})");
+    expect(serverSource).toContain('pathname.startsWith("/assets/")');
+    expect(serverSource).toContain('return resolve(viewerRoot, "assets", relativePath)');
   });
 });
