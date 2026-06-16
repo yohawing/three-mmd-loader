@@ -64,6 +64,46 @@ describe("MMD outline meshes", () => {
     expect(shader.vertexShader).not.toContain("transformed += normal * mmdOutlineWidth");
   });
 
+  it("normalises the outline viewport to CSS pixels so edge width is DPI/supersample invariant", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
+    geometry.setIndex([0, 1, 2]);
+    geometry.addGroup(0, 3, 0);
+
+    const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshToonMaterial());
+    const bone = new THREE.Bone();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const [outline] = createMmdOutlineMeshes({
+      mesh,
+      materials: [createMaterialInfo({ edgeSize: 0.6 })]
+    });
+    const material = outline?.material as THREE.Material | undefined;
+    const shader = {
+      uniforms: {},
+      vertexShader: ["#include <common>", "#include <project_vertex>"].join("\n"),
+      fragmentShader: ""
+    };
+
+    // Device viewport 1024x1024 at devicePixelRatio 2 must report the 512x512 CSS
+    // viewport so the edge keeps a fixed screen-space width under hi-DPI / SSAA.
+    material?.onBeforeCompile(shader, createRendererMock(1024, 1024, 2));
+    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(512, 512));
+    outline.onBeforeRender(
+      createRendererMock(2048, 2048, 2),
+      {} as THREE.Scene,
+      {} as THREE.Camera,
+      geometry,
+      material ?? new THREE.Material(),
+      null
+    );
+    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(1024, 1024));
+  });
+
   it("preserves PMX outline edge size without a library clamp", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
@@ -302,11 +342,12 @@ describe("MMD outline meshes", () => {
   });
 });
 
-function createRendererMock(width: number, height: number): THREE.WebGLRenderer {
+function createRendererMock(width: number, height: number, pixelRatio?: number): THREE.WebGLRenderer {
   return {
     getCurrentViewport(target: THREE.Vector4) {
       return target.set(0, 0, width, height);
-    }
+    },
+    ...(pixelRatio === undefined ? {} : { getPixelRatio: () => pixelRatio })
   } as THREE.WebGLRenderer;
 }
 

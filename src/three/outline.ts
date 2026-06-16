@@ -269,7 +269,14 @@ function updateMmdOutlineViewport(
   currentViewport: THREE.Vector4
 ): void {
   renderer.getCurrentViewport(currentViewport);
-  target.set(currentViewport.z, currentViewport.w);
+  // getCurrentViewport reports DEVICE pixels (pixelRatio applied). The edge
+  // expansion divides by this viewport, so a raw device viewport makes the edge
+  // width scale as 1/pixelRatio -- i.e. the outline gets thinner on hi-DPI
+  // displays or under supersampling, and thicker at pixelRatio 1. Real MMD's edge
+  // is a fixed screen-space width independent of render resolution, so normalise
+  // to CSS pixels here to keep the outline thickness DPI/supersample invariant.
+  const pixelRatio = renderer.getPixelRatio?.() || 1;
+  target.set(currentViewport.z / pixelRatio, currentViewport.w / pixelRatio);
 }
 
 function mmdOutlineExpansionWidth(
