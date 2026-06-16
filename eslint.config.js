@@ -9,7 +9,8 @@ export default tseslint.config(
       "native/bullet-mmd/dist/**",
       "native/third_party/**",
       "scripts/local/oracle/**",
-      "src/parser/wasm/generated/**"
+      "src/parser/wasm/generated/**",
+      "tmp/**"
     ]
   },
   js.configs.recommended,
