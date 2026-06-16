@@ -114,8 +114,17 @@ export function evaluateMmdDefaultMaterialTransparency(
   const textureAlphaSource = texture?.userData.mmdTextureAlphaSource as string | undefined;
   const pmxTransparencyMode = mmdMaterialTransparencyMode(material, !!texture);
   const pmxOpaque = pmxTransparencyMode === "opaque";
+  // Real MMD 9.32 blends a regular TGA hair material's texture alpha (golden:
+  // mmd-tga-regular-hair-alpha-opaque shows the white background through the soft band).
+  // The geometry-aware scan inspects the actually-used UVs, so it can be trusted to
+  // classify TGA materials too -- it returns "opaque" when the used region is solid and
+  // only promotes when a real alpha gradient/cutout is present. We therefore allow the
+  // geometry-aware scan for TGA materials; the coarse whole-texture metadata fast path
+  // stays guarded (TGA metadata over-reports alpha across unused atlas regions).
   const canUseTextureAlphaForOpaqueMaterial =
-    textureAlphaSource !== "tga" || isLikelyMmdAlphaOverlayMaterial(material);
+    options.geometryAwareAlpha ||
+    textureAlphaSource !== "tga" ||
+    isLikelyMmdAlphaOverlayMaterial(material);
   const shouldUseTextureMetadata =
     textureMetadataTransparencyMode !== undefined &&
     (!pmxOpaque || textureAlphaSource !== "tga");

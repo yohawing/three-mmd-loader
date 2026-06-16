@@ -652,7 +652,10 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.userData.mmdMaterial.morphAlphaTransparent).toBe(true);
   });
 
-  it("does not promote regular TGA material alpha metadata to transparency", async () => {
+  it("scans regular TGA material alpha through the geometry-aware used-UV path", async () => {
+    // Real MMD 9.32 blends a regular TGA hair material's texture alpha (golden:
+    // mmd-tga-regular-hair-alpha-opaque). With geometry-aware evaluation the used-UV scan
+    // is trusted to classify TGA materials too, so it runs and promotes the soft alpha.
     const texture = createReadableAlphaDataTexture();
     texture.userData.mmdTextureAlphaSource = "tga";
     texture.userData.mmdTextureAlphaMode = "alphaBlend";
@@ -688,10 +691,9 @@ describe("Three.js MMD materials", () => {
       geometryAwareAlpha: true
     });
 
-    expect(geometryAlphaSpy).not.toHaveBeenCalled();
-    expect(materials[0]?.transparent).toBe(false);
-    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
-    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+    expect(geometryAlphaSpy).toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
   });
 
   it("does not promote regular TGA material alpha metadata without geometry-aware evaluation", async () => {
