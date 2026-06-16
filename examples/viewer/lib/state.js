@@ -218,6 +218,10 @@ state.cameraApplyOptions = {
   }
 };
 
+export const kurokoModelUrl = "assets/yw_test_model.pmx";
+
+state.kurokoModelLoadPromise = undefined;
+
 export function hasCurrentMotion() {
   return state.currentMotion?.animation !== undefined;
 }

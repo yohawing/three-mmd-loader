@@ -11,7 +11,7 @@ import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearM
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
-import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, state } from "./lib/state.js";
+import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
 
 const volumeStorageKey = "three-mmd-loader.viewer.volume.v1";
 let frameCurrentInputDirty = false;
@@ -19,6 +19,8 @@ let frameCurrentInputDirty = false;
 setupScene();
 initLocalization();
 initVolumeControls();
+// Warm browser cache for kuroko stand-in model (silent on failure).
+fetch(kurokoModelUrl).catch(() => {});
 
 const viewerApi = {
   get camera() { return state.camera; },

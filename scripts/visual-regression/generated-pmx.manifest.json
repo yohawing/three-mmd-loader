@@ -191,6 +191,45 @@
         "far": 20
       },
       "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-edge-order-translucent-over-edge",
+      "model": "test/fixtures/generated/visual/mmd-edge-order-translucent-over-edge.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.0, 0.65, 4.0],
+        "target": [0.0, 0.65, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-edge-order-opaque-control",
+      "model": "test/fixtures/generated/visual/mmd-edge-order-opaque-control.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.0, 0.65, 4.0],
+        "target": [0.0, 0.65, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-texture-alpha-cutout-threshold-ramp",
+      "model": "test/fixtures/generated/visual/mmd-texture-alpha-cutout-threshold-ramp.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0, 0.58, 3.4],
+        "target": [0, 0.58, 0],
+        "fov": 24,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     }
   ]
 }

@@ -388,6 +388,13 @@ function resolveRequestPath(pathname) {
     );
     return resolve(viewerRoot, "lib", relativePath);
   }
+  if (pathname.startsWith("/assets/")) {
+    const relativePath = normalize(decodeURIComponent(pathname.slice("/assets/".length))).replace(
+      /^[/\\]+/,
+      ""
+    );
+    return resolve(viewerRoot, "assets", relativePath);
+  }
   if (pathname === "/main.js" || pathname === "/styles.css" || pathname === "/viewer.js") {
     return resolve(viewerRoot, pathname.slice(1));
   }
