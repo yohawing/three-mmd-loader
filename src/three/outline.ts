@@ -48,9 +48,6 @@ export function createMmdOutlineMeshes(
   ) {
     return [];
   }
-  const sourceMaterials = Array.isArray(model.mesh.material)
-    ? model.mesh.material
-    : [model.mesh.material];
   const hasVertexEdgeScale = !!model.mesh.geometry.getAttribute("mmdEdgeScale");
   const renderOrder = mmdMaterialRenderOrderEntries(model);
   const renderOrderByMaterial = mmdMaterialRenderOrderMap(renderOrder);
@@ -71,7 +68,6 @@ export function createMmdOutlineMeshes(
     const outlineMaterial = createMmdOutlineMaterial(
       materialInfo,
       materialIndex,
-      sourceMaterials,
       options,
       hasVertexEdgeScale
     );
@@ -100,26 +96,19 @@ export function createMmdOutlineMeshes(
 function createMmdOutlineMaterial(
   material: MaterialInfo,
   index: number,
-  sourceMaterials: readonly THREE.Material[],
   options: MmdOutlineOptions,
   hasVertexEdgeScale: boolean
 ): THREE.MeshBasicMaterial {
-  const sourceMaterial = sourceMaterials[index] ?? sourceMaterials[0];
-  const sourceMap =
-    sourceMaterial && "map" in sourceMaterial && sourceMaterial.map instanceof THREE.Texture
-      ? sourceMaterial.map
-      : undefined;
   const hasEdge = material.flags.edge && material.edgeSize > 0;
   const suppressColor = mmdMaterialSuppressesColorAtAlpha(material.diffuse[3], material.flags);
   const visible = !suppressColor && (hasEdge || !!options.forceFallback);
-  // Edge x texture-alpha policy (shading-note §12): only ALPHATEST-classified materials
-  // clip the inverted-hull edge to the cutout shape (babylon-mmd uses 0.4). Opaque and
-  // alphaBlend materials draw a FLAT silhouette edge -- clipping their edge with the body
-  // map erodes the silhouette where the texture is soft/transparent (real MMD keeps the
-  // black rim, e.g. golden mmd-tga-regular-hair-alpha-opaque).
-  const clipsEdgeToTexture =
-    !!sourceMap && mmdSourceMaterialTransparencyMode(sourceMaterial) === "alphaTest";
-  const alphaTest = clipsEdgeToTexture ? mmdOutlineAlphaTest(sourceMaterial, options) : 0;
+  // Edge x texture-alpha policy (shading-note §12): real MMD 9.32 draws a FLAT,
+  // texture-independent inverted-hull edge (saba mmd_edge.frag never samples the body
+  // texture). Verified against the golden: the solid black edge shows THROUGH a cutout
+  // body's holes (mmd-texture-alpha-used-uv-cutout 0.043 -> 0.013) and keeps the rim on a
+  // soft-alpha body (mmd-tga-regular-hair-alpha-opaque). Binding/clipping the edge by the
+  // body map (the old babylon-style behaviour) both eroded soft rims and let the white
+  // background show through cutout holes, so the edge never binds the body map.
   const parameters: THREE.MeshBasicMaterialParameters = {
     color: hasEdge
       ? new THREE.Color(material.edgeColor[0], material.edgeColor[1], material.edgeColor[2])
@@ -133,13 +122,8 @@ function createMmdOutlineMaterial(
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 1,
     toneMapped: false,
-    alphaTest
+    alphaTest: 0
   };
-  if (clipsEdgeToTexture) {
-    // Only bind the body map when we actually clip by it; otherwise MeshBasicMaterial
-    // would multiply the (black) edge color by the texture and tint the rim.
-    parameters.map = sourceMap;
-  }
   const outlineMaterial = new THREE.MeshBasicMaterial(parameters);
   const outlineWidth = mmdOutlineExpansionWidth(material, options, hasEdge);
   attachMmdPmxOutlineExpansion(outlineMaterial, outlineWidth, hasVertexEdgeScale);
@@ -152,33 +136,11 @@ function createMmdOutlineMaterial(
     shaderApplied: true,
     vertexEdgeScale: hasVertexEdgeScale,
     sourceMaterialIndex: index,
-    alphaCutout: clipsEdgeToTexture,
-    alphaTest,
+    alphaCutout: false,
+    alphaTest: 0,
     fallback: !hasEdge && !!options.forceFallback
   };
   return outlineMaterial;
-}
-
-function mmdSourceMaterialTransparencyMode(
-  sourceMaterial: THREE.Material | undefined
-): MmdMaterialTransparencyMode | undefined {
-  return sourceMaterial?.userData.mmdMaterial?.transparencyMode as
-    | MmdMaterialTransparencyMode
-    | undefined;
-}
-
-function mmdOutlineAlphaTest(
-  sourceMaterial: THREE.Material | undefined,
-  options: MmdOutlineOptions
-): number {
-  if (
-    sourceMaterial &&
-    "alphaTest" in sourceMaterial &&
-    typeof sourceMaterial.alphaTest === "number"
-  ) {
-    return sourceMaterial.alphaTest > 0 ? sourceMaterial.alphaTest : (options.alphaTest ?? 0.01);
-  }
-  return options.alphaTest ?? 0.01;
 }
 
 export function attachMmdOutlineExpansion(

@@ -241,7 +241,7 @@ describe("MMD outline meshes", () => {
     ]);
   });
 
-  it("carries source texture alpha testing onto outline materials without scanning texture pixels", () => {
+  it("draws a flat texture-independent edge even for alphaTest (cutout) source materials", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
@@ -252,8 +252,8 @@ describe("MMD outline meshes", () => {
 
     const sourceMap = new THREE.Texture();
     const sourceMaterial = new THREE.MeshToonMaterial({ map: sourceMap, alphaTest: 0.35 });
-    // Only alphaTest-classified materials clip the inverted-hull edge to the cutout shape
-    // (shading-note §12); mark the source accordingly.
+    // Real MMD draws a flat, texture-independent edge (shading-note §12); even a cutout
+    // (alphaTest) body's edge is a solid silhouette that shows through the body's holes.
     sourceMaterial.userData.mmdMaterial = { transparencyMode: "alphaTest" };
     const mesh = new THREE.SkinnedMesh(geometry, sourceMaterial);
     const bone = new THREE.Bone();
@@ -265,18 +265,10 @@ describe("MMD outline meshes", () => {
       materials: [createMaterialInfo({ edgeSize: 0.6 })]
     });
     const material = outline?.material as THREE.MeshBasicMaterial | undefined;
-    const shader = {
-      uniforms: {},
-      vertexShader: ["#include <common>", "#include <project_vertex>"].join("\n"),
-      fragmentShader: "#include <alphatest_fragment>"
-    };
 
-    material?.onBeforeCompile(shader, createRendererMock(512, 512));
-
-    expect(material?.map).toBe(sourceMap);
-    expect(material?.alphaTest).toBe(0.35);
-    expect(material?.userData.mmdOutlineMaterial.alphaCutout).toBe(true);
-    expect(shader.fragmentShader).toContain("#include <alphatest_fragment>");
+    expect(material?.map ?? null).toBeNull();
+    expect(material?.alphaTest).toBe(0);
+    expect(material?.userData.mmdOutlineMaterial.alphaCutout).toBe(false);
   });
 
   it("keeps a flat silhouette edge for alphaBlend materials instead of clipping by texture", () => {
