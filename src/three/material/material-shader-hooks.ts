@@ -9,8 +9,9 @@ import { clampColor } from "../utils.js";
 // ../unity-mmd-loader/docs/mmd-shading-notes.md §3.
 const MMD_DEFAULT_LIGHT_COLOR = 154 / 255;
 // MMD light travel direction (the light moves toward this vector). dirToLight is its
-// negation. The MMD default is a forward/down/right key light.
-const MMD_DEFAULT_LIGHT_TRAVEL_DIRECTION: readonly [number, number, number] = [-0.5, -1.0, -0.5];
+// negation, so the key light arrives from front-up-right (+x, +y, +z toward camera) --
+// matched against the real MMD 9.32 toon golden.
+const MMD_DEFAULT_LIGHT_TRAVEL_DIRECTION: readonly [number, number, number] = [-0.5, -1.0, -1.0];
 // MMD self-shadow attenuates the toon coordinate by (1 - visibility) (§10). When the
 // host scene provides no shadow map this stays 1.0 (no self shadow).
 const MMD_TOON_SHADOW_FACTOR_DECLARATION = "float ywMmdToonShadowFactor = 1.0;";
@@ -77,10 +78,14 @@ const MMD_FRAGMENT_PARS = [
 const MMD_OPAQUE_FRAGMENT = [
   "{",
   "  vec3 ywMmdNormal = normalize( vNormal );",
-  "  vec3 ywMmdEyeDir = normalize( vViewPosition );",
-  "  vec3 ywMmdLightDir = normalize( mmdLightDirection );",
+  // vViewPosition points from the fragment toward the camera; eyeDir in MMD/saba points
+  // from the camera toward the fragment, hence the negation.
+  "  vec3 ywMmdEyeDir = normalize( -vViewPosition );",
+  // mmdLightDirection is the world-space direction toward the light. The normal is in
+  // view space, so transform the light direction into view space before dotting.
+  "  vec3 ywMmdLightDir = normalize( ( viewMatrix * vec4( mmdLightDirection, 0.0 ) ).xyz );",
   "  float ywMmdLn = dot( ywMmdNormal, ywMmdLightDir );",
-  "  ywMmdLn = clamp( ywMmdLn + 0.5, 0.0, 1.0 );",
+  "  ywMmdLn = clamp( ywMmdLn * 0.5 + 0.5, 0.0, 1.0 );",
   "  ywMmdLn *= ywMmdToonShadowFactor;",
   "  vec3 ywMmdColor = mmdDiffuseColor * mmdLightColor;",
   "  ywMmdColor = clamp( ywMmdColor + mmdMaterialAmbient, 0.0, 1.0 );",

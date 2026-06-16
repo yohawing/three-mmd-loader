@@ -918,7 +918,7 @@ describe("Three.js MMD materials", () => {
     const shader = createMmdShaderScaffold();
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
-    expect(shader.fragmentShader).toContain("ywMmdLn = clamp( ywMmdLn + 0.5, 0.0, 1.0 );");
+    expect(shader.fragmentShader).toContain("ywMmdLn = clamp( ywMmdLn * 0.5 + 0.5, 0.0, 1.0 );");
     expect(shader.fragmentShader).toContain(
       "vec3 ywMmdToon = texture2D( gradientMap, vec2( 0.0, ywMmdLn ) ).rgb;"
     );
