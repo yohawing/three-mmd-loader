@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.3.1] - 2026-06-16
+
+### Added
+
+- Add a bundled viewer stand-in model for motion-first local playback flows.
+
+### Changed
+
+- Update the bundled mmd-anim WASM runtime/parser artifacts to v0.1.3.
+
 ## [0.3.0] - 2026-06-06
 
 ### Added

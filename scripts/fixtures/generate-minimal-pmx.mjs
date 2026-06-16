@@ -634,8 +634,12 @@ const VISUAL_CASES = {
     ],
     morphs: [
       {
-        name: "png_hairshadow_hide",
-        englishName: "PngHairshadowHide",
+        // 15-byte CP932 limit on VMD morph names: keep <=15 bytes so the morph is
+        // addressable by VMD/MMD animation (the original "png_hairshadow_hide" was 19 bytes
+        // and could never be driven by a VMD keyframe). Render at weight 0 is name-agnostic,
+        // so the existing rest-pose golden image stays valid.
+        name: "hairshadow_hide",
+        englishName: "HairshadowHide",
         panel: 4,
         type: "material",
         offsets: [
@@ -736,6 +740,91 @@ const VISUAL_CASES = {
         textureIndex: 0,
         faceVertexCount: 36,
         comment: "TGA hairshadow overlay should alpha blend"
+      })
+    ]
+  },
+  "mmd-edge-order-translucent-over-edge": {
+    name: "generated visual edge order translucent over edge",
+    englishName: "GeneratedVisualEdgeOrderTranslucentOverEdge",
+    comment: "redistribution-safe PMX visual fixture for body/edge render order",
+    englishComment: "An opaque black-edged grey plane behind a translucent cyan plane overlapping its edge band, to reveal per-material interleave vs two-pass edge ordering.",
+    geometry: edgeOrderGeometry(),
+    materials: [
+      material("mat_edge_back", "EdgeBack", {
+        diffuse: [0.8, 0.8, 0.8, 1],
+        specular: [0.02, 0.02, 0.02],
+        ambient: [0.4, 0.4, 0.4],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.5,
+        flags: 0x11,
+        faceVertexCount: 36,
+        comment: "material 0: opaque grey back plane with visible black edge"
+      }),
+      material("mat_trans_front", "TransFront", {
+        diffuse: [0.0, 0.7, 0.9, 0.5],
+        specular: [0.01, 0.02, 0.03],
+        ambient: [0.0, 0.35, 0.45],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        flags: 0x01,
+        faceVertexCount: 36,
+        comment: "material 1: translucent cyan front plane with no edge"
+      })
+    ]
+  },
+  "mmd-edge-order-opaque-control": {
+    name: "generated visual edge order opaque control",
+    englishName: "GeneratedVisualEdgeOrderOpaqueControl",
+    comment: "redistribution-safe PMX visual fixture for body/edge render order depth control",
+    englishComment: "Same layout as mmd-edge-order-translucent-over-edge but the front plane is opaque, to isolate depth behaviour from translucency.",
+    geometry: edgeOrderGeometry(),
+    materials: [
+      material("mat_edge_back", "EdgeBack", {
+        diffuse: [0.8, 0.8, 0.8, 1],
+        specular: [0.02, 0.02, 0.02],
+        ambient: [0.4, 0.4, 0.4],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1.5,
+        flags: 0x11,
+        faceVertexCount: 36,
+        comment: "material 0: opaque grey back plane with visible black edge"
+      }),
+      material("mat_opaque_front", "OpaqueFront", {
+        diffuse: [0.0, 0.7, 0.9, 1],
+        specular: [0.01, 0.02, 0.03],
+        ambient: [0.0, 0.35, 0.45],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        flags: 0x01,
+        faceVertexCount: 36,
+        comment: "material 1: opaque cyan front plane with no edge (depth control)"
+      })
+    ]
+  },
+  "mmd-texture-alpha-cutout-threshold-ramp": {
+    name: "generated visual texture alpha cutout threshold ramp",
+    englishName: "GeneratedVisualTextureAlphaCutoutThresholdRamp",
+    comment: "redistribution-safe PMX visual fixture for alpha cutout clip threshold",
+    englishComment: "A textured plane whose alpha steps 0.0/0.25/0.5/0.75/1.0 across U, to locate the real MMD alpha clip threshold.",
+    geometry: singleBoneQuadGeometry(0),
+    textures: ["texture-alpha-ramp.png"],
+    assets: [
+      {
+        path: "texture-alpha-ramp.png",
+        bytes: () => alphaRampPng()
+      }
+    ],
+    materials: [
+      material("mat_alpha_ramp", "AlphaRamp", {
+        diffuse: [1, 1, 1, 1],
+        specular: [0.03, 0.03, 0.03],
+        ambient: [0.35, 0.35, 0.35],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 2.5,
+        flags: 0x11,
+        textureIndex: 0,
+        faceVertexCount: 6,
+        comment: "opaque PMX material sampling a stepped alpha ramp texture"
       })
     ]
   }
@@ -1222,6 +1311,37 @@ function boxGeometry({ min, max, bone, normalMode = "face", uvRect = [0, 0, 1, 1
   return { vertices, indices };
 }
 
+// Shared layout for the edge-order render-order fixtures: an opaque back plane
+// (material 0, far Z) and a front plane (material 1, near Z) shifted in +X so the
+// front plane overlaps the back plane's right edge band. Boxes are depth-separated
+// (no intersection) so the overlap region exercises pure render ordering.
+function edgeOrderGeometry() {
+  return mergeGeometries([
+    transformGeometry(
+      boxGeometry({
+        min: [-0.5, 0.2, -0.08],
+        max: [0.1, 1.0, 0.08],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      // Back plane: farther from camera. PMX/MMD is left-handed (+Z = into screen),
+      // so the farther plane needs the LARGER Z.
+      { translate: [-0.05, 0, 0.15] }
+    ),
+    transformGeometry(
+      boxGeometry({
+        min: [-0.1, 0.35, -0.08],
+        max: [0.5, 1.15, 0.08],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      // Front plane: shifted left so its left half rides over the back plane's right
+      // black edge band (the A/B judgement region) and nearer the camera (smaller Z).
+      { translate: [-0.2, 0, -0.25] }
+    )
+  ]);
+}
+
 function boxNormal(corner, center, faceNormal, normalMode) {
   if (normalMode !== "corner") {
     return faceNormal;
@@ -1670,6 +1790,25 @@ function atlasPaddingPng() {
       png.data[index + 1] = usedRegion ? 179 : 84;
       png.data[index + 2] = usedRegion ? 64 : 180;
       png.data[index + 3] = usedRegion ? 255 : 0;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+function alphaRampPng() {
+  const bandAlphas = [0, 64, 128, 191, 255];
+  const bandWidth = 32;
+  const width = bandWidth * bandAlphas.length;
+  const height = 32;
+  const png = new PNG({ width, height });
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      const band = Math.min(bandAlphas.length - 1, Math.floor(x / bandWidth));
+      png.data[index] = 255;
+      png.data[index + 1] = 255;
+      png.data[index + 2] = 255;
+      png.data[index + 3] = bandAlphas[band];
     }
   }
   return PNG.sync.write(png);
