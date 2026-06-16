@@ -66,6 +66,14 @@ export function syncMmdMaterialStates(
         clampColor(state.ambient[2])
       );
     }
+    const diffuseColorUniform = materialFactorShader?.uniforms?.mmdDiffuseColor?.value;
+    if (diffuseColorUniform instanceof THREE.Color) {
+      diffuseColorUniform.setRGB(
+        clampColor(state.diffuse[0]),
+        clampColor(state.diffuse[1]),
+        clampColor(state.diffuse[2])
+      );
+    }
     const textureFactor = materialFactorShader?.uniforms?.mmdTextureFactor?.value;
     if (textureFactor instanceof THREE.Vector4) {
       textureFactor.set(
