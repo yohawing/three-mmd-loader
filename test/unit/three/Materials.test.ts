@@ -1009,10 +1009,7 @@ describe("Three.js MMD materials", () => {
 
     expect(shader.fragmentShader).toContain("#define USE_MMD_SPHERE");
     expect(shader.fragmentShader).toContain(
-      "vec3 ywMmdSphereViewDir = normalize( vViewPosition );"
-    );
-    expect(shader.fragmentShader).toContain(
-      "vec2 ywMmdSphereUv = vec2( dot( ywMmdSphereX, ywMmdNormal ), dot( ywMmdSphereY, ywMmdNormal ) ) * 0.495 + 0.5;"
+      "vec2 ywMmdSphereUv = vec2( ywMmdNormal.x * 0.5 + 0.5, 1.0 - ( ywMmdNormal.y * 0.5 + 0.5 ) );"
     );
     expect(shader.fragmentShader).not.toContain("vec2( normal.x, -normal.y )");
   });

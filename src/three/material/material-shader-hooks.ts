@@ -95,10 +95,8 @@ const MMD_OPAQUE_FRAGMENT = [
   "    ywMmdColor *= ywMmdTex;",
   "  #endif",
   "  #ifdef USE_MMD_SPHERE",
-  "    vec3 ywMmdSphereViewDir = normalize( vViewPosition );",
-  "    vec3 ywMmdSphereX = normalize( vec3( ywMmdSphereViewDir.z, 0.0, -ywMmdSphereViewDir.x ) );",
-  "    vec3 ywMmdSphereY = cross( ywMmdSphereViewDir, ywMmdSphereX );",
-  "    vec2 ywMmdSphereUv = vec2( dot( ywMmdSphereX, ywMmdNormal ), dot( ywMmdSphereY, ywMmdNormal ) ) * 0.495 + 0.5;",
+  // MMD matcap UV: project the view-space normal to [0,1] (§7 / saba mmd.frag).
+  "    vec2 ywMmdSphereUv = vec2( ywMmdNormal.x * 0.5 + 0.5, 1.0 - ( ywMmdNormal.y * 0.5 + 0.5 ) );",
   // Sphere texture is configured SRGBColorSpace, so texture2D returns linear; re-encode
   // to gamma for the MMD (gamma-space) composite.
   "    vec3 ywMmdSphere = ywMmdLinearToGamma( texture2D( mmdSphereMap, ywMmdSphereUv ).rgb );",
