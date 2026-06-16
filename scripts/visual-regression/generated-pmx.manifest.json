@@ -1,9 +1,9 @@
 {
   "note": "Generated in-repository PMX visual regression profile. PMX files are created by scripts/fixtures/generate-minimal-pmx.mjs --all-visual before rendering.",
   "render": {
-    "resolution": { "width": 512, "height": 512 },
+    "resolution": { "width": 1024, "height": 1024 },
     "pixelRatio": 1,
-    "background": "#f4f1ea",
+    "background": "#ffffff",
     "lights": {
       "ambient": { "color": "#ffffff", "intensity": 1.2 },
       "directional": { "color": "#ffffff", "intensity": 1.8, "position": [2.5, 5, 4] }
