@@ -112,9 +112,14 @@ function createMmdOutlineMaterial(
   const hasEdge = material.flags.edge && material.edgeSize > 0;
   const suppressColor = mmdMaterialSuppressesColorAtAlpha(material.diffuse[3], material.flags);
   const visible = !suppressColor && (hasEdge || !!options.forceFallback);
-  // The outline reuses the body map so Three.js MeshBasicMaterial can discard
-  // cutout pixels through its built-in alphatest_fragment shader chunk.
-  const alphaTest = sourceMap ? mmdOutlineAlphaTest(sourceMaterial, options) : 0;
+  // Edge x texture-alpha policy (shading-note §12): only ALPHATEST-classified materials
+  // clip the inverted-hull edge to the cutout shape (babylon-mmd uses 0.4). Opaque and
+  // alphaBlend materials draw a FLAT silhouette edge -- clipping their edge with the body
+  // map erodes the silhouette where the texture is soft/transparent (real MMD keeps the
+  // black rim, e.g. golden mmd-tga-regular-hair-alpha-opaque).
+  const clipsEdgeToTexture =
+    !!sourceMap && mmdSourceMaterialTransparencyMode(sourceMaterial) === "alphaTest";
+  const alphaTest = clipsEdgeToTexture ? mmdOutlineAlphaTest(sourceMaterial, options) : 0;
   const parameters: THREE.MeshBasicMaterialParameters = {
     color: hasEdge
       ? new THREE.Color(material.edgeColor[0], material.edgeColor[1], material.edgeColor[2])
@@ -130,7 +135,9 @@ function createMmdOutlineMaterial(
     toneMapped: false,
     alphaTest
   };
-  if (sourceMap) {
+  if (clipsEdgeToTexture) {
+    // Only bind the body map when we actually clip by it; otherwise MeshBasicMaterial
+    // would multiply the (black) edge color by the texture and tint the rim.
     parameters.map = sourceMap;
   }
   const outlineMaterial = new THREE.MeshBasicMaterial(parameters);
@@ -145,11 +152,19 @@ function createMmdOutlineMaterial(
     shaderApplied: true,
     vertexEdgeScale: hasVertexEdgeScale,
     sourceMaterialIndex: index,
-    alphaCutout: !!sourceMap,
+    alphaCutout: clipsEdgeToTexture,
     alphaTest,
     fallback: !hasEdge && !!options.forceFallback
   };
   return outlineMaterial;
+}
+
+function mmdSourceMaterialTransparencyMode(
+  sourceMaterial: THREE.Material | undefined
+): MmdMaterialTransparencyMode | undefined {
+  return sourceMaterial?.userData.mmdMaterial?.transparencyMode as
+    | MmdMaterialTransparencyMode
+    | undefined;
 }
 
 function mmdOutlineAlphaTest(

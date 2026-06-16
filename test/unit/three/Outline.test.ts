@@ -251,10 +251,11 @@ describe("MMD outline meshes", () => {
     geometry.addGroup(0, 3, 0);
 
     const sourceMap = new THREE.Texture();
-    const mesh = new THREE.SkinnedMesh(
-      geometry,
-      new THREE.MeshToonMaterial({ map: sourceMap, alphaTest: 0.35 })
-    );
+    const sourceMaterial = new THREE.MeshToonMaterial({ map: sourceMap, alphaTest: 0.35 });
+    // Only alphaTest-classified materials clip the inverted-hull edge to the cutout shape
+    // (shading-note §12); mark the source accordingly.
+    sourceMaterial.userData.mmdMaterial = { transparencyMode: "alphaTest" };
+    const mesh = new THREE.SkinnedMesh(geometry, sourceMaterial);
     const bone = new THREE.Bone();
     mesh.add(bone);
     mesh.bind(new THREE.Skeleton([bone]));
@@ -276,6 +277,36 @@ describe("MMD outline meshes", () => {
     expect(material?.alphaTest).toBe(0.35);
     expect(material?.userData.mmdOutlineMaterial.alphaCutout).toBe(true);
     expect(shader.fragmentShader).toContain("#include <alphatest_fragment>");
+  });
+
+  it("keeps a flat silhouette edge for alphaBlend materials instead of clipping by texture", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
+    geometry.setIndex([0, 1, 2]);
+    geometry.addGroup(0, 3, 0);
+
+    const sourceMap = new THREE.Texture();
+    const sourceMaterial = new THREE.MeshToonMaterial({ map: sourceMap, alphaTest: 0.01 });
+    sourceMaterial.userData.mmdMaterial = { transparencyMode: "alphaBlend" };
+    const mesh = new THREE.SkinnedMesh(geometry, sourceMaterial);
+    const bone = new THREE.Bone();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const [outline] = createMmdOutlineMeshes({
+      mesh,
+      materials: [createMaterialInfo({ edgeSize: 0.6 })]
+    });
+    const material = outline?.material as THREE.MeshBasicMaterial | undefined;
+
+    // alphaBlend source: the edge must NOT bind the body map (which would tint the rim)
+    // nor clip the silhouette by texture alpha.
+    expect(material?.map ?? null).toBeNull();
+    expect(material?.alphaTest).toBe(0);
+    expect(material?.userData.mmdOutlineMaterial.alphaCutout).toBe(false);
   });
 });
 
