@@ -152,7 +152,7 @@ describe("generated PMX visual regression manifest", () => {
     const manifest = readGeneratedPmxManifest();
     const names = new Set<string>();
 
-    expect(manifest.render.resolution).toEqual({ width: 512, height: 512 });
+    expect(manifest.render.resolution).toEqual({ width: 1024, height: 1024 });
     expect(manifest.render.pixelRatio).toBe(1);
     for (const visualCase of manifest.cases) {
       expect(visualCase.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);

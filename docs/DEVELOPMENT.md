@@ -349,6 +349,39 @@ storage for quick iteration.
 
 Visual regression scripts are development tools, not release-blocking CI gates.
 
+These baselines are **GPU- and platform-specific**. `render-real-models.mjs`
+launches the locally installed Chrome/Edge (hardware WebGL) and does not pin a
+software GL backend, so the rendered pixels differ across machines and across
+hardware GL vs. swiftshader. That is why the visual smoke is intentionally
+local-only: CI's software GL would not match the committed baselines, so a naive
+CI gate would fail even when nothing is wrong. Regenerate and review baselines on
+the same machine you validate them on.
+
+**Refresh the baselines whenever rendering output can change** — material,
+outline, or shader edits, and especially parser/runtime/WASM changes (e.g. the
+`native/third_party/mmd-anim` artifacts), which can alter texture-alpha
+classification and morph application. A stale baseline silently encodes the old
+behavior; this is how the generated-PMX `texture-alpha-used-uv-cutout` and
+`png-hair-shadow-alpha-morph-blend` baselines drifted across the mmd-anim
+migration. Workflow:
+
+```bash
+# 1. regenerate baselines from current output
+npm run render:visual:generated-pmx:baseline
+# 2. review every changed PNG (git diff) under
+#    test/fixtures/visual-baselines/generated-pmx/
+# 3. confirm the smoke gate is green (re-render vs the reviewed baselines)
+npm run visual:smoke:generated-pmx
+# 4. commit only the reviewed baselines
+```
+
+Do not eyeball-judge alpha/edge diffs as pass/fail: a soft-alpha texture's
+correct blend can look "too faint" and a stale baseline can look "more correct."
+Settle direction with the texture's actual alpha distribution
+(`evaluateMmdTextureAlphaRgba` in `src/three/textures.ts`) and check whether the
+case applies a morph — generated visual cases have no motion, so material morphs
+are inactive (weight 0) at rest.
+
 | Command | Purpose |
 | --- | --- |
 | `npm run visual:smoke:generated-pmx` | Regenerates focused PMX visual fixtures, renders them, then compares them. |

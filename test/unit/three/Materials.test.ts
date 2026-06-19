@@ -652,7 +652,10 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.userData.mmdMaterial.morphAlphaTransparent).toBe(true);
   });
 
-  it("does not promote regular TGA material alpha metadata to transparency", async () => {
+  it("scans regular TGA material alpha through the geometry-aware used-UV path", async () => {
+    // Real MMD 9.32 blends a regular TGA hair material's texture alpha (golden:
+    // mmd-tga-regular-hair-alpha-opaque). With geometry-aware evaluation the used-UV scan
+    // is trusted to classify TGA materials too, so it runs and promotes the soft alpha.
     const texture = createReadableAlphaDataTexture();
     texture.userData.mmdTextureAlphaSource = "tga";
     texture.userData.mmdTextureAlphaMode = "alphaBlend";
@@ -688,10 +691,9 @@ describe("Three.js MMD materials", () => {
       geometryAwareAlpha: true
     });
 
-    expect(geometryAlphaSpy).not.toHaveBeenCalled();
-    expect(materials[0]?.transparent).toBe(false);
-    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("opaque");
-    expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBeUndefined();
+    expect(geometryAlphaSpy).toHaveBeenCalled();
+    expect(materials[0]?.transparent).toBe(true);
+    expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
   });
 
   it("does not promote regular TGA material alpha metadata without geometry-aware evaluation", async () => {
@@ -852,123 +854,118 @@ describe("Three.js MMD materials", () => {
     }
   });
 
-  it("routes MMD toon directional shadows through gradient sampling instead of darkening light color", async () => {
-    const gradientMap = new THREE.Texture();
-    gradientMap.userData.mmdFallbackToonGradient = true;
-    const material = new THREE.MeshToonMaterial({
-      gradientMap
-    });
-    attachMmdMaterialFactors(material);
-
-    const shader = {
+  function createMmdShaderScaffold(): {
+    uniforms: Record<string, { value: unknown }>;
+    vertexShader: string;
+    fragmentShader: string;
+  } {
+    return {
       uniforms: {},
       vertexShader: "",
       fragmentShader: [
         "#include <map_pars_fragment>",
         "#include <map_fragment>",
-        "#include <lights_fragment_end>",
-        "#include <gradientmap_pars_fragment>",
         "#include <lights_fragment_begin>",
-        "float dotNL = dot( normal, lightDirection );",
-        "\tvec2 coord = vec2( dotNL * 0.5 + 0.5, 0.0 );",
-        "\treturn vec3( texture2D( gradientMap, coord ).r );"
+        "directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;",
+        "#include <lights_fragment_end>",
+        "#include <opaque_fragment>"
       ].join("\n")
     };
+  }
 
-    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
-
-    expect(shader.fragmentShader).toContain("float ywMmdToonShadowFactor = 1.0;");
-    expect(shader.fragmentShader).toContain("dotNL = mix( 0.22, dotNL, ywMmdToonShadowFactor );");
-    expect(shader.fragmentShader).toContain(
-      "ywMmdToonShadowFactor = ( mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]"
-    );
-    expect(shader.fragmentShader).toContain("getDirectionalLightInfo( directionalLight, directLight );\nywMmdToonShadowFactor = 1.0;");
-    expect(shader.fragmentShader).not.toContain("#include <lights_fragment_begin>");
-    expect(shader.fragmentShader).not.toContain(
-      "directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]"
-    );
-    expect(shader.fragmentShader).not.toContain("directLight.color *= mix(");
-  });
-
-  it("routes default face toon self-shadows through the MMD toon gradient path", async () => {
-    const [material] = createThreeMmdMaterials([createMaterialInfo()]);
-    if (!material) {
-      throw new Error("missing material");
-    }
-    await applyThreeMmdMaterialTextures([material], [createMaterialInfo()], {
-      textureLoader: createTextureLoaderMock()
-    });
+  it("bakes the fixed MMD directional light color and direction into the material", () => {
+    const material = new THREE.MeshToonMaterial();
+    material.userData.mmdMaterial = { diffuse: [0.31, 0.56, 0.85, 1] };
     attachMmdMaterialFactors(material);
 
-    const shader = {
-      uniforms: {},
-      vertexShader: "",
-      fragmentShader: [
-        "#include <map_pars_fragment>",
-        "#include <map_fragment>",
-        "#include <lights_fragment_end>",
-        "#include <gradientmap_pars_fragment>",
-        "#include <lights_fragment_begin>",
-        "float dotNL = dot( normal, lightDirection );",
-        "\tvec2 coord = vec2( dotNL * 0.5 + 0.5, 0.0 );",
-        "\treturn vec3( texture2D( gradientMap, coord ).r );"
-      ].join("\n")
-    };
-
+    const shader = createMmdShaderScaffold();
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
-    expect(shader.fragmentShader).toContain("return texture2D( gradientMap, coord ).rgb;");
-    expect(shader.fragmentShader).not.toContain("directLight.color *= mix( 0.75, 1.0, ywMmdToonShadowFactor );");
+    const lightColor = shader.uniforms.mmdLightColor?.value as THREE.Color;
+    expect(lightColor.r).toBeCloseTo(154 / 255, 5);
+    expect(lightColor.g).toBeCloseTo(154 / 255, 5);
+    expect(lightColor.b).toBeCloseTo(154 / 255, 5);
+    const lightDirection = shader.uniforms.mmdLightDirection?.value as THREE.Vector3;
+    expect(lightDirection.length()).toBeCloseTo(1, 5);
+    const diffuseColor = shader.uniforms.mmdDiffuseColor?.value as THREE.Color;
+    expect(diffuseColor.r).toBeCloseTo(0.31, 5);
+    expect(diffuseColor.g).toBeCloseTo(0.56, 5);
+    expect(diffuseColor.b).toBeCloseTo(0.85, 5);
   });
 
-  it("keeps fallback toon self-shadows above a black light multiplier", async () => {
+  it("computes the MMD lit color in gamma space (diffuse*light + ambient)", () => {
     const material = new THREE.MeshToonMaterial();
     attachMmdMaterialFactors(material);
 
-    const shader = {
-      uniforms: {},
-      vertexShader: "",
-      fragmentShader: [
-        "#include <map_pars_fragment>",
-        "#include <map_fragment>",
-        "#include <lights_fragment_end>",
-        "#include <gradientmap_pars_fragment>",
-        "#include <lights_fragment_begin>",
-        "float dotNL = dot( normal, lightDirection );",
-        "\tvec2 coord = vec2( dotNL * 0.5 + 0.5, 0.0 );"
-      ].join("\n")
-    };
-
+    const shader = createMmdShaderScaffold();
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
-    expect(shader.fragmentShader).toContain("dotNL = mix( 0.22, dotNL, ywMmdToonShadowFactor );");
-    expect(shader.fragmentShader).toContain("directLight.color *= mix( 0.75, 1.0, ywMmdToonShadowFactor );");
-    expect(shader.fragmentShader).not.toContain("#include <lights_fragment_begin>");
-    expect(shader.fragmentShader).not.toContain("dotNL = mix( -1.0, dotNL, ywMmdToonShadowFactor );");
+    expect(shader.fragmentShader).toContain("vec3 ywMmdColor = mmdDiffuseColor * mmdLightColor;");
+    expect(shader.fragmentShader).toContain(
+      "ywMmdColor = clamp( ywMmdColor + mmdMaterialAmbient, 0.0, 1.0 );"
+    );
+    // The composite must be gamma-decoded back to linear so Three's sRGB output encode
+    // reproduces the gamma-space MMD value.
+    expect(shader.fragmentShader).toContain(
+      "outgoingLight = ywMmdGammaToLinear( clamp( ywMmdColor, 0.0, 1.0 ) );"
+    );
   });
 
-  it("declares the self-shadow factor for non-toon materials", async () => {
+  it("samples the toon ramp at clamp( N.L + 0.5 ) and applies it as a pure multiply", () => {
+    const gradientMap = new THREE.Texture();
+    gradientMap.userData.mmdFallbackToonGradient = true;
+    const material = new THREE.MeshToonMaterial({ gradientMap });
+    attachMmdMaterialFactors(material);
+
+    const shader = createMmdShaderScaffold();
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    expect(shader.fragmentShader).toContain("ywMmdLn = clamp( ywMmdLn * 0.5 + 0.5, 0.0, 1.0 );");
+    expect(shader.fragmentShader).toContain(
+      "vec3 ywMmdToon = texture2D( gradientMap, vec2( 0.0, ywMmdLn ) ).rgb;"
+    );
+    expect(shader.fragmentShader).toContain("ywMmdColor *= ywMmdToon;");
+  });
+
+  it("gates the Blinn-Phong specular on a positive specular power", () => {
+    const material = new THREE.MeshToonMaterial();
+    attachMmdMaterialFactors(material);
+
+    const shader = createMmdShaderScaffold();
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    expect(shader.fragmentShader).toContain("if ( mmdSpecularPower > 0.0 ) {");
+    expect(shader.fragmentShader).toContain(
+      "ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor;"
+    );
+  });
+
+  it("attenuates the toon coordinate by the directional self-shadow factor", () => {
+    const material = new THREE.MeshToonMaterial();
+    attachMmdMaterialFactors(material);
+
+    const shader = createMmdShaderScaffold();
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    expect(shader.fragmentShader).toContain("float ywMmdToonShadowFactor = 1.0;");
+    expect(shader.fragmentShader).toContain("ywMmdLn *= ywMmdToonShadowFactor;");
+    expect(shader.fragmentShader).toContain(
+      "ywMmdToonShadowFactor = min( ywMmdToonShadowFactor, ( mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]"
+    );
+    expect(shader.fragmentShader).not.toContain("#include <lights_fragment_begin>");
+  });
+
+  it("does not depend on the scene's reflected light contribution", () => {
     const material = new THREE.MeshStandardMaterial();
     attachMmdMaterialFactors(material);
 
-    const shader = {
-      uniforms: {},
-      vertexShader: "",
-      fragmentShader: [
-        "#include <map_pars_fragment>",
-        "#include <map_fragment>",
-        "#include <lights_fragment_end>",
-        "#include <lights_fragment_begin>"
-      ].join("\n")
-    };
-
+    const shader = createMmdShaderScaffold();
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
-    const declarationIndex = shader.fragmentShader.indexOf("float ywMmdToonShadowFactor = 1.0;");
-    const assignmentIndex = shader.fragmentShader.indexOf("ywMmdToonShadowFactor = ( mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow )");
-    expect(declarationIndex).toBeGreaterThanOrEqual(0);
-    expect(assignmentIndex).toBeGreaterThan(declarationIndex);
-    expect(shader.fragmentShader).not.toContain("#include <lights_fragment_begin>");
+    // The MMD block overwrites outgoingLight from scratch; it must not scale the host
+    // scene's reflectedLight accumulators.
+    expect(shader.fragmentShader).not.toContain("reflectedLight.directDiffuse *=");
+    expect(shader.fragmentShader).toContain("vec3 ywMmdColor = mmdDiffuseColor * mmdLightColor;");
   });
 
   it("passes PMX self-shadow receiver flags into the material shader", async () => {
@@ -980,20 +977,7 @@ describe("Three.js MMD materials", () => {
     }
     attachMmdMaterialFactors(material);
 
-    const shader = {
-      uniforms: {},
-      vertexShader: "",
-      fragmentShader: [
-        "#include <map_pars_fragment>",
-        "#include <map_fragment>",
-        "#include <lights_fragment_end>",
-        "#include <gradientmap_pars_fragment>",
-        "#include <lights_fragment_begin>",
-        "float dotNL = dot( normal, lightDirection );",
-        "\tvec2 coord = vec2( dotNL * 0.5 + 0.5, 0.0 );"
-      ].join("\n")
-    };
-
+    const shader = createMmdShaderScaffold();
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
     expect(shader.uniforms.mmdSelfShadowReceive).toEqual({ value: 0 });
@@ -1018,19 +1002,16 @@ describe("Three.js MMD materials", () => {
 
   it("uses view-space matcap UVs for sphere texture sampling", () => {
     const material = new THREE.MeshToonMaterial();
+    attachMmdMaterialFactors(material);
     const texture = new THREE.Texture();
-
     attachMmdSphereTexture(material, "add", texture);
-    const shader = {
-      uniforms: {},
-      vertexShader: "",
-      fragmentShader: ["#include <map_pars_fragment>", "#include <opaque_fragment>"].join("\n")
-    };
+
+    const shader = createMmdShaderScaffold();
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
-    expect(shader.fragmentShader).toContain("vec3 mmdSphereViewDir = normalize( vViewPosition );");
+    expect(shader.fragmentShader).toContain("#define USE_MMD_SPHERE");
     expect(shader.fragmentShader).toContain(
-      "vec2 mmdSphereUv = vec2( dot( mmdSphereX, normal ), dot( mmdSphereY, normal ) ) * 0.495 + 0.5;"
+      "vec2 ywMmdSphereUv = vec2( ywMmdNormal.x * 0.5 + 0.5, 1.0 - ( ywMmdNormal.y * 0.5 + 0.5 ) );"
     );
     expect(shader.fragmentShader).not.toContain("vec2( normal.x, -normal.y )");
   });
