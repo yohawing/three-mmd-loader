@@ -51,9 +51,12 @@ can otherwise ship stale:
 
 ```bash
 npm run visual:smoke:generated-pmx
+npm run visual:smoke:camera-light-vmd
+npm run visual:smoke:self-shadow
 # if rendering legitimately changed: regenerate, review the PNG diffs, re-run
 # the smoke until green, then commit the reviewed baselines
 npm run render:visual:generated-pmx:baseline
+npm run render:visual:camera-light-vmd:baseline
 ```
 
 ## 3. Commit

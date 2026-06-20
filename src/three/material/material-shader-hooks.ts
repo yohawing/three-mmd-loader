@@ -8,6 +8,7 @@ import { clampColor } from "../utils.js";
 // baked into the material, independent of the host scene's lights. See
 // ../unity-mmd-loader/docs/mmd-shading-notes.md §3.
 const MMD_DEFAULT_LIGHT_COLOR = 154 / 255;
+const MMD_SELF_SHADOW_TOON_COORD_FLOOR = 0.22;
 // MMD light travel direction (the light moves toward this vector). dirToLight is its
 // negation, so the key light arrives from front-up-right (+x, +y, +z toward camera) --
 // matched against the real MMD 9.32 toon golden.
@@ -86,7 +87,7 @@ const MMD_OPAQUE_FRAGMENT = [
   "  vec3 ywMmdLightDir = normalize( ( viewMatrix * vec4( mmdLightDirection, 0.0 ) ).xyz );",
   "  float ywMmdLn = dot( ywMmdNormal, ywMmdLightDir );",
   "  ywMmdLn = clamp( ywMmdLn * 0.5 + 0.5, 0.0, 1.0 );",
-  "  ywMmdLn *= ywMmdToonShadowFactor;",
+  `  ywMmdLn = mix( ${MMD_SELF_SHADOW_TOON_COORD_FLOOR.toFixed(2)}, ywMmdLn, ywMmdToonShadowFactor );`,
   "  vec3 ywMmdColor = mmdDiffuseColor * mmdLightColor;",
   "  ywMmdColor = clamp( ywMmdColor + mmdMaterialAmbient, 0.0, 1.0 );",
   "  #ifdef USE_MAP",
@@ -174,7 +175,7 @@ export function attachMmdMaterialFactors(material: THREE.Material): void {
       value: materialReceivesMmdSelfShadow(material) ? 1 : 0
     };
     const lightUniformState = material.userData.mmdLightUniformState as
-      | { direction: [number, number, number] }
+      | { direction: [number, number, number]; directColor?: [number, number, number] }
       | undefined;
     if (lightUniformState) {
       shader.uniforms.mmdLightDirection.value.set(
@@ -182,6 +183,13 @@ export function attachMmdMaterialFactors(material: THREE.Material): void {
         lightUniformState.direction[1],
         lightUniformState.direction[2]
       );
+      if (lightUniformState.directColor) {
+        shader.uniforms.mmdLightColor.value.setRGB(
+          lightUniformState.directColor[0],
+          lightUniformState.directColor[1],
+          lightUniformState.directColor[2]
+        );
+      }
     }
     const materialState = material.userData.mmdMaterialState as
       | {

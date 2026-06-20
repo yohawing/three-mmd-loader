@@ -948,7 +948,7 @@ describe("Three.js MMD materials", () => {
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
     expect(shader.fragmentShader).toContain("float ywMmdToonShadowFactor = 1.0;");
-    expect(shader.fragmentShader).toContain("ywMmdLn *= ywMmdToonShadowFactor;");
+    expect(shader.fragmentShader).toContain("ywMmdLn = mix( 0.22, ywMmdLn, ywMmdToonShadowFactor );");
     expect(shader.fragmentShader).toContain(
       "ywMmdToonShadowFactor = min( ywMmdToonShadowFactor, ( mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]"
     );
@@ -986,18 +986,34 @@ describe("Three.js MMD materials", () => {
 
   it("syncs MMD light direction from directional light target instead of raw position", () => {
     const material = new THREE.MeshToonMaterial();
-    const light = new THREE.DirectionalLight(0xffffff, 1);
+    const light = new THREE.DirectionalLight(new THREE.Color(0.4, 0.5, 0.6), 1);
     light.position.set(0, 10, 0);
     light.target.position.set(0, 2, 0);
 
     syncMmdSpecularDirection(material, light);
 
     expect(material.userData.mmdLightUniformState.direction).toEqual([0, 1, 0]);
+    expect(material.userData.mmdLightUniformState.directColor).toEqual([0.4, 0.5, 0.6]);
 
     light.target.position.set(0, 20, 0);
     syncMmdSpecularDirection(material, light);
 
     expect(material.userData.mmdLightUniformState.direction).toEqual([0, -1, 0]);
+    expect(material.userData.mmdLightUniformState.directColor).toEqual([0.4, 0.5, 0.6]);
+  });
+
+  it("applies synced MMD light color to material shader uniforms", () => {
+    const material = new THREE.MeshToonMaterial();
+    const light = new THREE.DirectionalLight(new THREE.Color(0.4, 0.5, 0.6), 1);
+    light.position.set(0, 10, 0);
+    attachMmdMaterialFactors(material);
+    syncMmdSpecularDirection(material, light);
+
+    const shader = createMmdShaderScaffold();
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    expect(shader.uniforms.mmdLightDirection?.value).toEqual(new THREE.Vector3(0, 1, 0));
+    expect(shader.uniforms.mmdLightColor?.value).toEqual(new THREE.Color(0.4, 0.5, 0.6));
   });
 
   it("uses view-space matcap UVs for sphere texture sampling", () => {

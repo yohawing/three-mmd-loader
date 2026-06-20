@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.4.0] - 2026-06-20
+
+### Added
+
+- Add a public helper for applying sampled VMD light state to a Three.js
+  directional light.
+- Add a portable camera/light VMD visual smoke profile so VMD camera and light
+  tracks are verified through rendered output.
+
+### Changed
+
+- Rework the MMD-compatible material shader path around gamma-space
+  `diffuse * light + ambient`, MMD default light color/direction, half-lambert
+  toon response, and view-space sphere texture coordinates.
+- Update the viewer light-motion path to use the shared VMD light helper.
+- Refresh generated-PMX visual baselines against the current MMD-compatible
+  shading, alpha, and outline behavior.
+
+### Fixed
+
+- Draw inverted-hull outlines as flat texture-independent edges and keep outline
+  width stable across hi-DPI and supersampled rendering.
+- Preserve MMD-style alpha behavior for TGA alpha blending and texture cutout
+  outline cases under geometry-aware alpha evaluation.
+- Avoid per-frame allocations while syncing MMD light direction/material shader
+  uniforms during playback.
+
+### Test
+
+- Add rendered-output visual coverage for camera VMD and light VMD application.
+- Add generated visual baselines for edge-order and texture alpha cutout cases.
+- Document local-only visual baseline refresh requirements for rendering
+  changes.
+
 ## [0.3.1] - 2026-06-16
 
 ### Added

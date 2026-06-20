@@ -1,0 +1,70 @@
+{
+  "note": "Generated camera/light VMD visual profile. These cases prove VMD camera and light tracks are sampled and applied in the render path.",
+  "render": {
+    "resolution": { "width": 512, "height": 512 },
+    "pixelRatio": 1,
+    "background": "#ffffff",
+    "lights": {
+      "ambient": { "color": "#ffffff", "intensity": 0.25 },
+      "directional": { "color": "#ffffff", "intensity": 1.0, "position": [2.5, 5, 4] }
+    }
+  },
+  "cases": [
+    {
+      "name": "camera-near",
+      "model": "test/fixtures/generated/visual/mmd-diffuse-lit-box.pmx",
+      "cameraVmd": "test/fixtures/generated/camera-light-vmd/camera-near.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.06, 0.6, 3.3],
+        "target": [0.06, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "camera-far",
+      "model": "test/fixtures/generated/visual/mmd-diffuse-lit-box.pmx",
+      "cameraVmd": "test/fixtures/generated/camera-light-vmd/camera-far.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.06, 0.6, 3.3],
+        "target": [0.06, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "light-front",
+      "model": "test/fixtures/generated/visual/mmd-diffuse-lit-box.pmx",
+      "lightVmd": "test/fixtures/generated/camera-light-vmd/light-front.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.06, 0.6, 3.3],
+        "target": [0.06, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "light-side",
+      "model": "test/fixtures/generated/visual/mmd-diffuse-lit-box.pmx",
+      "lightVmd": "test/fixtures/generated/camera-light-vmd/light-side.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.06, 0.6, 3.3],
+        "target": [0.06, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    }
+  ]
+}

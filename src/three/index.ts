@@ -45,6 +45,7 @@ import type { ModelSourceDiagnostic, ModelSourceFetch } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "./geometry.js";
 export { applyMmdCameraStateToThreeCamera } from "./camera.js";
+export { applyMmdLightStateToThreeDirectionalLight } from "./light.js";
 export { disposeMmdModel } from "./dispose.js";
 export type { DisposeMmdModelOptions } from "./dispose.js";
 export {
@@ -116,6 +117,9 @@ export {
 export type {
   ApplyMmdCameraStateOptions
 } from "./camera.js";
+export type {
+  ApplyMmdLightStateOptions
+} from "./light.js";
 export type {
   ApplyMmdSelfShadowStateOptions,
   ConfigureMmdSelfShadowDirectionalLightOptions,
