@@ -40,7 +40,7 @@
     },
     {
       "name": "light-front",
-      "model": "test/fixtures/generated/visual/mmd-diffuse-lit-box.pmx",
+      "model": "test/fixtures/generated/visual/mmd-toon-ramp-lit-box.pmx",
       "lightVmd": "test/fixtures/generated/camera-light-vmd/light-front.vmd",
       "timeSeconds": 0,
       "camera": {
@@ -54,7 +54,7 @@
     },
     {
       "name": "light-side",
-      "model": "test/fixtures/generated/visual/mmd-diffuse-lit-box.pmx",
+      "model": "test/fixtures/generated/visual/mmd-toon-ramp-lit-box.pmx",
       "lightVmd": "test/fixtures/generated/camera-light-vmd/light-side.vmd",
       "timeSeconds": 0,
       "camera": {

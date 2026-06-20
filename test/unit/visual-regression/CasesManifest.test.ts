@@ -255,7 +255,11 @@ describe("camera/light VMD visual regression manifest", () => {
       expect(visualCase.thresholds?.p95).toBeGreaterThan(visualCase.thresholds?.mean ?? 0);
     }
     expect(manifest.cases.filter(visualCase => visualCase.cameraVmd !== undefined)).toHaveLength(2);
-    expect(manifest.cases.filter(visualCase => visualCase.lightVmd !== undefined)).toHaveLength(2);
+    const lightCases = manifest.cases.filter(visualCase => visualCase.lightVmd !== undefined);
+    expect(lightCases).toHaveLength(2);
+    for (const visualCase of lightCases) {
+      expect(visualCase.model).toBe("test/fixtures/generated/visual/mmd-toon-ramp-lit-box.pmx");
+    }
   });
 });
 

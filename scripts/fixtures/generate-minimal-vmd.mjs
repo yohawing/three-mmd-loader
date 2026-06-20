@@ -227,7 +227,7 @@ export const CAMERA_LIGHT_VMD_CASES = {
     lightFrames: [
       {
         frame: 0,
-        color: [0.9, 0.45, 0.25],
+        color: [0.82, 0.82, 0.82],
         direction: [0.45, -0.9, -0.55]
       }
     ]
@@ -237,7 +237,7 @@ export const CAMERA_LIGHT_VMD_CASES = {
     lightFrames: [
       {
         frame: 0,
-        color: [0.2, 0.55, 0.9],
+        color: [0.82, 0.82, 0.82],
         direction: [-1.0, -0.35, 0.0]
       }
     ]
