@@ -30,6 +30,8 @@ All notable changes to this project will be documented in this file.
   outline cases under geometry-aware alpha evaluation.
 - Avoid per-frame allocations while syncing MMD light direction/material shader
   uniforms during playback.
+- Interpret VMD light direction as the MMD light travel direction when applying
+  it to a Three.js directional light.
 
 ### Test
 

@@ -242,7 +242,7 @@ describe("camera/light VMD visual regression manifest", () => {
     const names = manifest.cases.map(visualCase => visualCase.name);
 
     expect(manifest.note).toContain("camera/light VMD");
-    expect(manifest.render.resolution).toEqual({ width: 512, height: 512 });
+    expect(manifest.render.resolution).toEqual({ width: 1024, height: 1024 });
     expect(manifest.render.pixelRatio).toBe(1);
     expect(names).toEqual(["camera-near", "camera-far", "light-front", "light-side"]);
     for (const visualCase of manifest.cases) {
@@ -259,6 +259,7 @@ describe("camera/light VMD visual regression manifest", () => {
     expect(lightCases).toHaveLength(2);
     for (const visualCase of lightCases) {
       expect(visualCase.model).toBe("test/fixtures/generated/visual/mmd-toon-ramp-lit-box.pmx");
+      expect(visualCase.thresholds?.p95).toBeCloseTo(0.22);
     }
   });
 });

@@ -28,8 +28,8 @@ describe("applyMmdLightStateToThreeDirectionalLight", () => {
     expect(light.color.b).toBeCloseTo(0.75);
     expect(light.target.position.toArray()).toEqual([1, 2, 3]);
     expect(light.position.x).toBeCloseTo(1);
-    expect(light.position.y).toBeCloseTo(2 - Math.SQRT1_2 * 10);
-    expect(light.position.z).toBeCloseTo(3 + Math.SQRT1_2 * 10);
+    expect(light.position.y).toBeCloseTo(2 + Math.SQRT1_2 * 10);
+    expect(light.position.z).toBeCloseTo(3 - Math.SQRT1_2 * 10);
   });
 
   it("scales color without moving the light for a zero direction", () => {

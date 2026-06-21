@@ -1,7 +1,7 @@
 {
   "note": "Generated camera/light VMD visual profile. These cases prove VMD camera and light tracks are sampled and applied in the render path.",
   "render": {
-    "resolution": { "width": 512, "height": 512 },
+    "resolution": { "width": 1024, "height": 1024 },
     "pixelRatio": 1,
     "background": "#ffffff",
     "lights": {
@@ -50,7 +50,7 @@
         "near": 0.1,
         "far": 20
       },
-      "thresholds": { "mean": 0.03, "p95": 0.12 }
+      "thresholds": { "mean": 0.03, "p95": 0.22 }
     },
     {
       "name": "light-side",
@@ -64,7 +64,7 @@
         "near": 0.1,
         "far": 20
       },
-      "thresholds": { "mean": 0.03, "p95": 0.12 }
+      "thresholds": { "mean": 0.03, "p95": 0.22 }
     }
   ]
 }

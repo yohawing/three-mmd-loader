@@ -27,7 +27,7 @@ export function applyMmdLightStateToThreeDirectionalLight(
     state.color[2] * colorScale
   );
   const direction = options.directionScratch ?? defaultLightDirectionScratch;
-  direction.set(state.direction[0], state.direction[1], -state.direction[2]);
+  direction.set(-state.direction[0], -state.direction[1], state.direction[2]);
   if (direction.lengthSq() > 0) {
     direction.normalize();
     const target = options.target ?? defaultLightTargetScratch.set(0, 0, 0);
