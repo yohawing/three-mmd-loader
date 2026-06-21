@@ -9,6 +9,8 @@ import { clampColor } from "../utils.js";
 // ../unity-mmd-loader/docs/mmd-shading-notes.md §3.
 const MMD_DEFAULT_LIGHT_COLOR = 154 / 255;
 const MMD_SELF_SHADOW_TOON_COORD_FLOOR = 0.22;
+const MMD_DEFAULT_TOON_COORD_OFFSET = 0.45;
+const MMD_SYNCED_LIGHT_TOON_COORD_OFFSET = 0.5;
 // MMD light travel direction (the light moves toward this vector). dirToLight is its
 // negation, so the key light arrives from front-up-right (+x, +y, +z toward camera) --
 // matched against the real MMD 9.32 toon golden.
@@ -61,6 +63,7 @@ const MMD_FRAGMENT_PARS = [
   "uniform float mmdSpecularPower;",
   "uniform vec3 mmdLightDirection;",
   "uniform vec3 mmdLightColor;",
+  "uniform float mmdToonCoordinateOffset;",
   "uniform float mmdSelfShadowReceive;",
   MMD_TOON_SHADOW_FACTOR_DECLARATION,
   MMD_TEXTURE_FACTOR_HELPERS
@@ -86,7 +89,7 @@ const MMD_OPAQUE_FRAGMENT = [
   // view space, so transform the light direction into view space before dotting.
   "  vec3 ywMmdLightDir = normalize( ( viewMatrix * vec4( mmdLightDirection, 0.0 ) ).xyz );",
   "  float ywMmdLn = dot( ywMmdNormal, ywMmdLightDir );",
-  "  ywMmdLn = clamp( ywMmdLn * 0.5 + 0.5, 0.0, 1.0 );",
+  "  ywMmdLn = clamp( ywMmdLn * 0.5 + mmdToonCoordinateOffset, 0.0, 1.0 );",
   `  ywMmdLn = mix( ${MMD_SELF_SHADOW_TOON_COORD_FLOOR.toFixed(2)}, ywMmdLn, ywMmdToonShadowFactor );`,
   "  vec3 ywMmdColor = mmdDiffuseColor * mmdLightColor;",
   "  ywMmdColor = clamp( ywMmdColor + mmdMaterialAmbient, 0.0, 1.0 );",
@@ -157,6 +160,9 @@ export function attachMmdMaterialFactors(material: THREE.Material): void {
       value: new THREE.Color(rawSpecular[0], rawSpecular[1], rawSpecular[2])
     };
     shader.uniforms.mmdSpecularPower = { value: rawSpecularPower };
+    const lightUniformState = material.userData.mmdLightUniformState as
+      | { direction: [number, number, number]; directColor?: [number, number, number] }
+      | undefined;
     shader.uniforms.mmdLightDirection = {
       value: new THREE.Vector3(
         -MMD_DEFAULT_LIGHT_TRAVEL_DIRECTION[0],
@@ -171,12 +177,12 @@ export function attachMmdMaterialFactors(material: THREE.Material): void {
         MMD_DEFAULT_LIGHT_COLOR
       )
     };
+    shader.uniforms.mmdToonCoordinateOffset = {
+      value: lightUniformState ? MMD_SYNCED_LIGHT_TOON_COORD_OFFSET : MMD_DEFAULT_TOON_COORD_OFFSET
+    };
     shader.uniforms.mmdSelfShadowReceive = {
       value: materialReceivesMmdSelfShadow(material) ? 1 : 0
     };
-    const lightUniformState = material.userData.mmdLightUniformState as
-      | { direction: [number, number, number]; directColor?: [number, number, number] }
-      | undefined;
     if (lightUniformState) {
       shader.uniforms.mmdLightDirection.value.set(
         lightUniformState.direction[0],

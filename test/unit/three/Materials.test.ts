@@ -147,7 +147,9 @@ describe("Three.js MMD materials", () => {
     expect(diagnostics).toEqual([]);
     expect(materials[0]?.map?.name).toBe("resolved/body.png");
     expect(materials[0]?.gradientMap?.name).toBe("resolved/local-toon.png");
-    expect(materials[0]?.gradientMap?.minFilter).toBe(THREE.NearestFilter);
+    expect(materials[0]?.gradientMap?.minFilter).toBe(THREE.LinearFilter);
+    expect(materials[0]?.gradientMap?.magFilter).toBe(THREE.LinearFilter);
+    expect(materials[0]?.gradientMap?.generateMipmaps).toBe(false);
     expect(materials[0]?.userData.mmdSphereTexture?.name).toBe("resolved/body-sphere.png");
     expect(materials[0]?.envMap).toBeUndefined();
   });
@@ -920,7 +922,9 @@ describe("Three.js MMD materials", () => {
     const shader = createMmdShaderScaffold();
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
-    expect(shader.fragmentShader).toContain("ywMmdLn = clamp( ywMmdLn * 0.5 + 0.5, 0.0, 1.0 );");
+    expect(shader.fragmentShader).toContain(
+      "ywMmdLn = clamp( ywMmdLn * 0.5 + mmdToonCoordinateOffset, 0.0, 1.0 );"
+    );
     expect(shader.fragmentShader).toContain(
       "vec3 ywMmdToon = texture2D( gradientMap, vec2( 0.0, ywMmdLn ) ).rgb;"
     );
@@ -1014,6 +1018,7 @@ describe("Three.js MMD materials", () => {
 
     expect(shader.uniforms.mmdLightDirection?.value).toEqual(new THREE.Vector3(0, 1, 0));
     expect(shader.uniforms.mmdLightColor?.value).toEqual(new THREE.Color(0.4, 0.5, 0.6));
+    expect(shader.uniforms.mmdToonCoordinateOffset?.value).toBe(0.5);
   });
 
   it("uses view-space matcap UVs for sphere texture sampling", () => {

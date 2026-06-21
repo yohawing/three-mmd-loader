@@ -202,10 +202,10 @@ const VISUAL_CASES = {
       }),
       { rotateY: 0.38, rotateX: -0.06, translate: [0.03, 0, 0] }
     ),
-    textures: ["toon-warm-ramp.png"],
+    textures: ["toon-three-step-warm.png"],
     assets: [
       {
-        path: "toon-warm-ramp.png",
+        path: "toon-three-step-warm.png",
         bytes: () => toonRampPng()
       }
     ],
@@ -1863,23 +1863,15 @@ function sphereRadialPng(centerColor, edgeColor) {
 
 function toonRampPng() {
   const width = 16;
-  const height = 256;
+  const height = 16;
   const png = new PNG({ width, height });
-  const litColor = [255, 244, 172];
-  const midColor = [226, 142, 62];
-  const shadeColor = [112, 58, 38];
-
   for (let y = 0; y < height; y += 1) {
     const t = y / (height - 1);
-    const localT = t < 0.58 ? t / 0.58 : (t - 0.58) / 0.42;
-    const fromColor = t < 0.58 ? litColor : midColor;
-    const toColor = t < 0.58 ? midColor : shadeColor;
-    const smoothT = localT * localT * (3 - 2 * localT);
-    const color = [
-      Math.round(fromColor[0] * (1 - smoothT) + toColor[0] * smoothT),
-      Math.round(fromColor[1] * (1 - smoothT) + toColor[1] * smoothT),
-      Math.round(fromColor[2] * (1 - smoothT) + toColor[2] * smoothT)
-    ];
+    const color = t < 0.34
+      ? [255, 244, 172]
+      : t < 0.72
+      ? [226, 142, 62]
+      : [112, 58, 38];
     for (let x = 0; x < width; x += 1) {
       const index = (y * width + x) * 4;
       png.data[index] = color[0];

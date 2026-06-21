@@ -429,8 +429,8 @@ export async function loadToonTexture(
   if (!texture) {
     return toonGradient();
   }
-  texture.minFilter = THREE.NearestFilter;
-  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = false;
   texture.colorSpace = THREE.NoColorSpace;
   texture.flipY = true;

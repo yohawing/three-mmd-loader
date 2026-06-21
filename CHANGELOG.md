@@ -32,6 +32,8 @@ All notable changes to this project will be documented in this file.
   uniforms during playback.
 - Interpret VMD light direction as the MMD light travel direction when applying
   it to a Three.js directional light.
+- Match custom toon ramp sampling more closely to MMD output while preserving
+  the generated PMX GoldenOracle fixture.
 
 ### Test
 

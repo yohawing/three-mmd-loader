@@ -165,6 +165,10 @@ export function syncMmdSpecularDirection(
     if (mmdLightColor instanceof THREE.Color) {
       mmdLightColor.setRGB(directColor[0], directColor[1], directColor[2]);
     }
+    const toonCoordinateOffsetUniform = shader?.uniforms?.mmdToonCoordinateOffset;
+    if (toonCoordinateOffsetUniform && typeof toonCoordinateOffsetUniform.value === "number") {
+      toonCoordinateOffsetUniform.value = 0.5;
+    }
   });
 }
 
