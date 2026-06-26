@@ -158,6 +158,13 @@ export class WasmPmxGeometry {
      */
     skinWeights(): Float32Array;
     /**
+     * Copy of derived per-vertex skinning mode names.
+     *
+     * Values match the C ABI `mmd_runtime_parse_pmx_skinning_modes_json`
+     * payload: `bdef1`, `bdef2`, `bdef4`, `sdef`, or `qdef`.
+     */
+    skinningModes(): string[];
+    /**
      * Copy of UV coordinates (vertex_count×2, UV, f32).
      */
     uvs(): Float32Array;
@@ -224,6 +231,8 @@ export function parsePmxModelJson(data: Uint8Array): string;
  */
 export function parsePmxModelNonGeometryJson(data: Uint8Array): string;
 
+export function parseVmdAnimationJson(data: Uint8Array): string;
+
 export function wasm_wrapper_version(): number;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -249,6 +258,7 @@ export interface InitOutput {
     readonly parseMmdFormatJson: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly parsePmxModelJson: (a: number, b: number) => [number, number, number, number];
     readonly parsePmxModelNonGeometryJson: (a: number, b: number) => [number, number, number, number];
+    readonly parseVmdAnimationJson: (a: number, b: number) => [number, number, number, number];
     readonly wasm_wrapper_version: () => number;
     readonly wasmmmdclip_firstFrame: (a: number) => number;
     readonly wasmmmdclip_fromVmdBytesForModel: (a: number, b: number, c: number) => [number, number, number];
@@ -308,6 +318,7 @@ export interface InitOutput {
     readonly wasmpmxgeometry_sdefRw1: (a: number) => [number, number];
     readonly wasmpmxgeometry_skinIndices: (a: number) => [number, number];
     readonly wasmpmxgeometry_skinWeights: (a: number) => [number, number];
+    readonly wasmpmxgeometry_skinningModes: (a: number) => [number, number];
     readonly wasmpmxgeometry_uvs: (a: number) => [number, number];
     readonly wasmpmxgeometry_vertexCount: (a: number) => number;
     readonly wasmpmxparsedmodel_geometry: (a: number) => number;
@@ -318,6 +329,7 @@ export interface InitOutput {
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __externref_drop_slice: (a: number, b: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Update the bundled mmd-anim WASM runtime/parser artifacts to v0.1.5.
+
 ## [0.4.0] - 2026-06-20
 
 ### Added
