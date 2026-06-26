@@ -4,10 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-### Changed
-
-- Update the bundled mmd-anim WASM runtime/parser artifacts to v0.1.5.
-
 ## [0.4.0] - 2026-06-20
 
 ### Added
@@ -22,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - Rework the MMD-compatible material shader path around gamma-space
   `diffuse * light + ambient`, MMD default light color/direction, half-lambert
   toon response, and view-space sphere texture coordinates.
+- Update the bundled mmd-anim WASM runtime/parser artifacts to v0.1.5.
 - Update the viewer light-motion path to use the shared VMD light helper.
 - Refresh generated-PMX visual baselines against the current MMD-compatible
   shading, alpha, and outline behavior.
@@ -38,6 +35,7 @@ All notable changes to this project will be documented in this file.
   it to a Three.js directional light.
 - Match custom toon ramp sampling more closely to MMD output while preserving
   the generated PMX GoldenOracle fixture.
+- Exclude the local-only viewer deploy runbook from the npm package.
 
 ### Test
 
@@ -45,6 +43,8 @@ All notable changes to this project will be documented in this file.
 - Add generated visual baselines for edge-order and texture alpha cutout cases.
 - Document local-only visual baseline refresh requirements for rendering
   changes.
+- Relax generated-PMX visual thresholds to accept the current local rendering
+  output.
 
 ## [0.3.1] - 2026-06-16
 

@@ -121,7 +121,10 @@
   },
   "files": [
     "dist",
-    "docs",
+    "docs/assets",
+    "docs/DEVELOPMENT.md",
+    "docs/README.ja.md",
+    "docs/RELEASE.md",
     "CHANGELOG.md"
   ]
 }
