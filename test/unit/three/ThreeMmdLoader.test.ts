@@ -427,6 +427,25 @@ describe("ThreeMmdLoader", () => {
     expect(bodyMeshes.map((mesh) => mesh.morphTargetInfluences?.[0])).toEqual([0.5, 1]);
   });
 
+  it("allows loadModel callers to disable morph split body meshes explicitly", async () => {
+    const loader = new ThreeMmdLoader({ core: createSparseMorphStressCore() });
+
+    const model = await loader.loadModel(new Uint8Array([1]), {
+      outline: false,
+      materialRenderOrder: false,
+      morphSplit: false
+    });
+
+    expect(model.mesh.userData.mmdMorphSplitBodyMeshes).toBeUndefined();
+    expect(model.mesh.userData.mmdMorphSplit).toBeUndefined();
+    expect(model.mesh.geometry.morphAttributes.position).toHaveLength(1000);
+    expect(model.mesh.morphTargetInfluences).toHaveLength(1000);
+    expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: Infinity });
+    expect(model.outlineMeshes).toEqual([]);
+    expect(model.renderOrderMeshes).toEqual([]);
+    expect(model.root.children).toEqual([model.mesh]);
+  });
+
   it("uses split body meshes directly instead of duplicate render-order proxies", async () => {
     const loader = new ThreeMmdLoader({ core: createSparseMorphStressCore() });
 

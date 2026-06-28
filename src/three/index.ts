@@ -227,6 +227,8 @@ export interface ThreeMmdLoadModelOptions {
    * the next breaking release.
    */
   readonly renderOrderProxies?: boolean;
+  /** Splits large sparse morph geometry into per-material body meshes. Defaults to true. */
+  readonly morphSplit?: boolean;
   /** Applies frustum culling to the base mesh and generated proxy meshes. */
   readonly frustumCulled?: boolean;
   /** Overrides fetch for this string ModelSource load. */
@@ -357,7 +359,9 @@ export class ThreeMmdLoader {
       let parsedModelDisposed = false;
       try {
         profile?.mark("parsed");
-        const mesh = createThreeMmdMesh(modelData);
+        const mesh = createThreeMmdMesh(modelData, {
+          morphSplit: options.morphSplit ?? true
+        });
         parsedModel.dispose?.();
         parsedModelDisposed = true;
         profile?.mark("mesh");
@@ -710,6 +714,9 @@ function validateLoadModelOptions(options: ThreeMmdLoadModelOptions): void {
   if (options.fetch !== undefined && typeof options.fetch !== "function") {
     throw new TypeError("ThreeMmdLoader.loadModel fetch must be a function");
   }
+  if (options.morphSplit !== undefined && typeof options.morphSplit !== "boolean") {
+    throw new TypeError("ThreeMmdLoader.loadModel morphSplit must be a boolean");
+  }
 }
 
 function warnDeprecatedApi(name: string, replacement: string): void {
@@ -835,8 +842,11 @@ function formatDiagnosticReason(error: unknown): string {
   return String(error);
 }
 
-function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
-  const splitGeometries = shouldCreateMorphSplitMeshes(modelData)
+function createThreeMmdMesh(
+  modelData: LoaderMmdModelData,
+  options: { readonly morphSplit: boolean }
+): THREE.SkinnedMesh {
+  const splitGeometries = options.morphSplit && shouldCreateMorphSplitMeshes(modelData)
     ? createThreeMorphSplitGeometries(modelData.geometry, modelData.materials, modelData.morphs)
     : [];
   const geometry = createThreeBufferGeometry(
