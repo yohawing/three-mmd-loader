@@ -1,9 +1,34 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { initCore } from "../../src/parser/wasm/index.js";
+import { MmdAnimBackedCore } from "../../src/parser/wasm/MmdAnimBackedCore.js";
 
 describe("@yw-mmd/core-wasm VMD metadata", () => {
+  it("routes loadVmd through the generated mmd-anim VMD parser when available", () => {
+    const parseVmdAnimationJson = vi.fn(() => JSON.stringify(createMmdAnimCameraDto()));
+    const core = new MmdAnimBackedCore({
+      parsePmxModelJson: () => "{}",
+      parseVmdAnimationJson,
+      wasm_wrapper_version: () => 7
+    });
+    const bytes = new Uint8Array([1, 2, 3]);
+
+    const animation = core.loadVmd(bytes);
+
+    expect(parseVmdAnimationJson).toHaveBeenCalledWith(bytes);
+    expect(animation.metadata.counts.cameras).toBe(1);
+    expect(animation.cameraFrames[0]).toMatchObject({
+      frame: 12,
+      distance: 42,
+      position: [1, 2, 3],
+      rotation: [0.1, 0.2, 0.3],
+      fov: 35,
+      perspective: true
+    });
+    expect(Array.from(animation.bytes)).toEqual([1, 2, 3]);
+  });
+
   it("loads VMD metadata through the mmd-anim-backed Wasm parser", async () => {
     const core = await initCore();
     const animation = core.loadVmd(
@@ -74,10 +99,44 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
   it("rejects broken VMD data", async () => {
     const core = await initCore();
     expect(() => core.loadVmd(new TextEncoder().encode("broken"))).toThrow(
-      /Invalid VMD header|Unexpected end/
+      /Invalid VMD header|Unexpected end|unexpected end of data/
     );
   });
 });
+
+function createMmdAnimCameraDto() {
+  return {
+    kind: "vmd",
+    metadata: {
+      modelName: "CameraTest",
+      counts: {
+        bones: 0,
+        morphs: 0,
+        cameras: 1,
+        lights: 0,
+        selfShadows: 0,
+        properties: 0
+      },
+      maxFrame: 12
+    },
+    boneFrames: [],
+    morphFrames: [],
+    cameraFrames: [
+      {
+        frame: 12,
+        distance: 42,
+        position: [1, 2, 3],
+        rotation: [0.1, 0.2, 0.3],
+        interpolation: [20, 20, 107, 107, 20, 20, 107, 107, 20, 20, 107, 107, 20, 20, 107, 107, 20, 20, 107, 107, 20, 20, 107, 107],
+        fov: 35,
+        perspective: true
+      }
+    ],
+    lightFrames: [],
+    selfShadowFrames: [],
+    propertyFrames: []
+  };
+}
 
 function createLightOnlyVmd(): Uint8Array {
   const bytes = new Uint8Array(30 + 20 + 4 + 4 + 4 + 4 + 2 * (4 + 6 * 4));

@@ -316,11 +316,12 @@ function readCameraInterpolation(bytes: readonly number[] | undefined): VmdCamer
 }
 
 function readCameraInterpolationCurve(bytes: readonly number[], channel: number): [number, number, number, number] {
+  const offset = channel * 4;
   return normalizeInterpolationCurve([
-    bytes[channel] ?? 0,
-    bytes[channel + 6] ?? 0,
-    bytes[channel + 12] ?? 0,
-    bytes[channel + 18] ?? 0
+    bytes[offset] ?? 0,
+    bytes[offset + 1] ?? 0,
+    bytes[offset + 2] ?? 0,
+    bytes[offset + 3] ?? 0
   ]);
 }
 

@@ -172,6 +172,8 @@ describe("example viewer source", () => {
     expect(motionSource).toContain("export const findVmdFiles = findMmdMotionFiles");
     expect(motionSource).toContain("findMmdMotionFiles");
     expect(motionSource).toContain("parseVmdSectionInventory");
+    expect(motionSource).not.toContain("parseVmd,");
+    expect(motionSource).toContain("const { animation } = await state.animationLoader.loadAnimation(source)");
     expect(motionSource).toContain("export async function classifyVmdFiles(files)");
     expect(motionSource).toContain("counts.cameras > 0 && counts.bones === 0 && counts.morphs === 0");
     expect(motionSource).toContain("return await loadCameraAnimation(animation, label, createCameraSwitcherEntry(source, label))");
@@ -183,6 +185,9 @@ describe("example viewer source", () => {
     expect(motionSource).toContain("dom.motionControl.hidden = state.currentMotionVmdFiles.length === 0");
     expect(cameraSource).toContain("export async function loadCameraAnimation(animation, label, entry)");
     expect(cameraSource).toContain("export function createCameraSwitcherEntry(source, label)");
+    expect(cameraSource).not.toContain("parseVmd");
+    expect(cameraSource).toContain("state.animationLoader.loadAnimation(url)");
+    expect(cameraSource).toContain("state.animationLoader.loadAnimation(file)");
 
     const dropHandler = modelSource.slice(
       modelSource.indexOf("function handleDroppedFiles"),

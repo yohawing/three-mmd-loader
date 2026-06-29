@@ -28,14 +28,34 @@ export class WasmMmdModel {
     static withMorphs(parent_indices: Int32Array, rest_positions_xyz: Float32Array, inverse_bind_matrices: Float32Array, transform_orders: Int32Array, ik_solvers_u32: Uint32Array, ik_solver_limit_angles: Float32Array, ik_links_u32: Uint32Array, ik_link_limits: Float32Array, append_u32: Uint32Array, append_ratios: Float32Array, morph_count: number, bone_morph_u32: Uint32Array, bone_morph_f32: Float32Array, group_morph_u32: Uint32Array, group_morph_ratios: Float32Array): WasmMmdModel;
 }
 
+export class WasmMmdRuntimeBatchEvaluation {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    boneCount(): number;
+    copyMorphWeights(out: Float32Array): boolean;
+    copyWorldMatrices(out: Float32Array): boolean;
+    frameCount(): number;
+    morphCount(): number;
+    morphWeightF32Len(): number;
+    morphWeights(): Float32Array;
+    morphWeightsView(): Float32Array;
+    worldMatrices(): Float32Array;
+    worldMatricesView(): Float32Array;
+    worldMatrixF32Len(): number;
+}
+
 export class WasmMmdRuntimeInstance {
     free(): void;
     [Symbol.dispose](): void;
+    clipFrameBatchMorphWeightF32Len(frame_count: number): number;
+    clipFrameBatchWorldMatrixF32Len(frame_count: number): number;
     copyIkEnabled(out: Uint8Array): boolean;
     copyMorphWeights(out: Float32Array): boolean;
     copySkinningMatrices(out: Float32Array): boolean;
     copyWorldMatrices(out: Float32Array): boolean;
     evaluateClipFrame(clip: WasmMmdClip, frame: number): void;
+    evaluateClipFrameBatch(clip: WasmMmdClip, start_frame: number, frame_step: number, frame_count: number, worker_count: number): WasmMmdRuntimeBatchEvaluation;
     evaluateClipFrameWithIkOptions(clip: WasmMmdClip, frame: number, ik_tolerance: number, ik_max_iterations_cap: number): void;
     evaluateRestPose(): void;
     static forModel(model: WasmMmdModel): WasmMmdRuntimeInstance;
@@ -241,6 +261,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_wasmmmdclip_free: (a: number, b: number) => void;
     readonly __wbg_wasmmmdmodel_free: (a: number, b: number) => void;
+    readonly __wbg_wasmmmdruntimebatchevaluation_free: (a: number, b: number) => void;
     readonly __wbg_wasmmmdruntimeinstance_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxgeometry_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxparsedmodel_free: (a: number, b: number) => void;
@@ -277,11 +298,25 @@ export interface InitOutput {
     readonly wasmmmdmodel_withIk: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
     readonly wasmmmdmodel_withInverseBind: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly wasmmmdmodel_withMorphs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number, r: number, s: number, t: number, u: number, v: number, w: number, x: number, y: number, z: number, a1: number, b1: number, c1: number) => [number, number, number];
+    readonly wasmmmdruntimebatchevaluation_boneCount: (a: number) => number;
+    readonly wasmmmdruntimebatchevaluation_copyMorphWeights: (a: number, b: number, c: number, d: any) => number;
+    readonly wasmmmdruntimebatchevaluation_copyWorldMatrices: (a: number, b: number, c: number, d: any) => number;
+    readonly wasmmmdruntimebatchevaluation_frameCount: (a: number) => number;
+    readonly wasmmmdruntimebatchevaluation_morphCount: (a: number) => number;
+    readonly wasmmmdruntimebatchevaluation_morphWeightF32Len: (a: number) => number;
+    readonly wasmmmdruntimebatchevaluation_morphWeights: (a: number) => [number, number];
+    readonly wasmmmdruntimebatchevaluation_morphWeightsView: (a: number) => any;
+    readonly wasmmmdruntimebatchevaluation_worldMatrices: (a: number) => [number, number];
+    readonly wasmmmdruntimebatchevaluation_worldMatricesView: (a: number) => any;
+    readonly wasmmmdruntimebatchevaluation_worldMatrixF32Len: (a: number) => number;
+    readonly wasmmmdruntimeinstance_clipFrameBatchMorphWeightF32Len: (a: number, b: number) => number;
+    readonly wasmmmdruntimeinstance_clipFrameBatchWorldMatrixF32Len: (a: number, b: number) => number;
     readonly wasmmmdruntimeinstance_copyIkEnabled: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_copyMorphWeights: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_copySkinningMatrices: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_copyWorldMatrices: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_evaluateClipFrame: (a: number, b: number, c: number) => void;
+    readonly wasmmmdruntimeinstance_evaluateClipFrameBatch: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly wasmmmdruntimeinstance_evaluateClipFrameWithIkOptions: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly wasmmmdruntimeinstance_evaluateRestPose: (a: number) => void;
     readonly wasmmmdruntimeinstance_forModel: (a: number) => number;

@@ -1,4 +1,4 @@
-import { parseVmd, parseVmdSectionInventory } from "../../../dist/parser/index.js";
+import { parseVmdSectionInventory } from "../../../dist/parser/index.js";
 import { findMmdMotionFiles, normalizeMmdRelativePath } from "../../../dist/three/index.js";
 
 import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateTransportState } from "./dom.js";
@@ -43,8 +43,7 @@ export async function loadMotion(source, label = source.name ?? "motion") {
   try {
     const switcherEntry = createMotionSwitcherEntry(source, label);
     setStatus(`Loading motion: ${label}`, "loading");
-    const bytes = await readAnimationSourceBytes(source);
-    const animation = parseVmd(bytes);
+    const { animation } = await state.animationLoader.loadAnimation(source);
     if (isCameraOnlyVmdAnimation(animation)) {
       state.pendingMotionSource = undefined;
       state.pendingMotionLabel = undefined;

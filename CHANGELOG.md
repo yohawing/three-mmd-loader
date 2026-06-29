@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - Rework the MMD-compatible material shader path around gamma-space
   `diffuse * light + ambient`, MMD default light color/direction, half-lambert
   toon response, and view-space sphere texture coordinates.
-- Update the bundled mmd-anim WASM runtime/parser artifacts to v0.1.5.
+- Update the bundled mmd-anim WASM runtime/parser artifacts to v0.1.7.
 - Update the viewer light-motion path to use the shared VMD light helper.
 - Refresh generated-PMX visual baselines against the current MMD-compatible
   shading, alpha, and outline behavior.

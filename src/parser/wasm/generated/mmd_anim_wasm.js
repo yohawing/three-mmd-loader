@@ -387,6 +387,113 @@ export class WasmMmdModel {
 }
 if (Symbol.dispose) WasmMmdModel.prototype[Symbol.dispose] = WasmMmdModel.prototype.free;
 
+export class WasmMmdRuntimeBatchEvaluation {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmMmdRuntimeBatchEvaluation.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmMmdRuntimeBatchEvaluationFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmMmdRuntimeBatchEvaluationFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmmmdruntimebatchevaluation_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    boneCount() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_boneCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {Float32Array} out
+     * @returns {boolean}
+     */
+    copyMorphWeights(out) {
+        var ptr0 = passArrayF32ToWasm0(out, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmmmdruntimebatchevaluation_copyMorphWeights(this.__wbg_ptr, ptr0, len0, out);
+        return ret !== 0;
+    }
+    /**
+     * @param {Float32Array} out
+     * @returns {boolean}
+     */
+    copyWorldMatrices(out) {
+        var ptr0 = passArrayF32ToWasm0(out, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmmmdruntimebatchevaluation_copyWorldMatrices(this.__wbg_ptr, ptr0, len0, out);
+        return ret !== 0;
+    }
+    /**
+     * @returns {number}
+     */
+    frameCount() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_frameCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    morphCount() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_morphCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    morphWeightF32Len() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_morphWeightF32Len(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {Float32Array}
+     */
+    morphWeights() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_morphWeights(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {Float32Array}
+     */
+    morphWeightsView() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_morphWeightsView(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {Float32Array}
+     */
+    worldMatrices() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_worldMatrices(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {Float32Array}
+     */
+    worldMatricesView() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_worldMatricesView(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    worldMatrixF32Len() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_worldMatrixF32Len(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+}
+if (Symbol.dispose) WasmMmdRuntimeBatchEvaluation.prototype[Symbol.dispose] = WasmMmdRuntimeBatchEvaluation.prototype.free;
+
 export class WasmMmdRuntimeInstance {
     static __wrap(ptr) {
         const obj = Object.create(WasmMmdRuntimeInstance.prototype);
@@ -403,6 +510,22 @@ export class WasmMmdRuntimeInstance {
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmmmdruntimeinstance_free(ptr, 0);
+    }
+    /**
+     * @param {number} frame_count
+     * @returns {number}
+     */
+    clipFrameBatchMorphWeightF32Len(frame_count) {
+        const ret = wasm.wasmmmdruntimeinstance_clipFrameBatchMorphWeightF32Len(this.__wbg_ptr, frame_count);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} frame_count
+     * @returns {number}
+     */
+    clipFrameBatchWorldMatrixF32Len(frame_count) {
+        const ret = wasm.wasmmmdruntimeinstance_clipFrameBatchWorldMatrixF32Len(this.__wbg_ptr, frame_count);
+        return ret >>> 0;
     }
     /**
      * @param {Uint8Array} out
@@ -451,6 +574,22 @@ export class WasmMmdRuntimeInstance {
     evaluateClipFrame(clip, frame) {
         _assertClass(clip, WasmMmdClip);
         wasm.wasmmmdruntimeinstance_evaluateClipFrame(this.__wbg_ptr, clip.__wbg_ptr, frame);
+    }
+    /**
+     * @param {WasmMmdClip} clip
+     * @param {number} start_frame
+     * @param {number} frame_step
+     * @param {number} frame_count
+     * @param {number} worker_count
+     * @returns {WasmMmdRuntimeBatchEvaluation}
+     */
+    evaluateClipFrameBatch(clip, start_frame, frame_step, frame_count, worker_count) {
+        _assertClass(clip, WasmMmdClip);
+        const ret = wasm.wasmmmdruntimeinstance_evaluateClipFrameBatch(this.__wbg_ptr, clip.__wbg_ptr, start_frame, frame_step, frame_count, worker_count);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmMmdRuntimeBatchEvaluation.__wrap(ret[0]);
     }
     /**
      * @param {WasmMmdClip} clip
@@ -1287,6 +1426,9 @@ const WasmMmdClipFinalization = (typeof FinalizationRegistry === 'undefined')
 const WasmMmdModelFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmmmdmodel_free(ptr, 1));
+const WasmMmdRuntimeBatchEvaluationFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmmmdruntimebatchevaluation_free(ptr, 1));
 const WasmMmdRuntimeInstanceFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmmmdruntimeinstance_free(ptr, 1));

@@ -20,11 +20,14 @@ import { parsePmd } from "../model/PmdModelParser.js";
 import { parsePmx, type ParsedPmx } from "../model/PmxModelParser.js";
 import { parseVmd } from "../vmd/index.js";
 import { parseVpd, vpdPoseToAnimation } from "../vpd/index.js";
+import { mmdAnimWasmVmdDtoToAnimation } from "../../runtime/mmdAnimWasmParser.js";
 import { ParsedModel } from "./ParsedModel.js";
 
 export interface MmdAnimWasmExports {
   parsePmxModelJson(data: Uint8Array): string;
   parsePmxModelNonGeometryJson?: (data: Uint8Array) => string;
+  parseMmdFormatJson?: (data: Uint8Array, fileName?: string | null) => string;
+  parseVmdAnimationJson?: (data: Uint8Array) => string;
   WasmPmxParsedModel?: WasmPmxParsedModelConstructor;
   WasmPmxGeometry?: WasmPmxGeometryConstructor;
   wasm_wrapper_version(): number;
@@ -392,6 +395,12 @@ export class MmdAnimBackedCore implements MmdCore {
 
   loadVmd(bytes: ArrayBuffer | Uint8Array): MmdAnimation {
     const input = toUint8Array(bytes);
+    if (this.wasm.parseVmdAnimationJson != null) {
+      return mmdAnimWasmVmdDtoToAnimation(JSON.parse(this.wasm.parseVmdAnimationJson(input)), input.slice());
+    }
+    if (this.wasm.parseMmdFormatJson != null) {
+      return mmdAnimWasmVmdDtoToAnimation(JSON.parse(this.wasm.parseMmdFormatJson(input, "motion.vmd")), input.slice());
+    }
     return { ...parseVmd(input), bytes: input.slice() };
   }
 

@@ -1,4 +1,3 @@
-import { parseVmd } from "../../../dist/parser/index.js";
 import { sampleMmdCameraTrackInto } from "../../../dist/runtime/index.js";
 import { applyMmdCameraStateToThreeCamera } from "../../../dist/three/index.js";
 
@@ -7,17 +6,12 @@ import { currentMmdFrame, currentMotionDurationSeconds, hasCurrentMotion } from 
 import { state } from "./state.js";
 import { labelFromUrl } from "./url-label.js";
 
-async function fetchBytes(url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Failed to fetch " + url + ": " + response.status);
-  return new Uint8Array(await response.arrayBuffer());
-}
-
 export async function loadCameraFromUrl(url) {
   try {
-    setStatus(`Loading camera: ${labelFromUrl(url)}`, "loading");
-    const animation = parseVmd(await fetchBytes(url));
-    return await loadCameraAnimation(animation, labelFromUrl(url), createCameraSwitcherEntry(url, labelFromUrl(url)));
+    const label = labelFromUrl(url);
+    setStatus(`Loading camera: ${label}`, "loading");
+    const { animation } = await state.animationLoader.loadAnimation(url);
+    return await loadCameraAnimation(animation, label, createCameraSwitcherEntry(url, label));
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
     return false;
@@ -27,7 +21,7 @@ export async function loadCameraFromUrl(url) {
 export async function loadCameraFile(file) {
   try {
     setStatus(`Loading camera: ${file.name}`, "loading");
-    const animation = parseVmd(new Uint8Array(await file.arrayBuffer()));
+    const { animation } = await state.animationLoader.loadAnimation(file);
     return await loadCameraAnimation(animation, file.name, createCameraSwitcherEntry(file, file.name));
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
@@ -74,6 +68,7 @@ export function applyCameraMotion() {
     sampled,
     state.cameraApplyOptions
   );
+  state.controls.target.copy(state.cameraTargetScratch);
   if (state.camera !== activeCamera) {
     state.camera = activeCamera;
     state.controls.object = activeCamera;
@@ -106,7 +101,6 @@ export async function loadCameraAnimation(animation, label, entry) {
   updateTransportState();
   applyCameraMotion();
   setStatus("", "ready");
-  state.controls.update();
   state.renderer.render(state.scene, state.camera);
   return true;
 }

@@ -6,6 +6,7 @@ export default tseslint.config(
     ignores: [
       "dist/**",
       "deploy/**",
+      "examples/viewer/.mmd-anim-wasm/**",
       "native/bullet-mmd/dist/**",
       "native/third_party/**",
       "scripts/local/oracle/**",

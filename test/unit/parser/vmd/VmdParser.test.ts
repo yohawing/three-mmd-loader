@@ -93,17 +93,17 @@ describe("parseVmd", () => {
     });
   });
 
-  it("reads camera interpolation in VMD channel-strided byte layout", () => {
+  it("reads camera interpolation in VMD contiguous channel byte layout", () => {
     const animation = parseVmd(createCameraOnlyVmd());
     const interpolation = animation.cameraFrames[0]?.interpolation;
 
     expect(interpolation).toEqual({
-      positionX: [0 / 127, 6 / 127, 12 / 127, 18 / 127],
-      positionY: [1 / 127, 7 / 127, 13 / 127, 19 / 127],
-      positionZ: [2 / 127, 8 / 127, 14 / 127, 20 / 127],
-      rotation: [3 / 127, 9 / 127, 15 / 127, 21 / 127],
-      distance: [4 / 127, 10 / 127, 16 / 127, 22 / 127],
-      fov: [5 / 127, 11 / 127, 17 / 127, 23 / 127]
+      positionX: [0 / 127, 1 / 127, 2 / 127, 3 / 127],
+      positionY: [4 / 127, 5 / 127, 6 / 127, 7 / 127],
+      positionZ: [8 / 127, 9 / 127, 10 / 127, 11 / 127],
+      rotation: [12 / 127, 13 / 127, 14 / 127, 15 / 127],
+      distance: [16 / 127, 17 / 127, 18 / 127, 19 / 127],
+      fov: [20 / 127, 21 / 127, 22 / 127, 23 / 127]
     });
   });
 
