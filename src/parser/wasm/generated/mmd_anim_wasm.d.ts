@@ -216,6 +216,15 @@ export class WasmPmxParsedModel {
     static parse(data: Uint8Array): WasmPmxParsedModel;
 }
 
+export class WasmVmdCameraTrack {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    frameCount(): number;
+    static fromVmdBytes(data: Uint8Array): WasmVmdCameraTrack;
+    sampleJson(frame: number): string;
+}
+
 export function exportAccessoryManifestBytes(data: Uint8Array, file_name?: string | null): Uint8Array;
 
 export function exportMmdFormatBytes(data: Uint8Array, file_name?: string | null): Uint8Array;
@@ -253,6 +262,8 @@ export function parsePmxModelNonGeometryJson(data: Uint8Array): string;
 
 export function parseVmdAnimationJson(data: Uint8Array): string;
 
+export function sampleVmdCameraJson(data: Uint8Array, frame: number): string;
+
 export function wasm_wrapper_version(): number;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -265,6 +276,7 @@ export interface InitOutput {
     readonly __wbg_wasmmmdruntimeinstance_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxgeometry_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxparsedmodel_free: (a: number, b: number) => void;
+    readonly __wbg_wasmvmdcameratrack_free: (a: number, b: number) => void;
     readonly exportAccessoryManifestBytes: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly exportMmdFormatBytes: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly exportPmdModelBytes: (a: number, b: number) => [number, number, number, number];
@@ -280,6 +292,7 @@ export interface InitOutput {
     readonly parsePmxModelJson: (a: number, b: number) => [number, number, number, number];
     readonly parsePmxModelNonGeometryJson: (a: number, b: number) => [number, number, number, number];
     readonly parseVmdAnimationJson: (a: number, b: number) => [number, number, number, number];
+    readonly sampleVmdCameraJson: (a: number, b: number, c: number) => [number, number, number, number];
     readonly wasm_wrapper_version: () => number;
     readonly wasmmmdclip_firstFrame: (a: number) => number;
     readonly wasmmmdclip_fromVmdBytesForModel: (a: number, b: number, c: number) => [number, number, number];
@@ -359,6 +372,9 @@ export interface InitOutput {
     readonly wasmpmxparsedmodel_geometry: (a: number) => number;
     readonly wasmpmxparsedmodel_nonGeometryJson: (a: number) => [number, number, number, number];
     readonly wasmpmxparsedmodel_parse: (a: number, b: number) => [number, number, number];
+    readonly wasmvmdcameratrack_frameCount: (a: number) => number;
+    readonly wasmvmdcameratrack_fromVmdBytes: (a: number, b: number) => [number, number, number];
+    readonly wasmvmdcameratrack_sampleJson: (a: number, b: number) => [number, number, number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

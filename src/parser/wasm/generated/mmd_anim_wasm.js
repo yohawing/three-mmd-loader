@@ -1062,6 +1062,68 @@ export class WasmPmxParsedModel {
 }
 if (Symbol.dispose) WasmPmxParsedModel.prototype[Symbol.dispose] = WasmPmxParsedModel.prototype.free;
 
+export class WasmVmdCameraTrack {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmVmdCameraTrack.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmVmdCameraTrackFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmVmdCameraTrackFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmvmdcameratrack_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    frameCount() {
+        const ret = wasm.wasmvmdcameratrack_frameCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {Uint8Array} data
+     * @returns {WasmVmdCameraTrack}
+     */
+    static fromVmdBytes(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvmdcameratrack_fromVmdBytes(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmVmdCameraTrack.__wrap(ret[0]);
+    }
+    /**
+     * @param {number} frame
+     * @returns {string}
+     */
+    sampleJson(frame) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.wasmvmdcameratrack_sampleJson(this.__wbg_ptr, frame);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) WasmVmdCameraTrack.prototype[Symbol.dispose] = WasmVmdCameraTrack.prototype.free;
+
 /**
  * @param {Uint8Array} data
  * @param {string | null} [file_name]
@@ -1374,6 +1436,32 @@ export function parseVmdAnimationJson(data) {
 }
 
 /**
+ * @param {Uint8Array} data
+ * @param {number} frame
+ * @returns {string}
+ */
+export function sampleVmdCameraJson(data, frame) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.sampleVmdCameraJson(ptr0, len0, frame);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * @returns {number}
  */
 export function wasm_wrapper_version() {
@@ -1438,6 +1526,9 @@ const WasmPmxGeometryFinalization = (typeof FinalizationRegistry === 'undefined'
 const WasmPmxParsedModelFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmpmxparsedmodel_free(ptr, 1));
+const WasmVmdCameraTrackFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvmdcameratrack_free(ptr, 1));
 
 function _assertClass(instance, klass) {
     if (!(instance instanceof klass)) {

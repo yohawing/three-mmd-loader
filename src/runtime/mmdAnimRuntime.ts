@@ -341,6 +341,9 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   cameraState(): CameraState | undefined {
+    if (this.parsedTrackRuntime) {
+      return this.parsedTrackRuntime.cameraState();
+    }
     const frames = this.mmdAnimation?.cameraFrames;
     if (!frames || frames.length === 0) {
       this.scratchCameraFrameHint.index = 0;
