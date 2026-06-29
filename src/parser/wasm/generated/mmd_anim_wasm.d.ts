@@ -222,7 +222,45 @@ export class WasmVmdCameraTrack {
     [Symbol.dispose](): void;
     frameCount(): number;
     static fromVmdBytes(data: Uint8Array): WasmVmdCameraTrack;
-    sampleJson(frame: number): string;
+    /**
+     * Sample the camera track into a caller-owned `Float32Array`.
+     *
+     * Writes `[distance, position.x, position.y, position.z, rotation.x,
+     * rotation.y, rotation.z, fov, perspective]` to `out`.
+     * `perspective` is encoded as `1.0` when enabled, otherwise `0.0`.
+     * Returns `false` when `out.length < 9`.
+     */
+    sample(frame: number, out: Float32Array): boolean;
+}
+
+export class WasmVmdLightTrack {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    frameCount(): number;
+    static fromVmdBytes(data: Uint8Array): WasmVmdLightTrack;
+    /**
+     * Sample the light track into a caller-owned `Float32Array`.
+     *
+     * Writes `[color.r, color.g, color.b, direction.x, direction.y,
+     * direction.z]` to `out`. Returns `false` when `out.length < 6`.
+     */
+    sample(frame: number, out: Float32Array): boolean;
+}
+
+export class WasmVmdSelfShadowTrack {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    frameCount(): number;
+    static fromVmdBytes(data: Uint8Array): WasmVmdSelfShadowTrack;
+    /**
+     * Sample the self-shadow track into a caller-owned `Float32Array`.
+     *
+     * Writes `[mode, distance]` to `out`. `mode` is encoded as a float.
+     * Returns `false` when `out.length < 2`.
+     */
+    sample(frame: number, out: Float32Array): boolean;
 }
 
 export function exportAccessoryManifestBytes(data: Uint8Array, file_name?: string | null): Uint8Array;
@@ -262,7 +300,31 @@ export function parsePmxModelNonGeometryJson(data: Uint8Array): string;
 
 export function parseVmdAnimationJson(data: Uint8Array): string;
 
-export function sampleVmdCameraJson(data: Uint8Array, frame: number): string;
+/**
+ * Sample VMD camera bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[distance, position.x, position.y, position.z, rotation.x,
+ * rotation.y, rotation.z, fov, perspective]` to `out`.
+ * `perspective` is encoded as `1.0` when enabled, otherwise `0.0`.
+ * Returns `false` when `out.length < 9`.
+ */
+export function sampleVmdCamera(data: Uint8Array, frame: number, out: Float32Array): boolean;
+
+/**
+ * Sample VMD light bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[color.r, color.g, color.b, direction.x, direction.y,
+ * direction.z]` to `out`. Returns `false` when `out.length < 6`.
+ */
+export function sampleVmdLight(data: Uint8Array, frame: number, out: Float32Array): boolean;
+
+/**
+ * Sample VMD self-shadow bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[mode, distance]` to `out`. `mode` is encoded as a float.
+ * Returns `false` when `out.length < 2`.
+ */
+export function sampleVmdSelfShadow(data: Uint8Array, frame: number, out: Float32Array): boolean;
 
 export function wasm_wrapper_version(): number;
 
@@ -277,6 +339,8 @@ export interface InitOutput {
     readonly __wbg_wasmpmxgeometry_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxparsedmodel_free: (a: number, b: number) => void;
     readonly __wbg_wasmvmdcameratrack_free: (a: number, b: number) => void;
+    readonly __wbg_wasmvmdlighttrack_free: (a: number, b: number) => void;
+    readonly __wbg_wasmvmdselfshadowtrack_free: (a: number, b: number) => void;
     readonly exportAccessoryManifestBytes: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly exportMmdFormatBytes: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly exportPmdModelBytes: (a: number, b: number) => [number, number, number, number];
@@ -292,7 +356,9 @@ export interface InitOutput {
     readonly parsePmxModelJson: (a: number, b: number) => [number, number, number, number];
     readonly parsePmxModelNonGeometryJson: (a: number, b: number) => [number, number, number, number];
     readonly parseVmdAnimationJson: (a: number, b: number) => [number, number, number, number];
-    readonly sampleVmdCameraJson: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly sampleVmdCamera: (a: number, b: number, c: number, d: any) => [number, number, number];
+    readonly sampleVmdLight: (a: number, b: number, c: number, d: any) => [number, number, number];
+    readonly sampleVmdSelfShadow: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly wasm_wrapper_version: () => number;
     readonly wasmmmdclip_firstFrame: (a: number) => number;
     readonly wasmmmdclip_fromVmdBytesForModel: (a: number, b: number, c: number) => [number, number, number];
@@ -374,7 +440,13 @@ export interface InitOutput {
     readonly wasmpmxparsedmodel_parse: (a: number, b: number) => [number, number, number];
     readonly wasmvmdcameratrack_frameCount: (a: number) => number;
     readonly wasmvmdcameratrack_fromVmdBytes: (a: number, b: number) => [number, number, number];
-    readonly wasmvmdcameratrack_sampleJson: (a: number, b: number) => [number, number, number, number];
+    readonly wasmvmdcameratrack_sample: (a: number, b: number, c: any) => [number, number, number];
+    readonly wasmvmdlighttrack_frameCount: (a: number) => number;
+    readonly wasmvmdlighttrack_fromVmdBytes: (a: number, b: number) => [number, number, number];
+    readonly wasmvmdlighttrack_sample: (a: number, b: number, c: any) => [number, number, number];
+    readonly wasmvmdselfshadowtrack_frameCount: (a: number) => number;
+    readonly wasmvmdselfshadowtrack_fromVmdBytes: (a: number, b: number) => [number, number, number];
+    readonly wasmvmdselfshadowtrack_sample: (a: number, b: number, c: any) => [number, number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

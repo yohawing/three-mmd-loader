@@ -43,11 +43,12 @@ export async function loadMotion(source, label = source.name ?? "motion") {
   try {
     const switcherEntry = createMotionSwitcherEntry(source, label);
     setStatus(`Loading motion: ${label}`, "loading");
-    const { animation } = await state.animationLoader.loadAnimation(source);
+    const loaded = await state.animationLoader.loadAnimation(source);
+    const { animation } = loaded;
     if (isCameraOnlyVmdAnimation(animation)) {
       state.pendingMotionSource = undefined;
       state.pendingMotionLabel = undefined;
-      return await loadCameraAnimation(animation, label, createCameraSwitcherEntry(source, label));
+      return await loadCameraAnimation(loaded, label, createCameraSwitcherEntry(source, label));
     }
     if (!state.currentModel) {
       state.pendingMotionSource = source;

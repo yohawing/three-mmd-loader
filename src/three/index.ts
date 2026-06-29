@@ -4,9 +4,11 @@ import * as mmdAnimWasm from "../parser/wasm/generated/mmd_anim_wasm.js";
 import { FallbackCore, initCore } from "../parser/wasm/index.js";
 import { parseVpd } from "../parser/index.js";
 import type { MmdAnimation, MmdCore, MmdPose, VmdBoneTrack } from "../parser/model/modelTypes.js";
-import { MmdAnimRuntime, DefaultMmdRuntime } from "../runtime/index.js";
+import { MmdAnimRuntime, DefaultMmdRuntime, createMmdAnimWasmCameraTrack, createMmdAnimWasmLightTrack } from "../runtime/index.js";
 import type {
   MmdAnimRuntimeWasmModule,
+  MmdAnimRuntimeWasmCameraTrack,
+  MmdAnimRuntimeWasmLightTrack,
   DefaultMmdRuntimeOptions,
   MmdFrameState,
   MmdRuntime,
@@ -569,6 +571,48 @@ export class ThreeMmdLoader {
       name: animation.metadata.modelName,
       animation
     };
+  }
+
+  createCameraTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmCameraTrack | undefined {
+    if (!this.implicitMmdAnimWasmReady || this.useExplicitCore) {
+      return undefined;
+    }
+    const mmdAnimation = unwrapThreeMmdAnimation(animation);
+    if (
+      mmdAnimation.bytes.byteLength === 0 ||
+      (mmdAnimation.metadata.counts.cameras === 0 && mmdAnimation.cameraFrames.length === 0)
+    ) {
+      return undefined;
+    }
+    try {
+      return createMmdAnimWasmCameraTrack(
+        mmdAnimWasm as unknown as Pick<MmdAnimRuntimeWasmModule, "WasmVmdCameraTrack">,
+        mmdAnimation.bytes
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  createLightTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmLightTrack | undefined {
+    if (!this.implicitMmdAnimWasmReady || this.useExplicitCore) {
+      return undefined;
+    }
+    const mmdAnimation = unwrapThreeMmdAnimation(animation);
+    if (
+      mmdAnimation.bytes.byteLength === 0 ||
+      (mmdAnimation.metadata.counts.lights === 0 && mmdAnimation.lightFrames.length === 0)
+    ) {
+      return undefined;
+    }
+    try {
+      return createMmdAnimWasmLightTrack(
+        mmdAnimWasm as unknown as Pick<MmdAnimRuntimeWasmModule, "WasmVmdLightTrack">,
+        mmdAnimation.bytes
+      );
+    } catch {
+      return undefined;
+    }
   }
 
   async loadPose(source: ModelSource): Promise<ThreeMmdPose> {

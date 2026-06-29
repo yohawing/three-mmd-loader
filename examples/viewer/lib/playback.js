@@ -3,7 +3,7 @@ import { hasActiveAudioSource, isAudioElement } from "./audio-loading.js";
 import { applyCameraMotion } from "./camera-loading.js";
 import { updateColliderHelpers, updateDebugFps } from "./debug.js";
 import { currentMmdFrame, currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
-import { sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
+import { sampleMmdAnimWasmLightTrackInto, sampleMmdLightTrackInto, sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
 import {
   applyMmdLightStateToThreeDirectionalLight,
   applyMmdSelfShadowStateToThreeDirectionalLight,
@@ -60,7 +60,17 @@ export function evaluateRuntime(options) {
 }
 
 function applyLightMotion() {
-  const lightState = state.currentModel?.runtime?.lightState?.();
+  const cameraMotion = state.currentCameraMotion;
+  const lightState = cameraMotion?.lightTrack
+    ? sampleMmdAnimWasmLightTrackInto(
+        cameraMotion.lightTrack,
+        currentMmdFrame(),
+        state.lightSampleScratch,
+        state.lightStateScratch
+      )
+    : cameraMotion?.lightFrames?.length > 0
+      ? sampleMmdLightTrackInto(cameraMotion.lightFrames, currentMmdFrame(), state.lightStateScratch)
+      : state.currentModel?.runtime?.lightState?.();
   if (!lightState || !state.keyLight) {
     return;
   }

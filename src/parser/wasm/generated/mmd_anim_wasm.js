@@ -1100,29 +1100,137 @@ export class WasmVmdCameraTrack {
         return WasmVmdCameraTrack.__wrap(ret[0]);
     }
     /**
+     * Sample the camera track into a caller-owned `Float32Array`.
+     *
+     * Writes `[distance, position.x, position.y, position.z, rotation.x,
+     * rotation.y, rotation.z, fov, perspective]` to `out`.
+     * `perspective` is encoded as `1.0` when enabled, otherwise `0.0`.
+     * Returns `false` when `out.length < 9`.
      * @param {number} frame
-     * @returns {string}
+     * @param {Float32Array} out
+     * @returns {boolean}
      */
-    sampleJson(frame) {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const ret = wasm.wasmvmdcameratrack_sampleJson(this.__wbg_ptr, frame);
-            var ptr1 = ret[0];
-            var len1 = ret[1];
-            if (ret[3]) {
-                ptr1 = 0; len1 = 0;
-                throw takeFromExternrefTable0(ret[2]);
-            }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
-        } finally {
-            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    sample(frame, out) {
+        const ret = wasm.wasmvmdcameratrack_sample(this.__wbg_ptr, frame, out);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
         }
+        return ret[0] !== 0;
     }
 }
 if (Symbol.dispose) WasmVmdCameraTrack.prototype[Symbol.dispose] = WasmVmdCameraTrack.prototype.free;
+
+export class WasmVmdLightTrack {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmVmdLightTrack.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmVmdLightTrackFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmVmdLightTrackFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmvmdlighttrack_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    frameCount() {
+        const ret = wasm.wasmvmdlighttrack_frameCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {Uint8Array} data
+     * @returns {WasmVmdLightTrack}
+     */
+    static fromVmdBytes(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvmdlighttrack_fromVmdBytes(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmVmdLightTrack.__wrap(ret[0]);
+    }
+    /**
+     * Sample the light track into a caller-owned `Float32Array`.
+     *
+     * Writes `[color.r, color.g, color.b, direction.x, direction.y,
+     * direction.z]` to `out`. Returns `false` when `out.length < 6`.
+     * @param {number} frame
+     * @param {Float32Array} out
+     * @returns {boolean}
+     */
+    sample(frame, out) {
+        const ret = wasm.wasmvmdlighttrack_sample(this.__wbg_ptr, frame, out);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+}
+if (Symbol.dispose) WasmVmdLightTrack.prototype[Symbol.dispose] = WasmVmdLightTrack.prototype.free;
+
+export class WasmVmdSelfShadowTrack {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmVmdSelfShadowTrack.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmVmdSelfShadowTrackFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmVmdSelfShadowTrackFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmvmdselfshadowtrack_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    frameCount() {
+        const ret = wasm.wasmvmdselfshadowtrack_frameCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {Uint8Array} data
+     * @returns {WasmVmdSelfShadowTrack}
+     */
+    static fromVmdBytes(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvmdselfshadowtrack_fromVmdBytes(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmVmdSelfShadowTrack.__wrap(ret[0]);
+    }
+    /**
+     * Sample the self-shadow track into a caller-owned `Float32Array`.
+     *
+     * Writes `[mode, distance]` to `out`. `mode` is encoded as a float.
+     * Returns `false` when `out.length < 2`.
+     * @param {number} frame
+     * @param {Float32Array} out
+     * @returns {boolean}
+     */
+    sample(frame, out) {
+        const ret = wasm.wasmvmdselfshadowtrack_sample(this.__wbg_ptr, frame, out);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+}
+if (Symbol.dispose) WasmVmdSelfShadowTrack.prototype[Symbol.dispose] = WasmVmdSelfShadowTrack.prototype.free;
 
 /**
  * @param {Uint8Array} data
@@ -1436,29 +1544,65 @@ export function parseVmdAnimationJson(data) {
 }
 
 /**
+ * Sample VMD camera bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[distance, position.x, position.y, position.z, rotation.x,
+ * rotation.y, rotation.z, fov, perspective]` to `out`.
+ * `perspective` is encoded as `1.0` when enabled, otherwise `0.0`.
+ * Returns `false` when `out.length < 9`.
  * @param {Uint8Array} data
  * @param {number} frame
- * @returns {string}
+ * @param {Float32Array} out
+ * @returns {boolean}
  */
-export function sampleVmdCameraJson(data, frame) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.sampleVmdCameraJson(ptr0, len0, frame);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+export function sampleVmdCamera(data, frame, out) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.sampleVmdCamera(ptr0, len0, frame, out);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
     }
+    return ret[0] !== 0;
+}
+
+/**
+ * Sample VMD light bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[color.r, color.g, color.b, direction.x, direction.y,
+ * direction.z]` to `out`. Returns `false` when `out.length < 6`.
+ * @param {Uint8Array} data
+ * @param {number} frame
+ * @param {Float32Array} out
+ * @returns {boolean}
+ */
+export function sampleVmdLight(data, frame, out) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.sampleVmdLight(ptr0, len0, frame, out);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
+}
+
+/**
+ * Sample VMD self-shadow bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[mode, distance]` to `out`. `mode` is encoded as a float.
+ * Returns `false` when `out.length < 2`.
+ * @param {Uint8Array} data
+ * @param {number} frame
+ * @param {Float32Array} out
+ * @returns {boolean}
+ */
+export function sampleVmdSelfShadow(data, frame, out) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.sampleVmdSelfShadow(ptr0, len0, frame, out);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
 }
 
 /**
@@ -1476,6 +1620,13 @@ function __wbg_get_imports() {
         },
         __wbg___wbindgen_throw_1506f2235d1bdba0: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
+        },
+        __wbg_length_7abca14930109c1c: function(arg0) {
+            const ret = arg0.length;
+            return ret;
+        },
+        __wbg_set_index_2ae12f863484ce58: function(arg0, arg1, arg2) {
+            arg0[arg1 >>> 0] = arg2;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Ref(Slice(F32)) -> NamedExternref("Float32Array")`.
@@ -1529,6 +1680,12 @@ const WasmPmxParsedModelFinalization = (typeof FinalizationRegistry === 'undefin
 const WasmVmdCameraTrackFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmvmdcameratrack_free(ptr, 1));
+const WasmVmdLightTrackFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvmdlighttrack_free(ptr, 1));
+const WasmVmdSelfShadowTrackFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvmdselfshadowtrack_free(ptr, 1));
 
 function _assertClass(instance, klass) {
     if (!(instance instanceof klass)) {

@@ -19,6 +19,10 @@ import {
   DefaultMmdRuntime,
   MmdAnimRuntime,
   ThreeMmdLoader,
+  createMmdAnimWasmCameraTrack,
+  createMmdAnimWasmLightTrack,
+  sampleMmdAnimWasmCameraTrackInto,
+  sampleMmdAnimWasmLightTrackInto,
   sampleMmdCameraTrackInto,
   sampleMmdLightTrackInto,
   sampleMmdSelfShadowTrackInto,
@@ -211,6 +215,10 @@ center
 
   it("exports the experimental MmdAnimRuntime facade", () => {
     expect(MmdAnimRuntime).toBeTypeOf("function");
+    expect(createMmdAnimWasmCameraTrack).toBeTypeOf("function");
+    expect(createMmdAnimWasmLightTrack).toBeTypeOf("function");
+    expect(sampleMmdAnimWasmCameraTrackInto).toBeTypeOf("function");
+    expect(sampleMmdAnimWasmLightTrackInto).toBeTypeOf("function");
     expect("CustomRuntime" in publicApi).toBe(false);
   });
 

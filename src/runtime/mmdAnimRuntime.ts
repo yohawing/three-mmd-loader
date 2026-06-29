@@ -44,6 +44,18 @@ export interface MmdAnimRuntimeWasmClip {
   free?(): void;
 }
 
+export interface MmdAnimRuntimeWasmCameraTrack {
+  frameCount(): number;
+  sample(frame: number, out: Float32Array): boolean;
+  free?(): void;
+}
+
+export interface MmdAnimRuntimeWasmLightTrack {
+  frameCount(): number;
+  sample(frame: number, out: Float32Array): boolean;
+  free?(): void;
+}
+
 export interface MmdAnimRuntimeWasmRuntimeInstance {
   evaluateRestPose(): void;
   evaluateClipFrame(clip: MmdAnimRuntimeWasmClip, frame: number): void;
@@ -72,6 +84,12 @@ export interface MmdAnimRuntimeWasmModule {
   };
   readonly WasmMmdClip?: {
     fromVmdBytesForModel?(model: MmdAnimRuntimeWasmModel, bytes: Uint8Array): MmdAnimRuntimeWasmClip;
+  };
+  readonly WasmVmdCameraTrack?: {
+    fromVmdBytes?(bytes: Uint8Array): MmdAnimRuntimeWasmCameraTrack;
+  };
+  readonly WasmVmdLightTrack?: {
+    fromVmdBytes?(bytes: Uint8Array): MmdAnimRuntimeWasmLightTrack;
   };
   readonly WasmMmdRuntimeInstance: {
     forModel?(model: MmdAnimRuntimeWasmModel): MmdAnimRuntimeWasmRuntimeInstance;
@@ -150,6 +168,59 @@ export function exportMmdAnimWasmVpdPoseJsonBytes(
   return exporter(json);
 }
 
+export function createMmdAnimWasmCameraTrack(
+  wasm: Pick<MmdAnimRuntimeWasmModule, "WasmVmdCameraTrack">,
+  bytes: Uint8Array
+): MmdAnimRuntimeWasmCameraTrack | undefined {
+  return wasm.WasmVmdCameraTrack?.fromVmdBytes?.(bytes);
+}
+
+export function createMmdAnimWasmLightTrack(
+  wasm: Pick<MmdAnimRuntimeWasmModule, "WasmVmdLightTrack">,
+  bytes: Uint8Array
+): MmdAnimRuntimeWasmLightTrack | undefined {
+  return wasm.WasmVmdLightTrack?.fromVmdBytes?.(bytes);
+}
+
+export function sampleMmdAnimWasmCameraTrackInto(
+  track: MmdAnimRuntimeWasmCameraTrack,
+  frame: number,
+  scratch: Float32Array,
+  target: CameraState
+): CameraState {
+  if (scratch.length < 9 || !track.sample(frame, scratch)) {
+    throw new RangeError("MmdAnimRuntime camera sample buffer is too short");
+  }
+  target.distance = scratch[0] ?? 0;
+  target.position[0] = scratch[1] ?? 0;
+  target.position[1] = scratch[2] ?? 0;
+  target.position[2] = scratch[3] ?? 0;
+  target.rotation[0] = scratch[4] ?? 0;
+  target.rotation[1] = scratch[5] ?? 0;
+  target.rotation[2] = scratch[6] ?? 0;
+  target.fov = scratch[7] ?? 1;
+  target.perspective = (scratch[8] ?? 1) >= 0.5;
+  return target;
+}
+
+export function sampleMmdAnimWasmLightTrackInto(
+  track: MmdAnimRuntimeWasmLightTrack,
+  frame: number,
+  scratch: Float32Array,
+  target: LightState
+): LightState {
+  if (scratch.length < 6 || !track.sample(frame, scratch)) {
+    throw new RangeError("MmdAnimRuntime light sample buffer is too short");
+  }
+  target.color[0] = scratch[0] ?? 0;
+  target.color[1] = scratch[1] ?? 0;
+  target.color[2] = scratch[2] ?? 0;
+  target.direction[0] = scratch[3] ?? 0;
+  target.direction[1] = scratch[4] ?? 0;
+  target.direction[2] = scratch[5] ?? 0;
+  return target;
+}
+
 /**
  * Experimental runtime adapter for the mmd-anim WASM evaluator.
  *
@@ -188,11 +259,13 @@ export class MmdAnimRuntime implements MmdRuntime {
     fov: 1,
     perspective: true
   };
+  private readonly scratchCameraSample = new Float32Array(9);
   private readonly scratchCameraFrameHint = { index: 0 };
   private readonly scratchLightState: LightState = {
     color: [0, 0, 0],
     direction: [0, 0, 0]
   };
+  private readonly scratchLightSample = new Float32Array(6);
   private readonly scratchExternalPhysicsInput = {
     translations: new Float32Array(0),
     rotations: new Float32Array(0),
@@ -219,6 +292,8 @@ export class MmdAnimRuntime implements MmdRuntime {
     localRotation: new THREE.Quaternion()
   };
   private wasmClip: MmdAnimRuntimeWasmClip | undefined;
+  private wasmCameraTrack: MmdAnimRuntimeWasmCameraTrack | undefined;
+  private wasmLightTrack: MmdAnimRuntimeWasmLightTrack | undefined;
   private ownsWasmClip = false;
   private mesh: THREE.SkinnedMesh | undefined;
   private mmdAnimation: MmdAnimation | undefined;
@@ -334,6 +409,8 @@ export class MmdAnimRuntime implements MmdRuntime {
 
   clearAnimation(): void {
     this.releaseOwnedClip();
+    this.releaseCameraTrack();
+    this.releaseLightTrack();
     this.wasmClip = undefined;
     this.mmdAnimation = undefined;
     this.parsedTrackRuntime = undefined;
@@ -343,6 +420,14 @@ export class MmdAnimRuntime implements MmdRuntime {
   cameraState(): CameraState | undefined {
     if (this.parsedTrackRuntime) {
       return this.parsedTrackRuntime.cameraState();
+    }
+    if (this.wasmCameraTrack) {
+      return sampleMmdAnimWasmCameraTrackInto(
+        this.wasmCameraTrack,
+        this.state.frame,
+        this.scratchCameraSample,
+        this.scratchCameraState
+      );
     }
     const frames = this.mmdAnimation?.cameraFrames;
     if (!frames || frames.length === 0) {
@@ -358,6 +443,17 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   lightState(): LightState | undefined {
+    if (this.parsedTrackRuntime) {
+      return this.parsedTrackRuntime.lightState();
+    }
+    if (this.wasmLightTrack) {
+      return sampleMmdAnimWasmLightTrackInto(
+        this.wasmLightTrack,
+        this.state.frame,
+        this.scratchLightSample,
+        this.scratchLightState
+      );
+    }
     const frames = this.mmdAnimation?.lightFrames;
     if (!frames || frames.length === 0) {
       return undefined;
@@ -383,6 +479,8 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.mmdAnimation = animation;
     this.parsedTrackRuntime = undefined;
     this.scratchCameraFrameHint.index = 0;
+    this.releaseCameraTrack();
+    this.releaseLightTrack();
     writeParentBoneIndices(mesh.skeleton.bones, this.scratchParentBoneIndices);
     this.externalPhysicsData =
       this.physicsMode === "external" && this.physicsBackend
@@ -415,6 +513,20 @@ export class MmdAnimRuntime implements MmdRuntime {
       this.wasmClip = clipFactory(this.wasmModel, animation.bytes);
       this.ownsWasmClip = true;
     }
+    if (animation.metadata.counts.cameras > 0 || animation.cameraFrames.length > 0) {
+      try {
+        this.wasmCameraTrack = createMmdAnimWasmCameraTrack(this.wasm ?? {}, animation.bytes);
+      } catch {
+        this.wasmCameraTrack = undefined;
+      }
+    }
+    if (animation.metadata.counts.lights > 0 || animation.lightFrames.length > 0) {
+      try {
+        this.wasmLightTrack = createMmdAnimWasmLightTrack(this.wasm ?? {}, animation.bytes);
+      } catch {
+        this.wasmLightTrack = undefined;
+      }
+    }
   }
 
   frameState(): MmdFrameState {
@@ -444,6 +556,8 @@ export class MmdAnimRuntime implements MmdRuntime {
 
   dispose(): void {
     this.releaseOwnedClip();
+    this.releaseCameraTrack();
+    this.releaseLightTrack();
     if (!this.ownsWasmResources) {
       return;
     }
@@ -644,6 +758,16 @@ export class MmdAnimRuntime implements MmdRuntime {
       this.wasmClip?.free?.();
     }
     this.ownsWasmClip = false;
+  }
+
+  private releaseCameraTrack(): void {
+    this.wasmCameraTrack?.free?.();
+    this.wasmCameraTrack = undefined;
+  }
+
+  private releaseLightTrack(): void {
+    this.wasmLightTrack?.free?.();
+    this.wasmLightTrack = undefined;
   }
 }
 

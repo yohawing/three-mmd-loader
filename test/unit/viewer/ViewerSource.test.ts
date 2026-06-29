@@ -173,21 +173,27 @@ describe("example viewer source", () => {
     expect(motionSource).toContain("findMmdMotionFiles");
     expect(motionSource).toContain("parseVmdSectionInventory");
     expect(motionSource).not.toContain("parseVmd,");
-    expect(motionSource).toContain("const { animation } = await state.animationLoader.loadAnimation(source)");
+    expect(motionSource).toContain("const loaded = await state.animationLoader.loadAnimation(source)");
+    expect(motionSource).toContain("const { animation } = loaded");
     expect(motionSource).toContain("export async function classifyVmdFiles(files)");
     expect(motionSource).toContain("counts.cameras > 0 && counts.bones === 0 && counts.morphs === 0");
-    expect(motionSource).toContain("return await loadCameraAnimation(animation, label, createCameraSwitcherEntry(source, label))");
+    expect(motionSource).toContain("return await loadCameraAnimation(loaded, label, createCameraSwitcherEntry(source, label))");
     expect(motionSource).toContain("export async function switchMotion(file)");
     expect(motionSource).toContain('setStatus(`Switching motion to ${file.name}`, "loading")');
     expect(motionSource).toContain("createMotionSwitcherEntry(source, label)");
     expect(motionSource).toContain('id: `url:${source}`');
     expect(motionSource).toContain("setLoadedFileSwitcherOptions(");
     expect(motionSource).toContain("dom.motionControl.hidden = state.currentMotionVmdFiles.length === 0");
-    expect(cameraSource).toContain("export async function loadCameraAnimation(animation, label, entry)");
+    expect(cameraSource).toContain("export async function loadCameraAnimation(loadedAnimation, label, entry)");
     expect(cameraSource).toContain("export function createCameraSwitcherEntry(source, label)");
     expect(cameraSource).not.toContain("parseVmd");
     expect(cameraSource).toContain("state.animationLoader.loadAnimation(url)");
     expect(cameraSource).toContain("state.animationLoader.loadAnimation(file)");
+    expect(cameraSource).toContain("sampleMmdAnimWasmCameraTrackInto");
+    expect(cameraSource).toContain("state.cameraSampleScratch");
+    expect(cameraSource).toContain("state.animationLoader.createCameraTrack(loadedAnimation)");
+    expect(cameraSource).toContain("lightFrames: animation.lightFrames");
+    expect(cameraSource).toContain("state.animationLoader.createLightTrack(loadedAnimation)");
 
     const dropHandler = modelSource.slice(
       modelSource.indexOf("function handleDroppedFiles"),
@@ -426,6 +432,9 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("cameraQuaternionScratch: new THREE.Quaternion()");
     expect(stateSource).toContain("quaternion: state.cameraQuaternionScratch");
     expect(stateSource).toContain("cameraStateScratch: {");
+    expect(stateSource).toContain("cameraSampleScratch: new Float32Array(9)");
+    expect(stateSource).toContain("lightSampleScratch: new Float32Array(6)");
+    expect(stateSource).toContain("lightStateScratch: {");
     expect(stateSource).toContain("orthographicCamera: undefined");
     expect(stateSource).toContain("get orthographicCamera()");
     expect(stateSource).toContain("state.cameraApplyOptions = {");
@@ -629,6 +638,7 @@ describe("example viewer source", () => {
 
   it("keeps viewer runtime updates allocation-light on the render path", async () => {
     const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const cameraSource = await readFile("examples/viewer/lib/camera-loading.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
 
     expect(playbackSource).toContain("export function evaluateRuntime(options)");
@@ -642,6 +652,16 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("runtimePhysicsDisabledOptionsScratch");
     expect(stateSource).toContain("audioNoEvaluateOptionsScratch");
     expect(stateSource).toContain("selfShadowLightOptionsScratch");
+    expect(stateSource).toContain("cameraSampleScratch: new Float32Array(9)");
+    expect(stateSource).toContain("lightSampleScratch: new Float32Array(6)");
+    expect(cameraSource).toContain("sampleMmdAnimWasmCameraTrackInto(");
+    expect(playbackSource).toContain("sampleMmdAnimWasmLightTrackInto(");
+    expect(playbackSource).toContain("state.lightSampleScratch");
+    expect(playbackSource).toContain("sampleMmdLightTrackInto(cameraMotion.lightFrames");
+    expect(cameraSource).not.toContain(".sampleJson(");
+    expect(cameraSource).not.toContain(".sampleArray(");
+    expect(playbackSource).not.toContain(".sampleJson(");
+    expect(playbackSource).not.toContain(".sampleArray(");
   });
 
   it("uses the custom Bullet MMD backend without an Ammo viewer fallback", async () => {
