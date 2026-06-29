@@ -169,6 +169,38 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.map?.userData.mmdTextureOwnership).toBe("loader");
   });
 
+  it("deduplicates Blob-backed TGA decodes while returning separate texture instances", async () => {
+    const tgaBytes = new Uint8Array([
+      0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0x20,
+      255, 255, 255, 255
+    ]);
+    let readCount = 0;
+    class CountingBlob extends Blob {
+      override async arrayBuffer(): Promise<ArrayBuffer> {
+        readCount += 1;
+        return super.arrayBuffer();
+      }
+    }
+    const blob = new CountingBlob([tgaBytes]);
+    const mmdMaterials = [
+      createMaterialInfo({ texturePath: "textures/body.tga" }),
+      createMaterialInfo({ texturePath: "textures/body.tga" })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/body.tga": blob }
+    });
+
+    expect(readCount).toBe(1);
+    expect(materials[0]?.map).not.toBe(materials[1]?.map);
+    expect((materials[0]?.map as THREE.DataTexture | undefined)?.image.data).toBe(
+      (materials[1]?.map as THREE.DataTexture | undefined)?.image.data
+    );
+    expect(materials[0]?.map?.version).toBeGreaterThan(0);
+    expect(materials[1]?.map?.version).toBeGreaterThan(0);
+  });
+
   it("shares material textures with the same resolved path within a loader cache", async () => {
     const mmdMaterials = [
       createMaterialInfo({ texturePath: "textures/body.png" }),

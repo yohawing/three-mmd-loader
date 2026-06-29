@@ -43,6 +43,7 @@ const bundledSharedToonTextureUrls: TextureMap = {
 
 let defaultToonGradientMap: THREE.DataTexture | undefined;
 const blobTextureCacheKeys = new WeakMap<Blob, number>();
+const blobTgaTextureCache = new WeakMap<Blob, Promise<THREE.DataTexture | undefined>>();
 let nextBlobTextureCacheKey = 1;
 
 interface AlphaStats {
@@ -932,6 +933,44 @@ async function loadMmdTgaTexture(
   resolved: string | URL | Blob,
   textureInfo: MaterialInfo["textureInfo"]
 ): Promise<THREE.Texture | undefined> {
+  const source =
+    typeof Blob !== "undefined" && resolved instanceof Blob
+      ? await loadCachedBlobMmdTgaTexture(resolved)
+      : await loadMmdTgaTextureSource(resolved);
+  if (!source) {
+    return undefined;
+  }
+  return cloneMmdTgaTexture(source, textureInfo);
+}
+
+async function loadCachedBlobMmdTgaTexture(
+  resolved: Blob
+): Promise<THREE.DataTexture | undefined> {
+  const cached = blobTgaTextureCache.get(resolved);
+  if (cached) {
+    return cached;
+  }
+  const promise = loadMmdTgaTextureSource(resolved).then(
+    (texture) => {
+      if (!texture && blobTgaTextureCache.get(resolved) === promise) {
+        blobTgaTextureCache.delete(resolved);
+      }
+      return texture;
+    },
+    (error: unknown) => {
+      if (blobTgaTextureCache.get(resolved) === promise) {
+        blobTgaTextureCache.delete(resolved);
+      }
+      throw error;
+    }
+  );
+  blobTgaTextureCache.set(resolved, promise);
+  return promise;
+}
+
+async function loadMmdTgaTextureSource(
+  resolved: string | URL | Blob
+): Promise<THREE.DataTexture | undefined> {
   try {
     const buffer =
       typeof Blob !== "undefined" && resolved instanceof Blob
@@ -953,10 +992,19 @@ async function loadMmdTgaTexture(
     texture.userData.mmdTextureAlphaMode = image.hasAlpha
       ? evaluateMmdTextureAlphaRgba(image.data)
       : "opaque";
-    return configureMmdTexture(texture, textureInfo);
+    return texture;
   } catch {
     return undefined;
   }
+}
+
+function cloneMmdTgaTexture(
+  source: THREE.DataTexture,
+  textureInfo: MaterialInfo["textureInfo"]
+): THREE.DataTexture {
+  const texture = source.clone();
+  texture.needsUpdate = true;
+  return configureMmdTexture(texture, textureInfo) as THREE.DataTexture;
 }
 
 function resolveBundledSharedToonTexture(texturePath: string): string | URL | Blob | undefined {
