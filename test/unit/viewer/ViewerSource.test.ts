@@ -3,6 +3,16 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("example viewer source", () => {
+  it("keeps viewer version metadata aligned with the package version", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
+    const buildDeploySource = await readFile("scripts/build-deploy.mjs", "utf8");
+
+    expect(html).toContain(`<meta name="mmd-viewer-version" content="${packageJson.version}" />`);
+    expect(buildDeploySource).toContain('name="mmd-viewer-version"');
+    expect(buildDeploySource).toContain('content="${packageJson.version}"');
+  });
+
   it("clears model resources through the texture-aware dispose helper", async () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");
@@ -682,6 +692,21 @@ describe("example viewer source", () => {
     expect(physicsSource).not.toContain("createAmmoMmdPhysicsBackend");
     expect(mainSource).toContain('./lib/physics-backend.js');
     expect(modelSource).toContain('./physics-backend.js');
+  });
+
+  it("defers Bullet physics initialization until a model and motion are both bound", async () => {
+    const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+
+    expect(physicsSource).toContain("createDeferredPhysicsBackend");
+    expect(physicsSource).toContain("export async function ensurePhysicsBackendReady()");
+    expect(physicsSource).toContain("loadPromise ??= createActivePhysicsBackend()");
+    expect(modelSource).toContain("const physicsBackend = await createPhysicsBackend()");
+    expect(modelSource).toContain("await ensurePhysicsBackendReady();\n      state.currentModel.setAnimation(state.currentMotion)");
+    expect(motionSource).toContain("await ensurePhysicsBackendReady();\n    state.currentModel.setAnimation(animation)");
+    expect(motionSource).toContain("void loadKurokoModelForQueuedMotion()");
+    expect(motionSource).not.toContain("await ensurePhysicsBackendReady();\n      state.pendingMotionSource = source");
   });
 
   it("profiles viewer model load stages only behind the perf query flag", async () => {
