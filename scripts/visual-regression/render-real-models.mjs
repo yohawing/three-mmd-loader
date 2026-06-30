@@ -199,6 +199,12 @@ function validateManifest(manifest) {
     if (visualCase.motion !== undefined && typeof visualCase.motion !== "string") {
       throw new Error(`Real-model case ${visualCase.name} motion must be a string when present`);
     }
+    if (visualCase.cameraVmd !== undefined && typeof visualCase.cameraVmd !== "string") {
+      throw new Error(`Real-model case ${visualCase.name} cameraVmd must be a string when present`);
+    }
+    if (visualCase.lightVmd !== undefined && typeof visualCase.lightVmd !== "string") {
+      throw new Error(`Real-model case ${visualCase.name} lightVmd must be a string when present`);
+    }
     if (visualCase.timeSeconds !== undefined && (!Number.isFinite(visualCase.timeSeconds) || visualCase.timeSeconds < 0)) {
       throw new Error(`Real-model case ${visualCase.name} timeSeconds must be a non-negative number`);
     }
@@ -250,12 +256,30 @@ function resolveCases(cases, dataRoot) {
         continue;
       }
     }
+    let cameraVmdPath;
+    if (visualCase.cameraVmd !== undefined) {
+      cameraVmdPath = resolveAssetPath(dataRoot, visualCase.cameraVmd);
+      if (cameraVmdPath === undefined || !existsSync(cameraVmdPath)) {
+        console.warn(`Skipping real-model case ${visualCase.name}: camera VMD not found: ${visualCase.cameraVmd}`);
+        continue;
+      }
+    }
+    let lightVmdPath;
+    if (visualCase.lightVmd !== undefined) {
+      lightVmdPath = resolveAssetPath(dataRoot, visualCase.lightVmd);
+      if (lightVmdPath === undefined || !existsSync(lightVmdPath)) {
+        console.warn(`Skipping real-model case ${visualCase.name}: light VMD not found: ${visualCase.lightVmd}`);
+        continue;
+      }
+    }
 
     resolvedCases.push({
       ...visualCase,
       timeSeconds: visualCase.timeSeconds ?? 0,
       modelUrl: dataUrlFor(dataRoot, modelPath),
-      motionUrl: motionPath === undefined ? undefined : dataUrlFor(dataRoot, motionPath)
+      motionUrl: motionPath === undefined ? undefined : dataUrlFor(dataRoot, motionPath),
+      cameraVmdUrl: cameraVmdPath === undefined ? undefined : dataUrlFor(dataRoot, cameraVmdPath),
+      lightVmdUrl: lightVmdPath === undefined ? undefined : dataUrlFor(dataRoot, lightVmdPath)
     });
   }
   return resolvedCases;
@@ -358,11 +382,14 @@ function rendererHtml() {
       import * as THREE from "three";
       import {
         ThreeMmdLoader,
+        applyMmdCameraStateToThreeCamera,
+        applyMmdLightStateToThreeDirectionalLight,
         applyMmdSelfShadowStateToThreeDirectionalLight,
         configureMmdSelfShadowDirectionalLight,
-        fitMmdSelfShadowDirectionalLightToBox
+        fitMmdSelfShadowDirectionalLightToBox,
+        syncMmdSpecularDirection
       } from "/dist/three/index.js";
-      import { sampleMmdSelfShadowTrack } from "/dist/runtime/index.js";
+      import { sampleMmdCameraTrack, sampleMmdLightTrack, sampleMmdSelfShadowTrack } from "/dist/runtime/index.js";
 
       globalThis.renderRealModelVisualRegressionCases = async config => {
         const renderer = new THREE.WebGLRenderer({
@@ -398,6 +425,7 @@ function rendererHtml() {
           scene.add(model.root);
 
           let selfShadowState;
+          let vmdCamera;
           if (visualCase.motionUrl !== undefined) {
             const { animation } = await loader.loadAnimation(await fetchBytes(visualCase.motionUrl));
             model.setAnimation(animation);
@@ -410,6 +438,19 @@ function rendererHtml() {
           }
 
           model.root.updateMatrixWorld(true);
+          if (visualCase.lightVmdUrl !== undefined) {
+            const { animation } = await loader.loadAnimation(await fetchBytes(visualCase.lightVmdUrl));
+            const lightState = sampleMmdLightTrack(
+              animation.lightFrames,
+              (visualCase.lightVmdTimeSeconds ?? visualCase.timeSeconds) * 30
+            );
+            applyMmdLightStateToThreeDirectionalLight(scene.userData.mmdDirectionalLight, lightState, {
+              target: model.root.position
+            });
+            if (model.mesh?.material) {
+              syncMmdSpecularDirection(model.mesh.material, scene.userData.mmdDirectionalLight);
+            }
+          }
           if (config.render.shadow?.enabled === true) {
             const shadowBounds = new THREE.Box3().setFromObject(model.root);
             fitMmdSelfShadowDirectionalLightToBox(scene.userData.mmdDirectionalLight, shadowBounds, {
@@ -425,7 +466,20 @@ function rendererHtml() {
               shadowIntensity: config.render.shadow.directional?.intensity ?? 0.55
             });
           }
-          const camera = createCamera(visualCase.camera, model.root, config.render.resolution);
+          if (visualCase.cameraVmdUrl !== undefined) {
+            const { animation } = await loader.loadAnimation(await fetchBytes(visualCase.cameraVmdUrl));
+            const cameraState = sampleMmdCameraTrack(
+              animation.cameraFrames,
+              (visualCase.cameraVmdTimeSeconds ?? visualCase.timeSeconds) * 30
+            );
+            if (cameraState !== undefined) {
+              vmdCamera = new THREE.PerspectiveCamera(45, config.render.resolution.width / config.render.resolution.height, 0.1, 1000);
+              applyMmdCameraStateToThreeCamera(vmdCamera, cameraState, {
+                aspect: config.render.resolution.width / config.render.resolution.height
+              });
+            }
+          }
+          const camera = vmdCamera ?? createCamera(visualCase.camera, model.root, config.render.resolution);
           renderer.render(scene, camera);
           await new Promise(requestAnimationFrame);
           results.push({

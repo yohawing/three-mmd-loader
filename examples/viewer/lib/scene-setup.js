@@ -15,6 +15,15 @@ const viewerSelfShadowQuality = {
   normalBias: 0.006
 };
 
+// Supersampling (SSAA): render at a higher internal resolution then downsample.
+// MSAA (antialias: true) alone leaves the hard inverted-hull edge aliased on fine
+// MMD geometry (hair/fingers), so the black outline looks thin/broken vs real MMD's
+// smooth anti-aliased line. SSAA renders the edge at sub-pixel detail so the
+// downsample reproduces MMD's soft continuous edge. Cost scales with the square of
+// this factor; the cap bounds the drawing buffer on hi-DPI displays. Tunable.
+const viewerSupersample = 2;
+const viewerMaxPixelRatio = 3;
+
 export function setupScene() {
   if (!(dom.canvas instanceof HTMLCanvasElement)) throw new Error("Viewer canvas is missing");
   state.renderer = new THREE.WebGLRenderer({
@@ -22,7 +31,9 @@ export function setupScene() {
     canvas: dom.canvas,
     logarithmicDepthBuffer: true
   });
-  state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  state.renderer.setPixelRatio(
+    Math.min(Math.min(window.devicePixelRatio, 2) * viewerSupersample, viewerMaxPixelRatio)
+  );
   state.renderer.setClearColor(0xffffff, 1);
   state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled;
   state.renderer.shadowMap.type = THREE.PCFShadowMap;

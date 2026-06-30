@@ -4,9 +4,11 @@ import * as mmdAnimWasm from "../parser/wasm/generated/mmd_anim_wasm.js";
 import { FallbackCore, initCore } from "../parser/wasm/index.js";
 import { parseVpd } from "../parser/index.js";
 import type { MmdAnimation, MmdCore, MmdPose, VmdBoneTrack } from "../parser/model/modelTypes.js";
-import { MmdAnimRuntime, DefaultMmdRuntime } from "../runtime/index.js";
+import { MmdAnimRuntime, DefaultMmdRuntime, createMmdAnimWasmCameraTrack, createMmdAnimWasmLightTrack } from "../runtime/index.js";
 import type {
   MmdAnimRuntimeWasmModule,
+  MmdAnimRuntimeWasmCameraTrack,
+  MmdAnimRuntimeWasmLightTrack,
   DefaultMmdRuntimeOptions,
   MmdFrameState,
   MmdRuntime,
@@ -45,6 +47,7 @@ import type { ModelSourceDiagnostic, ModelSourceFetch } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "./geometry.js";
 export { applyMmdCameraStateToThreeCamera } from "./camera.js";
+export { applyMmdLightStateToThreeDirectionalLight } from "./light.js";
 export { disposeMmdModel } from "./dispose.js";
 export type { DisposeMmdModelOptions } from "./dispose.js";
 export {
@@ -116,6 +119,9 @@ export {
 export type {
   ApplyMmdCameraStateOptions
 } from "./camera.js";
+export type {
+  ApplyMmdLightStateOptions
+} from "./light.js";
 export type {
   ApplyMmdSelfShadowStateOptions,
   ConfigureMmdSelfShadowDirectionalLightOptions,
@@ -223,6 +229,8 @@ export interface ThreeMmdLoadModelOptions {
    * the next breaking release.
    */
   readonly renderOrderProxies?: boolean;
+  /** Splits large sparse morph geometry into per-material body meshes. Defaults to true. */
+  readonly morphSplit?: boolean;
   /** Applies frustum culling to the base mesh and generated proxy meshes. */
   readonly frustumCulled?: boolean;
   /** Overrides fetch for this string ModelSource load. */
@@ -353,7 +361,9 @@ export class ThreeMmdLoader {
       let parsedModelDisposed = false;
       try {
         profile?.mark("parsed");
-        const mesh = createThreeMmdMesh(modelData);
+        const mesh = createThreeMmdMesh(modelData, {
+          morphSplit: options.morphSplit ?? true
+        });
         parsedModel.dispose?.();
         parsedModelDisposed = true;
         profile?.mark("mesh");
@@ -563,6 +573,48 @@ export class ThreeMmdLoader {
     };
   }
 
+  createCameraTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmCameraTrack | undefined {
+    if (!this.implicitMmdAnimWasmReady || this.useExplicitCore) {
+      return undefined;
+    }
+    const mmdAnimation = unwrapThreeMmdAnimation(animation);
+    if (
+      mmdAnimation.bytes.byteLength === 0 ||
+      (mmdAnimation.metadata.counts.cameras === 0 && mmdAnimation.cameraFrames.length === 0)
+    ) {
+      return undefined;
+    }
+    try {
+      return createMmdAnimWasmCameraTrack(
+        mmdAnimWasm as unknown as Pick<MmdAnimRuntimeWasmModule, "WasmVmdCameraTrack">,
+        mmdAnimation.bytes
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  createLightTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmLightTrack | undefined {
+    if (!this.implicitMmdAnimWasmReady || this.useExplicitCore) {
+      return undefined;
+    }
+    const mmdAnimation = unwrapThreeMmdAnimation(animation);
+    if (
+      mmdAnimation.bytes.byteLength === 0 ||
+      (mmdAnimation.metadata.counts.lights === 0 && mmdAnimation.lightFrames.length === 0)
+    ) {
+      return undefined;
+    }
+    try {
+      return createMmdAnimWasmLightTrack(
+        mmdAnimWasm as unknown as Pick<MmdAnimRuntimeWasmModule, "WasmVmdLightTrack">,
+        mmdAnimation.bytes
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
   async loadPose(source: ModelSource): Promise<ThreeMmdPose> {
     validateModelSource(source, "loadPose");
     const bytes = await readModelSourceBytes(source, { fetch: this.options.fetch });
@@ -706,6 +758,9 @@ function validateLoadModelOptions(options: ThreeMmdLoadModelOptions): void {
   if (options.fetch !== undefined && typeof options.fetch !== "function") {
     throw new TypeError("ThreeMmdLoader.loadModel fetch must be a function");
   }
+  if (options.morphSplit !== undefined && typeof options.morphSplit !== "boolean") {
+    throw new TypeError("ThreeMmdLoader.loadModel morphSplit must be a boolean");
+  }
 }
 
 function warnDeprecatedApi(name: string, replacement: string): void {
@@ -831,8 +886,11 @@ function formatDiagnosticReason(error: unknown): string {
   return String(error);
 }
 
-function createThreeMmdMesh(modelData: LoaderMmdModelData): THREE.SkinnedMesh {
-  const splitGeometries = shouldCreateMorphSplitMeshes(modelData)
+function createThreeMmdMesh(
+  modelData: LoaderMmdModelData,
+  options: { readonly morphSplit: boolean }
+): THREE.SkinnedMesh {
+  const splitGeometries = options.morphSplit && shouldCreateMorphSplitMeshes(modelData)
     ? createThreeMorphSplitGeometries(modelData.geometry, modelData.materials, modelData.morphs)
     : [];
   const geometry = createThreeBufferGeometry(

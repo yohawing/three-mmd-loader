@@ -28,14 +28,34 @@ export class WasmMmdModel {
     static withMorphs(parent_indices: Int32Array, rest_positions_xyz: Float32Array, inverse_bind_matrices: Float32Array, transform_orders: Int32Array, ik_solvers_u32: Uint32Array, ik_solver_limit_angles: Float32Array, ik_links_u32: Uint32Array, ik_link_limits: Float32Array, append_u32: Uint32Array, append_ratios: Float32Array, morph_count: number, bone_morph_u32: Uint32Array, bone_morph_f32: Float32Array, group_morph_u32: Uint32Array, group_morph_ratios: Float32Array): WasmMmdModel;
 }
 
+export class WasmMmdRuntimeBatchEvaluation {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    boneCount(): number;
+    copyMorphWeights(out: Float32Array): boolean;
+    copyWorldMatrices(out: Float32Array): boolean;
+    frameCount(): number;
+    morphCount(): number;
+    morphWeightF32Len(): number;
+    morphWeights(): Float32Array;
+    morphWeightsView(): Float32Array;
+    worldMatrices(): Float32Array;
+    worldMatricesView(): Float32Array;
+    worldMatrixF32Len(): number;
+}
+
 export class WasmMmdRuntimeInstance {
     free(): void;
     [Symbol.dispose](): void;
+    clipFrameBatchMorphWeightF32Len(frame_count: number): number;
+    clipFrameBatchWorldMatrixF32Len(frame_count: number): number;
     copyIkEnabled(out: Uint8Array): boolean;
     copyMorphWeights(out: Float32Array): boolean;
     copySkinningMatrices(out: Float32Array): boolean;
     copyWorldMatrices(out: Float32Array): boolean;
     evaluateClipFrame(clip: WasmMmdClip, frame: number): void;
+    evaluateClipFrameBatch(clip: WasmMmdClip, start_frame: number, frame_step: number, frame_count: number, worker_count: number): WasmMmdRuntimeBatchEvaluation;
     evaluateClipFrameWithIkOptions(clip: WasmMmdClip, frame: number, ik_tolerance: number, ik_max_iterations_cap: number): void;
     evaluateRestPose(): void;
     static forModel(model: WasmMmdModel): WasmMmdRuntimeInstance;
@@ -158,6 +178,13 @@ export class WasmPmxGeometry {
      */
     skinWeights(): Float32Array;
     /**
+     * Copy of derived per-vertex skinning mode names.
+     *
+     * Values match the C ABI `mmd_runtime_parse_pmx_skinning_modes_json`
+     * payload: `bdef1`, `bdef2`, `bdef4`, `sdef`, or `qdef`.
+     */
+    skinningModes(): string[];
+    /**
      * Copy of UV coordinates (vertex_count×2, UV, f32).
      */
     uvs(): Float32Array;
@@ -187,6 +214,53 @@ export class WasmPmxParsedModel {
      * Parse PMX bytes once and expose split non-geometry JSON plus geometry DTO getters.
      */
     static parse(data: Uint8Array): WasmPmxParsedModel;
+}
+
+export class WasmVmdCameraTrack {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    frameCount(): number;
+    static fromVmdBytes(data: Uint8Array): WasmVmdCameraTrack;
+    /**
+     * Sample the camera track into a caller-owned `Float32Array`.
+     *
+     * Writes `[distance, position.x, position.y, position.z, rotation.x,
+     * rotation.y, rotation.z, fov, perspective]` to `out`.
+     * `perspective` is encoded as `1.0` when enabled, otherwise `0.0`.
+     * Returns `false` when `out.length < 9`.
+     */
+    sample(frame: number, out: Float32Array): boolean;
+}
+
+export class WasmVmdLightTrack {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    frameCount(): number;
+    static fromVmdBytes(data: Uint8Array): WasmVmdLightTrack;
+    /**
+     * Sample the light track into a caller-owned `Float32Array`.
+     *
+     * Writes `[color.r, color.g, color.b, direction.x, direction.y,
+     * direction.z]` to `out`. Returns `false` when `out.length < 6`.
+     */
+    sample(frame: number, out: Float32Array): boolean;
+}
+
+export class WasmVmdSelfShadowTrack {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    frameCount(): number;
+    static fromVmdBytes(data: Uint8Array): WasmVmdSelfShadowTrack;
+    /**
+     * Sample the self-shadow track into a caller-owned `Float32Array`.
+     *
+     * Writes `[mode, distance]` to `out`. `mode` is encoded as a float.
+     * Returns `false` when `out.length < 2`.
+     */
+    sample(frame: number, out: Float32Array): boolean;
 }
 
 export function exportAccessoryManifestBytes(data: Uint8Array, file_name?: string | null): Uint8Array;
@@ -224,6 +298,34 @@ export function parsePmxModelJson(data: Uint8Array): string;
  */
 export function parsePmxModelNonGeometryJson(data: Uint8Array): string;
 
+export function parseVmdAnimationJson(data: Uint8Array): string;
+
+/**
+ * Sample VMD camera bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[distance, position.x, position.y, position.z, rotation.x,
+ * rotation.y, rotation.z, fov, perspective]` to `out`.
+ * `perspective` is encoded as `1.0` when enabled, otherwise `0.0`.
+ * Returns `false` when `out.length < 9`.
+ */
+export function sampleVmdCamera(data: Uint8Array, frame: number, out: Float32Array): boolean;
+
+/**
+ * Sample VMD light bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[color.r, color.g, color.b, direction.x, direction.y,
+ * direction.z]` to `out`. Returns `false` when `out.length < 6`.
+ */
+export function sampleVmdLight(data: Uint8Array, frame: number, out: Float32Array): boolean;
+
+/**
+ * Sample VMD self-shadow bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[mode, distance]` to `out`. `mode` is encoded as a float.
+ * Returns `false` when `out.length < 2`.
+ */
+export function sampleVmdSelfShadow(data: Uint8Array, frame: number, out: Float32Array): boolean;
+
 export function wasm_wrapper_version(): number;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -232,9 +334,13 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_wasmmmdclip_free: (a: number, b: number) => void;
     readonly __wbg_wasmmmdmodel_free: (a: number, b: number) => void;
+    readonly __wbg_wasmmmdruntimebatchevaluation_free: (a: number, b: number) => void;
     readonly __wbg_wasmmmdruntimeinstance_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxgeometry_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxparsedmodel_free: (a: number, b: number) => void;
+    readonly __wbg_wasmvmdcameratrack_free: (a: number, b: number) => void;
+    readonly __wbg_wasmvmdlighttrack_free: (a: number, b: number) => void;
+    readonly __wbg_wasmvmdselfshadowtrack_free: (a: number, b: number) => void;
     readonly exportAccessoryManifestBytes: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly exportMmdFormatBytes: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly exportPmdModelBytes: (a: number, b: number) => [number, number, number, number];
@@ -249,6 +355,10 @@ export interface InitOutput {
     readonly parseMmdFormatJson: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly parsePmxModelJson: (a: number, b: number) => [number, number, number, number];
     readonly parsePmxModelNonGeometryJson: (a: number, b: number) => [number, number, number, number];
+    readonly parseVmdAnimationJson: (a: number, b: number) => [number, number, number, number];
+    readonly sampleVmdCamera: (a: number, b: number, c: number, d: any) => [number, number, number];
+    readonly sampleVmdLight: (a: number, b: number, c: number, d: any) => [number, number, number];
+    readonly sampleVmdSelfShadow: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly wasm_wrapper_version: () => number;
     readonly wasmmmdclip_firstFrame: (a: number) => number;
     readonly wasmmmdclip_fromVmdBytesForModel: (a: number, b: number, c: number) => [number, number, number];
@@ -267,11 +377,25 @@ export interface InitOutput {
     readonly wasmmmdmodel_withIk: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
     readonly wasmmmdmodel_withInverseBind: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly wasmmmdmodel_withMorphs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number, r: number, s: number, t: number, u: number, v: number, w: number, x: number, y: number, z: number, a1: number, b1: number, c1: number) => [number, number, number];
+    readonly wasmmmdruntimebatchevaluation_boneCount: (a: number) => number;
+    readonly wasmmmdruntimebatchevaluation_copyMorphWeights: (a: number, b: number, c: number, d: any) => number;
+    readonly wasmmmdruntimebatchevaluation_copyWorldMatrices: (a: number, b: number, c: number, d: any) => number;
+    readonly wasmmmdruntimebatchevaluation_frameCount: (a: number) => number;
+    readonly wasmmmdruntimebatchevaluation_morphCount: (a: number) => number;
+    readonly wasmmmdruntimebatchevaluation_morphWeightF32Len: (a: number) => number;
+    readonly wasmmmdruntimebatchevaluation_morphWeights: (a: number) => [number, number];
+    readonly wasmmmdruntimebatchevaluation_morphWeightsView: (a: number) => any;
+    readonly wasmmmdruntimebatchevaluation_worldMatrices: (a: number) => [number, number];
+    readonly wasmmmdruntimebatchevaluation_worldMatricesView: (a: number) => any;
+    readonly wasmmmdruntimebatchevaluation_worldMatrixF32Len: (a: number) => number;
+    readonly wasmmmdruntimeinstance_clipFrameBatchMorphWeightF32Len: (a: number, b: number) => number;
+    readonly wasmmmdruntimeinstance_clipFrameBatchWorldMatrixF32Len: (a: number, b: number) => number;
     readonly wasmmmdruntimeinstance_copyIkEnabled: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_copyMorphWeights: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_copySkinningMatrices: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_copyWorldMatrices: (a: number, b: number, c: number, d: any) => number;
     readonly wasmmmdruntimeinstance_evaluateClipFrame: (a: number, b: number, c: number) => void;
+    readonly wasmmmdruntimeinstance_evaluateClipFrameBatch: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly wasmmmdruntimeinstance_evaluateClipFrameWithIkOptions: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly wasmmmdruntimeinstance_evaluateRestPose: (a: number) => void;
     readonly wasmmmdruntimeinstance_forModel: (a: number) => number;
@@ -308,16 +432,27 @@ export interface InitOutput {
     readonly wasmpmxgeometry_sdefRw1: (a: number) => [number, number];
     readonly wasmpmxgeometry_skinIndices: (a: number) => [number, number];
     readonly wasmpmxgeometry_skinWeights: (a: number) => [number, number];
+    readonly wasmpmxgeometry_skinningModes: (a: number) => [number, number];
     readonly wasmpmxgeometry_uvs: (a: number) => [number, number];
     readonly wasmpmxgeometry_vertexCount: (a: number) => number;
     readonly wasmpmxparsedmodel_geometry: (a: number) => number;
     readonly wasmpmxparsedmodel_nonGeometryJson: (a: number) => [number, number, number, number];
     readonly wasmpmxparsedmodel_parse: (a: number, b: number) => [number, number, number];
+    readonly wasmvmdcameratrack_frameCount: (a: number) => number;
+    readonly wasmvmdcameratrack_fromVmdBytes: (a: number, b: number) => [number, number, number];
+    readonly wasmvmdcameratrack_sample: (a: number, b: number, c: any) => [number, number, number];
+    readonly wasmvmdlighttrack_frameCount: (a: number) => number;
+    readonly wasmvmdlighttrack_fromVmdBytes: (a: number, b: number) => [number, number, number];
+    readonly wasmvmdlighttrack_sample: (a: number, b: number, c: any) => [number, number, number];
+    readonly wasmvmdselfshadowtrack_frameCount: (a: number) => number;
+    readonly wasmvmdselfshadowtrack_fromVmdBytes: (a: number, b: number) => [number, number, number];
+    readonly wasmvmdselfshadowtrack_sample: (a: number, b: number, c: any) => [number, number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __externref_drop_slice: (a: number, b: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

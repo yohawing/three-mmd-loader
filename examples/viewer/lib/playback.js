@@ -3,8 +3,9 @@ import { hasActiveAudioSource, isAudioElement } from "./audio-loading.js";
 import { applyCameraMotion } from "./camera-loading.js";
 import { updateColliderHelpers, updateDebugFps } from "./debug.js";
 import { currentMmdFrame, currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
-import { sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
+import { sampleMmdAnimWasmLightTrackInto, sampleMmdLightTrackInto, sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
 import {
+  applyMmdLightStateToThreeDirectionalLight,
   applyMmdSelfShadowStateToThreeDirectionalLight,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
@@ -59,24 +60,24 @@ export function evaluateRuntime(options) {
 }
 
 function applyLightMotion() {
-  const lightState = state.currentModel?.runtime?.lightState?.();
+  const cameraMotion = state.currentCameraMotion;
+  const lightState = cameraMotion?.lightTrack
+    ? sampleMmdAnimWasmLightTrackInto(
+        cameraMotion.lightTrack,
+        currentMmdFrame(),
+        state.lightSampleScratch,
+        state.lightStateScratch
+      )
+    : cameraMotion?.lightFrames?.length > 0
+      ? sampleMmdLightTrackInto(cameraMotion.lightFrames, currentMmdFrame(), state.lightStateScratch)
+      : state.currentModel?.runtime?.lightState?.();
   if (!lightState || !state.keyLight) {
     return;
   }
-  state.keyLight.color.setRGB(lightState.color[0], lightState.color[1], lightState.color[2]);
-  const direction = state.lightDirectionScratch.set(
-    lightState.direction[0],
-    lightState.direction[1],
-    -lightState.direction[2]
-  );
-  if (direction.lengthSq() > 0) {
-    direction.normalize();
-    const target = state.controls.target;
-    state.keyLight.target.position.copy(target);
-    state.keyLight.position.copy(target).addScaledVector(direction, 5);
-    state.keyLight.target.updateMatrixWorld();
-    state.keyLight.updateMatrixWorld();
-  }
+  applyMmdLightStateToThreeDirectionalLight(state.keyLight, lightState, {
+    target: state.controls.target,
+    directionScratch: state.lightDirectionScratch
+  });
   if (state.currentModel?.mesh?.material) {
     syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
   }

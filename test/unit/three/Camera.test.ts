@@ -105,12 +105,12 @@ describe("Three.js MMD camera helpers", () => {
 
     const direction = new THREE.Vector3();
     camera.getWorldDirection(direction);
-    expect(direction.x).toBeCloseTo(-0.479425539);
-    expect(direction.y).toBeCloseTo(0.217117401);
+    expect(direction.x).toBeCloseTo(-0.46452136);
+    expect(direction.y).toBeCloseTo(0.247403959);
     expect(direction.z).toBeCloseTo(-0.850300645);
   });
 
-  it("aims positive-distance camera frames back at the MMD camera center", () => {
+  it("preserves signed positive-distance camera frames", () => {
     const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 1000);
     applyMmdCameraStateToThreeCamera(camera, {
       ...createCameraState(),
@@ -125,7 +125,7 @@ describe("Three.js MMD camera helpers", () => {
     camera.getWorldDirection(direction);
     expect(direction.x).toBeCloseTo(0);
     expect(direction.y).toBeCloseTo(0);
-    expect(direction.z).toBeCloseTo(1);
+    expect(direction.z).toBeCloseTo(-1);
   });
 
   it("adds an outside parent object world position to the MMD camera center", () => {
@@ -153,8 +153,8 @@ describe("Three.js MMD camera helpers", () => {
 
     const direction = new THREE.Vector3();
     camera.getWorldDirection(direction);
-    expect(direction.x).toBeCloseTo(-0.479425539);
-    expect(direction.y).toBeCloseTo(0.217117401);
+    expect(direction.x).toBeCloseTo(-0.46452136);
+    expect(direction.y).toBeCloseTo(0.247403959);
     expect(direction.z).toBeCloseTo(-0.850300645);
   });
 
@@ -202,24 +202,24 @@ describe("Three.js MMD camera helpers", () => {
     camera.updateMatrixWorld(true);
 
     expect(projectMmdPoint(camera, [0, 0, 0])).toMatchCloseVector([
-      -0.821613359,
-      -0.425233888,
-      0.997160353
+      -0.75351107,
+      -0.651950778,
+      0.997236486
     ]);
     expect(projectMmdPoint(camera, [1, 0, 0])).toMatchCloseVector([
-      -0.467049299,
-      -0.345788556,
-      0.997011946
+      -0.440856701,
+      -0.533854902,
+      0.997068655
     ]);
     expect(projectMmdPoint(camera, [0, 1, 0])).toMatchCloseVector([
-      -0.807165836,
-      -0.044689532,
-      0.997317531
+      -0.808846781,
+      -0.271128775,
+      0.997363272
     ]);
     expect(projectMmdPoint(camera, [0, 0, 1])).toMatchCloseVector([
-      -0.581605594,
-      -0.506379023,
-      0.997468887
+      -0.49412264,
+      -0.652554299,
+      0.997529653
     ]);
   });
 });

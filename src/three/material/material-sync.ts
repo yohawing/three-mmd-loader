@@ -7,6 +7,7 @@ import { mmdMaterialDepthWrite, mmdMaterialSuppressesColorAtAlpha } from "./mate
 type ShaderUniformMap = Record<string, { value: unknown }>;
 const mmdDirectionalLightPositionScratch = new THREE.Vector3();
 const mmdDirectionalLightTargetScratch = new THREE.Vector3();
+const mmdDirectionalLightNormalizedScratch = new THREE.Vector3();
 
 export function syncMmdMaterialStates(
   materials: THREE.Material | THREE.Material[],
@@ -64,6 +65,14 @@ export function syncMmdMaterialStates(
         clampColor(state.ambient[0]),
         clampColor(state.ambient[1]),
         clampColor(state.ambient[2])
+      );
+    }
+    const diffuseColorUniform = materialFactorShader?.uniforms?.mmdDiffuseColor?.value;
+    if (diffuseColorUniform instanceof THREE.Color) {
+      diffuseColorUniform.setRGB(
+        clampColor(state.diffuse[0]),
+        clampColor(state.diffuse[1]),
+        clampColor(state.diffuse[2])
       );
     }
     const textureFactor = materialFactorShader?.uniforms?.mmdTextureFactor?.value;
@@ -124,7 +133,7 @@ export function syncMmdSpecularDirection(
 ): void {
   const materialList = Array.isArray(material) ? material : [material];
   const directionSource = mmdLightDirectionSource(lightDirection);
-  const directColor: [number, number, number] =
+  const directColor =
     lightDirection instanceof THREE.Light
       ? [
           lightDirection.visible ? lightDirection.color.r * lightDirection.intensity : 0,
@@ -133,11 +142,14 @@ export function syncMmdSpecularDirection(
         ]
       : [1, 1, 1];
   materialList.forEach((mat) => {
-    const normalizedDirection = directionSource.clone().normalize();
-    mat.userData.mmdLightUniformState = {
-      direction: normalizedDirection.toArray(),
-      directColor
-    };
+    const normalizedDirection = mmdDirectionalLightNormalizedScratch.copy(directionSource).normalize();
+    const lightUniformState = getMmdLightUniformState(mat);
+    lightUniformState.direction[0] = normalizedDirection.x;
+    lightUniformState.direction[1] = normalizedDirection.y;
+    lightUniformState.direction[2] = normalizedDirection.z;
+    lightUniformState.directColor[0] = directColor[0];
+    lightUniformState.directColor[1] = directColor[1];
+    lightUniformState.directColor[2] = directColor[2];
     const shader = mat.userData.mmdMaterialFactorShader as
       | { uniforms?: ShaderUniformMap }
       | undefined;
@@ -149,7 +161,42 @@ export function syncMmdSpecularDirection(
     if (color instanceof THREE.Color) {
       color.setRGB(directColor[0], directColor[1], directColor[2]);
     }
+    const mmdLightColor = shader?.uniforms?.mmdLightColor?.value;
+    if (mmdLightColor instanceof THREE.Color) {
+      mmdLightColor.setRGB(directColor[0], directColor[1], directColor[2]);
+    }
+    const toonCoordinateOffsetUniform = shader?.uniforms?.mmdToonCoordinateOffset;
+    if (toonCoordinateOffsetUniform && typeof toonCoordinateOffsetUniform.value === "number") {
+      toonCoordinateOffsetUniform.value = 0.5;
+    }
   });
+}
+
+function getMmdLightUniformState(material: THREE.Material): {
+  direction: [number, number, number];
+  directColor: [number, number, number];
+} {
+  const existing = material.userData.mmdLightUniformState as
+    | { direction?: unknown; directColor?: unknown }
+    | undefined;
+  if (
+    existing &&
+    Array.isArray(existing.direction) &&
+    existing.direction.length >= 3 &&
+    Array.isArray(existing.directColor) &&
+    existing.directColor.length >= 3
+  ) {
+    return existing as {
+      direction: [number, number, number];
+      directColor: [number, number, number];
+    };
+  }
+  const created = {
+    direction: [0, 0, 1] as [number, number, number],
+    directColor: [1, 1, 1] as [number, number, number]
+  };
+  material.userData.mmdLightUniformState = created;
+  return created;
 }
 
 function mmdLightDirectionSource(lightDirection: THREE.Vector3 | THREE.DirectionalLight): THREE.Vector3 {

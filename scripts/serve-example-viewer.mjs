@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { basename, dirname, extname, join, normalize, relative, resolve, sep } from "node:path";
@@ -10,7 +10,7 @@ const localFixturesPath = resolve(root, "test", "fixtures", "fixtures.local.json
 const localFixtureInventory = loadLocalFixtureInventory();
 const dataRoot = resolveDataRoot();
 const dataRoute = "/__mmd_data/";
-const mmdAnimWasmRoot = resolveMmdAnimWasmRoot();
+const mmdAnimWasmRoot = prepareMmdAnimWasmRoot();
 const mmdAnimWasmRoute = "/__mmd_anim_wasm/";
 const localAssetsRoute = "/__mmd_assets__/fixtures-local.json";
 const port = Number.parseInt(process.env.PORT ?? "3939", 10);
@@ -193,12 +193,27 @@ function resolveMmdAnimWasmRoot() {
   if (process.env.MMD_ANIM_WASM_ROOT !== undefined) {
     return resolve(process.env.MMD_ANIM_WASM_ROOT);
   }
-  const distRoot = resolve(root, "dist", "parser", "wasm", "generated");
-  if (existsSync(join(distRoot, "mmd_anim_wasm.js"))) {
-    return distRoot;
+  const localMmdAnimPkg = resolve(root, "..", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
+  return existsSync(join(localMmdAnimPkg, "mmd_anim_wasm.js")) ? localMmdAnimPkg : undefined;
+}
+
+function prepareMmdAnimWasmRoot() {
+  const sourceRoot = resolveMmdAnimWasmRoot();
+  if (sourceRoot === undefined) {
+    return undefined;
   }
-  const submoduleRoot = resolve(root, "native", "third_party", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
-  return existsSync(join(submoduleRoot, "mmd_anim_wasm.js")) ? submoduleRoot : undefined;
+  const viewerWasmRoot = resolve(viewerRoot, ".mmd-anim-wasm");
+  rmSync(viewerWasmRoot, { recursive: true, force: true });
+  mkdirSync(viewerWasmRoot, { recursive: true });
+  for (const file of ["mmd_anim_wasm.js", "mmd_anim_wasm_bg.wasm", "mmd_anim_wasm.d.ts"]) {
+    const source = join(sourceRoot, file);
+    if (existsSync(source)) {
+      copyFileSync(source, join(viewerWasmRoot, file));
+    } else if (file !== "mmd_anim_wasm.d.ts") {
+      throw new Error(`Required mmd-anim WASM artifact missing: ${source}`);
+    }
+  }
+  return viewerWasmRoot;
 }
 
 function createLocalAssetManifest() {

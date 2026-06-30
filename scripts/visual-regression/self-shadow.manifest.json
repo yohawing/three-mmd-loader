@@ -208,7 +208,7 @@
       "name": "body-self-shadow-black-toon-does-not-collapse-to-black",
       "shadowOn": "mmd-self-shadow-body-black-toon-on",
       "shadowOff": "mmd-self-shadow-body-black-toon-caster-off",
-      "receiverRoi": { "x": 124, "y": 322, "width": 210, "height": 20 },
+      "receiverRoi": { "x": 160, "y": 320, "width": 80, "height": 16 },
       "thresholds": {
         "receiverMeanDarkeningMin": 0.001,
         "receiverP95DarkeningMin": 0.005,

@@ -159,6 +159,60 @@ describe("MmdAnimRuntime", () => {
     });
   });
 
+  it("samples camera state through the mmd-anim wasm camera track without JSON allocation", () => {
+    const wasm = createFakeWasmModule();
+    const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]));
+    const animation = createMmdAnimation(createLikelyVmdBytes());
+    animation.metadata.counts.cameras = 1;
+    animation.cameraFrames.push({
+      frame: 0,
+      distance: 10,
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      fov: 45,
+      perspective: true
+    });
+
+    runtime.setAnimation(animation, createSingleBoneMesh());
+    runtime.evaluate(0.5);
+    const cameraState = runtime.cameraState();
+
+    expect(wasm.createdCameraTracks).toHaveLength(1);
+    expect(wasm.createdCameraTracks[0]?.sampledFrames).toEqual([15]);
+    expect(cameraState?.distance).toBeCloseTo(-40.25);
+    expect(cameraState?.position).toEqual([-0.25, 6, 1.625]);
+    expect(cameraState?.rotation[0]).toBeCloseTo(-0.1);
+    expect(cameraState?.rotation[1]).toBeCloseTo(-0.1);
+    expect(cameraState?.rotation[2]).toBeCloseTo(0.75);
+    expect(cameraState?.fov).toBeCloseTo(47.5);
+    expect(cameraState?.perspective).toBe(true);
+  });
+
+  it("samples light state through the mmd-anim wasm light track", () => {
+    const wasm = createFakeWasmModule();
+    const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]));
+    const animation = createMmdAnimation(createLikelyVmdBytes());
+    animation.metadata.counts.lights = 1;
+    animation.lightFrames.push({
+      frame: 0,
+      color: [0, 0, 1],
+      direction: [1, 0, 0]
+    });
+
+    runtime.setAnimation(animation, createSingleBoneMesh());
+    runtime.evaluate(0.5);
+    const lightState = runtime.lightState();
+
+    expect(wasm.createdLightTracks).toHaveLength(1);
+    expect(wasm.createdLightTracks[0]?.sampledFrames).toEqual([15]);
+    expect(lightState?.color[0]).toBeCloseTo(0.125);
+    expect(lightState?.color[1]).toBeCloseTo(0.5);
+    expect(lightState?.color[2]).toBeCloseTo(0.875);
+    expect(lightState?.direction[0]).toBeCloseTo(-0.25);
+    expect(lightState?.direction[1]).toBeCloseTo(-0.5);
+    expect(lightState?.direction[2]).toBeCloseTo(0.75);
+  });
+
   it("evaluates parsed model tracks when animation bytes are not VMD bytes", () => {
     const wasm = createFakeWasmModule();
     const runtime = MmdAnimRuntime.fromPmxBytes(wasm, new Uint8Array([0xaa]));
@@ -231,6 +285,8 @@ interface FakeWasmModule extends MmdAnimRuntimeWasmModule {
   readonly createdModels: FakeWasmModel[];
   readonly createdClips: FakeWasmClip[];
   readonly createdRuntimes: FakeWasmRuntimeInstance[];
+  readonly createdCameraTracks: FakeWasmCameraTrack[];
+  readonly createdLightTracks: FakeWasmLightTrack[];
 }
 
 class FakeWasmModel {
@@ -254,6 +310,50 @@ class FakeWasmClip {
 
   constructor(_model: FakeWasmModel, bytes: Uint8Array) {
     this.vmdBytes = Array.from(bytes);
+  }
+}
+
+class FakeWasmCameraTrack {
+  readonly vmdBytes: number[];
+  readonly sampledFrames: number[] = [];
+
+  constructor(bytes: Uint8Array) {
+    this.vmdBytes = Array.from(bytes);
+  }
+
+  frameCount(): number {
+    return 2;
+  }
+
+  sample(frame: number, out: Float32Array): boolean {
+    this.sampledFrames.push(frame);
+    if (out.length < 9) {
+      return false;
+    }
+    out.set([-40.25, -0.25, 6, 1.625, -0.1, -0.1, 0.75, 47.5, 1]);
+    return true;
+  }
+}
+
+class FakeWasmLightTrack {
+  readonly vmdBytes: number[];
+  readonly sampledFrames: number[] = [];
+
+  constructor(bytes: Uint8Array) {
+    this.vmdBytes = Array.from(bytes);
+  }
+
+  frameCount(): number {
+    return 2;
+  }
+
+  sample(frame: number, out: Float32Array): boolean {
+    this.sampledFrames.push(frame);
+    if (out.length < 6) {
+      return false;
+    }
+    out.set([0.125, 0.5, 0.875, -0.25, -0.5, 0.75]);
+    return true;
   }
 }
 
@@ -331,10 +431,14 @@ function createFakeWasmModule(): FakeWasmModule {
   const createdModels: FakeWasmModel[] = [];
   const createdClips: FakeWasmClip[] = [];
   const createdRuntimes: FakeWasmRuntimeInstance[] = [];
+  const createdCameraTracks: FakeWasmCameraTrack[] = [];
+  const createdLightTracks: FakeWasmLightTrack[] = [];
   return {
     createdModels,
     createdClips,
     createdRuntimes,
+    createdCameraTracks,
+    createdLightTracks,
     parseMmdFormatJson(data, fileName) {
       return JSON.stringify({
         kind: "vmd",
@@ -365,6 +469,20 @@ function createFakeWasmModule(): FakeWasmModule {
         return clip;
       }
     },
+    WasmVmdCameraTrack: {
+      fromVmdBytes(bytes) {
+        const track = new FakeWasmCameraTrack(bytes);
+        createdCameraTracks.push(track);
+        return track;
+      }
+    },
+    WasmVmdLightTrack: {
+      fromVmdBytes(bytes) {
+        const track = new FakeWasmLightTrack(bytes);
+        createdLightTracks.push(track);
+        return track;
+      }
+    },
     WasmMmdRuntimeInstance: class extends FakeWasmRuntimeInstance {
       constructor(model: FakeWasmModel, morphCount: number) {
         super(model, morphCount);
@@ -372,6 +490,13 @@ function createFakeWasmModule(): FakeWasmModule {
       }
     }
   };
+}
+
+function createLikelyVmdBytes(): Uint8Array {
+  const bytes = new TextEncoder().encode("Vocaloid Motion Data 0002");
+  const padded = new Uint8Array(30);
+  padded.set(bytes.subarray(0, padded.length));
+  return padded;
 }
 
 function createMmdAnimation(bytes: Uint8Array): MmdAnimation {

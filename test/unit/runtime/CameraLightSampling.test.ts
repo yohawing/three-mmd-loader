@@ -8,10 +8,10 @@ describe("camera and light runtime sampling", () => {
     const camera = sampleMmdCameraTrack(createCameraFrames(), 5);
 
     expect(camera).toEqual({
-      distance: 15,
-      position: [5, 10, 15],
-      rotation: [0.5, 1, 1.5],
-      fov: 52.5,
+      distance: 11.25,
+      position: [1.25, 2.5, 3.75],
+      rotation: [0.125, 0.25, 0.375],
+      fov: 46.875,
       perspective: true
     });
   });
@@ -29,10 +29,10 @@ describe("camera and light runtime sampling", () => {
 
     expect(camera).toBe(target);
     expect(target).toEqual({
-      distance: 15,
-      position: [5, 10, 15],
-      rotation: [0.5, 1, 1.5],
-      fov: 52.5,
+      distance: 11.25,
+      position: [1.25, 2.5, 3.75],
+      rotation: [0.125, 0.25, 0.375],
+      fov: 46.875,
       perspective: true
     });
   });
@@ -59,8 +59,8 @@ describe("camera and light runtime sampling", () => {
     sampleMmdCameraTrackInto(frames, 15, target, hint);
 
     expect(hint.index).toBe(1);
-    expect(target.distance).toBe(25);
-    expect(target.position).toEqual([15, 30, 45]);
+    expect(target.distance).toBe(21.25);
+    expect(target.position).toEqual([11.25, 22.5, 33.75]);
   });
 
   it("holds one-frame camera cuts until the next MMD frame", () => {
@@ -134,6 +134,7 @@ describe("camera and light runtime sampling", () => {
 
 function createCameraFrames(): VmdCameraFrame[] {
   const linearCurve: [number, number, number, number] = [0, 0, 1, 1];
+  const easeOutCurve: [number, number, number, number] = [0, 0, 1, 0];
   return [
     {
       frame: 0,
@@ -159,12 +160,12 @@ function createCameraFrames(): VmdCameraFrame[] {
       fov: 60,
       perspective: false,
       interpolation: {
-        distance: linearCurve,
-        positionX: linearCurve,
-        positionY: linearCurve,
-        positionZ: linearCurve,
-        rotation: linearCurve,
-        fov: linearCurve
+        distance: easeOutCurve,
+        positionX: easeOutCurve,
+        positionY: easeOutCurve,
+        positionZ: easeOutCurve,
+        rotation: easeOutCurve,
+        fov: easeOutCurve
       }
     }
   ];

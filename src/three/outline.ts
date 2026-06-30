@@ -48,9 +48,6 @@ export function createMmdOutlineMeshes(
   ) {
     return [];
   }
-  const sourceMaterials = Array.isArray(model.mesh.material)
-    ? model.mesh.material
-    : [model.mesh.material];
   const hasVertexEdgeScale = !!model.mesh.geometry.getAttribute("mmdEdgeScale");
   const renderOrder = mmdMaterialRenderOrderEntries(model);
   const renderOrderByMaterial = mmdMaterialRenderOrderMap(renderOrder);
@@ -71,7 +68,6 @@ export function createMmdOutlineMeshes(
     const outlineMaterial = createMmdOutlineMaterial(
       materialInfo,
       materialIndex,
-      sourceMaterials,
       options,
       hasVertexEdgeScale
     );
@@ -100,21 +96,19 @@ export function createMmdOutlineMeshes(
 function createMmdOutlineMaterial(
   material: MaterialInfo,
   index: number,
-  sourceMaterials: readonly THREE.Material[],
   options: MmdOutlineOptions,
   hasVertexEdgeScale: boolean
 ): THREE.MeshBasicMaterial {
-  const sourceMaterial = sourceMaterials[index] ?? sourceMaterials[0];
-  const sourceMap =
-    sourceMaterial && "map" in sourceMaterial && sourceMaterial.map instanceof THREE.Texture
-      ? sourceMaterial.map
-      : undefined;
   const hasEdge = material.flags.edge && material.edgeSize > 0;
   const suppressColor = mmdMaterialSuppressesColorAtAlpha(material.diffuse[3], material.flags);
   const visible = !suppressColor && (hasEdge || !!options.forceFallback);
-  // The outline reuses the body map so Three.js MeshBasicMaterial can discard
-  // cutout pixels through its built-in alphatest_fragment shader chunk.
-  const alphaTest = sourceMap ? mmdOutlineAlphaTest(sourceMaterial, options) : 0;
+  // Edge x texture-alpha policy (shading-note §12): real MMD 9.32 draws a FLAT,
+  // texture-independent inverted-hull edge (saba mmd_edge.frag never samples the body
+  // texture). Verified against the golden: the solid black edge shows THROUGH a cutout
+  // body's holes (mmd-texture-alpha-used-uv-cutout 0.043 -> 0.013) and keeps the rim on a
+  // soft-alpha body (mmd-tga-regular-hair-alpha-opaque). Binding/clipping the edge by the
+  // body map (the old babylon-style behaviour) both eroded soft rims and let the white
+  // background show through cutout holes, so the edge never binds the body map.
   const parameters: THREE.MeshBasicMaterialParameters = {
     color: hasEdge
       ? new THREE.Color(material.edgeColor[0], material.edgeColor[1], material.edgeColor[2])
@@ -128,11 +122,8 @@ function createMmdOutlineMaterial(
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 1,
     toneMapped: false,
-    alphaTest
+    alphaTest: 0
   };
-  if (sourceMap) {
-    parameters.map = sourceMap;
-  }
   const outlineMaterial = new THREE.MeshBasicMaterial(parameters);
   const outlineWidth = mmdOutlineExpansionWidth(material, options, hasEdge);
   attachMmdPmxOutlineExpansion(outlineMaterial, outlineWidth, hasVertexEdgeScale);
@@ -145,25 +136,11 @@ function createMmdOutlineMaterial(
     shaderApplied: true,
     vertexEdgeScale: hasVertexEdgeScale,
     sourceMaterialIndex: index,
-    alphaCutout: !!sourceMap,
-    alphaTest,
+    alphaCutout: false,
+    alphaTest: 0,
     fallback: !hasEdge && !!options.forceFallback
   };
   return outlineMaterial;
-}
-
-function mmdOutlineAlphaTest(
-  sourceMaterial: THREE.Material | undefined,
-  options: MmdOutlineOptions
-): number {
-  if (
-    sourceMaterial &&
-    "alphaTest" in sourceMaterial &&
-    typeof sourceMaterial.alphaTest === "number"
-  ) {
-    return sourceMaterial.alphaTest > 0 ? sourceMaterial.alphaTest : (options.alphaTest ?? 0.01);
-  }
-  return options.alphaTest ?? 0.01;
 }
 
 export function attachMmdOutlineExpansion(
@@ -292,7 +269,14 @@ function updateMmdOutlineViewport(
   currentViewport: THREE.Vector4
 ): void {
   renderer.getCurrentViewport(currentViewport);
-  target.set(currentViewport.z, currentViewport.w);
+  // getCurrentViewport reports DEVICE pixels (pixelRatio applied). The edge
+  // expansion divides by this viewport, so a raw device viewport makes the edge
+  // width scale as 1/pixelRatio -- i.e. the outline gets thinner on hi-DPI
+  // displays or under supersampling, and thicker at pixelRatio 1. Real MMD's edge
+  // is a fixed screen-space width independent of render resolution, so normalise
+  // to CSS pixels here to keep the outline thickness DPI/supersample invariant.
+  const pixelRatio = renderer.getPixelRatio?.() || 1;
+  target.set(currentViewport.z / pixelRatio, currentViewport.w / pixelRatio);
 }
 
 function mmdOutlineExpansionWidth(

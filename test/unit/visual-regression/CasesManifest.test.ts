@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const realModelsManifestPath = path.resolve("scripts/visual-regression/real-models.manifest.json");
 const generatedPmxManifestPath = path.resolve("scripts/visual-regression/generated-pmx.manifest.json");
+const cameraLightVmdManifestPath = path.resolve("scripts/visual-regression/camera-light-vmd.manifest.json");
 const selfShadowManifestPath = path.resolve("scripts/visual-regression/self-shadow.manifest.json");
 const packageJsonPath = path.resolve("package.json");
 
@@ -39,6 +40,19 @@ function readRealModelsManifest(): RealModelVisualManifest {
 
 function readGeneratedPmxManifest(): RealModelVisualManifest {
   return JSON.parse(readFileSync(generatedPmxManifestPath, "utf8")) as RealModelVisualManifest;
+}
+
+interface CameraLightVmdVisualCase extends RealModelVisualCase {
+  cameraVmd?: string;
+  lightVmd?: string;
+}
+
+interface CameraLightVmdVisualManifest extends Omit<RealModelVisualManifest, "cases"> {
+  cases: CameraLightVmdVisualCase[];
+}
+
+function readCameraLightVmdManifest(): CameraLightVmdVisualManifest {
+  return JSON.parse(readFileSync(cameraLightVmdManifestPath, "utf8")) as CameraLightVmdVisualManifest;
 }
 
 interface SelfShadowVisualManifest extends RealModelVisualManifest {
@@ -152,7 +166,7 @@ describe("generated PMX visual regression manifest", () => {
     const manifest = readGeneratedPmxManifest();
     const names = new Set<string>();
 
-    expect(manifest.render.resolution).toEqual({ width: 512, height: 512 });
+    expect(manifest.render.resolution).toEqual({ width: 1024, height: 1024 });
     expect(manifest.render.pixelRatio).toBe(1);
     for (const visualCase of manifest.cases) {
       expect(visualCase.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
@@ -222,8 +236,36 @@ describe("self-shadow visual regression manifest", () => {
   });
 });
 
+describe("camera/light VMD visual regression manifest", () => {
+  it("defines portable rendered-output coverage for camera and light VMD tracks", () => {
+    const manifest = readCameraLightVmdManifest();
+    const names = manifest.cases.map(visualCase => visualCase.name);
+
+    expect(manifest.note).toContain("camera/light VMD");
+    expect(manifest.render.resolution).toEqual({ width: 1024, height: 1024 });
+    expect(manifest.render.pixelRatio).toBe(1);
+    expect(names).toEqual(["camera-near", "camera-far", "light-front", "light-side"]);
+    for (const visualCase of manifest.cases) {
+      expect(visualCase.model).toMatch(/^test\/fixtures\/generated\/visual\/.+\.pmx$/);
+      expect(path.isAbsolute(visualCase.model)).toBe(false);
+      expect(visualCase.motion).toBeUndefined();
+      expect(visualCase.timeSeconds ?? 0).toBe(0);
+      expect(visualCase.camera).not.toBe("front-fit");
+      expect(visualCase.thresholds?.mean).toBeGreaterThan(0);
+      expect(visualCase.thresholds?.p95).toBeGreaterThan(visualCase.thresholds?.mean ?? 0);
+    }
+    expect(manifest.cases.filter(visualCase => visualCase.cameraVmd !== undefined)).toHaveLength(2);
+    const lightCases = manifest.cases.filter(visualCase => visualCase.lightVmd !== undefined);
+    expect(lightCases).toHaveLength(2);
+    for (const visualCase of lightCases) {
+      expect(visualCase.model).toBe("test/fixtures/generated/visual/mmd-toon-ramp-lit-box.pmx");
+      expect(visualCase.thresholds?.p95).toBeCloseTo(0.22);
+    }
+  });
+});
+
 describe("visual regression smoke scripts", () => {
-  it("exposes generated PMX and self-shadow smoke entrypoints", () => {
+  it("exposes generated PMX, camera/light VMD, and self-shadow smoke entrypoints", () => {
     const scripts = readPackageJson().scripts;
 
     expect(scripts["visual:smoke"]).toBeUndefined();
@@ -231,6 +273,8 @@ describe("visual regression smoke scripts", () => {
     expect(scripts["visual:report"]).toBeUndefined();
     expect(scripts["visual:report:flip"]).toBeUndefined();
     expect(scripts["visual:smoke:generated-pmx"]).toContain("visual:report:generated-pmx");
+    expect(scripts["visual:smoke:camera-light-vmd"]).toContain("visual:report:camera-light-vmd");
+    expect(scripts["render:visual:camera-light-vmd"]).toContain("camera-light-vmd.manifest.json");
     expect(scripts["visual:smoke:generated-pmx:flip"]).toContain("visual:report:generated-pmx:flip");
     expect(scripts["visual:report:generated-pmx:flip"]).toContain("--metric flip");
     expect(scripts["visual:smoke:self-shadow"]).toContain("visual:report:self-shadow");

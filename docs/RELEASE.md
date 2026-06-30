@@ -43,6 +43,22 @@ npm run build:mmd-anim
 npm run build
 ```
 
+If this release changes rendering (material/outline/shader) or the mmd-anim
+parser/runtime/WASM artifacts, also refresh and review the generated-PMX visual
+baselines before tagging. They are **not** CI-gated (GPU/platform-specific
+output, see [DEVELOPMENT.md](./DEVELOPMENT.md) → Visual Regression Scripts) and
+can otherwise ship stale:
+
+```bash
+npm run visual:smoke:generated-pmx
+npm run visual:smoke:camera-light-vmd
+npm run visual:smoke:self-shadow
+# if rendering legitimately changed: regenerate, review the PNG diffs, re-run
+# the smoke until green, then commit the reviewed baselines
+npm run render:visual:generated-pmx:baseline
+npm run render:visual:camera-light-vmd:baseline
+```
+
 ## 3. Commit
 
 Commit the version, changelog, and any release-prep changes before tagging.

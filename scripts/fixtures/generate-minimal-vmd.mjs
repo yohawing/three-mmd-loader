@@ -23,6 +23,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SKINNING_VMD_OUTPUT_DIR = "test/fixtures/generated/skinning";
+const CAMERA_LIGHT_VMD_OUTPUT_DIR = "test/fixtures/generated/camera-light-vmd";
 
 // Linear bezier interpolation control points (standard MMD defaults).
 // Layout: 4 axes (X,Y,Z,R) × 16 bytes each, interleaved in a specific pattern.
@@ -33,6 +34,12 @@ const LINEAR_INTERPOLATION = new Uint8Array([
   20, 20, 107, 107,  20, 20, 107, 107,  20, 20, 107, 107,  20, 20, 107, 107,
   20, 20, 107, 107,  20, 20, 107, 107,  20, 20, 107, 107,  20, 20, 107, 107,
 ]);
+const LINEAR_CAMERA_INTERPOLATION = new Uint8Array([
+  20, 20, 20, 20, 20, 20,
+  20, 20, 20, 20, 20, 20,
+  107, 107, 107, 107, 107, 107,
+  107, 107, 107, 107, 107, 107
+]);
 
 /**
  * Generates a VMD with one keyframe per entry in `boneFrames`.
@@ -41,10 +48,18 @@ const LINEAR_INTERPOLATION = new Uint8Array([
  * @param {string} [options.modelName]  Model name written into VMD header (cosmetic).
  * @param {Array<{boneName: string, frame?: number, quaternion: [number,number,number,number]}>} options.boneFrames
  *   Each entry sets one bone keyframe. quaternion = [x, y, z, w].
+ * @param {Array<{frame?: number, distance: number, position: [number,number,number], rotation: [number,number,number], fov: number, perspective?: boolean}>} [options.cameraFrames]
+ * @param {Array<{frame?: number, color: [number,number,number], direction: [number,number,number]}>} [options.lightFrames]
  * @param {Array<{frame?: number, mode: number, distance: number}>} [options.selfShadowFrames]
  * @returns {Uint8Array}
  */
-export function generateMinimalVmd({ modelName = "", boneFrames = [], selfShadowFrames = [] }) {
+export function generateMinimalVmd({
+  modelName = "",
+  boneFrames = [],
+  cameraFrames = [],
+  lightFrames = [],
+  selfShadowFrames = []
+}) {
   const out = [];
 
   const u32 = (v) => {
@@ -86,8 +101,26 @@ export function generateMinimalVmd({ modelName = "", boneFrames = [], selfShadow
     out.push(...LINEAR_INTERPOLATION);             // interpolation (64 bytes)
   }
 
-  // Remaining sections: morph, camera, light
-  i32(0); i32(0); i32(0);
+  // Morph frames
+  i32(0);
+  // Camera frames
+  i32(cameraFrames.length);
+  for (const frame of cameraFrames) {
+    u32(frame.frame ?? 0);
+    f32(frame.distance);
+    f32(frame.position[0]); f32(frame.position[1]); f32(frame.position[2]);
+    f32(frame.rotation[0]); f32(frame.rotation[1]); f32(frame.rotation[2]);
+    out.push(...LINEAR_CAMERA_INTERPOLATION);
+    u32(frame.fov);
+    out.push(frame.perspective === false ? 1 : 0);
+  }
+  // Light frames
+  i32(lightFrames.length);
+  for (const frame of lightFrames) {
+    u32(frame.frame ?? 0);
+    f32(frame.color[0]); f32(frame.color[1]); f32(frame.color[2]);
+    f32(frame.direction[0]); f32(frame.direction[1]); f32(frame.direction[2]);
+  }
   i32(selfShadowFrames.length);
   for (const frame of selfShadowFrames) {
     u32(frame.frame ?? 0);
@@ -162,6 +195,55 @@ export const SELF_SHADOW_VMD_CASES = {
   }
 };
 
+export const CAMERA_LIGHT_VMD_CASES = {
+  "camera-near": {
+    modelName: "cameraNear",
+    cameraFrames: [
+      {
+        frame: 0,
+        distance: -3.2,
+        position: [0.06, 0.6, 0],
+        rotation: [0, 0, 0],
+        fov: 24,
+        perspective: true
+      }
+    ]
+  },
+  "camera-far": {
+    modelName: "cameraFar",
+    cameraFrames: [
+      {
+        frame: 0,
+        distance: -6.2,
+        position: [0.06, 0.6, 0],
+        rotation: [0, 0, 0],
+        fov: 24,
+        perspective: true
+      }
+    ]
+  },
+  "light-front": {
+    modelName: "lightFront",
+    lightFrames: [
+      {
+        frame: 0,
+        color: [0.82, 0.82, 0.82],
+        direction: [0.45, -0.9, -0.55]
+      }
+    ]
+  },
+  "light-side": {
+    modelName: "lightSide",
+    lightFrames: [
+      {
+        frame: 0,
+        color: [0.82, 0.82, 0.82],
+        direction: [-1.0, -0.35, 0.0]
+      }
+    ]
+  }
+};
+
 export function skinningVmdCaseIds() {
   return Object.keys(SKINNING_VMOD_CASES);
 }
@@ -182,22 +264,42 @@ export function generateSelfShadowVmd(caseId) {
   return generateMinimalVmd(spec);
 }
 
+export function cameraLightVmdCaseIds() {
+  return Object.keys(CAMERA_LIGHT_VMD_CASES);
+}
+
+export function generateCameraLightVmd(caseId) {
+  const spec = CAMERA_LIGHT_VMD_CASES[caseId];
+  if (!spec) throw new Error(`Unknown camera/light VMD case: ${caseId}`);
+  return generateMinimalVmd(spec);
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // CLI
 // ──────────────────────────────────────────────────────────────────────────────
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const outputArgIndex = process.argv.indexOf("--output-dir");
+  const writeSelfShadow = process.argv.includes("--all-self-shadow");
+  const writeCameraLight = process.argv.includes("--camera-light");
   const outputDir =
     outputArgIndex >= 0 && process.argv[outputArgIndex + 1] !== undefined
       ? process.argv[outputArgIndex + 1]
-      : SKINNING_VMD_OUTPUT_DIR;
-
-  const writeSelfShadow = process.argv.includes("--all-self-shadow");
-  const caseIds = writeSelfShadow ? selfShadowVmdCaseIds() : skinningVmdCaseIds();
+      : writeCameraLight
+        ? CAMERA_LIGHT_VMD_OUTPUT_DIR
+        : SKINNING_VMD_OUTPUT_DIR;
+  const caseIds = writeCameraLight
+    ? cameraLightVmdCaseIds()
+    : writeSelfShadow
+      ? selfShadowVmdCaseIds()
+      : skinningVmdCaseIds();
   for (const caseId of caseIds) {
     const outputPath = resolve(outputDir, `${caseId}.vmd`);
-    const bytes = writeSelfShadow ? generateSelfShadowVmd(caseId) : generateSkinningVmd(caseId);
+    const bytes = writeCameraLight
+      ? generateCameraLightVmd(caseId)
+      : writeSelfShadow
+        ? generateSelfShadowVmd(caseId)
+        : generateSkinningVmd(caseId);
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, bytes);
     console.log(`wrote ${bytes.byteLength} bytes to ${outputPath}`);

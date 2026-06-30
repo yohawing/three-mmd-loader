@@ -20,6 +20,7 @@ test-results/visual/report.json
 test-results/visual/real-models/
 .cache/
 tmp/
+examples/viewer/.mmd-anim-wasm/
 *.tsbuildinfo
 *.log
 *.tmp

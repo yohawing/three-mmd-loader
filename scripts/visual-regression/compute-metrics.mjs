@@ -21,6 +21,11 @@ const profiles = {
     root: path.join(visualRoot, "generated-pmx"),
     caseKey: "name"
   },
+  "camera-light-vmd": {
+    manifestPath: path.join(__dirname, "camera-light-vmd.manifest.json"),
+    root: path.join(visualRoot, "camera-light-vmd"),
+    caseKey: "name"
+  },
   skinning: {
     manifestPath: path.join(__dirname, "skinning.manifest.json"),
     root: path.join(visualRoot, "skinning"),

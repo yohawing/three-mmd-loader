@@ -64,6 +64,46 @@ describe("MMD outline meshes", () => {
     expect(shader.vertexShader).not.toContain("transformed += normal * mmdOutlineWidth");
   });
 
+  it("normalises the outline viewport to CSS pixels so edge width is DPI/supersample invariant", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
+    geometry.setIndex([0, 1, 2]);
+    geometry.addGroup(0, 3, 0);
+
+    const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshToonMaterial());
+    const bone = new THREE.Bone();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const [outline] = createMmdOutlineMeshes({
+      mesh,
+      materials: [createMaterialInfo({ edgeSize: 0.6 })]
+    });
+    const material = outline?.material as THREE.Material | undefined;
+    const shader = {
+      uniforms: {},
+      vertexShader: ["#include <common>", "#include <project_vertex>"].join("\n"),
+      fragmentShader: ""
+    };
+
+    // Device viewport 1024x1024 at devicePixelRatio 2 must report the 512x512 CSS
+    // viewport so the edge keeps a fixed screen-space width under hi-DPI / SSAA.
+    material?.onBeforeCompile(shader, createRendererMock(1024, 1024, 2));
+    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(512, 512));
+    outline.onBeforeRender(
+      createRendererMock(2048, 2048, 2),
+      {} as THREE.Scene,
+      {} as THREE.Camera,
+      geometry,
+      material ?? new THREE.Material(),
+      null
+    );
+    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(1024, 1024));
+  });
+
   it("preserves PMX outline edge size without a library clamp", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
@@ -241,7 +281,7 @@ describe("MMD outline meshes", () => {
     ]);
   });
 
-  it("carries source texture alpha testing onto outline materials without scanning texture pixels", () => {
+  it("draws a flat texture-independent edge even for alphaTest (cutout) source materials", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
@@ -251,10 +291,11 @@ describe("MMD outline meshes", () => {
     geometry.addGroup(0, 3, 0);
 
     const sourceMap = new THREE.Texture();
-    const mesh = new THREE.SkinnedMesh(
-      geometry,
-      new THREE.MeshToonMaterial({ map: sourceMap, alphaTest: 0.35 })
-    );
+    const sourceMaterial = new THREE.MeshToonMaterial({ map: sourceMap, alphaTest: 0.35 });
+    // Real MMD draws a flat, texture-independent edge (shading-note §12); even a cutout
+    // (alphaTest) body's edge is a solid silhouette that shows through the body's holes.
+    sourceMaterial.userData.mmdMaterial = { transparencyMode: "alphaTest" };
+    const mesh = new THREE.SkinnedMesh(geometry, sourceMaterial);
     const bone = new THREE.Bone();
     mesh.add(bone);
     mesh.bind(new THREE.Skeleton([bone]));
@@ -264,26 +305,49 @@ describe("MMD outline meshes", () => {
       materials: [createMaterialInfo({ edgeSize: 0.6 })]
     });
     const material = outline?.material as THREE.MeshBasicMaterial | undefined;
-    const shader = {
-      uniforms: {},
-      vertexShader: ["#include <common>", "#include <project_vertex>"].join("\n"),
-      fragmentShader: "#include <alphatest_fragment>"
-    };
 
-    material?.onBeforeCompile(shader, createRendererMock(512, 512));
+    expect(material?.map ?? null).toBeNull();
+    expect(material?.alphaTest).toBe(0);
+    expect(material?.userData.mmdOutlineMaterial.alphaCutout).toBe(false);
+  });
 
-    expect(material?.map).toBe(sourceMap);
-    expect(material?.alphaTest).toBe(0.35);
-    expect(material?.userData.mmdOutlineMaterial.alphaCutout).toBe(true);
-    expect(shader.fragmentShader).toContain("#include <alphatest_fragment>");
+  it("keeps a flat silhouette edge for alphaBlend materials instead of clipping by texture", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
+    geometry.setIndex([0, 1, 2]);
+    geometry.addGroup(0, 3, 0);
+
+    const sourceMap = new THREE.Texture();
+    const sourceMaterial = new THREE.MeshToonMaterial({ map: sourceMap, alphaTest: 0.01 });
+    sourceMaterial.userData.mmdMaterial = { transparencyMode: "alphaBlend" };
+    const mesh = new THREE.SkinnedMesh(geometry, sourceMaterial);
+    const bone = new THREE.Bone();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+
+    const [outline] = createMmdOutlineMeshes({
+      mesh,
+      materials: [createMaterialInfo({ edgeSize: 0.6 })]
+    });
+    const material = outline?.material as THREE.MeshBasicMaterial | undefined;
+
+    // alphaBlend source: the edge must NOT bind the body map (which would tint the rim)
+    // nor clip the silhouette by texture alpha.
+    expect(material?.map ?? null).toBeNull();
+    expect(material?.alphaTest).toBe(0);
+    expect(material?.userData.mmdOutlineMaterial.alphaCutout).toBe(false);
   });
 });
 
-function createRendererMock(width: number, height: number): THREE.WebGLRenderer {
+function createRendererMock(width: number, height: number, pixelRatio?: number): THREE.WebGLRenderer {
   return {
     getCurrentViewport(target: THREE.Vector4) {
       return target.set(0, 0, width, height);
-    }
+    },
+    ...(pixelRatio === undefined ? {} : { getPixelRatio: () => pixelRatio })
   } as THREE.WebGLRenderer;
 }
 

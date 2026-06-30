@@ -387,6 +387,113 @@ export class WasmMmdModel {
 }
 if (Symbol.dispose) WasmMmdModel.prototype[Symbol.dispose] = WasmMmdModel.prototype.free;
 
+export class WasmMmdRuntimeBatchEvaluation {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmMmdRuntimeBatchEvaluation.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmMmdRuntimeBatchEvaluationFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmMmdRuntimeBatchEvaluationFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmmmdruntimebatchevaluation_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    boneCount() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_boneCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {Float32Array} out
+     * @returns {boolean}
+     */
+    copyMorphWeights(out) {
+        var ptr0 = passArrayF32ToWasm0(out, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmmmdruntimebatchevaluation_copyMorphWeights(this.__wbg_ptr, ptr0, len0, out);
+        return ret !== 0;
+    }
+    /**
+     * @param {Float32Array} out
+     * @returns {boolean}
+     */
+    copyWorldMatrices(out) {
+        var ptr0 = passArrayF32ToWasm0(out, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmmmdruntimebatchevaluation_copyWorldMatrices(this.__wbg_ptr, ptr0, len0, out);
+        return ret !== 0;
+    }
+    /**
+     * @returns {number}
+     */
+    frameCount() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_frameCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    morphCount() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_morphCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    morphWeightF32Len() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_morphWeightF32Len(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {Float32Array}
+     */
+    morphWeights() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_morphWeights(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {Float32Array}
+     */
+    morphWeightsView() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_morphWeightsView(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {Float32Array}
+     */
+    worldMatrices() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_worldMatrices(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {Float32Array}
+     */
+    worldMatricesView() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_worldMatricesView(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    worldMatrixF32Len() {
+        const ret = wasm.wasmmmdruntimebatchevaluation_worldMatrixF32Len(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+}
+if (Symbol.dispose) WasmMmdRuntimeBatchEvaluation.prototype[Symbol.dispose] = WasmMmdRuntimeBatchEvaluation.prototype.free;
+
 export class WasmMmdRuntimeInstance {
     static __wrap(ptr) {
         const obj = Object.create(WasmMmdRuntimeInstance.prototype);
@@ -403,6 +510,22 @@ export class WasmMmdRuntimeInstance {
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmmmdruntimeinstance_free(ptr, 0);
+    }
+    /**
+     * @param {number} frame_count
+     * @returns {number}
+     */
+    clipFrameBatchMorphWeightF32Len(frame_count) {
+        const ret = wasm.wasmmmdruntimeinstance_clipFrameBatchMorphWeightF32Len(this.__wbg_ptr, frame_count);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} frame_count
+     * @returns {number}
+     */
+    clipFrameBatchWorldMatrixF32Len(frame_count) {
+        const ret = wasm.wasmmmdruntimeinstance_clipFrameBatchWorldMatrixF32Len(this.__wbg_ptr, frame_count);
+        return ret >>> 0;
     }
     /**
      * @param {Uint8Array} out
@@ -451,6 +574,22 @@ export class WasmMmdRuntimeInstance {
     evaluateClipFrame(clip, frame) {
         _assertClass(clip, WasmMmdClip);
         wasm.wasmmmdruntimeinstance_evaluateClipFrame(this.__wbg_ptr, clip.__wbg_ptr, frame);
+    }
+    /**
+     * @param {WasmMmdClip} clip
+     * @param {number} start_frame
+     * @param {number} frame_step
+     * @param {number} frame_count
+     * @param {number} worker_count
+     * @returns {WasmMmdRuntimeBatchEvaluation}
+     */
+    evaluateClipFrameBatch(clip, start_frame, frame_step, frame_count, worker_count) {
+        _assertClass(clip, WasmMmdClip);
+        const ret = wasm.wasmmmdruntimeinstance_evaluateClipFrameBatch(this.__wbg_ptr, clip.__wbg_ptr, start_frame, frame_step, frame_count, worker_count);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmMmdRuntimeBatchEvaluation.__wrap(ret[0]);
     }
     /**
      * @param {WasmMmdClip} clip
@@ -820,6 +959,19 @@ export class WasmPmxGeometry {
         return v1;
     }
     /**
+     * Copy of derived per-vertex skinning mode names.
+     *
+     * Values match the C ABI `mmd_runtime_parse_pmx_skinning_modes_json`
+     * payload: `bdef1`, `bdef2`, `bdef4`, `sdef`, or `qdef`.
+     * @returns {string[]}
+     */
+    skinningModes() {
+        const ret = wasm.wasmpmxgeometry_skinningModes(this.__wbg_ptr);
+        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
      * Copy of UV coordinates (vertex_count×2, UV, f32).
      * @returns {Float32Array}
      */
@@ -909,6 +1061,176 @@ export class WasmPmxParsedModel {
     }
 }
 if (Symbol.dispose) WasmPmxParsedModel.prototype[Symbol.dispose] = WasmPmxParsedModel.prototype.free;
+
+export class WasmVmdCameraTrack {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmVmdCameraTrack.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmVmdCameraTrackFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmVmdCameraTrackFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmvmdcameratrack_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    frameCount() {
+        const ret = wasm.wasmvmdcameratrack_frameCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {Uint8Array} data
+     * @returns {WasmVmdCameraTrack}
+     */
+    static fromVmdBytes(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvmdcameratrack_fromVmdBytes(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmVmdCameraTrack.__wrap(ret[0]);
+    }
+    /**
+     * Sample the camera track into a caller-owned `Float32Array`.
+     *
+     * Writes `[distance, position.x, position.y, position.z, rotation.x,
+     * rotation.y, rotation.z, fov, perspective]` to `out`.
+     * `perspective` is encoded as `1.0` when enabled, otherwise `0.0`.
+     * Returns `false` when `out.length < 9`.
+     * @param {number} frame
+     * @param {Float32Array} out
+     * @returns {boolean}
+     */
+    sample(frame, out) {
+        const ret = wasm.wasmvmdcameratrack_sample(this.__wbg_ptr, frame, out);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+}
+if (Symbol.dispose) WasmVmdCameraTrack.prototype[Symbol.dispose] = WasmVmdCameraTrack.prototype.free;
+
+export class WasmVmdLightTrack {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmVmdLightTrack.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmVmdLightTrackFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmVmdLightTrackFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmvmdlighttrack_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    frameCount() {
+        const ret = wasm.wasmvmdlighttrack_frameCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {Uint8Array} data
+     * @returns {WasmVmdLightTrack}
+     */
+    static fromVmdBytes(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvmdlighttrack_fromVmdBytes(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmVmdLightTrack.__wrap(ret[0]);
+    }
+    /**
+     * Sample the light track into a caller-owned `Float32Array`.
+     *
+     * Writes `[color.r, color.g, color.b, direction.x, direction.y,
+     * direction.z]` to `out`. Returns `false` when `out.length < 6`.
+     * @param {number} frame
+     * @param {Float32Array} out
+     * @returns {boolean}
+     */
+    sample(frame, out) {
+        const ret = wasm.wasmvmdlighttrack_sample(this.__wbg_ptr, frame, out);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+}
+if (Symbol.dispose) WasmVmdLightTrack.prototype[Symbol.dispose] = WasmVmdLightTrack.prototype.free;
+
+export class WasmVmdSelfShadowTrack {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmVmdSelfShadowTrack.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmVmdSelfShadowTrackFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmVmdSelfShadowTrackFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmvmdselfshadowtrack_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    frameCount() {
+        const ret = wasm.wasmvmdselfshadowtrack_frameCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {Uint8Array} data
+     * @returns {WasmVmdSelfShadowTrack}
+     */
+    static fromVmdBytes(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvmdselfshadowtrack_fromVmdBytes(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmVmdSelfShadowTrack.__wrap(ret[0]);
+    }
+    /**
+     * Sample the self-shadow track into a caller-owned `Float32Array`.
+     *
+     * Writes `[mode, distance]` to `out`. `mode` is encoded as a float.
+     * Returns `false` when `out.length < 2`.
+     * @param {number} frame
+     * @param {Float32Array} out
+     * @returns {boolean}
+     */
+    sample(frame, out) {
+        const ret = wasm.wasmvmdselfshadowtrack_sample(this.__wbg_ptr, frame, out);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+}
+if (Symbol.dispose) WasmVmdSelfShadowTrack.prototype[Symbol.dispose] = WasmVmdSelfShadowTrack.prototype.free;
 
 /**
  * @param {Uint8Array} data
@@ -1197,6 +1519,93 @@ export function parsePmxModelNonGeometryJson(data) {
 }
 
 /**
+ * @param {Uint8Array} data
+ * @returns {string}
+ */
+export function parseVmdAnimationJson(data) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.parseVmdAnimationJson(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Sample VMD camera bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[distance, position.x, position.y, position.z, rotation.x,
+ * rotation.y, rotation.z, fov, perspective]` to `out`.
+ * `perspective` is encoded as `1.0` when enabled, otherwise `0.0`.
+ * Returns `false` when `out.length < 9`.
+ * @param {Uint8Array} data
+ * @param {number} frame
+ * @param {Float32Array} out
+ * @returns {boolean}
+ */
+export function sampleVmdCamera(data, frame, out) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.sampleVmdCamera(ptr0, len0, frame, out);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
+}
+
+/**
+ * Sample VMD light bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[color.r, color.g, color.b, direction.x, direction.y,
+ * direction.z]` to `out`. Returns `false` when `out.length < 6`.
+ * @param {Uint8Array} data
+ * @param {number} frame
+ * @param {Float32Array} out
+ * @returns {boolean}
+ */
+export function sampleVmdLight(data, frame, out) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.sampleVmdLight(ptr0, len0, frame, out);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
+}
+
+/**
+ * Sample VMD self-shadow bytes into a caller-owned `Float32Array`.
+ *
+ * Writes `[mode, distance]` to `out`. `mode` is encoded as a float.
+ * Returns `false` when `out.length < 2`.
+ * @param {Uint8Array} data
+ * @param {number} frame
+ * @param {Float32Array} out
+ * @returns {boolean}
+ */
+export function sampleVmdSelfShadow(data, frame, out) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.sampleVmdSelfShadow(ptr0, len0, frame, out);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
+}
+
+/**
  * @returns {number}
  */
 export function wasm_wrapper_version() {
@@ -1211,6 +1620,13 @@ function __wbg_get_imports() {
         },
         __wbg___wbindgen_throw_1506f2235d1bdba0: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
+        },
+        __wbg_length_7abca14930109c1c: function(arg0) {
+            const ret = arg0.length;
+            return ret;
+        },
+        __wbg_set_index_2ae12f863484ce58: function(arg0, arg1, arg2) {
+            arg0[arg1 >>> 0] = arg2;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Ref(Slice(F32)) -> NamedExternref("Float32Array")`.
@@ -1249,6 +1665,9 @@ const WasmMmdClipFinalization = (typeof FinalizationRegistry === 'undefined')
 const WasmMmdModelFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmmmdmodel_free(ptr, 1));
+const WasmMmdRuntimeBatchEvaluationFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmmmdruntimebatchevaluation_free(ptr, 1));
 const WasmMmdRuntimeInstanceFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmmmdruntimeinstance_free(ptr, 1));
@@ -1258,6 +1677,15 @@ const WasmPmxGeometryFinalization = (typeof FinalizationRegistry === 'undefined'
 const WasmPmxParsedModelFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmpmxparsedmodel_free(ptr, 1));
+const WasmVmdCameraTrackFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvmdcameratrack_free(ptr, 1));
+const WasmVmdLightTrackFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvmdlighttrack_free(ptr, 1));
+const WasmVmdSelfShadowTrackFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvmdselfshadowtrack_free(ptr, 1));
 
 function _assertClass(instance, klass) {
     if (!(instance instanceof klass)) {
@@ -1270,6 +1698,17 @@ function getArrayF32FromWasm0(ptr, len) {
     return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
 }
 
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_externrefs.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
+}
+
 function getArrayU32FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
@@ -1278,6 +1717,14 @@ function getArrayU32FromWasm0(ptr, len) {
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+}
+
+let cachedDataViewMemory0 = null;
+function getDataViewMemory0() {
+    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
+        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
+    }
+    return cachedDataViewMemory0;
 }
 
 let cachedFloat32ArrayMemory0 = null;
@@ -1410,6 +1857,7 @@ function __wbg_finalize_init(instance, module) {
     wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
+    cachedDataViewMemory0 = null;
     cachedFloat32ArrayMemory0 = null;
     cachedUint32ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;

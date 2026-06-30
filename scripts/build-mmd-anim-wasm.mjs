@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, "..");
-const crateDir = join(root, "native", "third_party", "mmd-anim", "crates", "mmd-anim-wasm");
+const sourceRoot = resolve(process.env.MMD_ANIM_SOURCE_ROOT ?? join(root, "..", "mmd-anim"));
+const crateDir = join(sourceRoot, "crates", "mmd-anim-wasm");
 const pkgDir = join(crateDir, "pkg");
 const generatedDir = join(root, "src", "parser", "wasm", "generated");
 const artifacts = [
@@ -37,11 +38,11 @@ async function main() {
   if (!existsSync(crateDir)) {
     throw new Error(
       `mmd-anim-wasm crate not found at ${crateDir}.\n` +
-      "Run: git submodule update --init native/third_party/mmd-anim"
+      "Set MMD_ANIM_SOURCE_ROOT to a local mmd-anim checkout if it is not a sibling of this repository."
     );
   }
 
-  console.log(`Building mmd-anim-wasm in ${crateDir} ...`);
+  console.log(`Building mmd-anim-wasm from ${sourceRoot} ...`);
   await spawnCommand("wasm-pack", ["build", "--target", "web", "--out-dir", "pkg"], crateDir);
   await copyArtifacts(pkgDir, generatedDir);
   console.log(`mmd-anim-wasm build complete: ${pkgDir}`);
