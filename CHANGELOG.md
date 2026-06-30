@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## [0.4.0] - 2026-06-20
+## [0.4.0] - 2026-06-30
 
 ### Added
 
@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
   directional light.
 - Add a portable camera/light VMD visual smoke profile so VMD camera and light
   tracks are verified through rendered output.
+- Add a morph-split load option so models with split morph body meshes can keep
+  the split rendering path when needed.
 
 ### Changed
 
@@ -19,6 +21,8 @@ All notable changes to this project will be documented in this file.
   `diffuse * light + ambient`, MMD default light color/direction, half-lambert
   toon response, and view-space sphere texture coordinates.
 - Update the bundled mmd-anim WASM runtime/parser artifacts to v0.1.7.
+- Route VMD camera and light sampling through the bundled mmd-anim WASM track
+  sampler while keeping caller-owned scratch buffers on playback paths.
 - Update the viewer light-motion path to use the shared VMD light helper.
 - Refresh generated-PMX visual baselines against the current MMD-compatible
   shading, alpha, and outline behavior.
@@ -36,6 +40,8 @@ All notable changes to this project will be documented in this file.
 - Match custom toon ramp sampling more closely to MMD output while preserving
   the generated PMX GoldenOracle fixture.
 - Exclude the local-only viewer deploy runbook from the npm package.
+- Reuse cached TGA blob texture decodes so materials sharing the same in-memory
+  texture source do not decode duplicate image data.
 
 ### Test
 
