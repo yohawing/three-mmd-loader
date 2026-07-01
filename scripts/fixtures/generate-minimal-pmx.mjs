@@ -24,6 +24,19 @@ const REST_POSE_CASES = {
     ],
     watchBone: "腰"
   },
+  "append-rotate-ascii": {
+    englishName: "AppendRotateAscii",
+    comment: "ASCII bone-name fixture with appendRotate metadata for runtime parity.",
+    bones: [
+      bone("center", "center", [0, 0, 0], -1),
+      bone("appendSource", "appendSource", [0, 0.8, 0], 0),
+      bone("waist", "waist", [0, 1.2, 0], 0, {
+        flags: BASE_BONE_FLAGS | 0x0100,
+        appendTransform: { parent: 1, weight: 1 }
+      })
+    ],
+    watchBone: "waist"
+  },
   "append-local": {
     englishName: "RestPoseAppendLocal",
     comment: "Rest pose fixture with local appendRotate metadata.",
@@ -59,6 +72,28 @@ const REST_POSE_CASES = {
     torsoBones: ["センター", "腰", "上半身"],
     ikLinkBone: "左足"
   },
+  "ik-chain-ascii": {
+    englishName: "RestPoseIkChainAscii",
+    comment: "ASCII bone-name fixture with an MMD-style leg IK chain for runtime parity.",
+    bones: [
+      bone("center", "center", [0, 0, 0], -1),
+      bone("waist", "waist", [0, 0.8, 0], 0),
+      bone("upperBody", "upperBody", [0, 1.4, 0], 1),
+      bone("leftLeg", "leftLeg", [0, 0.6, 0], 1),
+      bone("leftFootTip", "leftFootTip", [0, 0.1, 0], 3),
+      bone("leftLegIk", "leftLegIk", [0.45, 0.3, 0], 0, {
+        flags: BASE_BONE_FLAGS | 0x0020,
+        ik: {
+          target: 4,
+          loopCount: 8,
+          limitAngle: Math.PI,
+          links: [{ bone: 3 }]
+        }
+      })
+    ],
+    torsoBones: ["center", "waist", "upperBody"],
+    ikLinkBone: "leftLeg"
+  },
   "fixed-local-axis": {
     englishName: "RestPoseFixedLocalAxis",
     comment: "Rest pose fixture with fixedAxis and localAxis bone metadata.",
@@ -87,6 +122,44 @@ const REST_POSE_CASES = {
       bone("上半身", "upperBody", [0, 1.4, 0], 1)
     ],
     watchBone: "腰"
+  },
+  "physics-handoff-ascii": {
+    englishName: "PhysicsHandoffAscii",
+    comment: "ASCII fixture with one dynamic rigid body for runtime physics handoff parity.",
+    bones: [
+      bone("physicsRoot", "physicsRoot", [0, 0, 0], -1, { tail: [0, 0.8, 0] })
+    ],
+    geometry: singleBoneQuadGeometry(0),
+    materials: [
+      material("mat_physics_handoff", "PhysicsHandoffMaterial", {
+        diffuse: [0.65, 0.72, 0.85, 1],
+        specular: [0.08, 0.08, 0.08],
+        ambient: [0.25, 0.25, 0.28],
+        flags: 0x01,
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 0,
+        faceVertexCount: 6,
+        comment: "single-bone material for physics handoff fixture"
+      })
+    ],
+    rigidBodies: [
+      rigidBody("body_dynamic", "BodyDynamic", {
+        boneIndex: 0,
+        group: 1,
+        mask: 0xfffe,
+        shape: 0,
+        size: [0.18, 0.18, 0.18],
+        position: [0, 0.45, 0],
+        rotation: [0, 0, 0],
+        mass: 1,
+        linearDamping: 0.1,
+        angularDamping: 0.2,
+        restitution: 0.3,
+        friction: 0.4,
+        mode: 1
+      })
+    ],
+    joints: []
   }
 };
 
@@ -909,9 +982,11 @@ export function generateRestPosePmx(caseId) {
     englishComment: restCase.comment,
     bones: restCase.bones,
     morphs: false,
-    geometry: defaultGeometry(),
-    materials: [defaultMaterial()],
-    textures: []
+    geometry: restCase.geometry ?? defaultGeometry(),
+    materials: restCase.materials ?? [defaultMaterial()],
+    textures: [],
+    rigidBodies: restCase.rigidBodies,
+    joints: restCase.joints
   });
 }
 
@@ -1033,6 +1108,8 @@ function generatePmx({
   geometry,
   materials,
   textures,
+  rigidBodies = [],
+  joints = [],
   textEncoding = "utf8",
   indexSizes = defaultIndexSizes()
 }) {
@@ -1062,8 +1139,8 @@ function generatePmx({
   writeBones(writer, bones, indexSizes);
   writeMorphs(writer, morphs, indexSizes);
   writeDisplayFrames(writer, bones, morphs, indexSizes);
-  writer.i32(0);
-  writer.i32(0);
+  writeRigidBodies(writer, rigidBodies ?? [], indexSizes);
+  writeJoints(writer, joints ?? [], indexSizes);
 
   return writer.toUint8Array();
 }
@@ -2103,6 +2180,67 @@ function writeBones(writer, bones, indexSizes) {
         }
       }
     }
+  }
+}
+
+function rigidBody(name, englishName, options) {
+  return {
+    name,
+    englishName,
+    boneIndex: -1,
+    group: 0,
+    mask: 0xffff,
+    shape: 0,
+    size: [0.1, 0.1, 0.1],
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    mass: 1,
+    linearDamping: 0,
+    angularDamping: 0,
+    restitution: 0,
+    friction: 0.5,
+    mode: 1,
+    ...options
+  };
+}
+
+function writeRigidBodies(writer, rigidBodies, indexSizes) {
+  writer.i32(rigidBodies.length);
+  for (const body of rigidBodies) {
+    writer.text(body.name);
+    writer.text(body.englishName);
+    writer.index(body.boneIndex, indexSizes.bone);
+    writer.u8(body.group);
+    writer.u16(body.mask);
+    writer.u8(body.shape);
+    writer.vec3(body.size);
+    writer.vec3(body.position);
+    writer.vec3(body.rotation);
+    writer.f32(body.mass);
+    writer.f32(body.linearDamping);
+    writer.f32(body.angularDamping);
+    writer.f32(body.restitution);
+    writer.f32(body.friction);
+    writer.u8(body.mode);
+  }
+}
+
+function writeJoints(writer, joints, indexSizes) {
+  writer.i32(joints.length);
+  for (const joint of joints) {
+    writer.text(joint.name);
+    writer.text(joint.englishName);
+    writer.u8(joint.type ?? 0);
+    writer.index(joint.rigidBodyIndexA, indexSizes.rigidBody);
+    writer.index(joint.rigidBodyIndexB, indexSizes.rigidBody);
+    writer.vec3(joint.position ?? [0, 0, 0]);
+    writer.vec3(joint.rotation ?? [0, 0, 0]);
+    writer.vec3(joint.translationLowerLimit ?? [0, 0, 0]);
+    writer.vec3(joint.translationUpperLimit ?? [0, 0, 0]);
+    writer.vec3(joint.rotationLowerLimit ?? [0, 0, 0]);
+    writer.vec3(joint.rotationUpperLimit ?? [0, 0, 0]);
+    writer.vec3(joint.springTranslationFactor ?? [0, 0, 0]);
+    writer.vec3(joint.springRotationFactor ?? [0, 0, 0]);
   }
 }
 
