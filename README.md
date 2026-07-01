@@ -106,7 +106,7 @@ model.setAnimation(animation);
 Physics is abstracted behind `MmdPhysicsBackend` so the physics library can be
 swapped. We recommend the MMD-optimized prebuilt Bullet Physics path. The
 Ammo.js backend remains available as a compatibility path, but it is deprecated
-and planned for removal from the default guidance.
+and no longer part of the default guidance in README or viewer examples.
 
 ```ts
 import {

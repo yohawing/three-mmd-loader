@@ -165,6 +165,19 @@
           "type": "string",
           "minLength": 1
         },
+        "regressionPurpose": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional local-only note describing why a playback case is kept as regression evidence."
+        },
+        "regressionTags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Optional local-only tags for routing playback regression cases."
+        },
         "stage": {
           "type": "string",
           "enum": ["vmdInterpolation", "appendTransform", "ik", "physics"],
@@ -198,6 +211,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Optional local-only reason to skip a playback case while keeping it documented in the inventory."
+        },
+        "skipCategory": {
+          "type": "string",
+          "enum": ["runtime-bug", "oracle-limitation", "asset-unavailable"],
+          "description": "Optional machine-readable category for skipReason triage."
         }
       }
     },

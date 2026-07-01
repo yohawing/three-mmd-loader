@@ -35,7 +35,7 @@ Three.js 上で MMD モデルとモーションを読み込み・再生するた
 | IK link angle limits | ✅ PMX / PMD link limits + parent-local Euler clamp |
 | VMD Camera / Light | ✅ Three.js の Camera、DirectionalLight に適用 |
 | Self Shadow | ✅ Three.js shadow-map 経路 + VMD self-shadow sampling |
-| 物理 | ✅ MMD最適化ビルド済みのBullet Physics / Ammo.js backend は deprecated 互換経路 |
+| 物理 | ✅ MMD最適化ビルド済みのBullet Physics（推奨）; Ammo.js backend は deprecated 互換経路 |
 | Soft Body | ⚠️ PMX データは解析 / runtime simulation は未実装 |
 
 PMX の既定ランタイムと WASM parser には
@@ -102,7 +102,7 @@ model.setAnimation(animation);
 
 物理は `MmdPhysicsBackend` で抽象化されていて、物理ライブラリを変更可能にしてあります。
 MMD最適化ビルド済みのBullet Physicsを推奨しています。
-Ammo.js backend は互換用として残していますが、deprecated であり、今後の標準導線からは外します。
+Ammo.js backend は互換用として残していますが、deprecated であり、README / viewer の標準導線からは外しています。
 
 ```ts
 import {

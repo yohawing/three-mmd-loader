@@ -104,20 +104,70 @@ handle when the generated wrapper exports it:
 This keeps large geometry buffers out of JSON while preserving the existing
 `MmdModel` TypeScript-facing shape.
 
-## Core Checks
+## Release Gate Tiers
 
-Run these before publishing or opening a release PR. The full operator-facing
-release checklist is in [RELEASE.md](./RELEASE.md).
+Keep release confidence split into portable automation and local evidence.
+Portable checks must pass in a fresh clone without user-owned assets. Local
+evidence is useful for confidence, but it is not a CI or tag-release blocker.
+
+### PR / CI Portable
+
+The pull-request and branch CI gate is `.github/workflows/ci.yml`. It runs on
+Node.js 22 and 24:
 
 ```bash
+npm ci
 npm run lint
 npm test
 npm run build
 npm run smoke:dist
 npm run smoke:types
-npm run check:fixtures
-npm pack --dry-run --json
 ```
+
+### Tag Release Portable
+
+The release workflow package job is `.github/workflows/release.yml`. It runs on
+Node.js 24, repeats the PR / CI portable gate, and then adds:
+
+```bash
+npm run check:fixtures
+npm pack --json
+```
+
+For local operator preflight, use `npm pack --dry-run --json` before tagging so
+the tarball surface is checked without writing the package artifact.
+
+### Optional Local / Conditional Evidence
+
+Run these when the changed area justifies them. They are intentionally separate
+from the portable gate:
+
+```bash
+# When native/third_party/mmd-anim, generated WASM, or the export surface changed:
+npm run build:mmd-anim
+npm run build
+
+# When rendering, parser/runtime WASM output, material, outline, shader, camera,
+# light, or self-shadow behavior changed:
+npm run visual:smoke:generated-pmx
+npm run visual:smoke:camera-light-vmd
+npm run visual:smoke:self-shadow
+
+# When checking user-owned local corpora or physics/playback evidence:
+npm run check:fixtures:local
+npm run check:fixtures:physics
+npm test -- test/integration/physics/local-ammo-playback-stability.test.ts
+npm test -- test/integration/physics/local-ammo-dynamic-bone-anchor.test.ts
+```
+
+`build:mmd-anim` is not a standing CI gate while the generated
+`src/parser/wasm/generated/` files are committed. Treat it as a conditional
+preflight when the submodule, generated WASM, or wrapper export surface changed.
+
+## Core Checks
+
+Use the release gate tiers above when deciding which checks are required. The
+full operator-facing release checklist is in [RELEASE.md](./RELEASE.md).
 
 Command summary:
 
@@ -135,8 +185,8 @@ Command summary:
 | `npm run bench:wasm:perf -- <model> [repeat]` | Compares WASM and TypeScript fallback `loadModel` speed plus `loadModel + createThreeBufferGeometry` total time against a local PMX / PMD file. |
 | `npm run smoke:dist` | Verifies built package exports and key dist runtime paths. |
 | `npm run smoke:types` | Packs the library, installs it into a temporary TypeScript consumer, and verifies root/subpath imports with `tsc --noEmit`. |
-| `npm run check:fixtures` | Parses the fixture manifest and writes `tmp/fixture-parse-report.json`. |
-| `npm run check:fixtures:physics` | Runs fixture checks with physics-related validation enabled. |
+| `npm run check:fixtures` | Release-only portable fixture gate. Parses `test/fixtures/fixtures.sample.json` through built `dist` parser / Three.js assembly and writes `tmp/fixture-parse-report.json`. |
+| `npm run check:fixtures:physics` | Optional local evidence. Runs fixture checks with physics-related validation enabled. |
 | `npm run check:fixtures:local` | Parse-only crash-smoke over a gitignored local corpus inventory; skips when the inventory is absent. |
 | `npm pack --dry-run --json` | Verifies npm tarball contents without writing a package. |
 
@@ -157,6 +207,33 @@ Tests are split by risk and scope:
 
 Keep tests focused on public behavior or stable local contracts. Avoid
 snapshotting internal implementation details that should remain easy to refactor.
+
+### Test Suite Classification
+
+Use these categories when adding or auditing tests:
+
+| Category | Examples | Gate treatment |
+| --- | --- | --- |
+| Public API behavior | `test/unit/package/PublicApiSmoke.test.ts`, `test/unit/three/**`, `test/unit/physics/**`, model-loading and animation integration tests, `scripts/dist-export-smoke.mjs`, `scripts/type-consumer-smoke.mjs` | Required portable checks through `npm test`, `smoke:dist`, and `smoke:types`. |
+| Parser / runtime parity | `test/unit/parser/**`, `test/wasm/**`, `test/unit/runtime/**`, `test/integration/runtime/**`, `test/integration/ik/**`, generated skinning/runtime fixtures | Required portable checks when backed by committed fixtures or oracles; local comparison scripts remain optional evidence. |
+| Visual regression | `test/unit/visual-regression/CasesManifest.test.ts`, `scripts/visual-regression/**`, `test/fixtures/visual-baselines/**`, `visual:smoke:*` scripts | Manifest source checks are portable through `npm test`; rendered pixel comparisons are optional local evidence because GPU output is platform-sensitive. |
+| Release gate | `npm run lint`, `npm test`, `npm run build`, `npm run smoke:dist`, `npm run smoke:types`, `npm run check:fixtures`, npm pack checks | Split by tier: PR / CI portable, tag release portable, and operator dry-run. |
+| Local-only asset verification | `test/fixtures/fixtures.local.json`, local playback physics tests, `check:fixtures:local`, real-model visual scripts, runtime / Bullet local comparison and benchmark scripts | Optional local evidence only. Missing local inventory must skip or exit green. |
+| Implementation-rule checks | Viewer source-level tests, visual manifest source pins, Bullet patch source checks, selected runtime source guards | Keep only when the checked source shape is a deliberate contract or hard-rule guard. Otherwise rewrite to behavior. |
+
+### Fragile Test Policy
+
+When a test pins internal structure instead of observable behavior, classify it
+before editing:
+
+| Decision | Use when | Current examples |
+| --- | --- | --- |
+| Delete | The test only repeats an implementation detail and a public or integration test already covers the behavior. | Avoid adding more private-signature or file-layout snapshots. |
+| Rewrite to behavior | The test protects real behavior, but string or section-shape assertions break on harmless refactors. | Prefer behavior coverage for shader output over raw fragment strings; prefer fixture counts and trailing-byte checks over fixed parser section counts. |
+| Keep as source-level regression | The project intentionally treats the source shape as a contract or hard-rule guard. | `test/unit/viewer/ViewerSource.test.ts`, visual manifest entrypoint checks, Bullet patch source checks, and allocation-light render-path guards. |
+
+Source-level regression tests should state the contract they protect. They are
+not a default substitute for public API, parser/runtime, or visual evidence.
 
 ## Fixtures
 
@@ -233,9 +310,55 @@ Each playback case has these fields:
   `1e-4`.
 - `skipReason`: Optional local-only reason to skip a case while keeping the
   model, motion, and oracle registration documented in the inventory.
+- `skipCategory`: Optional machine-readable skip classification. Use
+  `runtime-bug` for cases kept as runtime regression candidates,
+  `oracle-limitation` when the native dump is not authoritative for the motion
+  semantics, and `asset-unavailable` when the local model, motion, camera, or
+  oracle is missing.
 
 The authoritative schema is
 `test/fixtures/fixtures.schema.json` under `paths.playbackSmoke.cases`.
+
+### Local Oracle Triage
+
+Do not remove `skipReason` only because the local model and motion exist. A
+skipped playback case is eligible to re-enter local playback checks only when
+its skip category has been resolved and its local oracle matches the current
+case registration.
+
+Current local playback skip triage:
+
+| Case | Category | Current action |
+|---|---|---|
+| `tda-miku-addiction` | `oracle-limitation` | Keep skipped; the native-health IK dump does not match PMX knee link-limit/local-axis behavior for this motion. |
+| `anomalo-miku-change` | `runtime-bug` | Keep skipped as a Phase5 rig regression candidate; regenerate the local oracle for the current Anomalo case before unskipping. |
+| `rem-proseka-weekender-girl` | `runtime-bug` | Keep skipped as a dense REM IK/twist rig regression candidate; regenerate the local oracle for the current Weekender Girl case before unskipping. |
+| `shiori-novella-patchwork-airi` | `oracle-limitation` | Keep skipped; the native-health local oracle does not apply VMD property IK enable states for this case. |
+
+The old `yyb-10th-change.local.json`, `rem-proseka-patchwork-miku.local.json`,
+and `yyb-10th-patchwork-airi.local.json` oracle dumps are stale for the current
+case registrations. Do not rename them into the current case names; regenerate
+fresh local oracles from the current model and motion pairs.
+
+### Sour Miku RabbitHole Regression
+
+`sour-miku-rabbithole` is the high-signal local regression case for PMX IK
+link-limit and knee instability drift. Keep it in the gitignored local
+inventory with:
+
+- model key: `sourMikuBlack`
+- motion key: `rabbitHoleDance`
+- oracle: `test/fixtures/oracles/sour-miku-rabbithole.local.json`
+- stage: `physics`
+- frames: `0,30,60,120,180`
+- matrix / morph epsilon: `1e-4`
+- regression tags: `local-only`, `ik-limit`, `knee-instability`, `phase5`
+
+This case depends on user-owned local corpus assets. Do not add the PMX, VMD,
+audio, screenshots, raw oracle inputs, or rendered baselines to package files,
+public docs, CI artifacts, or portable visual baselines. Re-run it after runtime
+IK or physics fixes, but keep the portable release gate separate from this
+local evidence.
 
 For the committed cube fixture, a minimal local inventory looks like this:
 
@@ -427,11 +550,10 @@ Do not commit generated files under `test-results/`.
 
 ## CI And Release
 
-GitHub Actions run the same core sequence on Node.js 22 and 24:
+GitHub Actions CI runs the PR / CI portable gate on Node.js 22 and 24:
 
 ```bash
 npm ci
-npm run build:mmd-anim
 npm run lint
 npm test
 npm run build
@@ -439,7 +561,8 @@ npm run smoke:dist
 npm run smoke:types
 ```
 
-The release workflow additionally validates that the package is publishable,
-checks tag/version consistency for `v*.*.*` tags, creates an npm package, and
-publishes only from an explicit tag or a manual workflow dispatch with
-publishing enabled.
+The release workflow package job runs on Node.js 24. It repeats the same gate,
+then runs `npm run check:fixtures` and `npm pack --json`. For publishable runs
+it also validates package metadata, checks tag/version consistency for
+`v*.*.*` tags, uploads the npm package artifact, and publishes only from an
+explicit tag or a manual workflow dispatch with publishing enabled.
