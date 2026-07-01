@@ -72,9 +72,33 @@ const defaultIkTolerance = 1e-4;
 const matrixElementCount = 16;
 
 export class CcdIkSolver {
+  private readonly scratchComposeLocalMatrix = new Float32Array(matrixElementCount);
+  private scratchComposeStates = new Uint8Array(0);
+  private readonly scratchTranslations: [number, number, number][] = [];
+  private scratchMatrices = new Float32Array(0);
+  private readonly scratchBaseRotations: [number, number, number, number][] = [];
+  private readonly scratchIkRotations: [number, number, number, number][] = [];
+  private readonly scratchBestRotations: [number, number, number, number][] = [];
+  private readonly scratchChainState: IkChainState[] = [];
+  private readonly scratchIkVectors: [number, number, number][] = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0]
+  ];
+  private readonly scratchLinkLimits: LinkLimits[] = [];
+
   prepareChain(chain: CcdIkChain, bones: readonly CcdIkBone[]): CcdIkPreparedChain {
     validateSkeleton(bones);
     validateChain(chain, bones);
+    this.ensureSolveScratchCapacity(bones.length, chain.links.length);
     return brandPreparedChain(chain);
   }
 
@@ -83,10 +107,16 @@ export class CcdIkSolver {
     bones: readonly CcdIkBone[]
   ): CcdIkPreparedChain[] {
     validateSkeleton(bones);
-    return chains.map((chain) => {
+    let maxLinkCount = 0;
+    const preparedChains = chains.map((chain) => {
       validateChain(chain, bones);
+      if (chain.links.length > maxLinkCount) {
+        maxLinkCount = chain.links.length;
+      }
       return brandPreparedChain(chain);
     });
+    this.ensureSolveScratchCapacity(bones.length, maxLinkCount);
+    return preparedChains;
   }
 
   solve(input: CcdIkSolveInput): CcdIkSolveResult {
@@ -98,19 +128,47 @@ export class CcdIkSolver {
   }
 
   solvePrepared(input: CcdIkPreparedSolveInput): CcdIkSolveResult {
+    const finalDistances: number[] = [];
+    const totalIterations = this.runPrepared(input, finalDistances);
+
+    return {
+      chainCount: input.chains.length,
+      iterationCount: totalIterations,
+      finalDistances
+    };
+  }
+
+  applyPrepared(input: CcdIkPreparedSolveInput): void {
+    this.runPrepared(input);
+  }
+
+  private runPrepared(input: CcdIkPreparedSolveInput, finalDistances?: number[]): number {
     for (const chain of input.chains) {
       assertPreparedChain(chain);
     }
     validatePose(input.pose, input.bones.length);
     assertFiniteBoneTranslations(input.bones);
-    const translations = input.bones.map(
-      (bone) => [...bone.translation] as [number, number, number]
-    );
-    const matrices = new Float32Array(input.bones.length * 16);
-    const finalDistances: number[] = [];
+    let maxLinkCount = 0;
+    for (const chain of input.chains) {
+      if (chain.links.length > maxLinkCount) {
+        maxLinkCount = chain.links.length;
+      }
+    }
+    this.ensureSolveScratchCapacity(input.bones.length, maxLinkCount);
+    const translations = this.scratchTranslations;
+    copyBoneTranslationsInto(input.bones, translations);
+    const matrices = this.scratchMatrices;
+    const composeStates = this.ensureComposeStatesCapacity(input.bones.length);
     let totalIterations = 0;
 
-    composeWorldMatrices(input.bones, translations, input.pose.rotations, matrices);
+    composeWorldMatrices(
+      input.bones,
+      translations,
+      input.pose.rotations,
+      matrices,
+      this.scratchComposeLocalMatrix,
+      composeStates
+    );
     for (const chain of input.chains) {
       const iterationCount = Math.min(
         Math.max(Math.trunc(chain.iterationCount), 0),
@@ -123,23 +181,50 @@ export class CcdIkSolver {
           input.pose.rotations,
           matrices,
           chain,
-          iterationCount
+          iterationCount,
+          this.scratchComposeLocalMatrix,
+          composeStates,
+          this.scratchBaseRotations,
+          this.scratchIkRotations,
+          this.scratchBestRotations,
+          this.scratchChainState,
+          this.scratchIkVectors,
+          this.scratchLinkLimits
         );
-      finalDistances.push(
-        vectorLength(
-          subtractVectors(
-            matrixTranslation(matrices, chain.effectorBoneIndex),
-            matrixTranslation(matrices, chain.goalBoneIndex)
+      if (finalDistances) {
+        finalDistances.push(
+          vectorLength(
+            subtractVectors(
+              matrixTranslation(matrices, chain.effectorBoneIndex),
+              matrixTranslation(matrices, chain.goalBoneIndex)
+            )
           )
-        )
-      );
+        );
+      }
     }
 
-    return {
-      chainCount: input.chains.length,
-      iterationCount: totalIterations,
-      finalDistances
-    };
+    return totalIterations;
+  }
+
+  private ensureComposeStatesCapacity(boneCount: number): Uint8Array {
+    if (this.scratchComposeStates.length < boneCount) {
+      this.scratchComposeStates = new Uint8Array(boneCount);
+    }
+    return this.scratchComposeStates;
+  }
+
+  private ensureSolveScratchCapacity(boneCount: number, linkCount: number): void {
+    ensureTranslationScratchLength(this.scratchTranslations, boneCount);
+    ensureQuaternionScratchLength(this.scratchBaseRotations, boneCount);
+    ensureQuaternionScratchLength(this.scratchIkRotations, boneCount);
+    ensureQuaternionScratchLength(this.scratchBestRotations, linkCount);
+    ensureChainStateScratchLength(this.scratchChainState, linkCount);
+    ensureLinkLimitsScratchLength(this.scratchLinkLimits, linkCount);
+    this.ensureComposeStatesCapacity(boneCount);
+    const matrixLength = boneCount * matrixElementCount;
+    if (this.scratchMatrices.length < matrixLength) {
+      this.scratchMatrices = new Float32Array(matrixLength);
+    }
   }
 }
 
@@ -158,34 +243,162 @@ function assertPreparedChain(chain: CcdIkPreparedChain): void {
   }
 }
 
+function ensureTranslationScratchLength(
+  scratch: [number, number, number][],
+  length: number
+): void {
+  for (let index = scratch.length; index < length; index += 1) {
+    scratch.push([0, 0, 0]);
+  }
+  scratch.length = length;
+}
+
+function ensureQuaternionScratchLength(
+  scratch: [number, number, number, number][],
+  length: number
+): void {
+  for (let index = scratch.length; index < length; index += 1) {
+    scratch.push([0, 0, 0, 1]);
+  }
+  scratch.length = length;
+}
+
+function ensureChainStateScratchLength(scratch: IkChainState[], length: number): void {
+  for (let index = scratch.length; index < length; index += 1) {
+    scratch.push({
+      previousAngle: [0, 0, 0],
+      planeModeAngle: 0
+    });
+  }
+  scratch.length = length;
+}
+
+function ensureLinkLimitsScratchLength(scratch: LinkLimits[], length: number): void {
+  for (let index = scratch.length; index < length; index += 1) {
+    scratch.push({
+      lower: [0, 0, 0],
+      upper: [0, 0, 0]
+    });
+  }
+  scratch.length = length;
+}
+
+function copyBoneTranslationsInto(
+  bones: readonly CcdIkBone[],
+  target: [number, number, number][]
+): void {
+  for (let index = 0; index < bones.length; index += 1) {
+    const source = bones[index]?.translation;
+    const translation = target[index];
+    if (!source) {
+      translation[0] = 0;
+      translation[1] = 0;
+      translation[2] = 0;
+      continue;
+    }
+    translation[0] = source[0];
+    translation[1] = source[1];
+    translation[2] = source[2];
+  }
+}
+
+function copyRotationsInto(
+  rotations: readonly QuatTuple[],
+  target: [number, number, number, number][]
+): void {
+  for (let index = 0; index < rotations.length; index += 1) {
+    const source = rotations[index];
+    const rotation = target[index];
+    if (!source) {
+      rotation[0] = 0;
+      rotation[1] = 0;
+      rotation[2] = 0;
+      rotation[3] = 1;
+      continue;
+    }
+    copyQuaternionInto(source, rotation);
+  }
+}
+
+function resetIkRotations(
+  rotations: [number, number, number, number][],
+  length: number
+): void {
+  for (let index = 0; index < length; index += 1) {
+    const rotation = rotations[index];
+    rotation[0] = 0;
+    rotation[1] = 0;
+    rotation[2] = 0;
+    rotation[3] = 1;
+  }
+}
+
+function resetChainStateScratch(chainState: IkChainState[], length: number): void {
+  for (let index = 0; index < length; index += 1) {
+    const state = chainState[index];
+    state.previousAngle[0] = 0;
+    state.previousAngle[1] = 0;
+    state.previousAngle[2] = 0;
+    state.planeModeAngle = 0;
+  }
+}
+
+function copyQuaternionInto(
+  source: readonly [number, number, number, number],
+  target: [number, number, number, number]
+): void {
+  target[0] = source[0];
+  target[1] = source[1];
+  target[2] = source[2];
+  target[3] = source[3];
+}
+
 function solveChain(
   bones: readonly CcdIkBone[],
   translations: readonly [number, number, number][],
   rotations: MutableQuatTuple[],
   matrices: Float32Array,
   chain: CcdIkChain,
-  iterationCount: number
+  iterationCount: number,
+  composeLocalMatrix: Float32Array,
+  composeStates: Uint8Array,
+  baseRotations: [number, number, number, number][],
+  ikRotations: [number, number, number, number][],
+  bestRotations: [number, number, number, number][],
+  chainState: IkChainState[],
+  vectorScratch: [number, number, number][],
+  linkLimitsScratch: LinkLimits[]
 ): number {
-  const chainState = chain.links.map(() => ({
-    previousAngle: [0, 0, 0] as [number, number, number],
-    planeModeAngle: 0
-  }));
-  const baseRotations = rotations.map(
-    (rotation) => [...rotation] as [number, number, number, number]
-  );
-  const ikRotations = rotations.map(() => [0, 0, 0, 1] as [number, number, number, number]);
-  const bestRotations = chain.links.map(
-    (link) => ikRotations[link.boneIndex]?.slice() as [number, number, number, number] | undefined
-  );
+  resetChainStateScratch(chainState, chain.links.length);
+  copyRotationsInto(rotations, baseRotations);
+  resetIkRotations(ikRotations, rotations.length);
+  for (let linkIndex = 0; linkIndex < chain.links.length; linkIndex += 1) {
+    const link = chain.links[linkIndex];
+    const boneIndex = link.boneIndex;
+    const bestRotation = bestRotations[linkIndex];
+    const ikRotation = ikRotations[boneIndex];
+    bestRotation[0] = ikRotation[0];
+    bestRotation[1] = ikRotation[1];
+    bestRotation[2] = ikRotation[2];
+    bestRotation[3] = ikRotation[3];
+  }
   const limitAngle = maxAnglePerIteration(chain);
   const tolerance = chain.tolerance ?? defaultIkTolerance;
   let bestDistance = Number.POSITIVE_INFINITY;
   let completedIterations = 0;
 
   for (let iteration = 0; iteration < iterationCount; iteration += 1) {
-    const ikPosition = matrixTranslation(matrices, chain.goalBoneIndex);
-    const targetPositionBeforeIteration = matrixTranslation(matrices, chain.effectorBoneIndex);
-    if (vectorLength(subtractVectors(targetPositionBeforeIteration, ikPosition)) <= tolerance) {
+    const ikPosition = matrixTranslationInto(matrices, chain.goalBoneIndex, vectorScratch[0]);
+    const targetPositionBeforeIteration = matrixTranslationInto(
+      matrices,
+      chain.effectorBoneIndex,
+      vectorScratch[1]
+    );
+    if (
+      vectorLength(
+        subtractVectorsInto(targetPositionBeforeIteration, ikPosition, vectorScratch[2])
+      ) <= tolerance
+    ) {
       break;
     }
     for (let linkIndex = 0; linkIndex < chain.links.length; linkIndex += 1) {
@@ -198,7 +411,7 @@ function solveChain(
         continue;
       }
 
-      const limits = toLinkLimits(link.angleLimit);
+      const limits = toLinkLimitsInto(link.angleLimit, linkLimitsScratch[linkIndex]);
       const singleAxis = getSingleAxisLimit(limits);
       if (limits && singleAxis !== null) {
         solvePlaneLink({
@@ -216,26 +429,37 @@ function solveChain(
           chainState,
           iteration,
           limitAngle,
-          axisIndex: singleAxis
+          axisIndex: singleAxis,
+          composeLocalMatrix,
+          composeStates,
+          vectorScratch
         });
         continue;
       }
 
-      const targetPosition = matrixTranslation(matrices, chain.effectorBoneIndex);
-      const linkPosition = matrixTranslation(matrices, link.boneIndex);
-      const chainIkVector = normalizeVector(
-        transformDirectionByInverseMatrix(
-          subtractVectors(ikPosition, linkPosition),
-          matrices,
-          link.boneIndex
-        )
+      const targetPosition = matrixTranslationInto(
+        matrices,
+        chain.effectorBoneIndex,
+        vectorScratch[1]
       );
-      const chainTargetVector = normalizeVector(
-        transformDirectionByInverseMatrix(
-          subtractVectors(targetPosition, linkPosition),
+      const linkPosition = matrixTranslationInto(matrices, link.boneIndex, vectorScratch[3]);
+      const chainIkVector = normalizeVectorInto(
+        transformDirectionByInverseMatrixInto(
+          subtractVectorsInto(ikPosition, linkPosition, vectorScratch[4]),
           matrices,
-          link.boneIndex
-        )
+          link.boneIndex,
+          vectorScratch[4]
+        ),
+        vectorScratch[4]
+      );
+      const chainTargetVector = normalizeVectorInto(
+        transformDirectionByInverseMatrixInto(
+          subtractVectorsInto(targetPosition, linkPosition, vectorScratch[5]),
+          matrices,
+          link.boneIndex,
+          vectorScratch[5]
+        ),
+        vectorScratch[5]
       );
       const dot = clamp(dotVectors(chainTargetVector, chainIkVector), -1, 1);
       let angle = link.fixedAxis
@@ -245,14 +469,20 @@ function solveChain(
         continue;
       }
       angle = clamp(angle, -limitAngle, limitAngle);
-      let axis = link.fixedAxis
-        ? normalizeVector([link.fixedAxis[0], link.fixedAxis[1], link.fixedAxis[2]])
-        : normalizeVector(crossVectors(chainTargetVector, chainIkVector));
+      const axis = vectorScratch[6];
+      if (link.fixedAxis) {
+        axis[0] = link.fixedAxis[0];
+        axis[1] = link.fixedAxis[1];
+        axis[2] = link.fixedAxis[2];
+        normalizeVectorInto(axis, axis);
+      } else {
+        normalizeVectorInto(crossVectorsInto(chainTargetVector, chainIkVector, axis), axis);
+      }
       if (vectorLength(axis) < 1e-5) {
         if (dot > -1 + 1e-5) {
           continue;
         }
-        axis = stablePerpendicularAxis(chainTargetVector);
+        stablePerpendicularAxisInto(chainTargetVector, axis);
       }
 
       const delta = axisAngleQuaternion(axis, angle);
@@ -274,27 +504,36 @@ function solveChain(
         invertQuaternion(baseRotation)
       );
       applyEffectiveRotation(rotations, baseRotations, ikRotations, link.boneIndex);
-      composeWorldMatrices(bones, translations, rotations, matrices);
+      composeWorldMatrices(
+        bones,
+        translations,
+        rotations,
+        matrices,
+        composeLocalMatrix,
+        composeStates
+      );
     }
 
     completedIterations += 1;
+    const currentTargetPosition = matrixTranslationInto(
+      matrices,
+      chain.effectorBoneIndex,
+      vectorScratch[0]
+    );
+    const currentIkPosition = matrixTranslationInto(
+      matrices,
+      chain.goalBoneIndex,
+      vectorScratch[1]
+    );
     const currentDistance = vectorLength(
-      subtractVectors(
-        matrixTranslation(matrices, chain.effectorBoneIndex),
-        matrixTranslation(matrices, chain.goalBoneIndex)
-      )
+      subtractVectorsInto(currentTargetPosition, currentIkPosition, vectorScratch[2])
     );
     if (currentDistance < bestDistance) {
       bestDistance = currentDistance;
       for (let linkIndex = 0; linkIndex < chain.links.length; linkIndex += 1) {
         const boneIndex = chain.links[linkIndex]?.boneIndex ?? -1;
         if (boneIndex >= 0 && boneIndex < bones.length) {
-          bestRotations[linkIndex] = ikRotations[boneIndex]?.slice() as [
-            number,
-            number,
-            number,
-            number
-          ];
+          copyQuaternionInto(ikRotations[boneIndex], bestRotations[linkIndex]);
         }
       }
       if (currentDistance <= tolerance) {
@@ -304,12 +543,19 @@ function solveChain(
       for (let linkIndex = 0; linkIndex < chain.links.length; linkIndex += 1) {
         const boneIndex = chain.links[linkIndex]?.boneIndex ?? -1;
         const bestIkRotation = bestRotations[linkIndex];
-        if (boneIndex >= 0 && boneIndex < bones.length && bestIkRotation) {
-          ikRotations[boneIndex] = bestIkRotation;
+        if (boneIndex >= 0 && boneIndex < bones.length) {
+          copyQuaternionInto(bestIkRotation, ikRotations[boneIndex]);
           applyEffectiveRotation(rotations, baseRotations, ikRotations, boneIndex);
         }
       }
-      composeWorldMatrices(bones, translations, rotations, matrices);
+      composeWorldMatrices(
+        bones,
+        translations,
+        rotations,
+        matrices,
+        composeLocalMatrix,
+        composeStates
+      );
       break;
     }
   }
@@ -343,7 +589,10 @@ function solvePlaneLink({
   chainState,
   iteration,
   limitAngle,
-  axisIndex
+  axisIndex,
+  composeLocalMatrix,
+  composeStates,
+  vectorScratch
 }: {
   readonly bones: readonly CcdIkBone[];
   readonly translations: readonly [number, number, number][];
@@ -360,24 +609,31 @@ function solvePlaneLink({
   readonly iteration: number;
   readonly limitAngle: number;
   readonly axisIndex: number;
+  readonly composeLocalMatrix: Float32Array;
+  readonly composeStates: Uint8Array;
+  readonly vectorScratch: [number, number, number][];
 }): void {
   const rotateAxis = axisTuple(axisIndex);
-  const ikPosition = matrixTranslation(matrices, ikBoneIndex);
-  const targetPosition = matrixTranslation(matrices, ikTargetIndex);
-  const linkPosition = matrixTranslation(matrices, link.boneIndex);
-  const chainIkVector = normalizeVector(
-    transformDirectionByInverseMatrix(
-      subtractVectors(ikPosition, linkPosition),
+  const ikPosition = matrixTranslationInto(matrices, ikBoneIndex, vectorScratch[6]);
+  const targetPosition = matrixTranslationInto(matrices, ikTargetIndex, vectorScratch[7]);
+  const linkPosition = matrixTranslationInto(matrices, link.boneIndex, vectorScratch[8]);
+  const chainIkVector = normalizeVectorInto(
+    transformDirectionByInverseMatrixInto(
+      subtractVectorsInto(ikPosition, linkPosition, vectorScratch[9]),
       matrices,
-      link.boneIndex
-    )
+      link.boneIndex,
+      vectorScratch[9]
+    ),
+    vectorScratch[9]
   );
-  const chainTargetVector = normalizeVector(
-    transformDirectionByInverseMatrix(
-      subtractVectors(targetPosition, linkPosition),
+  const chainTargetVector = normalizeVectorInto(
+    transformDirectionByInverseMatrixInto(
+      subtractVectorsInto(targetPosition, linkPosition, vectorScratch[10]),
       matrices,
-      link.boneIndex
-    )
+      link.boneIndex,
+      vectorScratch[10]
+    ),
+    vectorScratch[10]
   );
   const dot = clamp(dotVectors(chainTargetVector, chainIkVector), -1, 1);
   const rawAngle = Math.acos(dot);
@@ -417,7 +673,14 @@ function solvePlaneLink({
     invertQuaternion(baseRotation)
   );
   applyEffectiveRotation(rotations, baseRotations, ikRotations, link.boneIndex);
-  composeWorldMatrices(bones, translations, rotations, matrices);
+  composeWorldMatrices(
+    bones,
+    translations,
+    rotations,
+    matrices,
+    composeLocalMatrix,
+    composeStates
+  );
 }
 
 function validateSkeleton(bones: readonly CcdIkBone[]): void {
@@ -504,16 +767,17 @@ function composeWorldMatrices(
   bones: readonly CcdIkBone[],
   translations: readonly [number, number, number][],
   rotations: readonly QuatTuple[],
-  matrices: Float32Array
+  matrices: Float32Array,
+  local: Float32Array,
+  states: Uint8Array
 ): void {
-  const local = new Float32Array(matrixElementCount);
   if (isParentBeforeChildOrdered(bones)) {
     for (let index = 0; index < bones.length; index += 1) {
       composeWorldMatrixInOrder(index, bones, translations, rotations, matrices, local);
     }
     return;
   }
-  const states = new Uint8Array(bones.length);
+  states.fill(0, 0, bones.length);
   for (let index = 0; index < bones.length; index += 1) {
     composeWorldMatrix(index, bones, translations, rotations, matrices, states, local);
   }
@@ -608,7 +872,11 @@ function composeColumnMajorMatrixInto(
   rotation: QuatTuple,
   target: Float32Array
 ): void {
-  const [x, y, z, w] = normalizeQuaternion(rotation);
+  const length = Math.hypot(rotation[0], rotation[1], rotation[2], rotation[3]) || 1;
+  const x = rotation[0] / length;
+  const y = rotation[1] / length;
+  const z = rotation[2] / length;
+  const w = rotation[3] / length;
   const x2 = x + x;
   const y2 = y + y;
   const z2 = z + z;
@@ -670,27 +938,44 @@ function setMatrix(
 }
 
 function matrixTranslation(matrices: Float32Array, index: number): [number, number, number] {
-  const offset = index * 16;
-  return [matrices[offset + 12] ?? 0, matrices[offset + 13] ?? 0, matrices[offset + 14] ?? 0];
+  return matrixTranslationInto(matrices, index, [0, 0, 0]);
 }
 
-function transformDirectionByInverseMatrix(
+function matrixTranslationInto(
+  matrices: Float32Array,
+  index: number,
+  target: [number, number, number]
+): [number, number, number] {
+  const offset = index * 16;
+  target[0] = matrices[offset + 12] ?? 0;
+  target[1] = matrices[offset + 13] ?? 0;
+  target[2] = matrices[offset + 14] ?? 0;
+  return target;
+}
+
+function transformDirectionByInverseMatrixInto(
   vector: [number, number, number],
   matrices: Float32Array,
-  boneIndex: number
+  boneIndex: number,
+  target: [number, number, number]
 ): [number, number, number] {
   const offset = boneIndex * 16;
-  return [
-    vector[0] * (matrices[offset] ?? 0) +
-      vector[1] * (matrices[offset + 1] ?? 0) +
-      vector[2] * (matrices[offset + 2] ?? 0),
-    vector[0] * (matrices[offset + 4] ?? 0) +
-      vector[1] * (matrices[offset + 5] ?? 0) +
-      vector[2] * (matrices[offset + 6] ?? 0),
-    vector[0] * (matrices[offset + 8] ?? 0) +
-      vector[1] * (matrices[offset + 9] ?? 0) +
-      vector[2] * (matrices[offset + 10] ?? 0)
-  ];
+  const x = vector[0];
+  const y = vector[1];
+  const z = vector[2];
+  target[0] =
+    x * (matrices[offset] ?? 0) +
+    y * (matrices[offset + 1] ?? 0) +
+    z * (matrices[offset + 2] ?? 0);
+  target[1] =
+    x * (matrices[offset + 4] ?? 0) +
+    y * (matrices[offset + 5] ?? 0) +
+    z * (matrices[offset + 6] ?? 0);
+  target[2] =
+    x * (matrices[offset + 8] ?? 0) +
+    y * (matrices[offset + 9] ?? 0) +
+    z * (matrices[offset + 10] ?? 0);
+  return target;
 }
 
 function applyEffectiveRotation(
@@ -705,14 +990,26 @@ function applyEffectiveRotation(
   );
 }
 
-function toLinkLimits(limit: CcdIkLink["angleLimit"]): LinkLimits | undefined {
+function toLinkLimitsInto(
+  limit: CcdIkLink["angleLimit"],
+  target: LinkLimits
+): LinkLimits | undefined {
   if (!limit) {
+    target.lower[0] = 0;
+    target.lower[1] = 0;
+    target.lower[2] = 0;
+    target.upper[0] = 0;
+    target.upper[1] = 0;
+    target.upper[2] = 0;
     return undefined;
   }
-  return {
-    lower: [...limit.minimumAngle],
-    upper: [...limit.maximumAngle]
-  };
+  target.lower[0] = limit.minimumAngle[0];
+  target.lower[1] = limit.minimumAngle[1];
+  target.lower[2] = limit.minimumAngle[2];
+  target.upper[0] = limit.maximumAngle[0];
+  target.upper[1] = limit.maximumAngle[1];
+  target.upper[2] = limit.maximumAngle[2];
+  return target;
 }
 
 function getSingleAxisLimit(limits: LinkLimits | undefined): number | null {
@@ -784,18 +1081,35 @@ function subtractVectors(
   left: [number, number, number],
   right: [number, number, number]
 ): [number, number, number] {
-  return [left[0] - right[0], left[1] - right[1], left[2] - right[2]];
+  return subtractVectorsInto(left, right, [0, 0, 0]);
 }
 
-function crossVectors(
+function subtractVectorsInto(
   left: [number, number, number],
-  right: [number, number, number]
+  right: [number, number, number],
+  target: [number, number, number]
 ): [number, number, number] {
-  return [
-    left[1] * right[2] - left[2] * right[1],
-    left[2] * right[0] - left[0] * right[2],
-    left[0] * right[1] - left[1] * right[0]
-  ];
+  target[0] = left[0] - right[0];
+  target[1] = left[1] - right[1];
+  target[2] = left[2] - right[2];
+  return target;
+}
+
+function crossVectorsInto(
+  left: [number, number, number],
+  right: [number, number, number],
+  target: [number, number, number]
+): [number, number, number] {
+  const leftX = left[0];
+  const leftY = left[1];
+  const leftZ = left[2];
+  const rightX = right[0];
+  const rightY = right[1];
+  const rightZ = right[2];
+  target[0] = leftY * rightZ - leftZ * rightY;
+  target[1] = leftZ * rightX - leftX * rightZ;
+  target[2] = leftX * rightY - leftY * rightX;
+  return target;
 }
 
 function dotVectors(left: [number, number, number], right: [number, number, number]): number {
@@ -803,11 +1117,27 @@ function dotVectors(left: [number, number, number], right: [number, number, numb
 }
 
 function normalizeVector(value: [number, number, number]): [number, number, number] {
+  return normalizeVectorInto(value, [0, 0, 0]);
+}
+
+function normalizeVectorInto(
+  value: [number, number, number],
+  target: [number, number, number]
+): [number, number, number] {
+  const x = value[0];
+  const y = value[1];
+  const z = value[2];
   const length = vectorLength(value);
   if (length < 1e-8) {
-    return [0, 0, 0];
+    target[0] = 0;
+    target[1] = 0;
+    target[2] = 0;
+    return target;
   }
-  return [value[0] / length, value[1] / length, value[2] / length];
+  target[0] = x / length;
+  target[1] = y / length;
+  target[2] = z / length;
+  return target;
 }
 
 function signedProjectedAngle(
@@ -839,9 +1169,19 @@ function projectVectorOnPlane(
   ];
 }
 
-function stablePerpendicularAxis(vector: [number, number, number]): [number, number, number] {
-  const basis: [number, number, number] = Math.abs(vector[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
-  return normalizeVector(crossVectors(vector, basis));
+function stablePerpendicularAxisInto(
+  vector: [number, number, number],
+  target: [number, number, number]
+): [number, number, number] {
+  const basisX = Math.abs(vector[0]) < 0.9 ? 1 : 0;
+  const basisY = basisX === 1 ? 0 : 1;
+  const x = vector[0];
+  const y = vector[1];
+  const z = vector[2];
+  target[0] = -z * basisY;
+  target[1] = z * basisX;
+  target[2] = x * basisY - y * basisX;
+  return normalizeVectorInto(target, target);
 }
 
 function vectorLength(value: [number, number, number]): number {
