@@ -1,6 +1,18 @@
 export type Vec3Tuple = readonly [number, number, number];
 export type QuatTuple = readonly [number, number, number, number];
 export type MutableQuatTuple = [number, number, number, number];
+type MutableVec3Tuple = [number, number, number];
+type Rotation3Tuple = [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number
+];
 
 export interface CcdIkBone {
   readonly parentIndex: number;
@@ -94,6 +106,18 @@ export class CcdIkSolver {
     [0, 0, 0]
   ];
   private readonly scratchLinkLimits: LinkLimits[] = [];
+  private readonly scratchIkQuaternions: MutableQuatTuple[] = [
+    [0, 0, 0, 1],
+    [0, 0, 0, 1],
+    [0, 0, 0, 1],
+    [0, 0, 0, 1]
+  ];
+  private readonly scratchIkEulerVectors: MutableVec3Tuple[] = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0]
+  ];
+  private readonly scratchRotation3: Rotation3Tuple = [0, 0, 0, 0, 0, 0, 0, 0, 0];
 
   prepareChain(chain: CcdIkChain, bones: readonly CcdIkBone[]): CcdIkPreparedChain {
     validateSkeleton(bones);
@@ -189,7 +213,10 @@ export class CcdIkSolver {
           this.scratchBestRotations,
           this.scratchChainState,
           this.scratchIkVectors,
-          this.scratchLinkLimits
+          this.scratchLinkLimits,
+          this.scratchIkQuaternions,
+          this.scratchIkEulerVectors,
+          this.scratchRotation3
         );
       if (finalDistances) {
         finalDistances.push(
@@ -367,7 +394,10 @@ function solveChain(
   bestRotations: [number, number, number, number][],
   chainState: IkChainState[],
   vectorScratch: [number, number, number][],
-  linkLimitsScratch: LinkLimits[]
+  linkLimitsScratch: LinkLimits[],
+  quaternionScratch: MutableQuatTuple[],
+  eulerScratch: MutableVec3Tuple[],
+  rotation3Scratch: Rotation3Tuple
 ): number {
   resetChainStateScratch(chainState, chain.links.length);
   copyRotationsInto(rotations, baseRotations);
@@ -432,7 +462,8 @@ function solveChain(
           axisIndex: singleAxis,
           composeLocalMatrix,
           composeStates,
-          vectorScratch
+          vectorScratch,
+          quaternionScratch
         });
         continue;
       }
@@ -463,7 +494,16 @@ function solveChain(
       );
       const dot = clamp(dotVectors(chainTargetVector, chainIkVector), -1, 1);
       let angle = link.fixedAxis
-        ? signedProjectedAngle(chainTargetVector, chainIkVector, link.fixedAxis)
+        ? signedProjectedAngleInto(
+            chainTargetVector,
+            chainIkVector,
+            link.fixedAxis,
+            vectorScratch[7],
+            vectorScratch[8],
+            vectorScratch[9],
+            vectorScratch[10],
+            quaternionScratch[0]
+          )
         : Math.acos(dot);
       if (Math.abs(angle) < 1e-3 * (Math.PI / 180)) {
         continue;
@@ -485,23 +525,29 @@ function solveChain(
         stablePerpendicularAxisInto(chainTargetVector, axis);
       }
 
-      const delta = axisAngleQuaternion(axis, angle);
-      const baseRotation = baseRotations[link.boneIndex] ?? [0, 0, 0, 1];
-      let chainRotation = multiplyQuaternions(
-        multiplyQuaternions(ikRotations[link.boneIndex], baseRotation),
-        delta
+      const delta = axisAngleQuaternionInto(axis, angle, quaternionScratch[0]);
+      const baseRotation = baseRotations[link.boneIndex];
+      const ikRotation = ikRotations[link.boneIndex];
+      const chainRotation = multiplyQuaternionsInto(
+        multiplyQuaternionsInto(ikRotation, baseRotation, quaternionScratch[1]),
+        delta,
+        quaternionScratch[2]
       );
       if (limits) {
-        chainRotation = clampLimitedRotation(
+        clampLimitedRotationInto(
           chainRotation,
           limits,
           chainState[linkIndex],
-          limitAngle
+          limitAngle,
+          rotation3Scratch,
+          eulerScratch,
+          chainRotation
         );
       }
-      ikRotations[link.boneIndex] = multiplyQuaternions(
+      multiplyQuaternionsInto(
         chainRotation,
-        invertQuaternion(baseRotation)
+        invertQuaternionInto(baseRotation, quaternionScratch[1]),
+        ikRotation
       );
       applyEffectiveRotation(rotations, baseRotations, ikRotations, link.boneIndex);
       composeWorldMatrices(
@@ -570,8 +616,11 @@ function maxAnglePerIteration(chain: CcdIkChain): number {
   return Math.max(chain.maxAnglePerIteration, 0);
 }
 
-function axisTuple(axisIndex: number): [number, number, number] {
-  return axisIndex === 0 ? [1, 0, 0] : axisIndex === 1 ? [0, 1, 0] : [0, 0, 1];
+function axisTupleInto(axisIndex: number, target: MutableVec3Tuple): MutableVec3Tuple {
+  target[0] = axisIndex === 0 ? 1 : 0;
+  target[1] = axisIndex === 1 ? 1 : 0;
+  target[2] = axisIndex === 2 ? 1 : 0;
+  return target;
 }
 
 function solvePlaneLink({
@@ -592,7 +641,8 @@ function solvePlaneLink({
   axisIndex,
   composeLocalMatrix,
   composeStates,
-  vectorScratch
+  vectorScratch,
+  quaternionScratch
 }: {
   readonly bones: readonly CcdIkBone[];
   readonly translations: readonly [number, number, number][];
@@ -612,8 +662,9 @@ function solvePlaneLink({
   readonly composeLocalMatrix: Float32Array;
   readonly composeStates: Uint8Array;
   readonly vectorScratch: [number, number, number][];
+  readonly quaternionScratch: MutableQuatTuple[];
 }): void {
-  const rotateAxis = axisTuple(axisIndex);
+  const rotateAxis = axisTupleInto(axisIndex, vectorScratch[5]);
   const ikPosition = matrixTranslationInto(matrices, ikBoneIndex, vectorScratch[6]);
   const targetPosition = matrixTranslationInto(matrices, ikTargetIndex, vectorScratch[7]);
   const linkPosition = matrixTranslationInto(matrices, link.boneIndex, vectorScratch[8]);
@@ -638,13 +689,15 @@ function solvePlaneLink({
   const dot = clamp(dotVectors(chainTargetVector, chainIkVector), -1, 1);
   const rawAngle = Math.acos(dot);
   const angle = Math.min(rawAngle, limitAngle);
-  const targetVec1 = rotateVectorByQuaternion(
+  const targetVec1 = rotateVectorByQuaternionInto(
     chainTargetVector,
-    axisAngleQuaternion(rotateAxis, angle)
+    axisAngleQuaternionInto(rotateAxis, angle, quaternionScratch[0]),
+    vectorScratch[3]
   );
-  const targetVec2 = rotateVectorByQuaternion(
+  const targetVec2 = rotateVectorByQuaternionInto(
     chainTargetVector,
-    axisAngleQuaternion(rotateAxis, -angle)
+    axisAngleQuaternionInto(rotateAxis, -angle, quaternionScratch[0]),
+    vectorScratch[4]
   );
   const state = chainState[linkIndex];
   let newAngle = state.planeModeAngle;
@@ -667,10 +720,11 @@ function solvePlaneLink({
   }
   newAngle = clamp(newAngle, limits.lower[axisIndex], limits.upper[axisIndex]);
   state.planeModeAngle = newAngle;
-  const baseRotation = baseRotations[link.boneIndex] ?? [0, 0, 0, 1];
-  ikRotations[link.boneIndex] = multiplyQuaternions(
-    axisAngleQuaternion(rotateAxis, newAngle),
-    invertQuaternion(baseRotation)
+  const baseRotation = baseRotations[link.boneIndex];
+  multiplyQuaternionsInto(
+    axisAngleQuaternionInto(rotateAxis, newAngle, quaternionScratch[0]),
+    invertQuaternionInto(baseRotation, quaternionScratch[1]),
+    ikRotations[link.boneIndex]
   );
   applyEffectiveRotation(rotations, baseRotations, ikRotations, link.boneIndex);
   composeWorldMatrices(
@@ -984,10 +1038,7 @@ function applyEffectiveRotation(
   ikRotations: readonly [number, number, number, number][],
   boneIndex: number
 ): void {
-  rotations[boneIndex] = multiplyQuaternions(
-    ikRotations[boneIndex] ?? [0, 0, 0, 1],
-    baseRotations[boneIndex] ?? [0, 0, 0, 1]
-  );
+  multiplyQuaternionsInto(ikRotations[boneIndex], baseRotations[boneIndex], rotations[boneIndex]);
 }
 
 function toLinkLimitsInto(
@@ -1035,28 +1086,39 @@ function hasZeroEndpointAxisLimit(limits: LinkLimits, axis: number): boolean {
   return limits.lower[axis] === 0 && limits.upper[axis] === 0;
 }
 
-function clampLimitedRotation(
+function clampLimitedRotationInto(
   rotation: [number, number, number, number],
   limits: LinkLimits,
   state: IkChainState,
-  limitAngle: number
+  limitAngle: number,
+  rotation3Scratch: Rotation3Tuple,
+  eulerScratch: MutableVec3Tuple[],
+  target: MutableQuatTuple
 ): [number, number, number, number] {
-  const euler = decomposeEulerXyz(quaternionToRotation3(rotation), state.previousAngle);
-  const clampedEuler: [number, number, number] = [
-    clamp(euler[0], limits.lower[0], limits.upper[0]),
-    clamp(euler[1], limits.lower[1], limits.upper[1]),
-    clamp(euler[2], limits.lower[2], limits.upper[2])
-  ];
-  const limitedStep: [number, number, number] = [
+  const euler = decomposeEulerXyzInto(
+    quaternionToRotation3Into(rotation, rotation3Scratch),
+    state.previousAngle,
+    eulerScratch[0],
+    eulerScratch[1]
+  );
+  const clampedEuler = eulerScratch[1];
+  clampedEuler[0] = clamp(euler[0], limits.lower[0], limits.upper[0]);
+  clampedEuler[1] = clamp(euler[1], limits.lower[1], limits.upper[1]);
+  clampedEuler[2] = clamp(euler[2], limits.lower[2], limits.upper[2]);
+  const limitedStep = eulerScratch[2];
+  limitedStep[0] =
     clamp(clampedEuler[0] - state.previousAngle[0], -limitAngle, limitAngle) +
-      state.previousAngle[0],
+    state.previousAngle[0];
+  limitedStep[1] =
     clamp(clampedEuler[1] - state.previousAngle[1], -limitAngle, limitAngle) +
-      state.previousAngle[1],
+    state.previousAngle[1];
+  limitedStep[2] =
     clamp(clampedEuler[2] - state.previousAngle[2], -limitAngle, limitAngle) +
-      state.previousAngle[2]
-  ];
-  state.previousAngle = limitedStep;
-  return eulerXyzToQuaternion(limitedStep);
+    state.previousAngle[2];
+  state.previousAngle[0] = limitedStep[0];
+  state.previousAngle[1] = limitedStep[1];
+  state.previousAngle[2] = limitedStep[2];
+  return eulerXyzToQuaternionInto(limitedStep, target);
 }
 
 function assertBoneIndex(bones: readonly CcdIkBone[], index: number, name: string): void {
@@ -1116,10 +1178,6 @@ function dotVectors(left: [number, number, number], right: [number, number, numb
   return left[0] * right[0] + left[1] * right[1] + left[2] * right[2];
 }
 
-function normalizeVector(value: [number, number, number]): [number, number, number] {
-  return normalizeVectorInto(value, [0, 0, 0]);
-}
-
 function normalizeVectorInto(
   value: [number, number, number],
   target: [number, number, number]
@@ -1140,33 +1198,55 @@ function normalizeVectorInto(
   return target;
 }
 
-function signedProjectedAngle(
+function signedProjectedAngleInto(
   from: [number, number, number],
   to: [number, number, number],
-  axisValue: Vec3Tuple
+  axisValue: Vec3Tuple,
+  axis: MutableVec3Tuple,
+  projectedFrom: MutableVec3Tuple,
+  projectedTo: MutableVec3Tuple,
+  rotated: MutableVec3Tuple,
+  quaternionScratch: MutableQuatTuple
 ): number {
-  const axis = normalizeVector([axisValue[0], axisValue[1], axisValue[2]]);
-  const projectedFrom = normalizeVector(projectVectorOnPlane(from, axis));
-  const projectedTo = normalizeVector(projectVectorOnPlane(to, axis));
+  axis[0] = axisValue[0];
+  axis[1] = axisValue[1];
+  axis[2] = axisValue[2];
+  normalizeVectorInto(axis, axis);
+  normalizeVectorInto(projectVectorOnPlaneInto(from, axis, projectedFrom), projectedFrom);
+  normalizeVectorInto(projectVectorOnPlaneInto(to, axis, projectedTo), projectedTo);
   if (vectorLength(projectedFrom) < 1e-5 || vectorLength(projectedTo) < 1e-5) {
     return 0;
   }
   const angle = Math.acos(clamp(dotVectors(projectedFrom, projectedTo), -1, 1));
-  const positive = rotateVectorByQuaternion(projectedFrom, axisAngleQuaternion(axis, angle));
-  const negative = rotateVectorByQuaternion(projectedFrom, axisAngleQuaternion(axis, -angle));
-  return dotVectors(positive, projectedTo) >= dotVectors(negative, projectedTo) ? angle : -angle;
+  const positiveDot = dotVectors(
+    rotateVectorByQuaternionInto(
+      projectedFrom,
+      axisAngleQuaternionInto(axis, angle, quaternionScratch),
+      rotated
+    ),
+    projectedTo
+  );
+  const negativeDot = dotVectors(
+    rotateVectorByQuaternionInto(
+      projectedFrom,
+      axisAngleQuaternionInto(axis, -angle, quaternionScratch),
+      rotated
+    ),
+    projectedTo
+  );
+  return positiveDot >= negativeDot ? angle : -angle;
 }
 
-function projectVectorOnPlane(
+function projectVectorOnPlaneInto(
   vector: [number, number, number],
-  normal: [number, number, number]
-): [number, number, number] {
+  normal: [number, number, number],
+  target: MutableVec3Tuple
+): MutableVec3Tuple {
   const scale = dotVectors(vector, normal);
-  return [
-    vector[0] - normal[0] * scale,
-    vector[1] - normal[1] * scale,
-    vector[2] - normal[2] * scale
-  ];
+  target[0] = vector[0] - normal[0] * scale;
+  target[1] = vector[1] - normal[1] * scale;
+  target[2] = vector[2] - normal[2] * scale;
+  return target;
 }
 
 function stablePerpendicularAxisInto(
@@ -1192,55 +1272,79 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function axisAngleQuaternion(
+function axisAngleQuaternionInto(
   axis: [number, number, number],
-  angle: number
-): [number, number, number, number] {
+  angle: number,
+  target: MutableQuatTuple
+): MutableQuatTuple {
   const half = angle / 2;
   const scale = Math.sin(half);
-  return normalizeQuaternion([axis[0] * scale, axis[1] * scale, axis[2] * scale, Math.cos(half)]);
+  target[0] = axis[0] * scale;
+  target[1] = axis[1] * scale;
+  target[2] = axis[2] * scale;
+  target[3] = Math.cos(half);
+  return normalizeQuaternionInto(target, target);
 }
 
-function multiplyQuaternions(left: QuatTuple, right: QuatTuple): [number, number, number, number] {
+function multiplyQuaternionsInto(
+  left: QuatTuple,
+  right: QuatTuple,
+  target: MutableQuatTuple
+): MutableQuatTuple {
   const [ax, ay, az, aw] = left;
   const [bx, by, bz, bw] = right;
-  return normalizeQuaternion([
-    aw * bx + ax * bw + ay * bz - az * by,
-    aw * by - ax * bz + ay * bw + az * bx,
-    aw * bz + ax * by - ay * bx + az * bw,
-    aw * bw - ax * bx - ay * by - az * bz
-  ]);
+  target[0] = aw * bx + ax * bw + ay * bz - az * by;
+  target[1] = aw * by - ax * bz + ay * bw + az * bx;
+  target[2] = aw * bz + ax * by - ay * bx + az * bw;
+  target[3] = aw * bw - ax * bx - ay * by - az * bz;
+  return normalizeQuaternionInto(target, target);
 }
 
-function normalizeQuaternion(value: QuatTuple): [number, number, number, number] {
+function normalizeQuaternionInto(value: QuatTuple, target: MutableQuatTuple): MutableQuatTuple {
   const length = Math.hypot(value[0], value[1], value[2], value[3]) || 1;
-  return [value[0] / length, value[1] / length, value[2] / length, value[3] / length];
+  target[0] = value[0] / length;
+  target[1] = value[1] / length;
+  target[2] = value[2] / length;
+  target[3] = value[3] / length;
+  return target;
 }
 
-function invertQuaternion(value: QuatTuple): [number, number, number, number] {
-  const normalized = normalizeQuaternion(value);
-  return [-normalized[0], -normalized[1], -normalized[2], normalized[3]];
+function invertQuaternionInto(value: QuatTuple, target: MutableQuatTuple): MutableQuatTuple {
+  normalizeQuaternionInto(value, target);
+  target[0] *= -1;
+  target[1] *= -1;
+  target[2] *= -1;
+  return target;
 }
 
-function rotateVectorByQuaternion(
+function rotateVectorByQuaternionInto(
   vector: [number, number, number],
-  rotation: QuatTuple
-): [number, number, number] {
-  const [x, y, z, w] = normalizeQuaternion(rotation);
-  const tx = 2 * (y * vector[2] - z * vector[1]);
-  const ty = 2 * (z * vector[0] - x * vector[2]);
-  const tz = 2 * (x * vector[1] - y * vector[0]);
-  return [
-    vector[0] + w * tx + (y * tz - z * ty),
-    vector[1] + w * ty + (z * tx - x * tz),
-    vector[2] + w * tz + (x * ty - y * tx)
-  ];
+  rotation: QuatTuple,
+  target: MutableVec3Tuple
+): MutableVec3Tuple {
+  const length = Math.hypot(rotation[0], rotation[1], rotation[2], rotation[3]) || 1;
+  const x = rotation[0] / length;
+  const y = rotation[1] / length;
+  const z = rotation[2] / length;
+  const w = rotation[3] / length;
+  const vectorX = vector[0];
+  const vectorY = vector[1];
+  const vectorZ = vector[2];
+  const tx = 2 * (y * vectorZ - z * vectorY);
+  const ty = 2 * (z * vectorX - x * vectorZ);
+  const tz = 2 * (x * vectorY - y * vectorX);
+  target[0] = vectorX + w * tx + (y * tz - z * ty);
+  target[1] = vectorY + w * ty + (z * tx - x * tz);
+  target[2] = vectorZ + w * tz + (x * ty - y * tx);
+  return target;
 }
 
-function quaternionToRotation3(
-  rotation: QuatTuple
-): [number, number, number, number, number, number, number, number, number] {
-  const [x, y, z, w] = normalizeQuaternion(rotation);
+function quaternionToRotation3Into(rotation: QuatTuple, target: Rotation3Tuple): Rotation3Tuple {
+  const length = Math.hypot(rotation[0], rotation[1], rotation[2], rotation[3]) || 1;
+  const x = rotation[0] / length;
+  const y = rotation[1] / length;
+  const z = rotation[2] / length;
+  const w = rotation[3] / length;
   const x2 = x + x;
   const y2 = y + y;
   const z2 = z + z;
@@ -1253,24 +1357,24 @@ function quaternionToRotation3(
   const wx = w * x2;
   const wy = w * y2;
   const wz = w * z2;
-  return [
-    1 - (yy + zz),
-    xy + wz,
-    xz - wy,
-    xy - wz,
-    1 - (xx + zz),
-    yz + wx,
-    xz + wy,
-    yz - wx,
-    1 - (xx + yy)
-  ];
+  target[0] = 1 - (yy + zz);
+  target[1] = xy + wz;
+  target[2] = xz - wy;
+  target[3] = xy - wz;
+  target[4] = 1 - (xx + zz);
+  target[5] = yz + wx;
+  target[6] = xz + wy;
+  target[7] = yz - wx;
+  target[8] = 1 - (xx + yy);
+  return target;
 }
 
-function decomposeEulerXyz(
-  matrix: [number, number, number, number, number, number, number, number, number],
-  before: [number, number, number]
-): [number, number, number] {
-  let result: [number, number, number];
+function decomposeEulerXyzInto(
+  matrix: Rotation3Tuple,
+  before: [number, number, number],
+  target: MutableVec3Tuple,
+  candidate: MutableVec3Tuple
+): MutableVec3Tuple {
   const sy = -matrix[2];
   if (1 - Math.abs(sy) < 1e-6) {
     const y = Math.asin(sy);
@@ -1278,44 +1382,62 @@ function decomposeEulerXyz(
     const sz = Math.sin(before[2]);
     if (Math.abs(sx) < Math.abs(sz)) {
       const cx = Math.cos(before[0]);
-      result = cx > 0 ? [0, y, Math.asin(-matrix[3])] : [Math.PI, y, Math.asin(matrix[3])];
+      target[0] = cx > 0 ? 0 : Math.PI;
+      target[1] = y;
+      target[2] = cx > 0 ? Math.asin(-matrix[3]) : Math.asin(matrix[3]);
     } else {
       const cz = Math.cos(before[2]);
-      result = cz > 0 ? [Math.asin(-matrix[7]), y, 0] : [Math.asin(matrix[7]), y, Math.PI];
+      target[0] = cz > 0 ? Math.asin(-matrix[7]) : Math.asin(matrix[7]);
+      target[1] = y;
+      target[2] = cz > 0 ? 0 : Math.PI;
     }
   } else {
-    result = [
-      Math.atan2(matrix[5], matrix[8]),
-      Math.asin(-matrix[2]),
-      Math.atan2(matrix[1], matrix[0])
-    ];
+    target[0] = Math.atan2(matrix[5], matrix[8]);
+    target[1] = Math.asin(-matrix[2]);
+    target[2] = Math.atan2(matrix[1], matrix[0]);
   }
   const pi = Math.PI;
-  const tests: Array<[number, number, number]> = [
-    [result[0] + pi, pi - result[1], result[2] + pi],
-    [result[0] + pi, pi - result[1], result[2] - pi],
-    [result[0] + pi, -pi - result[1], result[2] + pi],
-    [result[0] + pi, -pi - result[1], result[2] - pi],
-    [result[0] - pi, pi - result[1], result[2] + pi],
-    [result[0] - pi, pi - result[1], result[2] - pi],
-    [result[0] - pi, -pi - result[1], result[2] + pi],
-    [result[0] - pi, -pi - result[1], result[2] - pi]
-  ];
   let minError =
-    Math.abs(diffAngle(result[0], before[0])) +
-    Math.abs(diffAngle(result[1], before[1])) +
-    Math.abs(diffAngle(result[2], before[2]));
-  for (const test of tests) {
-    const error =
-      Math.abs(diffAngle(test[0], before[0])) +
-      Math.abs(diffAngle(test[1], before[1])) +
-      Math.abs(diffAngle(test[2], before[2]));
-    if (error < minError) {
-      minError = error;
-      result = test;
-    }
+    Math.abs(diffAngle(target[0], before[0])) +
+    Math.abs(diffAngle(target[1], before[1])) +
+    Math.abs(diffAngle(target[2], before[2]));
+  const baseX = target[0];
+  const baseY = target[1];
+  const baseZ = target[2];
+  minError = chooseEulerCandidate(target, before, candidate, minError, baseX + pi, pi - baseY, baseZ + pi);
+  minError = chooseEulerCandidate(target, before, candidate, minError, baseX + pi, pi - baseY, baseZ - pi);
+  minError = chooseEulerCandidate(target, before, candidate, minError, baseX + pi, -pi - baseY, baseZ + pi);
+  minError = chooseEulerCandidate(target, before, candidate, minError, baseX + pi, -pi - baseY, baseZ - pi);
+  minError = chooseEulerCandidate(target, before, candidate, minError, baseX - pi, pi - baseY, baseZ + pi);
+  minError = chooseEulerCandidate(target, before, candidate, minError, baseX - pi, pi - baseY, baseZ - pi);
+  minError = chooseEulerCandidate(target, before, candidate, minError, baseX - pi, -pi - baseY, baseZ + pi);
+  chooseEulerCandidate(target, before, candidate, minError, baseX - pi, -pi - baseY, baseZ - pi);
+  return target;
+}
+
+function chooseEulerCandidate(
+  target: MutableVec3Tuple,
+  before: [number, number, number],
+  candidate: MutableVec3Tuple,
+  minError: number,
+  x: number,
+  y: number,
+  z: number
+): number {
+  candidate[0] = x;
+  candidate[1] = y;
+  candidate[2] = z;
+  const error =
+    Math.abs(diffAngle(candidate[0], before[0])) +
+    Math.abs(diffAngle(candidate[1], before[1])) +
+    Math.abs(diffAngle(candidate[2], before[2]));
+  if (error >= minError) {
+    return minError;
   }
-  return result;
+  target[0] = candidate[0];
+  target[1] = candidate[1];
+  target[2] = candidate[2];
+  return error;
 }
 
 function diffAngle(a: number, b: number): number {
@@ -1340,7 +1462,10 @@ function normalizeAngle(angle: number): number {
   return result;
 }
 
-function eulerXyzToQuaternion(euler: [number, number, number]): [number, number, number, number] {
+function eulerXyzToQuaternionInto(
+  euler: [number, number, number],
+  target: MutableQuatTuple
+): MutableQuatTuple {
   const [x, y, z] = euler;
   const c1 = Math.cos(x / 2);
   const c2 = Math.cos(y / 2);
@@ -1348,10 +1473,9 @@ function eulerXyzToQuaternion(euler: [number, number, number]): [number, number,
   const s1 = Math.sin(x / 2);
   const s2 = Math.sin(y / 2);
   const s3 = Math.sin(z / 2);
-  return normalizeQuaternion([
-    s1 * c2 * c3 + c1 * s2 * s3,
-    c1 * s2 * c3 - s1 * c2 * s3,
-    c1 * c2 * s3 + s1 * s2 * c3,
-    c1 * c2 * c3 - s1 * s2 * s3
-  ]);
+  target[0] = s1 * c2 * c3 + c1 * s2 * s3;
+  target[1] = c1 * s2 * c3 - s1 * c2 * s3;
+  target[2] = c1 * c2 * s3 + s1 * s2 * c3;
+  target[3] = c1 * c2 * c3 - s1 * s2 * s3;
+  return normalizeQuaternionInto(target, target);
 }

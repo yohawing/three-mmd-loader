@@ -29,7 +29,7 @@ import {
   writeVector3ToBuffer
 } from "./math.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
-import { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
+import { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
 import type { PrePhysicsScratch } from "./physics.js";
 import type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeExternalPhysicsData, RuntimeRestTransform } from "./types.js";
 import { readMmdBoneUserData } from "./userData.js";
@@ -753,7 +753,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private captureDebugStage(stage: keyof MmdRuntimeDebugState["stages"]): void {
     const mesh = this.mesh;
     if (!mesh) {
-      this.debugStages[stage] = createEmptyDebugStage();
+      clearDebugStage(this.debugStages[stage]);
       return;
     }
     captureRuntimeDebugStageInto(mesh, this.debugStages[stage]);
@@ -840,6 +840,11 @@ function copyFloat32ArrayToScratch(
 function resetNumberArray(target: number[]): number[] {
   target.length = 0;
   return target;
+}
+
+function clearDebugStage(stage: MmdRuntimeDebugState["stages"]["physics"]): void {
+  (stage.worldMatricesColumnMajor as number[]).length = 0;
+  (stage.morphWeights as number[]).length = 0;
 }
 
 function resetDirectUpdatedBoneIndices(

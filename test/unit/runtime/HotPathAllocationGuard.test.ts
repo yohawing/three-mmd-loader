@@ -99,16 +99,49 @@ describe("runtime hot path allocation guards", () => {
     const solverSource = await readFile("src/runtime/ik/CcdIkSolver.ts", "utf8");
     const hotPathBodies = [
       extractFunctionBody(solverSource, "solveChain"),
-      extractFunctionBody(solverSource, "solvePlaneLink")
+      extractFunctionBody(solverSource, "solvePlaneLink"),
+      extractFunctionBody(solverSource, "signedProjectedAngleInto"),
+      extractFunctionBody(solverSource, "projectVectorOnPlaneInto"),
+      extractFunctionBody(solverSource, "axisAngleQuaternionInto"),
+      extractFunctionBody(solverSource, "multiplyQuaternionsInto"),
+      extractFunctionBody(solverSource, "normalizeQuaternionInto"),
+      extractFunctionBody(solverSource, "invertQuaternionInto"),
+      extractFunctionBody(solverSource, "rotateVectorByQuaternionInto"),
+      extractFunctionBody(solverSource, "quaternionToRotation3Into"),
+      extractFunctionBody(solverSource, "decomposeEulerXyzInto"),
+      extractFunctionBody(solverSource, "chooseEulerCandidate"),
+      extractFunctionBody(solverSource, "eulerXyzToQuaternionInto"),
+      extractFunctionBody(solverSource, "clampLimitedRotationInto"),
+      extractFunctionBody(solverSource, "applyEffectiveRotation")
     ];
     const forbiddenPatterns: Array<readonly [string, RegExp]> = [
+      ["new Float32Array", /new\s+Float32Array\s*\(/],
+      ["new Uint8Array", /new\s+Uint8Array\s*\(/],
+      ["new Array", /new\s+Array\s*\(/],
+      ["empty array literal", /\[\s*\]/],
+      ["array return literal", /return\s+\[/],
+      ["typed tuple tests array", /Array<\s*\[/],
+      [".map(", /\.map\s*\(/],
+      [".filter(", /\.filter\s*\(/],
+      [".slice(", /\.slice\s*\(/],
       ["matrixTranslation()", /\bmatrixTranslation\s*\(/],
       ["subtractVectors()", /\bsubtractVectors\s*\(/],
       ["toLinkLimits()", /\btoLinkLimits\s*\(/],
       ["transformDirectionByInverseMatrix()", /\btransformDirectionByInverseMatrix\s*\(/],
       ["normalizeVector()", /\bnormalizeVector\s*\(/],
       ["crossVectors()", /\bcrossVectors\s*\(/],
-      ["stablePerpendicularAxis()", /\bstablePerpendicularAxis\s*\(/]
+      ["stablePerpendicularAxis()", /\bstablePerpendicularAxis\s*\(/],
+      ["axisTuple()", /\baxisTuple\s*\(/],
+      ["axisAngleQuaternion()", /\baxisAngleQuaternion\s*\(/],
+      ["multiplyQuaternions()", /\bmultiplyQuaternions\s*\(/],
+      ["normalizeQuaternion()", /\bnormalizeQuaternion\s*\(/],
+      ["invertQuaternion()", /\binvertQuaternion\s*\(/],
+      ["rotateVectorByQuaternion()", /\brotateVectorByQuaternion\s*\(/],
+      ["quaternionToRotation3()", /\bquaternionToRotation3\s*\(/],
+      ["decomposeEulerXyz()", /\bdecomposeEulerXyz\s*\(/],
+      ["eulerXyzToQuaternion()", /\beulerXyzToQuaternion\s*\(/],
+      ["signedProjectedAngle()", /\bsignedProjectedAngle\s*\(/],
+      ["projectVectorOnPlane()", /\bprojectVectorOnPlane\s*\(/]
     ];
 
     expectNoForbiddenPatterns(
@@ -116,6 +149,33 @@ describe("runtime hot path allocation guards", () => {
       forbiddenPatterns,
       "selected IK helper allocation slice"
     );
+  });
+
+  it("keeps runtime debug capture paths using caller-owned arrays", async () => {
+    const coreSource = await readFile("src/runtime/core.ts", "utf8");
+    const wasmRuntimeSource = await readFile("src/runtime/mmdAnimRuntime.ts", "utf8");
+    const physicsSource = await readFile("src/runtime/physics.ts", "utf8");
+    const hotPathBodies = [
+      extractMethodBody(coreSource, "captureDebugStage"),
+      extractMethodBody(wasmRuntimeSource, "captureDebugStage"),
+      extractMethodBody(wasmRuntimeSource, "capturePhysicsDebugStage"),
+      extractFunctionBody(wasmRuntimeSource, "copyArrayLikeToNumberArray"),
+      extractFunctionBody(physicsSource, "captureRuntimeDebugStageInto"),
+      extractFunctionBody(physicsSource, "extractMmdWorldMatricesInto"),
+      extractFunctionBody(physicsSource, "copyArrayLikeToNumberArray")
+    ];
+    const forbiddenPatterns: Array<readonly [string, RegExp]> = [
+      ["new Array", /new\s+Array\s*\(/],
+      ["empty array literal", /\[\s*\]/],
+      ["Array.from", /Array\.from\s*\(/],
+      [".map(", /\.map\s*\(/],
+      [".filter(", /\.filter\s*\(/],
+      [".slice(", /\.slice\s*\(/],
+      ["createEmptyDebugStage()", /\bcreateEmptyDebugStage\s*\(/],
+      ["captureRuntimeDebugStage()", /\bcaptureRuntimeDebugStage\s*\(/]
+    ];
+
+    expectNoForbiddenPatterns(hotPathBodies, forbiddenPatterns, "runtime debug capture paths");
   });
 });
 
