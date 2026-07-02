@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.5.0] - 2026-07-03
+
+### Added
+
+- Add generated PMX/VMD parity coverage comparing TypeScript runtime output
+  against the mmd-anim/WASM-backed runtime for sampling, append transforms, IK,
+  morph sync, camera/light tracks, and physics handoff state.
+- Add WASM-backed PMX parity fixtures for SDEF geometry, flip morphs, material
+  flag behavior, split ABI routing, and adapter diagnostics.
+- Add source-level hot-path allocation guards for runtime animation, append
+  transforms, IK solving, and related scratch-buffer helpers.
+
+### Changed
+
+- Promote the MMD-optimized Bullet backend as the recommended physics path in
+  README guidance and the example viewer while keeping Ammo.js as a deprecated
+  compatibility backend.
+- Remove the normal PMX load-time TypeScript parser merge fallback from
+  `MmdAnimBackedCore`; the WASM-backed path now requires the split parsed-model
+  or non-geometry-plus-geometry adapter result.
+- Reduce per-frame allocations across animation sampling, append transform
+  application, IK world-matrix composition, IK solve scratch storage, and
+  runtime debug/morph fallback paths.
+- Move local planning and release-runbook files out of the tracked public
+  surface, and add the portable fixture check to PR CI.
+
+### Fixed
+
+- Keep pre-append runtime scratch state synchronized after `resetPose()` so a
+  subsequent `clearAnimation()` and `evaluate()` does not reuse stale pose data.
+- Classify local playback oracle skips by runtime bug, oracle limitation, or
+  unavailable asset so local-only evidence is not confused with portable
+  release gates.
+- Keep Sour PMX plus `ラビットホール.vmd` documented as a local-only IK
+  limit/knee-instability regression case without redistributing user-owned
+  assets.
+
 ## [0.4.0] - 2026-06-30
 
 ### Added

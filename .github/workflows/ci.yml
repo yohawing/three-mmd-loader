@@ -47,6 +47,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Check fixtures
+        run: npm run check:fixtures
+
       - name: Smoke dist exports
         run: npm run smoke:dist
 

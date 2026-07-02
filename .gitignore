@@ -53,4 +53,11 @@ CLAUDE.md
 .claude/
 .aider*
 review-*.md
+/TODO.md
+/ROADMAP.md
+/PLAN.md
+/docs/TODO.md
+/docs/ROADMAP.md
+/docs/roadmap.md
+/docs/PLAN.md
 docs/RELEASE.md

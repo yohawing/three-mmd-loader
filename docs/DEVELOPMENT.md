@@ -120,6 +120,7 @@ npm ci
 npm run lint
 npm test
 npm run build
+npm run check:fixtures
 npm run smoke:dist
 npm run smoke:types
 ```
@@ -130,7 +131,6 @@ The release workflow package job is `.github/workflows/release.yml`. It runs on
 Node.js 24, repeats the PR / CI portable gate, and then adds:
 
 ```bash
-npm run check:fixtures
 npm pack --json
 ```
 
@@ -167,7 +167,8 @@ preflight when the submodule, generated WASM, or wrapper export surface changed.
 ## Core Checks
 
 Use the release gate tiers above when deciding which checks are required. The
-full operator-facing release checklist is in [RELEASE.md](./RELEASE.md).
+operator-facing release runbook is local-only when present; this public document
+records the portable gate contract.
 
 Command summary:
 
@@ -185,7 +186,7 @@ Command summary:
 | `npm run bench:wasm:perf -- <model> [repeat]` | Compares WASM and TypeScript fallback `loadModel` speed plus `loadModel + createThreeBufferGeometry` total time against a local PMX / PMD file. |
 | `npm run smoke:dist` | Verifies built package exports and key dist runtime paths. |
 | `npm run smoke:types` | Packs the library, installs it into a temporary TypeScript consumer, and verifies root/subpath imports with `tsc --noEmit`. |
-| `npm run check:fixtures` | Release-only portable fixture gate. Parses `test/fixtures/fixtures.sample.json` through built `dist` parser / Three.js assembly and writes `tmp/fixture-parse-report.json`. |
+| `npm run check:fixtures` | Portable fixture gate. Parses `test/fixtures/fixtures.sample.json` through built `dist` parser / Three.js assembly and writes `tmp/fixture-parse-report.json`. |
 | `npm run check:fixtures:physics` | Optional local evidence. Runs fixture checks with physics-related validation enabled. |
 | `npm run check:fixtures:local` | Parse-only crash-smoke over a gitignored local corpus inventory; skips when the inventory is absent. |
 | `npm pack --dry-run --json` | Verifies npm tarball contents without writing a package. |
@@ -557,12 +558,13 @@ npm ci
 npm run lint
 npm test
 npm run build
+npm run check:fixtures
 npm run smoke:dist
 npm run smoke:types
 ```
 
 The release workflow package job runs on Node.js 24. It repeats the same gate,
-then runs `npm run check:fixtures` and `npm pack --json`. For publishable runs
-it also validates package metadata, checks tag/version consistency for
-`v*.*.*` tags, uploads the npm package artifact, and publishes only from an
-explicit tag or a manual workflow dispatch with publishing enabled.
+then runs `npm pack --json`. For publishable runs it also validates package
+metadata, checks tag/version consistency for `v*.*.*` tags, uploads the npm
+package artifact, and publishes only from an explicit tag or a manual workflow
+dispatch with publishing enabled.
