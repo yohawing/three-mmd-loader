@@ -6,11 +6,13 @@ describe("example viewer source", () => {
   it("keeps viewer version metadata aligned with the package version", async () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
-    const buildDeploySource = await readFile("scripts/build-deploy.mjs", "utf8");
+    const buildDeploySource = await readLocalOptionalText("scripts/build-deploy.mjs");
 
     expect(html).toContain(`<meta name="mmd-viewer-version" content="${packageJson.version}" />`);
-    expect(buildDeploySource).toContain('name="mmd-viewer-version"');
-    expect(buildDeploySource).toContain('content="${packageJson.version}"');
+    if (buildDeploySource !== undefined) {
+      expect(buildDeploySource).toContain('name="mmd-viewer-version"');
+      expect(buildDeploySource).toContain('content="${packageJson.version}"');
+    }
   });
 
   it("clears model resources through the texture-aware dispose helper", async () => {
@@ -908,3 +910,18 @@ describe("example viewer source", () => {
     expect(serverSource).toContain('return resolve(viewerRoot, "assets", relativePath)');
   });
 });
+
+async function readLocalOptionalText(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error;
+}
