@@ -114,7 +114,4 @@ const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 
 ## Development
 
-Development notes for tests, scripts, and fixtures are in
-[docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md), including mmd-anim / Yw MMD and
-MMD-optimized Bullet Physics build notes and the public CI / release gate
-summary.
+Development notes are in [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md).
