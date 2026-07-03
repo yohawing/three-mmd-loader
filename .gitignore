@@ -51,6 +51,7 @@ AGENTS.md
 CLAUDE.md
 .cursor/
 .claude/
+.ai/
 .aider*
 review-*.md
 /TODO.md
