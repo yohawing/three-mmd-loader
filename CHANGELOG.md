@@ -19,8 +19,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Promote the MMD-optimized Bullet backend as the recommended physics path in
-  README guidance and the example viewer while keeping Ammo.js as a deprecated
-  compatibility backend.
+  README guidance and the example viewer.
 - Remove the normal PMX load-time TypeScript parser merge fallback from
   `MmdAnimBackedCore`; the WASM-backed path now requires the split parsed-model
   or non-geometry-plus-geometry adapter result.
