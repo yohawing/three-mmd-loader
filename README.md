@@ -20,25 +20,20 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | VMD (motion) | ✅ | ✅ |
 | VPD (pose) | ✅ | ✅ |
 | PMM (project) | ❌ | ❌ |
-| .x / .vac (accessory) | ❌ | ❌ |
-| .emm / .emd (effect project) | ❌ | ❌ |
-| .fx (MME effect) | ❌ | ❌ |
 
 ### Features
 
 | Feature | Status |
 | --- | --- |
-| Parser | ✅ PMX / PMD / VMD / VPD TypeScript parser |
+| Parser | ✅ PMX / PMD / VMD / VPD |
 | Deform / skinning | ✅ BDEF1/2/4, SDEF, QDEF |
-| MMD material / toon shader | ✅ Toon textures, alpha blending decisions, and material render ordering |
-| Append transform | ✅ PMX layer order |
-| IK link angle limits | ✅ PMX / PMD link limits with parent-local Euler clamp |
+| MMD material / toon shader | ✅ Toon textures, alpha blending decisions, render ordering, and self shadow |
+| IK / append-transform rigging | ✅ Verified through the mmd-anim/WASM-backed path |
 | VMD Camera / Light | ✅ Applies to Three.js Camera and DirectionalLight |
-| Self Shadow | ✅ Three.js shadow-map path with VMD self-shadow sampling |
-| Physics | ✅ MMD-optimized prebuilt Bullet Physics; Ammo.js backend is deprecated compatibility path |
+| Physics | ✅ MMD-focused Bullet Physics. |
 | Soft Body | ⚠️ PMX data parsed; runtime simulation not implemented |
 
-The default PMX runtime and WASM parser are backed by
+The main PMX parser and animation path are backed by
 [yohawing/mmd-anim](https://github.com/yohawing/mmd-anim).
 
 ## Acknowledgements
@@ -104,9 +99,7 @@ model.setAnimation(animation);
 ## Usage - Physics
 
 Physics is abstracted behind `MmdPhysicsBackend` so the physics library can be
-swapped. We recommend the MMD-optimized prebuilt Bullet Physics path. The
-Ammo.js backend remains available as a compatibility path, but it is deprecated
-and no longer part of the default guidance in README or viewer examples.
+swapped. The default path is the MMD-focused prebuilt Bullet Physics backend.
 
 ```ts
 import {
@@ -114,7 +107,7 @@ import {
   loadCustomBulletMmdModule
 } from "@yohawing/three-mmd-loader/physics";
 
-// Recommended: MMD-optimized prebuilt Bullet Physics.
+// Default: MMD-focused Bullet Physics backend.
 const mmdBullet = await loadCustomBulletMmdModule();
 const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 ```
