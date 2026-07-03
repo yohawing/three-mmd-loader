@@ -88,14 +88,6 @@ if (cameraState) {
 `applyMmdCameraStateToThreeCamera(...)` converts MMD camera coordinates for
 Three.js and returns the active camera.
 
-## Usage - Pose (VPD)
-
-```ts
-const { pose } = await loader.loadPose(vpdSource);
-const { animation } = await loader.loadPoseAnimation(vpdSource, "myPose");
-model.setAnimation(animation);
-```
-
 ## Usage - Physics
 
 Physics is abstracted behind `MmdPhysicsBackend` so the physics library can be

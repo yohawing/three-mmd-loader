@@ -85,14 +85,6 @@ if (cameraState) {
 }
 ```
 
-## 使い方 - ポーズ (VPD)
-
-```ts
-const { pose } = await loader.loadPose(vpdSource);
-const { animation } = await loader.loadPoseAnimation(vpdSource, "myPose");
-model.setAnimation(animation);
-```
-
 ## 使い方 - 物理
 
 物理は `MmdPhysicsBackend` で抽象化されていて、物理ライブラリを変更可能にしてあります。
