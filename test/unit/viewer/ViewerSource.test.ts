@@ -26,6 +26,15 @@ describe("example viewer source", () => {
     expect(disposeSource).not.toContain("function collectMaterialTextures(material)");
   });
 
+  it("keeps the default viewer camera far clip distance wide enough for large stages", async () => {
+    const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+
+    expect(sceneSetupSource).toContain("const viewerDefaultCameraFar = 2000;");
+    expect(sceneSetupSource).toContain("viewerDefaultCameraFar");
+    expect(sceneSetupSource).toContain("Math.max(radius * 80, 200)");
+    expect(sceneSetupSource).not.toContain("Math.max(radius * 40, 100)");
+  });
+
   it("adds loader root objects so split morph body meshes are rendered", async () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
