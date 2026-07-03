@@ -3,6 +3,18 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("example viewer source", () => {
+  it("keeps viewer version metadata aligned with the package version", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
+    const buildDeploySource = await readLocalOptionalText("scripts/build-deploy.mjs");
+
+    expect(html).toContain(`<meta name="mmd-viewer-version" content="${packageJson.version}" />`);
+    if (buildDeploySource !== undefined) {
+      expect(buildDeploySource).toContain('name="mmd-viewer-version"');
+      expect(buildDeploySource).toContain('content="${packageJson.version}"');
+    }
+  });
+
   it("clears model resources through the texture-aware dispose helper", async () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");
@@ -12,6 +24,15 @@ describe("example viewer source", () => {
     expect(disposeSource).toContain('import { disposeMmdModel } from "../../../dist/three/index.js"');
     expect(disposeSource).toContain("disposeMmdModel(model)");
     expect(disposeSource).not.toContain("function collectMaterialTextures(material)");
+  });
+
+  it("keeps the default viewer camera far clip distance wide enough for large stages", async () => {
+    const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+
+    expect(sceneSetupSource).toContain("const viewerDefaultCameraFar = 2000;");
+    expect(sceneSetupSource).toContain("viewerDefaultCameraFar");
+    expect(sceneSetupSource).toContain("Math.max(radius * 80, 200)");
+    expect(sceneSetupSource).not.toContain("Math.max(radius * 40, 100)");
   });
 
   it("adds loader root objects so split morph body meshes are rendered", async () => {
@@ -684,6 +705,21 @@ describe("example viewer source", () => {
     expect(modelSource).toContain('./physics-backend.js');
   });
 
+  it("defers Bullet physics initialization until a model and motion are both bound", async () => {
+    const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+
+    expect(physicsSource).toContain("createDeferredPhysicsBackend");
+    expect(physicsSource).toContain("export async function ensurePhysicsBackendReady()");
+    expect(physicsSource).toContain("loadPromise ??= createActivePhysicsBackend()");
+    expect(modelSource).toContain("const physicsBackend = await createPhysicsBackend()");
+    expect(modelSource).toContain("await ensurePhysicsBackendReady();\n      state.currentModel.setAnimation(state.currentMotion)");
+    expect(motionSource).toContain("await ensurePhysicsBackendReady();\n    state.currentModel.setAnimation(animation)");
+    expect(motionSource).toContain("void loadKurokoModelForQueuedMotion()");
+    expect(motionSource).not.toContain("await ensurePhysicsBackendReady();\n      state.pendingMotionSource = source");
+  });
+
   it("profiles viewer model load stages only behind the perf query flag", async () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const performanceSource = await readFile("examples/viewer/lib/performance.js", "utf8");
@@ -883,3 +919,18 @@ describe("example viewer source", () => {
     expect(serverSource).toContain('return resolve(viewerRoot, "assets", relativePath)');
   });
 });
+
+async function readLocalOptionalText(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error;
+}

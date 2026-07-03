@@ -17,14 +17,12 @@ import type {
   SoftBodyData
 } from "../model/modelTypes.js";
 import { parsePmd } from "../model/PmdModelParser.js";
-import { parsePmx, type ParsedPmx } from "../model/PmxModelParser.js";
 import { parseVmd } from "../vmd/index.js";
 import { parseVpd, vpdPoseToAnimation } from "../vpd/index.js";
 import { mmdAnimWasmVmdDtoToAnimation } from "../../runtime/mmdAnimWasmParser.js";
 import { ParsedModel } from "./ParsedModel.js";
 
 export interface MmdAnimWasmExports {
-  parsePmxModelJson(data: Uint8Array): string;
   parsePmxModelNonGeometryJson?: (data: Uint8Array) => string;
   parseMmdFormatJson?: (data: Uint8Array, fileName?: string | null) => string;
   parseVmdAnimationJson?: (data: Uint8Array) => string;
@@ -77,8 +75,7 @@ class MmdAnimPmxModel implements MmdModel {
 
   constructor(
     private readonly j: Record<string, unknown>,
-    fallbackParsed?: ParsedPmx,
-    geometry?: GeometryBuffers
+    geometry: GeometryBuffers
   ) {
     const rawMeta = (j["metadata"] ?? {}) as Record<string, unknown>;
     const topDiagnostics = (j["diagnostics"] as Diagnostic[] | undefined) ?? [];
@@ -88,13 +85,9 @@ class MmdAnimPmxModel implements MmdModel {
       ...(rawMeta as unknown as ModelMetadata),
       diagnostics: [...metaDiagnostics, ...topDiagnostics, ...adapterDiagnostics]
     };
-    this._geometry =
-      geometry ?? buildGeometry((j["geometry"] ?? {}) as Record<string, unknown>, fallbackParsed);
+    this._geometry = geometry;
     this._skeleton = normalizeSkeleton((j["skeleton"] ?? { bones: [] }) as SkeletonData);
-    this._materials = normalizeMaterials(
-      (this.j["materials"] ?? []) as MaterialInfo[],
-      fallbackParsed
-    );
+    this._materials = normalizeMaterials((this.j["materials"] ?? []) as MaterialInfo[]);
   }
 
   metadata(): ModelMetadata      { return this._metadata; }
@@ -107,30 +100,6 @@ class MmdAnimPmxModel implements MmdModel {
   joints(): JointData[]          { return (this.j["joints"] ?? []) as JointData[]; }
   softBodies(): SoftBodyData[]   { return (this.j["softBodies"] ?? []) as SoftBodyData[]; }
   embeddedTextures()             { return []; }
-}
-
-function buildGeometry(g: Record<string, unknown>, fallbackParsed: ParsedPmx | undefined): GeometryBuffers {
-  const positions = toF32(g["positions"]);
-  const vertexCount = positions.length / 3;
-  const rawIndices = (g["indices"] ?? []) as readonly number[];
-  const indices: Uint16Array | Uint32Array =
-    vertexCount <= 65535
-      ? Uint16Array.from(rawIndices)
-      : Uint32Array.from(rawIndices);
-  const rawAdditionalUvs = (g["additionalUvs"] ?? []) as readonly (readonly number[])[];
-  return {
-    positions,
-    normals: toF32(g["normals"]),
-    uvs: toF32(g["uvs"]),
-    additionalUvs: rawAdditionalUvs.map((set) => Float32Array.from(set)),
-    indices,
-    edgeScale: g["edgeScale"] != null ? toF32(g["edgeScale"]) : undefined,
-    materialGroups: g["materialGroups"] as GeometryBuffers["materialGroups"],
-    skinIndices: toSkinIndices16((g["skinIndices"] ?? []) as readonly number[]),
-    skinWeights: toF32(g["skinWeights"]),
-    sdef: buildSdef(g["sdef"]) ?? fallbackParsed?.geometry.sdef,
-    qdef: buildQdef(g["qdef"]) ?? fallbackParsed?.geometry.qdef
-  };
 }
 
 function buildGeometryFromWasm(g: WasmPmxGeometryDto): GeometryBuffers {
@@ -178,10 +147,6 @@ function buildMaterialGroupsFromWasm(raw: Uint32Array): GeometryBuffers["materia
   return materialGroups;
 }
 
-function toF32(value: unknown): Float32Array {
-  return value != null ? Float32Array.from(value as readonly number[]) : new Float32Array(0);
-}
-
 function toSkinIndices16(values: ArrayLike<number>): Uint16Array {
   const converted = new Uint16Array(values.length);
   for (let index = 0; index < values.length; index += 1) {
@@ -220,52 +185,12 @@ function normalizeSkeleton(skeleton: SkeletonData): SkeletonData {
   };
 }
 
-function normalizeMaterials(
-  materials: readonly MaterialInfo[],
-  fallbackParsed: ParsedPmx | undefined
-): MaterialInfo[] {
-  return materials.map((material, index) => {
-    const fallbackMaterial = fallbackParsed?.materials[index];
-    return {
-      ...material,
-      sharedToonIndex:
-        material.sharedToonIndex ?? fallbackMaterial?.sharedToonIndex ?? undefined,
-      toonTexturePath: material.toonTexturePath || fallbackMaterial?.toonTexturePath || ""
-    };
-  });
-}
-
-function buildSdef(value: unknown): GeometryBuffers["sdef"] {
-  if (value == null) {
-    return undefined;
-  }
-  const sdef = value as Record<string, unknown>;
-  const enabled = toF32(sdef["enabled"]);
-  if (!hasEnabledDeformVertex(enabled)) {
-    return undefined;
-  }
-  return {
-    enabled,
-    c: toF32(sdef["c"]),
-    r0: toF32(sdef["r0"]),
-    r1: toF32(sdef["r1"]),
-    rw0: toF32(sdef["rw0"]),
-    rw1: toF32(sdef["rw1"])
-  };
-}
-
-function buildQdef(value: unknown): GeometryBuffers["qdef"] {
-  if (value == null) {
-    return undefined;
-  }
-  const qdef = value as Record<string, unknown>;
-  const enabled = toF32(qdef["enabled"]);
-  if (!hasEnabledDeformVertex(enabled)) {
-    return undefined;
-  }
-  return {
-    enabled
-  };
+function normalizeMaterials(materials: readonly MaterialInfo[]): MaterialInfo[] {
+  return materials.map((material) => ({
+    ...material,
+    sharedToonIndex: material.sharedToonIndex ?? undefined,
+    toonTexturePath: material.toonTexturePath || ""
+  }));
 }
 
 function buildSdefFromWasm(g: WasmPmxGeometryDto): GeometryBuffers["sdef"] {
@@ -326,17 +251,25 @@ function buildAdapterDiagnostics(j: Record<string, unknown>): Diagnostic[] {
     diagnostics.push({
       level: "warning",
       code: "BONE_FIXED_AXIS_CONSTRAINTS_UNSUPPORTED",
-      message: "PMX fixed-axis bone constraints are parsed but not enforced by the runtime adapter."
+      message:
+        "Fixed-axis metadata is applied to IK links, but non-IK fixed-axis bone behavior is not yet enforced by the runtime."
     });
   }
   if (bones.some((bone) => bone.flags?.["localAxis"] === true)) {
     diagnostics.push({
       level: "warning",
       code: "BONE_LOCAL_AXIS_CONSTRAINTS_UNSUPPORTED",
-      message: "PMX local-axis bone constraints are parsed but not enforced by the runtime adapter."
+      message:
+        "Local-axis metadata is applied to IK link limits, but non-IK local-axis bone behavior is not yet enforced by the runtime."
     });
   }
   return diagnostics;
+}
+
+function missingSplitPmxAbi(): never {
+  throw new Error(
+    "mmd-anim PMX split ABI is required: provide WasmPmxParsedModel or parsePmxModelNonGeometryJson plus WasmPmxGeometry."
+  );
 }
 
 export class MmdAnimBackedCore implements MmdCore {
@@ -368,7 +301,7 @@ export class MmdAnimBackedCore implements MmdCore {
           const json = JSON.parse(parsedHandle.nonGeometryJson()) as Record<string, unknown>;
           const geometryHandle = parsedHandle.geometry();
           try {
-            return new MmdAnimPmxModel(json, undefined, buildGeometryFromWasm(geometryHandle));
+            return new MmdAnimPmxModel(json, buildGeometryFromWasm(geometryHandle));
           } finally {
             geometryHandle.free?.();
           }
@@ -380,15 +313,12 @@ export class MmdAnimBackedCore implements MmdCore {
         const json = JSON.parse(this.wasm.parsePmxModelNonGeometryJson(input)) as Record<string, unknown>;
         const geometryHandle = this.wasm.WasmPmxGeometry.fromPmxBytes(input);
         try {
-          return new MmdAnimPmxModel(json, undefined, buildGeometryFromWasm(geometryHandle));
+          return new MmdAnimPmxModel(json, buildGeometryFromWasm(geometryHandle));
         } finally {
           geometryHandle.free?.();
         }
       }
-      const json = JSON.parse(this.wasm.parsePmxModelJson(input)) as Record<string, unknown>;
-      // Keep the TS parser fallback load-time only for remaining adapter parity gaps.
-      // Wasm-unavailable environments are handled separately by FallbackCore.
-      return new MmdAnimPmxModel(json, parsePmx(input));
+      return missingSplitPmxAbi();
     }
     return new ParsedModel(parsePmd(input));
   }

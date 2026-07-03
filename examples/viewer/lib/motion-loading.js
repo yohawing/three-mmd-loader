@@ -4,6 +4,7 @@ import { findMmdMotionFiles, normalizeMmdRelativePath } from "../../../dist/thre
 import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateTransportState } from "./dom.js";
 import { animationDurationSeconds, kurokoModelUrl, state } from "./state.js";
 import { createCameraSwitcherEntry, loadCameraAnimation } from "./camera-loading.js";
+import { ensurePhysicsBackendReady } from "./physics-backend.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { labelFromUrl } from "./url-label.js";
 
@@ -66,6 +67,7 @@ export async function loadMotion(source, label = source.name ?? "motion") {
       animation,
       durationSeconds: animationDurationSeconds(animation)
     };
+    await ensurePhysicsBackendReady();
     state.currentModel.setAnimation(animation);
     dom.timeline.max = Math.max(animationDurationSeconds(animation), state.currentCameraMotion?.durationSeconds ?? 0, 0.001);
     state.elapsedSeconds = 0;

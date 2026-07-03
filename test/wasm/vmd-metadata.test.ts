@@ -8,7 +8,6 @@ describe("@yw-mmd/core-wasm VMD metadata", () => {
   it("routes loadVmd through the generated mmd-anim VMD parser when available", () => {
     const parseVmdAnimationJson = vi.fn(() => JSON.stringify(createMmdAnimCameraDto()));
     const core = new MmdAnimBackedCore({
-      parsePmxModelJson: () => "{}",
       parseVmdAnimationJson,
       wasm_wrapper_version: () => 7
     });

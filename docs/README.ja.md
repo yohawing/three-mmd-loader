@@ -20,25 +20,20 @@ Three.js 上で MMD モデルとモーションを読み込み・再生するた
 | VMD (モーション) | ✅ | ✅ |
 | VPD (ポーズ) | ✅ | ✅ |
 | PMM (プロジェクト) | ❌ | ❌ |
-| .x / .vac (アクセサリ) | ❌ | ❌ |
-| .emm / .emd (エフェクトプロジェクト) | ❌ | ❌ |
-| .fx (MME エフェクト) | ❌ | ❌ |
 
 ### 機能
 
 | 機能 | 状態 |
 | --- | --- |
-| Parser | ✅ PMX / PMD / VMD / VPD TypeScript parser |
-| Deform / skinning | ✅ BDEF1/2/4, SDEF, QDEF |
-| MMD マテリアル / Toon シェーダー | ✅ Toon、AlphaBlend 判定、描画順 |
-| 付与変形 (append transform) | ✅ PMX layer 順 |
-| IK link angle limits | ✅ PMX / PMD link limits + parent-local Euler clamp |
-| VMD Camera / Light | ✅ Three.js の Camera、DirectionalLight に適用 |
-| Self Shadow | ✅ Three.js shadow-map 経路 + VMD self-shadow sampling |
-| 物理 | ✅ MMD最適化ビルド済みのBullet Physics / Ammo.js backend は deprecated 互換経路 |
-| Soft Body | ⚠️ PMX データは解析 / runtime simulation は未実装 |
+| パーサー | ✅ PMX / PMD / VMD / VPD |
+| 変形 / スキニング | ✅ BDEF1/2/4, SDEF, QDEF |
+| MMD マテリアル / Toon シェーダー | ✅ Toon、AlphaBlend 判定、描画順、自己影 |
+| IK / 付与変形などのリギング | ✅ mmd-anim/WASM 経路で検証 |
+| VMD カメラ / ライト | ✅ Three.js の Camera、DirectionalLight に適用 |
+| 物理 | ✅ MMD 向け Bullet Physics |
+| ソフトボディ | ⚠️ PMX データは解析 / ランタイムシミュレーションは未実装 |
 
-PMX の既定ランタイムと WASM parser には
+PMX パーサーとアニメーション処理の主要経路には
 [yohawing/mmd-anim](https://github.com/yohawing/mmd-anim) を使用しています。
 
 ## Acknowledgements
@@ -90,19 +85,10 @@ if (cameraState) {
 }
 ```
 
-## 使い方 - ポーズ (VPD)
-
-```ts
-const { pose } = await loader.loadPose(vpdSource);
-const { animation } = await loader.loadPoseAnimation(vpdSource, "myPose");
-model.setAnimation(animation);
-```
-
 ## 使い方 - 物理
 
 物理は `MmdPhysicsBackend` で抽象化されていて、物理ライブラリを変更可能にしてあります。
-MMD最適化ビルド済みのBullet Physicsを推奨しています。
-Ammo.js backend は互換用として残していますが、deprecated であり、今後の標準導線からは外します。
+標準経路は MMD 向けにビルド済みの Bullet Physics バックエンドです。
 
 ```ts
 import {
@@ -110,7 +96,7 @@ import {
   loadCustomBulletMmdModule
 } from "@yohawing/three-mmd-loader/physics";
 
-// 推奨: MMD最適化ビルド済みのBullet Physics。
+// 標準: MMD 向け Bullet Physics バックエンド。
 const mmdBullet = await loadCustomBulletMmdModule();
 const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 ```

@@ -409,10 +409,12 @@ function captureRuntimeDebugStageInto(
 ): MmdRuntimeDebugStageState {
   mesh.updateWorldMatrix(false, true);
   extractMmdWorldMatricesInto(mesh, mutableNumberArray(target.worldMatricesColumnMajor));
-  copyArrayLikeToNumberArray(
-    mesh.morphTargetInfluences ?? [],
-    mutableNumberArray(target.morphWeights)
-  );
+  const morphWeights = mutableNumberArray(target.morphWeights);
+  if (mesh.morphTargetInfluences) {
+    copyArrayLikeToNumberArray(mesh.morphTargetInfluences, morphWeights);
+  } else {
+    morphWeights.length = 0;
+  }
   return target;
 }
 
@@ -421,13 +423,14 @@ function extractMmdWorldMatrices(mesh: THREE.SkinnedMesh): number[] {
 }
 
 function extractMmdWorldMatricesInto(mesh: THREE.SkinnedMesh, matrices: number[]): number[] {
-  const signs = [1, 1, -1, 1];
   matrices.length = 0;
   for (const bone of mesh.skeleton.bones) {
     const elements = bone.matrixWorld.elements;
     for (let column = 0; column < 4; column += 1) {
+      const columnSign = column === 2 ? -1 : 1;
       for (let row = 0; row < 4; row += 1) {
-        matrices.push(signs[row] * elements[column * 4 + row] * signs[column]);
+        const rowSign = row === 2 ? -1 : 1;
+        matrices.push(rowSign * elements[column * 4 + row] * columnSign);
       }
     }
   }

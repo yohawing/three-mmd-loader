@@ -8,7 +8,7 @@ import {
 import { MmdAnimRuntime, DefaultMmdRuntime } from "../../../dist/runtime/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
-import { createPhysicsBackend, disposeActivePhysicsBackend } from "./physics-backend.js";
+import { createPhysicsBackend, disposeActivePhysicsBackend, ensurePhysicsBackendReady } from "./physics-backend.js";
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
 import { loadCameraFile } from "./camera-loading.js";
 import { hideCreditPopup, showModelCredits } from "./credits.js";
@@ -107,6 +107,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
+      await ensurePhysicsBackendReady();
       state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
@@ -185,6 +186,7 @@ export async function loadModelFolder(files) {
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
+      await ensurePhysicsBackendReady();
       state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
@@ -247,6 +249,7 @@ export async function switchFolderModel(modelFile) {
     updatePlaybackDisplay();
     fitCameraToObject(state.currentModel.mesh);
     if (hasCurrentMotion()) {
+      await ensurePhysicsBackendReady();
       state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
