@@ -23,6 +23,8 @@ const viewerSelfShadowQuality = {
 // this factor; the cap bounds the drawing buffer on hi-DPI displays. Tunable.
 const viewerSupersample = 2;
 const viewerMaxPixelRatio = 3;
+const viewerDefaultCameraNear = 0.01;
+const viewerDefaultCameraFar = 2000;
 
 export function setupScene() {
   if (!(dom.canvas instanceof HTMLCanvasElement)) throw new Error("Viewer canvas is missing");
@@ -38,8 +40,20 @@ export function setupScene() {
   state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled;
   state.renderer.shadowMap.type = THREE.PCFShadowMap;
   state.scene = new THREE.Scene();
-  state.perspectiveCamera = new THREE.PerspectiveCamera(22, 1, 0.01, 1000);
-  state.orthographicCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 1000);
+  state.perspectiveCamera = new THREE.PerspectiveCamera(
+    22,
+    1,
+    viewerDefaultCameraNear,
+    viewerDefaultCameraFar
+  );
+  state.orthographicCamera = new THREE.OrthographicCamera(
+    -1,
+    1,
+    1,
+    -1,
+    viewerDefaultCameraNear,
+    viewerDefaultCameraFar
+  );
   state.camera = state.perspectiveCamera;
   state.camera.position.set(0, 1.1, 9);
   state.controls = new OrbitControls(state.camera, dom.canvas);
@@ -94,7 +108,7 @@ export function fitCameraToObject(object) {
   state.controls.object = state.camera;
   state.perspectiveCamera.position.copy(sphere.center).add(new THREE.Vector3(0, radius * 0.15, radius * 5.2));
   state.perspectiveCamera.near = Math.max(radius / 100, 0.01);
-  state.perspectiveCamera.far = Math.max(radius * 40, 100);
+  state.perspectiveCamera.far = Math.max(radius * 80, 200);
   state.perspectiveCamera.updateProjectionMatrix();
   fitShadowCameraToObject(object);
   state.controls.update();
@@ -105,8 +119,8 @@ export function setDefaultCameraView() {
   state.camera = state.perspectiveCamera;
   state.controls.object = state.camera;
   state.perspectiveCamera.position.set(0, 1.1, 9);
-  state.perspectiveCamera.near = 0.01;
-  state.perspectiveCamera.far = 1000;
+  state.perspectiveCamera.near = viewerDefaultCameraNear;
+  state.perspectiveCamera.far = viewerDefaultCameraFar;
   state.perspectiveCamera.updateProjectionMatrix();
   state.selfShadowBoundsScratch.set(
     new THREE.Vector3(-0.6, 0, -0.6),

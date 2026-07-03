@@ -8,6 +8,7 @@ export interface LocalPlaybackFixturesResult {
 }
 
 export type LocalPlaybackStageName = "vmdInterpolation" | "appendTransform" | "ik" | "physics";
+export type LocalPlaybackSkipCategory = "runtime-bug" | "oracle-limitation" | "asset-unavailable";
 
 export interface LocalPlaybackCase {
   readonly name: string;
@@ -26,6 +27,7 @@ export interface LocalPlaybackCase {
 export interface LocalPlaybackSkippedCase {
   readonly name: string;
   readonly reason: string;
+  readonly category?: LocalPlaybackSkipCategory;
 }
 
 interface FixtureInventory {
@@ -68,6 +70,7 @@ interface PlaybackSmokeCaseConfig {
   readonly morphEpsilon?: number;
   readonly cameraEpsilon?: number;
   readonly skipReason?: string;
+  readonly skipCategory?: LocalPlaybackSkipCategory;
 }
 
 const defaultInventoryPath = "test/fixtures/fixtures.local.json";
@@ -112,7 +115,8 @@ export async function loadLocalPlaybackFixtures(
     if (rawCase.skipReason !== undefined) {
       skippedCases.push({
         name: resolvedCase.name,
-        reason: rawCase.skipReason
+        reason: rawCase.skipReason,
+        category: rawCase.skipCategory
       });
       continue;
     }
@@ -283,7 +287,11 @@ function parsePlaybackCaseConfig(raw: unknown, label: string): PlaybackSmokeCase
     skipReason:
       config.skipReason === undefined
         ? undefined
-        : readString(config.skipReason, `${label}.skipReason`)
+        : readString(config.skipReason, `${label}.skipReason`),
+    skipCategory:
+      config.skipCategory === undefined
+        ? undefined
+        : readSkipCategory(config.skipCategory, `${label}.skipCategory`)
   };
 }
 
@@ -370,4 +378,16 @@ function readStage(raw: unknown, label: string): LocalPlaybackStageName {
     throw new Error(`${label} must be a known runtime stage`);
   }
   return stage as LocalPlaybackStageName;
+}
+
+function readSkipCategory(raw: unknown, label: string): LocalPlaybackSkipCategory {
+  const category = readString(raw, label);
+  if (
+    category !== "runtime-bug" &&
+    category !== "oracle-limitation" &&
+    category !== "asset-unavailable"
+  ) {
+    throw new Error(`${label} must be runtime-bug, oracle-limitation, or asset-unavailable`);
+  }
+  return category;
 }

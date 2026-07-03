@@ -1059,4 +1059,53 @@ describe("CcdIkSolver", () => {
       })
     ).toThrow("CCD IK chain must be prepared");
   });
+
+  it("applies prepared chains without returning a result and matches solvePrepared pose mutation", () => {
+    const bones: CcdIkBone[] = [
+      { parentIndex: -1, translation: [0, 0, 0] },
+      { parentIndex: 0, translation: [1, 0, 0] },
+      { parentIndex: 1, translation: [1, 0, 0] },
+      { parentIndex: 0, translation: [1, 1, 0] }
+    ];
+    const solver = new CcdIkSolver();
+    const chains = solver.prepareChains(
+      [
+        {
+          goalBoneIndex: 3,
+          effectorBoneIndex: 2,
+          links: [{ boneIndex: 1 }],
+          iterationCount: 4,
+          maxAnglePerIteration: Math.PI
+        }
+      ],
+      bones
+    );
+    const solvePreparedRotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+    const applyPreparedRotations: MutableQuatTuple[] = [
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY],
+      [...IDENTITY]
+    ];
+
+    const result = solver.solvePrepared({
+      bones,
+      pose: { rotations: solvePreparedRotations },
+      chains
+    });
+    const applyResult = solver.applyPrepared({
+      bones,
+      pose: { rotations: applyPreparedRotations },
+      chains
+    });
+
+    expect(applyResult).toBeUndefined();
+    expect(result.finalDistances[0]).toBeLessThan(1e-5);
+    expect(applyPreparedRotations).toEqual(solvePreparedRotations);
+  });
 });

@@ -92,7 +92,7 @@ export function solvePreparedIk(
     rotation[2] = bone.quaternion.z;
     rotation[3] = bone.quaternion.w;
   }
-  solver.solvePrepared({
+  solver.applyPrepared({
     bones: scratch.bones as readonly CcdIkBone[],
     pose: { rotations: scratch.rotations },
     chains

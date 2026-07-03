@@ -2,15 +2,34 @@ import * as THREE from "three";
 import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
 import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
 import type { MmdDirectBufferPhysicsBackend, MmdPhysicsBackend, MmdPhysicsStepBuffers, MmdPhysicsStepContext } from "../physics/index.js";
-import { applyMmdAnimation, isMmdAnimation, sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./animation.js";
-import { applyAppendTransforms, reapplyAppendTransformsForSources } from "./append.js";
+import {
+  applyMmdAnimation,
+  isMmdAnimation,
+  preparePreAppendTransforms,
+  sampleMmdCameraTrackInto,
+  sampleMmdLightTrackInto
+} from "./animation.js";
+import {
+  appendTransformOrder,
+  applyAppendTransforms,
+  reapplyAppendTransformsForSources
+} from "./append.js";
 import { createCcdIkStaticBones, readIkChains, solvePreparedIk } from "./ik-bridge.js";
 import type { SolvePreparedIkScratch } from "./ik-bridge.js";
 import { CcdIkSolver } from "./ik/index.js";
 import type { CcdIkPreparedChain } from "./ik/index.js";
-import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
+import {
+  copyNumbersToFloat32Scratch,
+  ensureFloat32ArrayLength,
+  normalizeFrameRate,
+  prepareQuaternionScratchArray,
+  prepareVector3ScratchArray,
+  threeQuaternionToMmd,
+  writeQuaternionToBuffer,
+  writeVector3ToBuffer
+} from "./math.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
-import { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
+import { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
 import type { PrePhysicsScratch } from "./physics.js";
 import type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeExternalPhysicsData, RuntimeRestTransform } from "./types.js";
 import { readMmdBoneUserData } from "./userData.js";
@@ -51,12 +70,28 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private readonly disabledIkBoneNames = new Set<string>();
   private readonly scratchAppendTranslations: THREE.Vector3[] = [];
   private readonly scratchAppendRotations: THREE.Quaternion[] = [];
+  private cachedAppendTransformOrder: number[] = [];
+  private readonly scratchReapplyChangedAppendBoneIndices = new Set<number>();
+  private readonly scratchReappliedAppendBoneIndices = new Set<number>();
   private readonly scratchReapplyAppendTranslations: THREE.Vector3[] = [];
   private readonly scratchReapplyAppendRotations: THREE.Quaternion[] = [];
   private readonly scratchVector3A = new THREE.Vector3();
   private readonly scratchQuaternionA = new THREE.Quaternion();
   private readonly scratchAnimation = {
     boneMorphQuaternion: new THREE.Quaternion(),
+    boneSample: {
+      frame: 0,
+      translationX: 0,
+      translationY: 0,
+      translationZ: 0,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
+      rotationW: 1,
+      hasPhysicsToggle: false,
+      physicsToggle: -1
+    },
+    bonePhysicsToggles: {} as Record<string, number>,
     groupMorphDirectWeights: [] as number[],
     groupMorphVisited: new Uint8Array(0)
   };
@@ -181,7 +216,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
 
   resetPose(): void {
     this.restoreRestTransforms();
-    this.preAppendTransforms = [];
+    this.syncPreAppendTransformsToCurrentPose();
   }
 
   clearAnimation(): void {
@@ -225,6 +260,8 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.clearAnimation();
     this.mesh = undefined;
     this.restTransforms = [];
+    this.preAppendTransforms.length = 0;
+    this.cachedAppendTransformOrder.length = 0;
     this.physicsSimulation?.reset(seconds);
     this.physicsBackend?.reset?.(
       createPhysicsResetContext(createFrameState(seconds, this.frameRate))
@@ -267,6 +304,13 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private prepareAnimationTarget(mesh: THREE.SkinnedMesh): void {
     this.restoreRestTransforms();
     this.mesh = mesh;
+    const boneCount = mesh.skeleton.bones.length;
+    this.cachedAppendTransformOrder = appendTransformOrder(mesh.skeleton.bones);
+    prepareVector3ScratchArray(this.scratchAppendTranslations, boneCount);
+    prepareQuaternionScratchArray(this.scratchAppendRotations, boneCount);
+    prepareVector3ScratchArray(this.scratchReapplyAppendTranslations, boneCount);
+    prepareQuaternionScratchArray(this.scratchReapplyAppendRotations, boneCount);
+    preparePreAppendTransforms(mesh.skeleton.bones, this.preAppendTransforms);
     this.restTransforms = mesh.skeleton.bones.map((bone) => ({
       position: bone.position.clone(),
       quaternion: bone.quaternion.clone()
@@ -317,6 +361,23 @@ export class DefaultMmdRuntime implements MmdRuntime {
       bone.position.copy(rest.position);
       bone.quaternion.copy(rest.quaternion);
     });
+  }
+
+  private syncPreAppendTransformsToCurrentPose(): void {
+    const mesh = this.mesh;
+    if (!mesh || this.preAppendTransforms.length === 0) {
+      return;
+    }
+    const bones = mesh.skeleton.bones;
+    for (let index = 0; index < bones.length; index += 1) {
+      const bone = bones[index];
+      const transform = this.preAppendTransforms[index];
+      if (!bone || !transform) {
+        continue;
+      }
+      transform.position.copy(bone.position);
+      transform.quaternion.copy(bone.quaternion);
+    }
   }
 
   private solveIk(): Set<number> {
@@ -415,7 +476,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     if (!mesh) {
       return;
     }
-    const result = applyMmdAnimation(
+    const bonePhysicsToggles = applyMmdAnimation(
       mesh,
       this.mmdAnimation,
       this.restTransforms,
@@ -423,9 +484,9 @@ export class DefaultMmdRuntime implements MmdRuntime {
       this.scratchAnimation,
       frame
     );
-    if (!result) return;
+    if (!bonePhysicsToggles) return;
     syncMorphSplitTargetInfluences(mesh);
-    this.bonePhysicsToggles = result.bonePhysicsToggles;
+    this.bonePhysicsToggles = bonePhysicsToggles;
   }
 
   private updateCurrentIkStates(frame: number): void {
@@ -470,12 +531,30 @@ export class DefaultMmdRuntime implements MmdRuntime {
 
 
   private applyCurrentAppendTransforms(): void {
-    applyAppendTransforms(this.mesh, this.scratchAppendTranslations, this.scratchAppendRotations, this.scratchVector3A, this.scratchQuaternionA);
+    applyAppendTransforms(
+      this.mesh,
+      this.cachedAppendTransformOrder,
+      this.scratchAppendTranslations,
+      this.scratchAppendRotations,
+      this.scratchVector3A,
+      this.scratchQuaternionA
+    );
   }
 
 
   private reapplyCurrentAppendTransformsForSources(sourceBoneIndices: ReadonlySet<number>): void {
-    reapplyAppendTransformsForSources(this.mesh, sourceBoneIndices, this.preAppendTransforms, this.scratchReapplyAppendTranslations, this.scratchReapplyAppendRotations, this.scratchVector3A, this.scratchQuaternionA);
+    reapplyAppendTransformsForSources(
+      this.mesh,
+      sourceBoneIndices,
+      this.cachedAppendTransformOrder,
+      this.preAppendTransforms,
+      this.scratchReapplyChangedAppendBoneIndices,
+      this.scratchReappliedAppendBoneIndices,
+      this.scratchReapplyAppendTranslations,
+      this.scratchReapplyAppendRotations,
+      this.scratchVector3A,
+      this.scratchQuaternionA
+    );
   }
 
 
@@ -674,7 +753,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private captureDebugStage(stage: keyof MmdRuntimeDebugState["stages"]): void {
     const mesh = this.mesh;
     if (!mesh) {
-      this.debugStages[stage] = createEmptyDebugStage();
+      clearDebugStage(this.debugStages[stage]);
       return;
     }
     captureRuntimeDebugStageInto(mesh, this.debugStages[stage]);
@@ -761,6 +840,11 @@ function copyFloat32ArrayToScratch(
 function resetNumberArray(target: number[]): number[] {
   target.length = 0;
   return target;
+}
+
+function clearDebugStage(stage: MmdRuntimeDebugState["stages"]["physics"]): void {
+  (stage.worldMatricesColumnMajor as number[]).length = 0;
+  (stage.morphWeights as number[]).length = 0;
 }
 
 function resetDirectUpdatedBoneIndices(

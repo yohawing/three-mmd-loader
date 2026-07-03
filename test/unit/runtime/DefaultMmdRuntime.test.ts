@@ -536,6 +536,45 @@ describe("DefaultMmdRuntime", () => {
     expect(append.position.x).toBeCloseTo(0);
   });
 
+  it("does not reuse stale pre-append transforms after resetPose and clearAnimation", () => {
+    const root = new THREE.Bone();
+    root.name = "root";
+    const source = new THREE.Bone();
+    source.name = "source";
+    source.position.set(1, 0, 0);
+    root.add(source);
+    const append = new THREE.Bone();
+    append.name = "append";
+    append.userData.mmdAppendTransform = { parentIndex: 1, weight: 1 };
+    append.userData.mmdFlags = { appendTranslate: true };
+    root.add(append);
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    mesh.add(root);
+    mesh.bind(new THREE.Skeleton([root, source, append]));
+    mesh.userData.mmdIkChains = [
+      {
+        goalBoneIndex: 0,
+        effectorBoneIndex: 1,
+        links: [{ boneIndex: 1 }],
+        iterationCount: 0
+      }
+    ];
+    const animation = createEmptyMmdAnimation();
+    animation.boneTracks.append = createBoneTrack([
+      { frame: 0, translation: [10, 0, 0], rotation: [0, 0, 0, 1] }
+    ]);
+
+    const runtime = new DefaultMmdRuntime();
+    runtime.setAnimation(animation, mesh);
+    expect(append.position.x).toBeCloseTo(10);
+
+    runtime.resetPose();
+    runtime.clearAnimation();
+    runtime.evaluate(0, { physics: false });
+
+    expect(append.position.x).toBeCloseTo(0);
+  });
+
   it("can skip IK evaluation without changing default IK behavior", () => {
     const ikSource = new THREE.Bone();
     ikSource.name = "ikSource";

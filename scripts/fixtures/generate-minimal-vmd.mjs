@@ -11,7 +11,11 @@
  *     12 bytes  translation xyz (f32 × 3)
  *     16 bytes  rotation quaternion xyzw (f32 × 4)
  *     64 bytes  bezier interpolation (linear defaults: 20 20 107 107 pattern)
- *   4 bytes   morph frame count (i32 LE) = 0
+ *   4 bytes   morph frame count (i32 LE)
+ *   per morph frame:
+ *     15 bytes  morph name (Shift-JIS, null-padded)
+ *      4 bytes  frame number (u32 LE)
+ *      4 bytes  weight (f32)
  *   4 bytes   camera frame count (i32 LE) = 0
  *   4 bytes   light frame count (i32 LE) = 0
  *   4 bytes   self-shadow frame count (i32 LE) = 0
@@ -24,6 +28,9 @@ import { fileURLToPath } from "node:url";
 
 const SKINNING_VMD_OUTPUT_DIR = "test/fixtures/generated/skinning";
 const CAMERA_LIGHT_VMD_OUTPUT_DIR = "test/fixtures/generated/camera-light-vmd";
+const APPEND_VMD_OUTPUT_DIR = "test/fixtures/generated/append-vmd";
+const IK_VMD_OUTPUT_DIR = "test/fixtures/generated/ik-vmd";
+const MORPH_VMD_OUTPUT_DIR = "test/fixtures/generated/morph-vmd";
 
 // Linear bezier interpolation control points (standard MMD defaults).
 // Layout: 4 axes (X,Y,Z,R) × 16 bytes each, interleaved in a specific pattern.
@@ -46,8 +53,9 @@ const LINEAR_CAMERA_INTERPOLATION = new Uint8Array([
  *
  * @param {object} options
  * @param {string} [options.modelName]  Model name written into VMD header (cosmetic).
- * @param {Array<{boneName: string, frame?: number, quaternion: [number,number,number,number]}>} options.boneFrames
- *   Each entry sets one bone keyframe. quaternion = [x, y, z, w].
+ * @param {Array<{boneName: string, frame?: number, translation?: [number,number,number], quaternion: [number,number,number,number]}>} options.boneFrames
+ *   Each entry sets one bone keyframe. translation = [x, y, z], quaternion = [x, y, z, w].
+ * @param {Array<{morphName: string, frame?: number, weight: number}>} [options.morphFrames]
  * @param {Array<{frame?: number, distance: number, position: [number,number,number], rotation: [number,number,number], fov: number, perspective?: boolean}>} [options.cameraFrames]
  * @param {Array<{frame?: number, color: [number,number,number], direction: [number,number,number]}>} [options.lightFrames]
  * @param {Array<{frame?: number, mode: number, distance: number}>} [options.selfShadowFrames]
@@ -56,6 +64,7 @@ const LINEAR_CAMERA_INTERPOLATION = new Uint8Array([
 export function generateMinimalVmd({
   modelName = "",
   boneFrames = [],
+  morphFrames = [],
   cameraFrames = [],
   lightFrames = [],
   selfShadowFrames = []
@@ -95,14 +104,20 @@ export function generateMinimalVmd({
   for (const bf of boneFrames) {
     fixedText(bf.boneName, 15);                    // bone name (15 bytes)
     u32(bf.frame ?? 0);                            // frame number
-    f32(0); f32(0); f32(0);                        // translation (zero)
+    const translation = bf.translation ?? [0, 0, 0];
+    f32(translation[0]); f32(translation[1]); f32(translation[2]);
     const [qx, qy, qz, qw] = bf.quaternion;
     f32(qx); f32(qy); f32(qz); f32(qw);           // rotation quaternion
     out.push(...LINEAR_INTERPOLATION);             // interpolation (64 bytes)
   }
 
   // Morph frames
-  i32(0);
+  i32(morphFrames.length);
+  for (const frame of morphFrames) {
+    fixedText(frame.morphName, 15);
+    u32(frame.frame ?? 0);
+    f32(frame.weight);
+  }
   // Camera frames
   i32(cameraFrames.length);
   for (const frame of cameraFrames) {
@@ -244,6 +259,33 @@ export const CAMERA_LIGHT_VMD_CASES = {
   }
 };
 
+export const APPEND_VMD_CASES = {
+  "rotate-append-source-90": {
+    modelName: "append90",
+    boneFrames: [
+      { boneName: "appendSource", frame: 0, quaternion: rotZ(90) }
+    ]
+  }
+};
+
+export const IK_VMD_CASES = {
+  "ik-target-offset": {
+    modelName: "ikOffset",
+    boneFrames: [
+      { boneName: "leftLegIk", frame: 0, translation: [-0.10358984, 0, 0.2], quaternion: [0, 0, 0, 1] }
+    ]
+  }
+};
+
+export const MORPH_VMD_CASES = {
+  "tiny-raise-half": {
+    modelName: "tinyRaise",
+    morphFrames: [
+      { morphName: "tiny_raise", frame: 0, weight: 0.5 }
+    ]
+  }
+};
+
 export function skinningVmdCaseIds() {
   return Object.keys(SKINNING_VMOD_CASES);
 }
@@ -274,6 +316,36 @@ export function generateCameraLightVmd(caseId) {
   return generateMinimalVmd(spec);
 }
 
+export function appendVmdCaseIds() {
+  return Object.keys(APPEND_VMD_CASES);
+}
+
+export function generateAppendVmd(caseId) {
+  const spec = APPEND_VMD_CASES[caseId];
+  if (!spec) throw new Error(`Unknown append VMD case: ${caseId}`);
+  return generateMinimalVmd(spec);
+}
+
+export function ikVmdCaseIds() {
+  return Object.keys(IK_VMD_CASES);
+}
+
+export function generateIkVmd(caseId) {
+  const spec = IK_VMD_CASES[caseId];
+  if (!spec) throw new Error(`Unknown IK VMD case: ${caseId}`);
+  return generateMinimalVmd(spec);
+}
+
+export function morphVmdCaseIds() {
+  return Object.keys(MORPH_VMD_CASES);
+}
+
+export function generateMorphVmd(caseId) {
+  const spec = MORPH_VMD_CASES[caseId];
+  if (!spec) throw new Error(`Unknown morph VMD case: ${caseId}`);
+  return generateMinimalVmd(spec);
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // CLI
 // ──────────────────────────────────────────────────────────────────────────────
@@ -282,20 +354,41 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const outputArgIndex = process.argv.indexOf("--output-dir");
   const writeSelfShadow = process.argv.includes("--all-self-shadow");
   const writeCameraLight = process.argv.includes("--camera-light");
+  const writeAppend = process.argv.includes("--append");
+  const writeIk = process.argv.includes("--ik");
+  const writeMorph = process.argv.includes("--morph");
   const outputDir =
     outputArgIndex >= 0 && process.argv[outputArgIndex + 1] !== undefined
       ? process.argv[outputArgIndex + 1]
+      : writeMorph
+        ? MORPH_VMD_OUTPUT_DIR
+      : writeIk
+        ? IK_VMD_OUTPUT_DIR
+      : writeAppend
+        ? APPEND_VMD_OUTPUT_DIR
       : writeCameraLight
         ? CAMERA_LIGHT_VMD_OUTPUT_DIR
         : SKINNING_VMD_OUTPUT_DIR;
-  const caseIds = writeCameraLight
+  const caseIds = writeMorph
+    ? morphVmdCaseIds()
+    : writeIk
+    ? ikVmdCaseIds()
+    : writeAppend
+    ? appendVmdCaseIds()
+    : writeCameraLight
     ? cameraLightVmdCaseIds()
     : writeSelfShadow
       ? selfShadowVmdCaseIds()
       : skinningVmdCaseIds();
   for (const caseId of caseIds) {
     const outputPath = resolve(outputDir, `${caseId}.vmd`);
-    const bytes = writeCameraLight
+    const bytes = writeMorph
+      ? generateMorphVmd(caseId)
+      : writeIk
+      ? generateIkVmd(caseId)
+      : writeAppend
+      ? generateAppendVmd(caseId)
+      : writeCameraLight
       ? generateCameraLightVmd(caseId)
       : writeSelfShadow
         ? generateSelfShadowVmd(caseId)
