@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile as readRawFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
@@ -471,6 +471,7 @@ describe("example viewer source", () => {
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
 
     expect(sceneSource).toContain("state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled");
+    expect(sceneSource).toContain("state.renderer.shadowMap.type = THREE.BasicShadowMap");
     expect(sceneSource).toContain("state.keyLight.castShadow = state.debugSelfShadowEnabled");
     expect(sceneSource).toContain("configureMmdSelfShadowDirectionalLight");
     expect(sceneSource).toContain("fitMmdSelfShadowDirectionalLightToBox");
@@ -919,6 +920,10 @@ describe("example viewer source", () => {
     expect(serverSource).toContain('return resolve(viewerRoot, "assets", relativePath)');
   });
 });
+
+async function readFile(path: string, encoding: BufferEncoding): Promise<string> {
+  return (await readRawFile(path, encoding)).replaceAll("\r\n", "\n");
+}
 
 async function readLocalOptionalText(path: string): Promise<string | undefined> {
   try {

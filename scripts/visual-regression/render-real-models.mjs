@@ -405,7 +405,7 @@ function rendererHtml() {
         renderer.toneMapping = THREE.NoToneMapping;
         if (config.render.shadow?.enabled === true) {
           renderer.shadowMap.enabled = true;
-          renderer.shadowMap.type = THREE.PCFShadowMap;
+          renderer.shadowMap.type = THREE.BasicShadowMap;
         }
         document.body.append(renderer.domElement);
 

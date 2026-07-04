@@ -36,6 +36,8 @@ async function main() {
     console.log(
       `${status} ${result.name} meanDarkening=${format(result.receiverMeanDarkening)} ` +
         `p95Darkening=${format(result.receiverP95Darkening)} ` +
+        `meanAbsDelta=${format(result.receiverMeanAbsDelta)} ` +
+        `p95AbsDelta=${format(result.receiverP95AbsDelta)} ` +
         `shadowPixelRatio=${format(result.shadowPixelRatio)} ` +
         `shadowOnMeanLum=${format(result.shadowOnMeanLuminance)} ` +
         `shadowOnP05Lum=${format(result.shadowOnP05Luminance)} ` +
@@ -59,8 +61,10 @@ async function compareShadowPair(comparison, outputDir) {
 
   const roi = normalizeRoi(comparison.receiverRoi, shadowOn.width, shadowOn.height);
   const darkeningValues = [];
+  const absDeltaValues = [];
   const shadowOnLuminanceValues = [];
   let darkeningSum = 0;
+  let absDeltaSum = 0;
   let shadowOnLuminanceSum = 0;
   let shadowPixelCount = 0;
   let roiPixelCount = 0;
@@ -74,9 +78,12 @@ async function compareShadowPair(comparison, outputDir) {
       const offLum = luminance(shadowOff.data, offset);
       if (x >= roi.x && x < roi.x + roi.width && y >= roi.y && y < roi.y + roi.height) {
         const darkening = Math.max(0, offLum - onLum);
+        const absDelta = Math.abs(offLum - onLum);
         darkeningValues.push(darkening);
+        absDeltaValues.push(absDelta);
         shadowOnLuminanceValues.push(onLum);
         darkeningSum += darkening;
+        absDeltaSum += absDelta;
         shadowOnLuminanceSum += onLum;
         roiPixelCount += 1;
         if (darkening >= 0.035) {
@@ -90,10 +97,14 @@ async function compareShadowPair(comparison, outputDir) {
   }
 
   darkeningValues.sort((a, b) => a - b);
+  absDeltaValues.sort((a, b) => a - b);
   shadowOnLuminanceValues.sort((a, b) => a - b);
   const receiverMeanDarkening = darkeningSum / Math.max(1, roiPixelCount);
+  const receiverMeanAbsDelta = absDeltaSum / Math.max(1, roiPixelCount);
   const receiverP95Darkening =
     darkeningValues[Math.min(darkeningValues.length - 1, Math.ceil(darkeningValues.length * 0.95) - 1)] ?? 0;
+  const receiverP95AbsDelta =
+    absDeltaValues[Math.min(absDeltaValues.length - 1, Math.ceil(absDeltaValues.length * 0.95) - 1)] ?? 0;
   const shadowPixelRatio = shadowPixelCount / Math.max(1, roiPixelCount);
   const shadowOnMeanLuminance = shadowOnLuminanceSum / Math.max(1, roiPixelCount);
   const shadowOnP05Luminance =
@@ -101,6 +112,8 @@ async function compareShadowPair(comparison, outputDir) {
   const outsideRoiMeanDelta = outsideDeltaSum / Math.max(1, outsidePixelCount);
   const thresholds = normalizeThresholds(comparison.thresholds);
   const pass =
+    receiverMeanAbsDelta >= thresholds.receiverMeanAbsDeltaMin &&
+    receiverP95AbsDelta >= thresholds.receiverP95AbsDeltaMin &&
     receiverMeanDarkening >= thresholds.receiverMeanDarkeningMin &&
     receiverP95Darkening >= thresholds.receiverP95DarkeningMin &&
     shadowPixelRatio >= thresholds.shadowPixelRatioMin &&
@@ -113,6 +126,8 @@ async function compareShadowPair(comparison, outputDir) {
     shadowOn: comparison.shadowOn,
     shadowOff: comparison.shadowOff,
     receiverRoi: roi,
+    receiverMeanAbsDelta: round(receiverMeanAbsDelta),
+    receiverP95AbsDelta: round(receiverP95AbsDelta),
     receiverMeanDarkening: round(receiverMeanDarkening),
     receiverP95Darkening: round(receiverP95Darkening),
     shadowPixelRatio: round(shadowPixelRatio),
@@ -151,6 +166,8 @@ function normalizeThresholds(thresholds) {
   return {
     receiverMeanDarkeningMin: numberOr(thresholds?.receiverMeanDarkeningMin, 0.025),
     receiverP95DarkeningMin: numberOr(thresholds?.receiverP95DarkeningMin, 0.08),
+    receiverMeanAbsDeltaMin: numberOr(thresholds?.receiverMeanAbsDeltaMin, 0),
+    receiverP95AbsDeltaMin: numberOr(thresholds?.receiverP95AbsDeltaMin, 0),
     shadowPixelRatioMin: numberOr(thresholds?.shadowPixelRatioMin, 0.04),
     shadowOnMeanLuminanceMin: numberOr(thresholds?.shadowOnMeanLuminanceMin, 0),
     shadowOnP05LuminanceMin: numberOr(thresholds?.shadowOnP05LuminanceMin, 0),

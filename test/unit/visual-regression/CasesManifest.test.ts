@@ -64,6 +64,8 @@ interface SelfShadowVisualManifest extends RealModelVisualManifest {
     thresholds: {
       receiverMeanDarkeningMin: number;
       receiverP95DarkeningMin: number;
+      receiverMeanAbsDeltaMin?: number;
+      receiverP95AbsDeltaMin?: number;
       shadowPixelRatioMin: number;
       shadowOnMeanLuminanceMin?: number;
       shadowOnP05LuminanceMin?: number;
@@ -195,8 +197,8 @@ describe("self-shadow visual regression manifest", () => {
     expect(names).toEqual(expect.arrayContaining([
       "mmd-self-shadow-body-on",
       "mmd-self-shadow-body-caster-off",
-      "mmd-self-shadow-body-black-toon-on",
-      "mmd-self-shadow-body-black-toon-caster-off",
+      "mmd-self-shadow-body-midband-black-toon-on",
+      "mmd-self-shadow-body-midband-black-toon-caster-off",
       "mmd-self-shadow-body-vmd-off",
       "mmd-self-shadow-body-vmd-on",
       "mmd-self-shadow-on",
@@ -220,10 +222,23 @@ describe("self-shadow visual regression manifest", () => {
       expect(comparison.shadowOn).not.toBe(comparison.shadowOff);
       expect(comparison.receiverRoi.width).toBeGreaterThan(0);
       expect(comparison.receiverRoi.height).toBeGreaterThan(0);
-      expect(comparison.thresholds.receiverMeanDarkeningMin).toBeGreaterThan(0);
-      expect(comparison.thresholds.receiverP95DarkeningMin).toBeGreaterThan(
+      expect(comparison.thresholds.receiverMeanDarkeningMin).toBeGreaterThanOrEqual(0);
+      expect(comparison.thresholds.receiverP95DarkeningMin).toBeGreaterThanOrEqual(
         comparison.thresholds.receiverMeanDarkeningMin
       );
+      if (comparison.thresholds.receiverMeanAbsDeltaMin !== undefined) {
+        expect(comparison.thresholds.receiverMeanAbsDeltaMin).toBeGreaterThanOrEqual(0);
+      }
+      if (comparison.thresholds.receiverP95AbsDeltaMin !== undefined) {
+        expect(comparison.thresholds.receiverP95AbsDeltaMin).toBeGreaterThanOrEqual(
+          comparison.thresholds.receiverMeanAbsDeltaMin ?? 0
+        );
+      }
+      expect(
+        comparison.thresholds.receiverMeanDarkeningMin > 0 ||
+          (comparison.thresholds.receiverMeanAbsDeltaMin ?? 0) > 0 ||
+          (comparison.thresholds.shadowOnMeanLuminanceMin ?? 0) > 0
+      ).toBe(true);
       expect(comparison.thresholds.shadowPixelRatioMin).toBeGreaterThanOrEqual(0);
       if (comparison.thresholds.shadowOnMeanLuminanceMin !== undefined) {
         expect(comparison.thresholds.shadowOnMeanLuminanceMin).toBeGreaterThan(0);
