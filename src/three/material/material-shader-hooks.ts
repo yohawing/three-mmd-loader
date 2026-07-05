@@ -21,7 +21,7 @@ const MMD_DEFAULT_LIGHT_TRAVEL_DIRECTION: readonly [number, number, number] = [-
 // MMD self-shadow uses the material toon color as a multiplier for fully shadowed
 // fragments. D3D9 traces show that texture-backed toon color comes from the bottom band.
 // Unity treats self-shadow toon as a single ToonColor and changes only the visibility
-// grade: both lit and self-shadow layers blend that fixed color toward white.
+// grade inside the self-shadowed branch. Normal toon lighting still uses the ramp.
 const MMD_TOON_SHADOW_FACTOR_DECLARATION = "float ywMmdToonShadowFactor = 1.0;";
 const DIRECTIONAL_LIGHT_INFO_CALL = "getDirectionalLightInfo( directionalLight, directLight );";
 const DIRECTIONAL_SHADOW_COLOR_MULTIPLY =
@@ -95,6 +95,8 @@ const MMD_OPAQUE_FRAGMENT = [
   "  vec3 ywMmdLightDir = normalize( ( viewMatrix * vec4( mmdLightDirection, 0.0 ) ).xyz );",
   "  float ywMmdLightVisibility = clamp( dot( ywMmdNormal, ywMmdLightDir ) * 3.0, 0.0, 1.0 );",
   "  float ywMmdToonVisibility = min( ywMmdToonShadowFactor, ywMmdLightVisibility );",
+  "  float ywMmdLn = dot( ywMmdNormal, ywMmdLightDir );",
+  "  ywMmdLn = clamp( ywMmdLn * 0.5 + mmdToonCoordinateOffset, 0.0, 1.0 );",
   "  vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );",
   "  #ifdef USE_MAP",
   // mmdTextureFactor is the morph-aggregated multiply tint (identity = (1,1,1,1)).
@@ -113,14 +115,15 @@ const MMD_OPAQUE_FRAGMENT = [
   "    else if ( mmdSphereMode == 3 ) { ywMmdBase = mix( ywMmdBase, ywMmdSphere, mmdSphereFactor.a ); }",
   "  #endif",
   "  #ifdef USE_GRADIENTMAP",
-  // Self-shadow uses a representative ToonColor, then changes only the scalar
-  // visibility grade. It does not sample the ramp by NdotL inside this path.
+  // Normal toon lighting uses the ramp. The self-shadowed branch switches to a
+  // representative ToonColor and changes only the scalar visibility grade.
+  `    vec3 ywMmdToon = texture2D( gradientMap, vec2( ${MMD_TOON_SAMPLE_U.toFixed(1)}, ywMmdLn ) ).rgb;`,
+  "    ywMmdToon = ywMmdApplyMul( ywMmdToon, mmdToonTextureFactor );",
   `    vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( ${MMD_TOON_SAMPLE_U.toFixed(1)}, ${MMD_SELF_SHADOW_TOON_V.toFixed(1)} ) ).rgb;`,
   "    ywMmdSelfShadowToon = ywMmdApplyMul( ywMmdSelfShadowToon, mmdToonTextureFactor );",
-  "    vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdLightVisibility );",
+  "    vec3 ywMmdToonLight = ywMmdToon;",
   "    if ( ywMmdToonShadowFactor < 0.999 ) {",
-  "      vec3 ywMmdSelfShadowToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );",
-  "      ywMmdToonLight = min( ywMmdToonLight, ywMmdSelfShadowToonLight );",
+  "      ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );",
   "    }",
   "    vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;",
   "  #else",
