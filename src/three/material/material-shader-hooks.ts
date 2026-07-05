@@ -19,8 +19,9 @@ const MMD_SYNCED_LIGHT_TOON_COORD_OFFSET = 0.5;
 // matched against the real MMD 9.32 toon golden.
 const MMD_DEFAULT_LIGHT_TRAVEL_DIRECTION: readonly [number, number, number] = [-0.5, -1.0, -1.0];
 // MMD self-shadow uses the material toon color as a multiplier for fully shadowed
-// fragments. D3D9 traces show that texture-backed toon color comes from the bottom band,
-// then gets blended toward white by min(shadow visibility, light visibility).
+// fragments. D3D9 traces show that texture-backed toon color comes from the bottom band.
+// Unity keeps the existing toon ramp result and only applies the darker self-shadow
+// branch when the self-shadow visibility shadows the fragment.
 const MMD_TOON_SHADOW_FACTOR_DECLARATION = "float ywMmdToonShadowFactor = 1.0;";
 const DIRECTIONAL_LIGHT_INFO_CALL = "getDirectionalLightInfo( directionalLight, directLight );";
 const DIRECTIONAL_SHADOW_COLOR_MULTIPLY =
@@ -120,10 +121,12 @@ const MMD_OPAQUE_FRAGMENT = [
   "    ywMmdToon = ywMmdApplyMul( ywMmdToon, mmdToonTextureFactor );",
   `    vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( ${MMD_TOON_SAMPLE_U.toFixed(1)}, ${MMD_SELF_SHADOW_TOON_V.toFixed(1)} ) ).rgb;`,
   "    ywMmdSelfShadowToon = ywMmdApplyMul( ywMmdSelfShadowToon, mmdToonTextureFactor );",
-  "    vec3 ywMmdColor = ywMmdBase * ywMmdToon;",
+  "    vec3 ywMmdToonLight = ywMmdToon;",
   "    if ( ywMmdToonShadowFactor < 0.999 ) {",
-  "      ywMmdColor = ywMmdBase * mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );",
+  "      vec3 ywMmdSelfShadowToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );",
+  "      ywMmdToonLight = min( ywMmdToonLight, ywMmdSelfShadowToonLight );",
   "    }",
+  "    vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;",
   "  #else",
   "    vec3 ywMmdColor = ywMmdBase;",
   "  #endif",

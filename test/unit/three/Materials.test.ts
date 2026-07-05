@@ -931,7 +931,7 @@ describe("Three.js MMD materials", () => {
     expect(diffuseColor.b).toBeCloseTo(0.85, 5);
   });
 
-  it("uses the lit gamma-space base for both regular toon and self-shadow toon", () => {
+  it("uses the lit gamma-space base after regular toon and darker self-shadow toon are blended", () => {
     const material = new THREE.MeshToonMaterial();
     attachMmdMaterialFactors(material);
 
@@ -942,8 +942,9 @@ describe("Three.js MMD materials", () => {
       "vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );"
     );
     expect(shader.fragmentShader).toContain(
-      "ywMmdColor = ywMmdBase * mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );"
+      "ywMmdToonLight = min( ywMmdToonLight, ywMmdSelfShadowToonLight );"
     );
+    expect(shader.fragmentShader).toContain("vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;");
     // The composite must be gamma-decoded back to linear so Three's sRGB output encode
     // reproduces the gamma-space MMD value.
     expect(shader.fragmentShader).toContain(
@@ -970,12 +971,19 @@ describe("Three.js MMD materials", () => {
     expect(shader.fragmentShader).toContain(
       "vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( 0.5, 0.0 ) ).rgb;"
     );
-    expect(shader.fragmentShader).toContain("vec3 ywMmdColor = ywMmdBase * ywMmdToon;");
+    expect(shader.fragmentShader).toContain("vec3 ywMmdToonLight = ywMmdToon;");
     expect(shader.fragmentShader).toContain("if ( ywMmdToonShadowFactor < 0.999 ) {");
     expect(shader.fragmentShader).toContain(
+      "vec3 ywMmdSelfShadowToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );"
+    );
+    expect(shader.fragmentShader).toContain(
+      "ywMmdToonLight = min( ywMmdToonLight, ywMmdSelfShadowToonLight );"
+    );
+    expect(shader.fragmentShader).toContain("vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;");
+    expect(shader.fragmentShader).not.toContain("ywMmdColor = mix( ywMmdSelfShadowColor, ywMmdColor");
+    expect(shader.fragmentShader).not.toContain(
       "ywMmdColor = ywMmdBase * mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );"
     );
-    expect(shader.fragmentShader).not.toContain("ywMmdColor = mix( ywMmdSelfShadowColor, ywMmdColor");
     expect(shader.fragmentShader).toContain(
       "ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdToonVisibility;"
     );
