@@ -216,9 +216,9 @@
       "thresholds": {
         "receiverMeanDarkeningMin": 0,
         "receiverP95DarkeningMin": 0,
-        "receiverMeanAbsDeltaMin": 0.0005,
-        "receiverP95AbsDeltaMin": 0.003,
-        "shadowPixelRatioMin": 0,
+        "receiverMeanAbsDeltaMin": 0.001,
+        "receiverP95AbsDeltaMin": 0.005,
+        "shadowPixelRatioMin": 0.04,
         "shadowOnMeanLuminanceMin": 0.05,
         "shadowOnP05LuminanceMin": 0.05,
         "outsideRoiMeanDeltaMax": 0.08
