@@ -8,7 +8,7 @@ export interface LocalPlaybackFixturesResult {
 }
 
 export type LocalPlaybackStageName = "vmdInterpolation" | "appendTransform" | "ik" | "physics";
-export type LocalPlaybackSkipCategory = "runtime-bug" | "oracle-limitation" | "asset-unavailable";
+export type LocalPlaybackSkipCategory = "runtime-bug" | "runtime-limitation" | "oracle-limitation" | "asset-unavailable";
 
 export interface LocalPlaybackCase {
   readonly name: string;
@@ -384,10 +384,11 @@ function readSkipCategory(raw: unknown, label: string): LocalPlaybackSkipCategor
   const category = readString(raw, label);
   if (
     category !== "runtime-bug" &&
+    category !== "runtime-limitation" &&
     category !== "oracle-limitation" &&
     category !== "asset-unavailable"
   ) {
-    throw new Error(`${label} must be runtime-bug, oracle-limitation, or asset-unavailable`);
+    throw new Error(`${label} must be runtime-bug, runtime-limitation, oracle-limitation, or asset-unavailable`);
   }
   return category;
 }
