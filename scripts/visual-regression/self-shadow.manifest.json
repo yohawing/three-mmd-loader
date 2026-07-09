@@ -39,7 +39,8 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-body-caster-off",
@@ -51,7 +52,8 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-body-midband-black-toon-on",
@@ -63,7 +65,9 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.04, "p95": 0.18 },
+      "toleranceNote": "Black toon ramp compresses shadow gradients; shadow-edge pixels show larger perceptual delta than standard toon."
     },
     {
       "name": "mmd-self-shadow-body-midband-black-toon-caster-off",
@@ -75,7 +79,9 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.04, "p95": 0.18 },
+      "toleranceNote": "Black toon ramp compresses shadow gradients; shadow-edge pixels show larger perceptual delta than standard toon."
     },
     {
       "name": "mmd-self-shadow-body-vmd-off",
@@ -88,7 +94,8 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-body-vmd-on",
@@ -101,7 +108,8 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-on",
@@ -113,7 +121,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-caster-flag-off-mixed",
@@ -125,7 +134,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-receiver-flag-off-mixed",
@@ -137,7 +147,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-vmd-off",
@@ -150,7 +161,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-vmd-on",
@@ -163,7 +175,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-sdef-depth",
@@ -176,7 +189,9 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.04, "p95": 0.15 },
+      "toleranceNote": "SDEF deformation shifts shadow penumbra sub-pixel boundaries; slightly wider tolerance than rigid geometry."
     }
   ],
   "comparisons": [

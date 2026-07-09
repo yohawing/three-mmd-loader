@@ -8,7 +8,7 @@ import { clampColor } from "../utils.js";
 // baked into the material, independent of the host scene's lights. See
 // ../unity-mmd-loader/docs/mmd-shading-notes.md §3.
 const MMD_DEFAULT_LIGHT_COLOR = 154 / 255;
-const MMD_TOON_SAMPLE_U = 0.5;
+const MMD_TOON_SAMPLE_U = 0.0;
 // MMD chooses the representative self-shadow ToonColor from the source image bottom
 // band. Toon textures are uploaded with flipY=true, so source y ~= 1 maps to shader v=0.
 const MMD_SELF_SHADOW_TOON_V = 0.0;
@@ -36,6 +36,9 @@ const MMD_DIRECTIONAL_SELF_SHADOW_FACTOR =
 const MMD_TEXTURE_FACTOR_HELPERS = [
   "vec3 ywMmdApplyMul( vec3 c, vec4 f ) {",
   "  return mix( vec3( 1.0 ), c * f.rgb, f.a );",
+  "}",
+  "vec3 ywMmdApplyAdd( vec3 c, vec4 f ) {",
+  "  return c * f.rgb * f.a;",
   "}",
   // sRGB <-> linear helpers so the MMD formula runs in gamma (sRGB) space (§1)
   // while still feeding Three's linear -> sRGB output encode correctly.
@@ -97,22 +100,30 @@ const MMD_OPAQUE_FRAGMENT = [
   "  float ywMmdToonVisibility = min( ywMmdToonShadowFactor, ywMmdLightVisibility );",
   "  float ywMmdLn = dot( ywMmdNormal, ywMmdLightDir );",
   "  ywMmdLn = clamp( ywMmdLn * 0.5 + mmdToonCoordinateOffset, 0.0, 1.0 );",
-  "  vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );",
+  "  #ifdef USE_GRADIENTMAP",
+  "    vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );",
+  "  #else",
+  "    float ywMmdLambert = max( 0.0, dot( ywMmdNormal, ywMmdLightDir ) );",
+  "    vec3 ywMmdBase = clamp( mmdMaterialAmbient + ywMmdLambert * mmdDiffuseColor * mmdLightColor, 0.0, 1.0 );",
+  "  #endif",
   "  #ifdef USE_MAP",
   // mmdTextureFactor is the morph-aggregated multiply tint (identity = (1,1,1,1)).
   "    vec3 ywMmdTex = ywMmdApplyMul( sampledMmdDiffuse.rgb, mmdTextureFactor );",
   "    ywMmdBase *= ywMmdTex;",
   "  #endif",
   "  #ifdef USE_MMD_SPHERE",
-  // MMD matcap UV: project the view-space normal to [0,1] (§7 / saba mmd.frag).
-  "    vec2 ywMmdSphereUv = vec2( ywMmdNormal.x * 0.5 + 0.5, 1.0 - ( ywMmdNormal.y * 0.5 + 0.5 ) );",
+  "    vec2 ywMmdSphereUv = vec2( ywMmdNormal.x * 0.5 + 0.5, ywMmdNormal.y * 0.5 + 0.5 );",
   // Sphere texture is configured SRGBColorSpace, so texture2D returns linear; re-encode
   // to gamma for the MMD (gamma-space) composite.
   "    vec3 ywMmdSphere = ywMmdLinearToGamma( texture2D( mmdSphereMap, ywMmdSphereUv ).rgb );",
-  "    ywMmdSphere = ywMmdApplyMul( ywMmdSphere, mmdSphereFactor );",
-  "    if ( mmdSphereMode == 1 ) { ywMmdBase *= ywMmdSphere; }",
-  "    else if ( mmdSphereMode == 2 ) { ywMmdBase += ywMmdSphere; }",
-  "    else if ( mmdSphereMode == 3 ) { ywMmdBase = mix( ywMmdBase, ywMmdSphere, mmdSphereFactor.a ); }",
+  "    #if MMD_SPHERE_MODE == 1",
+  "      ywMmdBase *= ywMmdApplyMul( ywMmdSphere, mmdSphereFactor );",
+  "    #elif MMD_SPHERE_MODE == 2",
+  // apitrace: MMD 9.32 weights additive sphere by SphCAdd.a + SphCMul.a (= 2.0 at defaults).
+  "      ywMmdBase += ywMmdApplyAdd( ywMmdSphere, mmdSphereFactor ) * 2.0;",
+  "    #elif MMD_SPHERE_MODE == 3",
+  "      ywMmdBase = mix( ywMmdBase, ywMmdSphere, mmdSphereFactor.a );",
+  "    #endif",
   "  #endif",
   "  #ifdef USE_GRADIENTMAP",
   // Normal toon lighting uses the ramp. The self-shadowed branch switches to a
@@ -131,7 +142,8 @@ const MMD_OPAQUE_FRAGMENT = [
   "  #endif",
   "  if ( mmdSpecularPower > 0.0 ) {",
   "    vec3 ywMmdHalf = normalize( ywMmdEyeDir + ywMmdLightDir );",
-  "    ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdToonVisibility;",
+  "    float ywMmdSpecGate = ywMmdToonShadowFactor < 0.999 ? ywMmdToonVisibility : 1.0;",
+  "    ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdSpecGate;",
   "  }",
   "  outgoingLight = ywMmdGammaToLinear( clamp( ywMmdColor, 0.0, 1.0 ) );",
   "}",
@@ -367,8 +379,18 @@ export function attachMmdSphereTexture(
   material.onBeforeCompile = (shader, renderer) => {
     previousOnBeforeCompile(shader, renderer);
     shader.uniforms.mmdSphereMap = { value: texture };
-    shader.uniforms.mmdSphereMode = { value: mmdSphereModeToUniform(sphereMode) };
     shader.uniforms.mmdSphereFactor = { value: new THREE.Vector4(1, 1, 1, 1) };
+    const materialState = material.userData.mmdMaterialState as
+      | { sphereTextureFactor?: [number, number, number, number] }
+      | undefined;
+    if (materialState?.sphereTextureFactor) {
+      shader.uniforms.mmdSphereFactor.value.set(
+        materialState.sphereTextureFactor[0],
+        materialState.sphereTextureFactor[1],
+        materialState.sphereTextureFactor[2],
+        materialState.sphereTextureFactor[3]
+      );
+    }
     material.userData.mmdSphereShader = shader;
     // Declare sphere uniforms and enable the USE_MMD_SPHERE branch in the main MMD
     // shading block (material-shader-hooks injected before this hook runs).
@@ -377,8 +399,8 @@ export function attachMmdSphereTexture(
       [
         "#include <map_pars_fragment>",
         "#define USE_MMD_SPHERE",
+        `#define MMD_SPHERE_MODE ${mmdSphereModeToUniform(sphereMode)}`,
         "uniform sampler2D mmdSphereMap;",
-        "uniform int mmdSphereMode;",
         "uniform vec4 mmdSphereFactor;"
       ].join("\n")
     );

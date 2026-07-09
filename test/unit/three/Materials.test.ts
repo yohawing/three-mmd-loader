@@ -7,6 +7,7 @@ import {
   applyThreeMmdMaterialTextures,
   createThreeMmdMaterials,
   getDefaultToonGradientMap,
+  syncMmdMaterialStates,
   syncMmdSpecularDirection
 } from "../../../src/three/index.js";
 import type { MaterialInfo, MorphData } from "../../../src/parser/model/modelTypes.js";
@@ -540,6 +541,50 @@ describe("Three.js MMD materials", () => {
     expect(materials[0]?.transparent).toBe(true);
     expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaBlend");
     expect(materials[0]?.userData.mmdMaterial.textureTransparencyMode).toBe("alphaBlend");
+    // Real MMD discards only alpha == 0 fragments (shading-notes §8.1); the epsilon
+    // alphaTest keeps zero-alpha texels from writing depth so the edge hull shows
+    // through them, while every alpha >= 1/255 texel still blends.
+    expect(materials[0]?.alphaTest).toBeCloseTo(0.5 / 255);
+  });
+
+  it("keeps color-suppressed shadow-only materials free of the zero-alpha discard", async () => {
+    const texture = createReadableAlphaDataTexture();
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        texture.name = url;
+        onLoad?.(texture);
+        return texture;
+      }
+    };
+    const mmdMaterials = [
+      createMaterialInfo({
+        diffuse: [0.5, 0.6, 0.7, 0],
+        texturePath: "textures/depth-trick.png",
+        flags: {
+          doubleSided: false,
+          groundShadow: true,
+          selfShadowMap: false,
+          selfShadow: false,
+          edge: false,
+          vertexColor: false,
+          pointDraw: false,
+          lineDraw: false
+        }
+      })
+    ];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials, {
+      textureMap: { "textures/depth-trick.png": "resolved/depth-trick.png" },
+      textureLoader,
+      geometry: createAlphaEvaluationGeometry(),
+      geometryAwareAlpha: true
+    });
+
+    // Alpha-0 + ground shadow materials keep writing depth with colorWrite off; an
+    // alphaTest would discard every fragment and break the depth trick.
+    expect(materials[0]?.colorWrite).toBe(false);
+    expect(materials[0]?.alphaTest).toBe(0);
   });
 
   it("does not run geometry-aware scans when PMX material data already makes the body transparent", async () => {
@@ -899,7 +944,14 @@ describe("Three.js MMD materials", () => {
   } {
     return {
       uniforms: {},
-      vertexShader: "",
+      vertexShader: [
+        "#include <normal_pars_vertex>",
+        "void main() {",
+        "#include <beginnormal_vertex>",
+        "#include <defaultnormal_vertex>",
+        "#include <normal_vertex>",
+        "}"
+      ].join("\n"),
       fragmentShader: [
         "#include <map_pars_fragment>",
         "#include <map_fragment>",
@@ -968,9 +1020,9 @@ describe("Three.js MMD materials", () => {
       "float ywMmdToonVisibility = min( ywMmdToonShadowFactor, ywMmdLightVisibility );"
     );
     expect(shader.fragmentShader).toContain(
-      "vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( 0.5, 0.0 ) ).rgb;"
+      "vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( 0.0, 0.0 ) ).rgb;"
     );
-    expect(shader.fragmentShader).toContain("vec3 ywMmdToon = texture2D( gradientMap, vec2( 0.5, ywMmdLn ) ).rgb;");
+    expect(shader.fragmentShader).toContain("vec3 ywMmdToon = texture2D( gradientMap, vec2( 0.0, ywMmdLn ) ).rgb;");
     expect(shader.fragmentShader).toContain("vec3 ywMmdToonLight = ywMmdToon;");
     expect(shader.fragmentShader).toContain(
       "ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );"
@@ -983,7 +1035,7 @@ describe("Three.js MMD materials", () => {
     );
     expect(shader.fragmentShader).not.toContain("ywMmdToonLight = min( ywMmdToonLight, ywMmdSelfShadowToonLight );");
     expect(shader.fragmentShader).toContain(
-      "ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdToonVisibility;"
+      "ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdSpecGate;"
     );
   });
 
@@ -996,7 +1048,10 @@ describe("Three.js MMD materials", () => {
 
     expect(shader.fragmentShader).toContain("if ( mmdSpecularPower > 0.0 ) {");
     expect(shader.fragmentShader).toContain(
-      "ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdToonVisibility;"
+      "float ywMmdSpecGate = ywMmdToonShadowFactor < 0.999 ? ywMmdToonVisibility : 1.0;"
+    );
+    expect(shader.fragmentShader).toContain(
+      "ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdSpecGate;"
     );
   });
 
@@ -1027,7 +1082,9 @@ describe("Three.js MMD materials", () => {
     // The MMD block overwrites outgoingLight from scratch; it must not scale the host
     // scene's reflectedLight accumulators.
     expect(shader.fragmentShader).not.toContain("reflectedLight.directDiffuse *=");
-    expect(shader.fragmentShader).toContain("vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );");
+    expect(shader.fragmentShader).toContain(
+      "vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );"
+    );
   });
 
   it("passes PMX self-shadow receiver flags into the material shader", async () => {
@@ -1079,7 +1136,7 @@ describe("Three.js MMD materials", () => {
     expect(shader.uniforms.mmdToonCoordinateOffset?.value).toBe(0.5);
   });
 
-  it("uses view-space matcap UVs for sphere texture sampling", () => {
+  it("uses view-space normal (vNormal) for sphere texture UV", () => {
     const material = new THREE.MeshToonMaterial();
     attachMmdMaterialFactors(material);
     const texture = new THREE.Texture();
@@ -1089,10 +1146,77 @@ describe("Three.js MMD materials", () => {
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
     expect(shader.fragmentShader).toContain("#define USE_MMD_SPHERE");
+    expect(shader.fragmentShader).toContain("#define MMD_SPHERE_MODE 2");
+    expect(shader.fragmentShader).not.toContain("uniform int mmdSphereMode;");
+    expect(shader.vertexShader).not.toContain("vMmdSphereNormal");
     expect(shader.fragmentShader).toContain(
-      "vec2 ywMmdSphereUv = vec2( ywMmdNormal.x * 0.5 + 0.5, 1.0 - ( ywMmdNormal.y * 0.5 + 0.5 ) );"
+      "vec2 ywMmdSphereUv = vec2( ywMmdNormal.x * 0.5 + 0.5, ywMmdNormal.y * 0.5 + 0.5 );"
     );
-    expect(shader.fragmentShader).not.toContain("vec2( normal.x, -normal.y )");
+  });
+
+  it("composites sphere textures into diffuse base before toon and self-shadow grading", () => {
+    const material = new THREE.MeshToonMaterial();
+    attachMmdMaterialFactors(material);
+    attachMmdSphereTexture(material, "add", new THREE.Texture());
+
+    const shader = createMmdShaderScaffold();
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    const source = shader.fragmentShader;
+    expect(source).toContain(
+      "vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );"
+    );
+    expect(source).toContain("ywMmdBase *= ywMmdTex;");
+    expect(source).toContain("#define MMD_SPHERE_MODE 2");
+    expect(source).toContain(
+      "ywMmdBase *= ywMmdApplyMul( ywMmdSphere, mmdSphereFactor );"
+    );
+    expect(source).toContain(
+      "ywMmdBase += ywMmdApplyAdd( ywMmdSphere, mmdSphereFactor ) * 2.0;"
+    );
+    expect(source.indexOf("ywMmdBase *= ywMmdTex;")).toBeLessThan(
+      source.indexOf("#elif MMD_SPHERE_MODE == 2")
+    );
+    expect(source.indexOf("#elif MMD_SPHERE_MODE == 2")).toBeLessThan(
+      source.indexOf("vec3 ywMmdToonLight")
+    );
+  });
+
+  it("uses sphere morph alpha as additive sphere weight instead of adding identity", () => {
+    const material = new THREE.MeshToonMaterial();
+    attachMmdMaterialFactors(material);
+    attachMmdSphereTexture(material, "add", new THREE.Texture());
+
+    const shader = createMmdShaderScaffold();
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    expect(shader.fragmentShader).toContain("vec3 ywMmdApplyAdd( vec3 c, vec4 f ) {");
+    expect(shader.fragmentShader).toContain("return c * f.rgb * f.a;");
+    expect(shader.fragmentShader).not.toContain("ywMmdBase += ywMmdApplyMul( ywMmdSphere");
+  });
+
+  it("initializes sphere factor uniforms from precompiled runtime material state", () => {
+    const material = new THREE.MeshToonMaterial();
+    attachMmdMaterialFactors(material);
+    attachMmdSphereTexture(material, "multiply", new THREE.Texture());
+    syncMmdMaterialStates(material, [
+      {
+        diffuse: [1, 1, 1, 1],
+        specular: [0, 0, 0],
+        specularPower: 0,
+        ambient: [0, 0, 0],
+        edgeColor: [0, 0, 0, 1],
+        edgeSize: 1,
+        textureFactor: [1, 1, 1, 1],
+        sphereTextureFactor: [0.25, 0.5, 0.75, 0.4],
+        toonTextureFactor: [1, 1, 1, 1]
+      }
+    ]);
+
+    const shader = createMmdShaderScaffold();
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    expect(shader.uniforms.mmdSphereFactor?.value).toEqual(new THREE.Vector4(0.25, 0.5, 0.75, 0.4));
   });
 
   it("records texture diagnostics instead of throwing when texture resolution fails", async () => {

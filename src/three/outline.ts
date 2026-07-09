@@ -109,6 +109,14 @@ function createMmdOutlineMaterial(
   // soft-alpha body (mmd-tga-regular-hair-alpha-opaque). Binding/clipping the edge by the
   // body map (the old babylon-style behaviour) both eroded soft rims and let the white
   // background show through cutout holes, so the edge never binds the body map.
+  //
+  // The edge hull stays BackSide even for both-face materials: the golden for the TGA
+  // soft-alpha box shows the interior far face blending over the BACKGROUND through the
+  // body's zero-alpha holes — a camera-facing hull face would paint those holes black
+  // (verified: a DoubleSide hull regressed mmd-tga-regular-hair-alpha-opaque). The
+  // both-face ramp quad still gets its black zero-alpha band because its triangles face
+  // away from the camera, so the BackSide hull is what rasterises there.
+  const outlineWidth = mmdOutlineExpansionWidth(material, options, hasEdge);
   const parameters: THREE.MeshBasicMaterialParameters = {
     color: hasEdge
       ? new THREE.Color(material.edgeColor[0], material.edgeColor[1], material.edgeColor[2])
@@ -119,13 +127,16 @@ function createMmdOutlineMaterial(
     depthWrite: true,
     depthTest: true,
     polygonOffset: true,
-    polygonOffsetFactor: 1,
+    // The hull is shifted ~2*outlineWidth screen pixels sideways, so at a given pixel
+    // its interpolated depth leads the body's by up to (slope x shift). A slope factor
+    // of 1 only compensates one pixel of slope; scale it with the shift so front-facing
+    // hull fragments (DoubleSide materials) always lose against their own body.
+    polygonOffsetFactor: mmdOutlinePolygonOffsetFactor(outlineWidth),
     polygonOffsetUnits: 1,
     toneMapped: false,
     alphaTest: 0
   };
   const outlineMaterial = new THREE.MeshBasicMaterial(parameters);
-  const outlineWidth = mmdOutlineExpansionWidth(material, options, hasEdge);
   attachMmdPmxOutlineExpansion(outlineMaterial, outlineWidth, hasVertexEdgeScale);
   outlineMaterial.visible = visible;
   outlineMaterial.userData.mmdOutlineMaterial = {
@@ -288,6 +299,10 @@ function mmdOutlineExpansionWidth(
   return Math.max(edgeSize, 0);
 }
 
+function mmdOutlinePolygonOffsetFactor(outlineWidth: number): number {
+  return 1 + 2 * Math.max(outlineWidth, 0);
+}
+
 export function createMmdMaterialRenderOrderMeshes(
   model: MmdOutlineModelSource,
   options: MmdMaterialRenderOrderMeshOptions = {}
@@ -432,6 +447,7 @@ export function syncMmdOutlineMaterialStates(
     material.transparent = true;
     material.visible = !suppressColor && (!!metadata?.fallback || (state.edgeSize > 0 && alpha > 0));
     material.depthWrite = true;
+    material.polygonOffsetFactor = mmdOutlinePolygonOffsetFactor(outlineWidth);
     material.userData.mmdOutlineMaterial = {
       ...(metadata ?? {}),
       edgeColor: [...state.edgeColor],

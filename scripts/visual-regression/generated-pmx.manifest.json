@@ -86,7 +86,8 @@
         "near": 0.1,
         "far": 20
       },
-      "thresholds": { "mean": 0.11, "p95": 0.4 }
+      "thresholds": { "mean": 0.11, "p95": 0.4 },
+      "toleranceNote": "Additive sphere-map blending amplifies gamma-space rounding at bright highlight peaks; mean stays low but p95 spikes at specular hotspots."
     },
     {
       "name": "mmd-material-order-body-outline-interleave",
@@ -177,7 +178,7 @@
         "near": 0.1,
         "far": 20
       },
-      "thresholds": { "mean": 0.09, "p95": 1.0 }
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-tga-hair-shadow-overlay-alpha-blend",
@@ -229,7 +230,7 @@
         "near": 0.1,
         "far": 20
       },
-      "thresholds": { "mean": 0.07, "p95": 1.0 }
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     }
   ]
 }
