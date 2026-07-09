@@ -9,12 +9,26 @@
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" />
     <!-- The import map must precede any module load (e.g. the Shoelace autoloader below). -->
-    <script type="importmap">
+    <script>
       {
-        "imports": {
-          "three": "/node_modules/three/build/three.module.js",
-          "three/addons/": "/node_modules/three/examples/jsm/"
-        }
+        const query = new URLSearchParams(window.location.search);
+        const baseline = query.get("baseline") === "1" ||
+          query.get("pipeline") === "baseline-webgl" ||
+          query.get("backend") === "webgl";
+        const threeBuild = baseline
+          ? "/node_modules/three/build/three.module.js"
+          : "/node_modules/three/build/three.webgpu.js";
+        const importMap = document.createElement("script");
+        importMap.type = "importmap";
+        importMap.textContent = JSON.stringify({
+          imports: {
+            "three": threeBuild,
+            "three/webgpu": "/node_modules/three/build/three.webgpu.js",
+            "three/tsl": "/node_modules/three/build/three.tsl.js",
+            "three/addons/": "/node_modules/three/examples/jsm/"
+          }
+        });
+        document.currentScript.after(importMap);
       }
     </script>
     <!-- Shoelace UI spike (no-build, CDN autoloader). Vendor it like three if adopted. -->
@@ -157,6 +171,12 @@
         </div>
 
         <span class="status" id="status"></span>
+        <dl class="pipeline-status" aria-label="Rendering pipeline">
+          <div><dt>backend</dt><dd id="pipeline-backend">forcewebgl</dd></div>
+          <div><dt>pipeline</dt><dd id="pipeline-name">TSL forceWebGL</dd></div>
+          <div><dt>model</dt><dd id="pipeline-model">(none)</dd></div>
+          <div><dt>renderer</dt><dd id="pipeline-renderer">pending</dd></div>
+        </dl>
 
         <input id="model-folder" type="file" webkitdirectory directory multiple />
         <input id="pmm-folder" type="file" webkitdirectory directory multiple />

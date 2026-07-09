@@ -4,6 +4,7 @@ import { dom } from "./dom.js";
 import { normalizeMaterials } from "./dispose.js";
 import { evaluateRuntime } from "./playback.js";
 import { debugEnabled, state } from "./state.js";
+import { setCurrentModelTslOutlineHidden } from "./viewer-pipeline.js";
 
 export function createViewerDebugApi() {
   return {
@@ -259,6 +260,7 @@ export function setOutlineHidden(hidden) {
   state.currentModel?.outlineMeshes?.forEach((outline) => {
     outline.visible = !state.debugOutlineHidden;
   });
+  setCurrentModelTslOutlineHidden(state.debugOutlineHidden);
   state.renderer.render(state.scene, state.camera);
   refreshDebugPanelState();
   return state.debugOutlineHidden;

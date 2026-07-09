@@ -35,6 +35,65 @@ describe("example viewer source", () => {
     expect(sceneSetupSource).not.toContain("Math.max(radius * 40, 100)");
   });
 
+  it("wires the main viewer as a TSL parity review viewer with a baseline fallback", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
+    const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('const threeBuild = baseline');
+    expect(html).toContain('"/node_modules/three/build/three.module.js"');
+    expect(html).toContain('"/node_modules/three/build/three.webgpu.js"');
+    expect(html).toContain('"three": threeBuild');
+    expect(html).toContain('"three/webgpu": "/node_modules/three/build/three.webgpu.js"');
+    expect(html).toContain('"three/tsl": "/node_modules/three/build/three.tsl.js"');
+    expect(html).toContain('class="pipeline-status"');
+    expect(html).toContain('id="pipeline-backend"');
+    expect(html).toContain('id="pipeline-name"');
+    expect(html).toContain('id="pipeline-model"');
+    expect(html).toContain('id="pipeline-renderer"');
+    expect(domSource).toContain('pipelineBackendText: document.querySelector("#pipeline-backend")');
+    expect(domSource).toContain('pipelineNameText: document.querySelector("#pipeline-name")');
+    expect(stateSource).toContain('return "tsl-forcewebgl";');
+    expect(stateSource).toContain('params.get("baseline") === "1"');
+    expect(stateSource).toContain('backend === "webgpu"');
+    expect(sceneSetupSource).toContain("export async function setupScene()");
+    expect(sceneSetupSource).not.toContain('import { WebGPURenderer } from "three/webgpu"');
+    expect(sceneSetupSource).toContain('await import("three/webgpu")');
+    expect(sceneSetupSource).toContain("new WebGPURenderer({");
+    expect(sceneSetupSource).toContain('forceWebGL: state.viewerPipeline === "tsl-forcewebgl"');
+    expect(sceneSetupSource).toContain("state.renderer.shadowMap.transmitted = true");
+    expect(sceneSetupSource).toContain("await state.renderer.init()");
+    expect(mainSource).toContain("void initializeViewer();");
+    expect(mainSource).toContain("await setupScene();");
+    expect(modelSource).toContain("createViewerModelLoadOptions()");
+    expect(modelSource).toContain("await applyViewerPipelineToModel(state.currentModel");
+    expect(pipelineSource).not.toContain('from "../../../dist/webgpu/index.js"');
+    expect(pipelineSource).toContain('import("../../../dist/webgpu/index.js")');
+    expect(pipelineSource).toContain('replaceMmdModelMaterialsWithTsl(model.mesh, {');
+    expect(pipelineSource).toContain("appendOutlineGroups: true");
+    expect(pipelineSource).toContain("morphSplit: false");
+    expect(pipelineSource).toContain("outline: false");
+    expect(pipelineSource).toContain("materialRenderOrder: false");
+    expect(pipelineSource).toContain("syncMmdTslMaterialState(material, materialState)");
+    expect(pipelineSource).toContain("outlineMetadata?.sourceMaterialIndex");
+    expect(pipelineSource).toContain("syncTslOutlineMaterialState(material, materialState, outlineMetadata)");
+    expect(pipelineSource).toContain("export function setCurrentModelTslOutlineHidden(hidden)");
+    expect(pipelineSource).toContain("material.visible = !state.debugOutlineHidden && runtimeVisible");
+    expect(pipelineSource).toContain("setTslOutlineMaterialHidden(material, hidden)");
+    expect(pipelineSource).not.toContain("Array.isArray(material) ? material : [material]");
+    expect(debugSource).toContain("setCurrentModelTslOutlineHidden(state.debugOutlineHidden)");
+    expect(playbackSource).toContain("syncCurrentModelTslLight()");
+    expect(playbackSource).toContain("syncCurrentModelTslMaterialStates()");
+    expect(styles).toContain(".pipeline-status");
+  });
+
   it("adds loader root objects so split morph body meshes are rendered", async () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");

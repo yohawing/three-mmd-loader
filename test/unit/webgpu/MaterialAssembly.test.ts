@@ -2,6 +2,7 @@ import * as THREE from "three/webgpu";
 import { describe, expect, it } from "vitest";
 
 import {
+  createMmdTslMaterialFromSource,
   replaceMmdModelMaterialsWithTsl
 } from "../../../src/webgpu/material-assembly.js";
 
@@ -44,6 +45,38 @@ describe("TSL material assembly", () => {
     expect(nodeMaterial?.alphaTest).toBeCloseTo(0.5 / 255);
   });
 
+  it("preserves source render flags for non-MMD transparent materials", () => {
+    const sourceMaterial = new THREE.MeshToonMaterial({
+      transparent: true,
+      opacity: 1,
+      depthWrite: false
+    });
+
+    const nodeMaterial = createMmdTslMaterialFromSource(sourceMaterial);
+
+    expect(nodeMaterial.opacity).toBe(1);
+    expect(nodeMaterial.transparent).toBe(true);
+    expect(nodeMaterial.depthWrite).toBe(false);
+  });
+
+  it("applies MMD transparency metadata before the initial runtime state sync", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setIndex([0, 1, 2]);
+    geometry.addGroup(0, 3, 0);
+    const material = createSourceMaterial({ edgeSize: 0 });
+    material.userData.mmdMaterial.diffuse = [1, 1, 1, 0];
+    material.userData.mmdMaterial.flags.groundShadow = true;
+    const mesh = new THREE.Mesh(geometry, material);
+
+    replaceMmdModelMaterialsWithTsl(mesh);
+
+    const [nodeMaterial] = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    expect(nodeMaterial?.visible).toBe(true);
+    expect(nodeMaterial?.colorWrite).toBe(false);
+  });
+
   it("appends outline groups after PMX body material groups on one mesh", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute(
@@ -73,15 +106,19 @@ describe("TSL material assembly", () => {
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     expect(materials).toHaveLength(4);
     expect(materials[2]?.userData.mmdTslOutlineMaterial).toMatchObject({
+      sourceMaterialIndex: 0,
       sourceEdgeSize: 0.4,
       shaderApplied: true
     });
+    expect(materials[2]?.userData.mmdTslOutlineMaterial.uniforms.width.value).toBe(0.4);
     expect(materials[2]?.vertexNode).toBeDefined();
     expect(materials[2]?.positionNode ?? null).toBeNull();
     expect(materials[3]?.userData.mmdTslOutlineMaterial).toMatchObject({
+      sourceMaterialIndex: 1,
       sourceEdgeSize: 0.7,
       shaderApplied: true
     });
+    expect(materials[3]?.userData.mmdTslOutlineMaterial.uniforms.opacity.value).toBe(0.8);
   });
 
   it("can force fallback outline groups for edge-less PoC fixtures", () => {

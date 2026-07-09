@@ -10,6 +10,11 @@ import {
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
 import { fitShadowCameraToObject } from "./scene-setup.js";
+import {
+  isTslViewerPipeline,
+  syncCurrentModelTslLight,
+  syncCurrentModelTslMaterialStates
+} from "./viewer-pipeline.js";
 
 export function render() {
   state.frameTimer.update();
@@ -47,6 +52,7 @@ export function evaluateRuntime(options) {
     updateOptions.physics =
       state.physicsEnabled && (options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0));
     state.currentModel.update(currentMmdSeconds(), updateOptions);
+    syncCurrentModelTslMaterialStates();
   }
   applyLightMotion();
   if (state.currentModel?.mesh) {
@@ -78,7 +84,9 @@ function applyLightMotion() {
     target: state.controls.target,
     directionScratch: state.lightDirectionScratch
   });
-  if (state.currentModel?.mesh?.material) {
+  if (isTslViewerPipeline()) {
+    syncCurrentModelTslLight();
+  } else if (state.currentModel?.mesh?.material) {
     syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
   }
   if (state.currentBackground?.mesh?.material) {

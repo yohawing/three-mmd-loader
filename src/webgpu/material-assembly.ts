@@ -52,16 +52,17 @@ export function createMmdTslMaterialFromSource(
     sphereMode: metadata.sphereMode ?? "none",
     gammaSpaceComposite: source.map != null || source.gradientMap != null || sphereTexture !== undefined
   });
-  syncMmdTslMaterialState(material, createMaterialRuntimeStateForSource(sourceMaterial, metadata, sphereTexture));
   material.userData.mmdMaterial = {
     ...metadata,
     flags: metadata.flags ? { ...metadata.flags } : undefined
   };
+  material.userData.mmdTslSourceRenderFlags = {
+    transparent: sourceMaterial.transparent,
+    depthWrite: sourceMaterial.depthWrite
+  };
   material.side = sourceMaterial.side;
-  material.transparent = sourceMaterial.transparent;
-  material.opacity = sourceMaterial.opacity;
-  material.depthWrite = sourceMaterial.depthWrite;
   material.alphaTest = sourceMaterial.alphaTest;
+  syncMmdTslMaterialState(material, createMaterialRuntimeStateForSource(sourceMaterial, metadata, sphereTexture));
   if (options.respectMaterialShadowFlags !== false && !mmdMaterialCastsShadow(metadata.flags)) {
     material.castShadowNode = TSL.Fn(() => {
       TSL.Discard();
@@ -105,7 +106,7 @@ export function appendMmdTslOutlineGroups(
     if (!mmdMaterialHasVisibleOutline(metadata, options.forceOutlineGroups === true)) {
       continue;
     }
-    const outlineMaterial = createMmdTslOutlineMaterial(metadata, options);
+    const outlineMaterial = createMmdTslOutlineMaterial(metadata, options, group.materialIndex);
     const outlineMaterialIndex = materialList.length;
     materialList.push(outlineMaterial);
     mesh.geometry.addGroup(group.start, group.count, outlineMaterialIndex);
@@ -119,11 +120,17 @@ export function appendMmdTslOutlineGroups(
 
 function createMmdTslOutlineMaterial(
   metadata: MmdMaterialMetadata,
-  options: MmdTslMaterialAssemblyOptions
+  options: MmdTslMaterialAssemblyOptions,
+  sourceMaterialIndex: number
 ): THREE.MeshBasicNodeMaterial {
   const force = options.forceOutlineGroups === true;
   const edgeColor = mmdTslOutlineColor(metadata, force);
   const outlineWidth = mmdTslOutlineWidth(metadata, force);
+  const outlineUniforms = {
+    color: new THREE.Vector3(edgeColor[0], edgeColor[1], edgeColor[2]),
+    opacity: TSL.uniform(edgeColor[3], "float") as unknown as ReturnType<typeof TSL.float> & { value: number },
+    width: TSL.uniform(outlineWidth, "float") as unknown as ReturnType<typeof TSL.float> & { value: number }
+  };
   const material = new THREE.MeshBasicNodeMaterial({
     color: new THREE.Color(edgeColor[0], edgeColor[1], edgeColor[2]),
     opacity: edgeColor[3],
@@ -136,29 +143,44 @@ function createMmdTslOutlineMaterial(
     polygonOffsetUnits: 1,
     toneMapped: false
   });
-  material.colorNode = TSL.vec3(edgeColor[0], edgeColor[1], edgeColor[2]);
-  material.opacityNode = TSL.float(edgeColor[3]);
-  material.vertexNode = createMmdTslScreenSpaceOutlineVertexNode(outlineWidth);
+  material.colorNode = TSL.uniform(outlineUniforms.color);
+  material.opacityNode = outlineUniforms.opacity;
+  material.vertexNode = createMmdTslScreenSpaceOutlineVertexNode(outlineUniforms.width);
   material.castShadowNode = TSL.Fn(() => {
     TSL.Discard();
     return TSL.vec4(0, 0, 0, 0);
   })();
   material.castShadowPositionNode = TSL.positionLocal;
   material.userData.mmdTslOutlineMaterial = {
+    sourceMaterialIndex,
+    fallback: force,
     sourceEdgeSize: metadata.edgeSize ?? 0,
     edgeColor,
-    shaderApplied: true
+    flags: metadata.flags ? { ...metadata.flags } : undefined,
+    shaderApplied: true,
+    uniforms: outlineUniforms
   };
   return material;
 }
 
-function createMmdTslScreenSpaceOutlineVertexNode(outlineWidth: number): THREE.Node {
-  const mvp = TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix);
+interface TslVectorNodeOps {
+  readonly w: unknown;
+  add(value: unknown): TslVectorNodeOps;
+  sub(value: unknown): TslVectorNodeOps;
+  mul(value: unknown): TslVectorNodeOps;
+}
+
+function createMmdTslScreenSpaceOutlineVertexNode(outlineWidth: THREE.Node): THREE.Node {
+  const outlineWidthNode = outlineWidth as unknown as TslVectorNodeOps;
+  const mvp = TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix) as unknown as {
+    mul(value: unknown): TslVectorNodeOps;
+  };
   const outlineNormal = TSL.normalLocal.negate();
   const pos = mvp.mul(TSL.vec4(TSL.positionLocal, 1));
   const pos2 = mvp.mul(TSL.vec4(TSL.positionLocal.add(outlineNormal), 1));
-  const direction = TSL.normalize(pos.sub(pos2));
-  return pos.add(direction.mul(outlineWidth * 0.004).mul(pos.w));
+  const normalizeNode = TSL.normalize as unknown as (value: unknown) => TslVectorNodeOps;
+  const direction = normalizeNode(pos.sub(pos2));
+  return pos.add(direction.mul(outlineWidthNode.mul(0.004)).mul(pos.w)) as unknown as THREE.Node;
 }
 
 function createMaterialRuntimeStateForSource(

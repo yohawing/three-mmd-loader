@@ -61,4 +61,41 @@ describe("TSL material core", () => {
     expect(material.opacity).toBe(0.5);
     expect(material.transparent).toBe(true);
   });
+
+  it("preserves alpha blend transparency semantics while syncing runtime state", () => {
+    const material = createMmdTslToonMaterial();
+    material.userData.mmdMaterial = {
+      transparencyMode: "alphaBlend",
+      flags: {}
+    };
+    const previousVersion = material.version;
+
+    syncMmdTslMaterialState(material, {
+      diffuse: [1, 1, 1, 1],
+      ambient: [0, 0, 0],
+      specular: [0, 0, 0],
+      specularPower: 0,
+      textureFactor: [1, 1, 1, 1],
+      sphereTextureFactor: [0, 0, 0, 0],
+      toonTextureFactor: [1, 1, 1, 1]
+    });
+
+    expect(material.opacity).toBe(1);
+    expect(material.transparent).toBe(true);
+    expect(material.depthWrite).toBe(true);
+    expect(material.colorWrite).toBe(true);
+    expect(material.version).toBeGreaterThan(previousVersion);
+
+    const syncedVersion = material.version;
+    syncMmdTslMaterialState(material, {
+      diffuse: [1, 1, 1, 1],
+      ambient: [0, 0, 0],
+      specular: [0, 0, 0],
+      specularPower: 0,
+      textureFactor: [1, 1, 1, 1],
+      sphereTextureFactor: [0, 0, 0, 0],
+      toonTextureFactor: [1, 1, 1, 1]
+    });
+    expect(material.version).toBe(syncedVersion);
+  });
 });

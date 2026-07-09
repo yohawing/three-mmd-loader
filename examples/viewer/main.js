@@ -14,15 +14,10 @@ import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles,
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
 import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
+import { updateViewerPipelineStatus } from "./lib/viewer-pipeline.js";
 
 const volumeStorageKey = "three-mmd-loader.viewer.volume.v1";
 let frameCurrentInputDirty = false;
-
-setupScene();
-initLocalization();
-initVolumeControls();
-// Warm browser cache for kuroko stand-in model (silent on failure).
-fetch(kurokoModelUrl).catch(() => {});
 
 const viewerApi = {
   get camera() { return state.camera; },
@@ -44,11 +39,29 @@ if (debugEnabled) {
 }
 window.mmdViewer = viewerApi;
 
-bindControls();
-void initializeAssetLibrary();
-resize();
-state.frameTimer.update();
-state.renderer.setAnimationLoop(render);
+void initializeViewer();
+
+async function initializeViewer() {
+  try {
+    await setupScene();
+    initLocalization();
+    initVolumeControls();
+    // Warm browser cache for kuroko stand-in model (silent on failure).
+    fetch(kurokoModelUrl).catch(() => {});
+    bindControls();
+    void initializeAssetLibrary();
+    resize();
+    updateViewerPipelineStatus();
+    state.frameTimer.update();
+    state.renderer.setAnimationLoop(render);
+  } catch (error) {
+    state.rendererStatus = "error";
+    updateViewerPipelineStatus();
+    const message = error instanceof Error ? error.message : String(error);
+    window.console?.error("[viewer] Failed to initialize:", error);
+    setStatus(message, "error");
+  }
+}
 
 function bindControls() {
   window.addEventListener("resize", resize);
@@ -461,7 +474,7 @@ function hasTimelineSource() {
 function disposeViewerResources() {
   if (state.viewerDisposed) return;
   state.viewerDisposed = true;
-  state.renderer.setAnimationLoop(null);
+  state.renderer?.setAnimationLoop?.(null);
   clearModel();
   clearBackground();
   clearAccessory();
@@ -473,8 +486,8 @@ function disposeViewerResources() {
   clearAudioSource();
   disposeActivePhysicsBackend();
   state.frameTimer.dispose();
-  state.controls.dispose();
-  state.renderer.dispose();
-  state.renderer.forceContextLoss?.();
+  state.controls?.dispose();
+  state.renderer?.dispose();
+  state.renderer?.forceContextLoss?.();
 }
 

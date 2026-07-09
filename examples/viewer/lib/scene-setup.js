@@ -7,6 +7,7 @@ import {
 
 import { dom, updateChromeHeights } from "./dom.js";
 import { persistViewportSettings, state } from "./state.js";
+import { updateViewerPipelineStatus } from "./viewer-pipeline.js";
 
 const viewerSelfShadowQuality = {
   mapSize: 4096,
@@ -26,19 +27,40 @@ const viewerMaxPixelRatio = 3;
 const viewerDefaultCameraNear = 0.01;
 const viewerDefaultCameraFar = 2000;
 
-export function setupScene() {
+export async function setupScene() {
   if (!(dom.canvas instanceof HTMLCanvasElement)) throw new Error("Viewer canvas is missing");
-  state.renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    canvas: dom.canvas,
-    logarithmicDepthBuffer: true
-  });
+  state.rendererStatus = "initializing";
+  updateViewerPipelineStatus();
+  if (state.viewerPipeline === "baseline-webgl") {
+    state.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      canvas: dom.canvas,
+      logarithmicDepthBuffer: true
+    });
+  } else {
+    const { WebGPURenderer } = await import("three/webgpu");
+    state.renderer = new WebGPURenderer({
+      antialias: true,
+      canvas: dom.canvas,
+      forceWebGL: state.viewerPipeline === "tsl-forcewebgl"
+    });
+  }
+  state.renderer.outputColorSpace = THREE.SRGBColorSpace;
+  state.renderer.toneMapping = THREE.NoToneMapping;
   state.renderer.setPixelRatio(
     Math.min(Math.min(window.devicePixelRatio, 2) * viewerSupersample, viewerMaxPixelRatio)
   );
   state.renderer.setClearColor(0xffffff, 1);
   state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled;
   state.renderer.shadowMap.type = THREE.BasicShadowMap;
+  if (state.viewerPipeline !== "baseline-webgl") {
+    state.renderer.shadowMap.transmitted = true;
+  }
+  if (typeof state.renderer.init === "function") {
+    await state.renderer.init();
+  }
+  state.rendererStatus = "ready";
+  updateViewerPipelineStatus();
   state.scene = new THREE.Scene();
   state.perspectiveCamera = new THREE.PerspectiveCamera(
     22,

@@ -2,12 +2,18 @@ import type { MaterialRuntimeState } from "../parser/model/modelTypes.js";
 import * as THREE from "three/webgpu";
 import * as TSL from "three/tsl";
 
+import { mmdMaterialDepthWrite, mmdMaterialSuppressesColorAtAlpha } from "../three/material/material-metadata.js";
 import { clampColor } from "../three/utils.js";
 
 export const MMD_TSL_DEFAULT_LIGHT_COLOR = 154 / 255;
 export const MMD_TSL_DEFAULT_TOON_COORD_OFFSET = 0.45;
 
 const defaultLightDirection = new THREE.Vector3(0.5, 1.0, 1.0).normalize();
+
+interface MmdTslSourceRenderFlags {
+  readonly transparent: boolean;
+  readonly depthWrite: boolean;
+}
 
 export interface MmdTslMaterialCoreOptions {
   readonly diffuse?: readonly [number, number, number];
@@ -169,8 +175,37 @@ export function syncMmdTslMaterialState(
     state.toonTextureFactor[2],
     state.toonTextureFactor[3]
   );
+  const previousVisible = material.visible;
+  const previousColorWrite = material.colorWrite;
+  const previousTransparent = material.transparent;
+  const previousDepthWrite = material.depthWrite;
   material.opacity = clampColor(state.diffuse[3]);
-  material.transparent = material.opacity < 1;
+  const materialUserData = material.userData as {
+    mmdMaterial?: {
+      readonly flags?: Parameters<typeof mmdMaterialSuppressesColorAtAlpha>[1];
+      readonly transparencyMode?: Parameters<typeof mmdMaterialDepthWrite>[0];
+    };
+    readonly mmdTslSourceRenderFlags?: MmdTslSourceRenderFlags;
+  };
+  const flags = materialUserData.mmdMaterial?.flags;
+  const suppressColor = mmdMaterialSuppressesColorAtAlpha(material.opacity, flags);
+  const transparencyMode = materialUserData.mmdMaterial?.transparencyMode;
+  const sourceRenderFlags = materialUserData.mmdTslSourceRenderFlags;
+  const usesAlphaBlend = transparencyMode === "alphaBlend";
+  material.visible = material.opacity > 0 || suppressColor;
+  material.colorWrite = !suppressColor;
+  material.transparent = usesAlphaBlend || material.opacity < 1 || sourceRenderFlags?.transparent === true;
+  material.depthWrite = transparencyMode
+    ? mmdMaterialDepthWrite(transparencyMode)
+    : sourceRenderFlags?.depthWrite ?? !material.transparent;
+  if (
+    material.visible !== previousVisible ||
+    material.colorWrite !== previousColorWrite ||
+    material.transparent !== previousTransparent ||
+    material.depthWrite !== previousDepthWrite
+  ) {
+    material.needsUpdate = true;
+  }
 }
 
 function createMmdTslMaterialUniforms(options: MmdTslMaterialCoreOptions): MmdTslMaterialUniforms {

@@ -24,6 +24,12 @@ import { createViewerRuntimeOptions, currentMotionDurationSeconds, hasCurrentMot
 import { fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
 import { viewerConfig } from "./viewer-config.js";
+import {
+  applyViewerPipelineToModel,
+  clearViewerPipelineModel,
+  createViewerModelLoadOptions,
+  isTslViewerPipeline
+} from "./viewer-pipeline.js";
 
 export async function loadModelFromUrl(url, loadOptions = {}) {
   const profile = createViewerLoadProfile(`url:${url}`);
@@ -87,15 +93,18 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
         ? await modelLoader()
         : await (modelLoader ?? createModelLoader());
     loadProfile?.mark("loader-ready");
-    const loadedModel = await resolvedModelLoader.loadModel(source, { frustumCulled: false });
+    const loadedModel = await resolvedModelLoader.loadModel(source, createViewerModelLoadOptions());
     if (loadOptions.shouldCommit && !loadOptions.shouldCommit()) {
       disposeModelResources(loadedModel);
       loadProfile?.mark("cancelled");
       return false;
     }
     state.currentModel = loadedModel;
+    await applyViewerPipelineToModel(state.currentModel, label);
     loadProfile?.mark("model-loaded");
-    syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    if (!isTslViewerPipeline()) {
+      syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
     addModelToScene(state.currentModel);
     loadProfile?.mark("scene-ready");
     state.currentFolderPmxFiles = [switcherEntry ?? createModelSwitcherEntry(source, label)];
@@ -176,9 +185,12 @@ export async function loadModelFolder(files) {
     profile?.mark("cleared");
     const folderLoader = await createModelLoader({ textureMap });
     profile?.mark("loader-ready");
-    state.currentModel = await folderLoader.loadModel(modelFile, { frustumCulled: false });
+    state.currentModel = await folderLoader.loadModel(modelFile, createViewerModelLoadOptions());
+    await applyViewerPipelineToModel(state.currentModel, modelFile.name);
     profile?.mark("model-loaded");
-    syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    if (!isTslViewerPipeline()) {
+      syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
     addModelToScene(state.currentModel);
     profile?.mark("scene-ready");
     state.elapsedSeconds = 0;
@@ -242,9 +254,12 @@ export async function switchFolderModel(modelFile) {
     profile?.mark("cleared");
     const folderLoader = await createModelLoader({ textureMap: state.currentFolderTextureMap });
     profile?.mark("loader-ready");
-    state.currentModel = await folderLoader.loadModel(modelFile, { frustumCulled: false });
+    state.currentModel = await folderLoader.loadModel(modelFile, createViewerModelLoadOptions());
+    await applyViewerPipelineToModel(state.currentModel, modelFile.name);
     profile?.mark("model-loaded");
-    syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    if (!isTslViewerPipeline()) {
+      syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
     addModelToScene(state.currentModel);
     updateModelSwitcher(modelFile);
     profile?.mark("scene-ready");
@@ -296,6 +311,7 @@ export function clearModel(options = {}) {
     disposeModelResources(state.currentModel);
   }
   state.currentModel = undefined;
+  clearViewerPipelineModel();
   hideCreditPopup();
   clearDiagnosticsPanel();
   clearBoneDetectionPanel();

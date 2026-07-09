@@ -5,6 +5,8 @@ import { viewerConfig } from "./viewer-config.js";
 
 export const debugEnabled = new window.URLSearchParams(location.search).has("debug");
 const query = new window.URLSearchParams(location.search);
+export const initialViewerPipeline = resolveInitialViewerPipeline(query);
+export const initialRendererBackend = rendererBackendForPipeline(initialViewerPipeline);
 const viewportStorageKey = "three-mmd-loader.viewer.viewport.v1";
 const storedViewportSettings = readStoredViewportSettings();
 const initialPhysicsMaxSubSteps = parseDebugInteger(query.get("maxSubSteps"), 5);
@@ -40,6 +42,10 @@ export const state = {
   customBulletMmdLoadPromise: undefined,
   animationLoader: new ThreeMmdLoader({ runtime: createViewerRuntimeOptions() }),
   frameTimer: new THREE.Timer(),
+  viewerPipeline: initialViewerPipeline,
+  rendererBackend: initialRendererBackend,
+  rendererStatus: "pending",
+  pipelineModelName: "(none)",
   renderer: undefined,
   scene: undefined,
   gridHelper: undefined,
@@ -210,6 +216,28 @@ function parseDebugNumber(value, fallback) {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function resolveInitialViewerPipeline(params) {
+  const pipeline = params.get("pipeline")?.toLowerCase();
+  const backend = params.get("backend")?.toLowerCase();
+  if (params.get("baseline") === "1" || pipeline === "baseline-webgl" || backend === "webgl") {
+    return "baseline-webgl";
+  }
+  if (pipeline === "tsl-webgpu" || backend === "webgpu") {
+    return "tsl-webgpu";
+  }
+  return "tsl-forcewebgl";
+}
+
+function rendererBackendForPipeline(pipeline) {
+  if (pipeline === "baseline-webgl") {
+    return "webgl";
+  }
+  if (pipeline === "tsl-webgpu") {
+    return "webgpu";
+  }
+  return "forcewebgl";
 }
 
 state.cameraApplyOptions = {
