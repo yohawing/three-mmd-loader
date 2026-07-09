@@ -173,7 +173,7 @@ describe("detectStandardBones", () => {
     const result = detectStandardBones(bones);
     const match = result.standard.present.find((m) => m.entry.id === "left-leg-ik");
     expect(match).toBeDefined();
-    expect(match!.matchedField).toBe("name");
+    expect(match?.matchedField).toBe("name");
   });
 
   it("matches Japanese name placed in englishName field", () => {
@@ -181,7 +181,7 @@ describe("detectStandardBones", () => {
     const result = detectStandardBones(bones);
     const match = result.standard.present.find((m) => m.entry.id === "center");
     expect(match).toBeDefined();
-    expect(match!.matchedField).toBe("englishName");
+    expect(match?.matchedField).toBe("englishName");
   });
 
   it("reports bone indices in match results", () => {

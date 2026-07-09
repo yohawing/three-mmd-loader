@@ -78,8 +78,7 @@ export function getStandardBoneDefinitions(): readonly StandardBoneEntry[] {
 export function detectStandardBones(bones: readonly BoneData[]): StandardBoneDetectionResult {
   const nameIndex = new Map<string, number>();
   const englishNameIndex = new Map<string, number>();
-  for (let i = 0; i < bones.length; i++) {
-    const bone = bones[i]!;
+  for (const [i, bone] of bones.entries()) {
     const normalizedName = normalizeForMatch(bone.name);
     const normalizedEnglish = normalizeForMatch(bone.englishName);
     if (!nameIndex.has(normalizedName)) {

@@ -1,8 +1,8 @@
 import { parsePmmManifest } from "../../../dist/parser/index.js";
 import { createMmdFileIndex } from "../../../dist/three/index.js";
-import { dom, setStatus } from "./dom.js";
-import { createFolderTextureMap, createModelLoader, loadModel, resetFolderModelState } from "./model-loading.js";
-import { loadMotion, resetMotionSwitcherState } from "./motion-loading.js";
+import { setStatus } from "./dom.js";
+import { createFolderTextureMap, createModelLoader, loadModel } from "./model-loading.js";
+import { loadMotion } from "./motion-loading.js";
 import { loadCameraFile } from "./camera-loading.js";
 import { loadAudioFile } from "./audio-loading.js";
 import { state } from "./state.js";

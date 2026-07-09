@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { initCore, parseAccessory } from "../../../dist/parser/index.js";
-import { dom, setStatus } from "./dom.js";
+import { setStatus } from "./dom.js";
 import { renderStillFrame } from "./playback.js";
 import { state } from "./state.js";
 
@@ -50,7 +50,7 @@ function buildAccessoryGroup(manifest, name) {
 
   for (const meshSummary of manifest.meshSummaries) {
     const geometry = buildAccessoryGeometry(meshSummary);
-    const materials = buildAccessoryMaterials(manifest.materials, meshSummary);
+    const materials = buildAccessoryMaterials(manifest.materials);
     const mesh = materials.length > 1
       ? new THREE.Mesh(geometry, materials)
       : new THREE.Mesh(geometry, materials[0] || new THREE.MeshStandardMaterial());
@@ -133,7 +133,7 @@ function triangulatePolygon(vertexCount) {
   return tris;
 }
 
-function buildAccessoryMaterials(materials, meshSummary) {
+function buildAccessoryMaterials(materials) {
   if (materials.length === 0) {
     return [new THREE.MeshStandardMaterial({ color: 0xcccccc })];
   }
