@@ -1,0 +1,64 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  MMD_TSL_DEFAULT_LIGHT_COLOR,
+  MMD_TSL_DEFAULT_TOON_COORD_OFFSET,
+  createMmdTslToonMaterial,
+  syncMmdTslMaterialState
+} from "../../../src/webgpu/material-core.js";
+
+describe("TSL material core", () => {
+  it("initializes MMD default light and toon uniforms", () => {
+    const material = createMmdTslToonMaterial();
+    const uniforms = material.userData.mmdTslMaterialUniforms;
+
+    expect(uniforms.lightColor.toArray()).toEqual([
+      MMD_TSL_DEFAULT_LIGHT_COLOR,
+      MMD_TSL_DEFAULT_LIGHT_COLOR,
+      MMD_TSL_DEFAULT_LIGHT_COLOR
+    ]);
+    expect(MMD_TSL_DEFAULT_TOON_COORD_OFFSET).toBe(0.45);
+    expect(material.colorNode).toBeDefined();
+    expect(material.receivedShadowNode).toBeDefined();
+    expect(material.castShadowNode).toBeDefined();
+  });
+
+  it("syncs runtime state without replacing preallocated uniform containers", () => {
+    const material = createMmdTslToonMaterial();
+    const uniforms = material.userData.mmdTslMaterialUniforms;
+    const originalDiffuse = uniforms.diffuse;
+    const originalAmbient = uniforms.ambient;
+    const originalSpecular = uniforms.specular;
+    const originalSpecularPower = uniforms.specularPower;
+    const originalTextureFactor = uniforms.textureFactor;
+    const originalSphereTextureFactor = uniforms.sphereTextureFactor;
+    const originalToonTextureFactor = uniforms.toonTextureFactor;
+
+    syncMmdTslMaterialState(material, {
+      diffuse: [0.25, 0.5, 0.75, 0.5],
+      ambient: [0.1, 0.2, 0.3],
+      specular: [0.4, 0.5, 0.6],
+      specularPower: 16,
+      textureFactor: [0.7, 0.8, 0.9, 1],
+      sphereTextureFactor: [0.2, 0.3, 0.4, 0.5],
+      toonTextureFactor: [0.6, 0.7, 0.8, 0.9]
+    });
+
+    expect(uniforms.diffuse).toBe(originalDiffuse);
+    expect(uniforms.ambient).toBe(originalAmbient);
+    expect(uniforms.specular).toBe(originalSpecular);
+    expect(uniforms.specularPower).toBe(originalSpecularPower);
+    expect(uniforms.textureFactor).toBe(originalTextureFactor);
+    expect(uniforms.sphereTextureFactor).toBe(originalSphereTextureFactor);
+    expect(uniforms.toonTextureFactor).toBe(originalToonTextureFactor);
+    expect(uniforms.diffuse.toArray()).toEqual([0.25, 0.5, 0.75]);
+    expect(uniforms.ambient.toArray()).toEqual([0.1, 0.2, 0.3]);
+    expect(uniforms.specular.toArray()).toEqual([0.4, 0.5, 0.6]);
+    expect(uniforms.specularPower.value).toBe(16);
+    expect(uniforms.textureFactor.toArray()).toEqual([0.7, 0.8, 0.9, 1]);
+    expect(uniforms.sphereTextureFactor.toArray()).toEqual([0.2, 0.3, 0.4, 0.5]);
+    expect(uniforms.toonTextureFactor.toArray()).toEqual([0.6, 0.7, 0.8, 0.9]);
+    expect(material.opacity).toBe(0.5);
+    expect(material.transparent).toBe(true);
+  });
+});

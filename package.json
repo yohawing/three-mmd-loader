@@ -46,6 +46,10 @@
       "types": "./dist/three/index.d.ts",
       "default": "./dist/three/index.js"
     },
+    "./webgpu": {
+      "types": "./dist/webgpu/index.d.ts",
+      "default": "./dist/webgpu/index.js"
+    },
     "./physics": {
       "types": "./dist/physics/index.d.ts",
       "default": "./dist/physics/index.js"
@@ -95,6 +99,8 @@
     "visual:smoke:camera-light-vmd": "npm run render:visual:camera-light-vmd && npm run visual:report:camera-light-vmd",
     "visual:smoke:generated-pmx:flip": "npm run render:visual:generated-pmx && npm run visual:report:generated-pmx:flip",
     "visual:smoke:self-shadow": "npm run render:visual:self-shadow && npm run visual:report:self-shadow",
+    "visual:smoke:webgpu-poc": "npm run build && node scripts/visual-regression/check-webgpu-poc.mjs",
+    "visual:smoke:webgpu-poc:local": "npm run build && node scripts/visual-regression/check-webgpu-poc.mjs --include-webgpu --output-dir test-results/visual/webgpu-poc-optional",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "smoke:types": "node scripts/type-consumer-smoke.mjs",
     "test": "vitest run",
