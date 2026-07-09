@@ -50,6 +50,14 @@ export const dom = {
   debugNormalsToggle: document.querySelector("#debug-normals-toggle"),
   debugOutlineOffToggle: document.querySelector("#debug-outline-off-toggle"),
   debugSelfShadowToggle: document.querySelector("#debug-self-shadow-toggle"),
+  debugCaptureButton: document.querySelector("#debug-capture-button"),
+  debugBeforeButton: document.querySelector("#debug-before-button"),
+  debugCompareAfterButton: document.querySelector("#debug-compare-after-button"),
+  debugDiagnostics: document.querySelector("#debug-diagnostics"),
+  debugDiagnosticsCount: document.querySelector("#debug-diagnostics-count"),
+  debugDiagnosticsList: document.querySelector("#debug-diagnostics-list"),
+  debugBoneDetection: document.querySelector("#debug-bone-detection"),
+  debugBoneDetectionContent: document.querySelector("#debug-bone-detection-content"),
   debugFpsValue: document.querySelector("#debug-fps-value"),
   debugFrameTimeValue: document.querySelector("#debug-frame-time-value"),
   debugMemoryValue: document.querySelector("#debug-memory-value"),
@@ -72,11 +80,13 @@ export const dom = {
   viewportGridToggle: document.querySelector("#viewport-grid-toggle"),
   viewportAxesToggle: document.querySelector("#viewport-axes-toggle"),
   modelFolderInput: document.querySelector("#model-folder"),
+  pmmFolderInput: document.querySelector("#pmm-folder"),
   motionFileInput: document.querySelector("#motion-file"),
   poseFileInput: document.querySelector("#pose-file"),
   audioFileInput: document.querySelector("#audio-file"),
   backgroundFolderInput: document.querySelector("#background-folder"),
   cameraFileInput: document.querySelector("#camera-file"),
+  accessoryFileInput: document.querySelector("#accessory-file"),
   bgmAudio: document.querySelector("#bgm-audio")
 };
 

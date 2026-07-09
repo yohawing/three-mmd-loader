@@ -5,6 +5,7 @@ import {
   normalizeMmdRelativePath,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
+import { detectStandardBones } from "../../../dist/parser/index.js";
 import { MmdAnimRuntime, DefaultMmdRuntime } from "../../../dist/runtime/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
@@ -13,7 +14,7 @@ import { loadAudioFile, isAudioFile } from "./audio-loading.js";
 import { loadCameraFile } from "./camera-loading.js";
 import { hideCreditPopup, showModelCredits } from "./credits.js";
 import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, setOutlineHidden, showColliderHelpers } from "./debug.js";
-import { reportTextureDiagnostics } from "./diagnostics.js";
+import { clearBoneDetectionPanel, clearDiagnosticsPanel, reportTextureDiagnostics, updateBoneDetectionPanel, updateDiagnosticsPanel } from "./diagnostics.js";
 import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStageState, updateTransportState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
 import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
@@ -119,6 +120,8 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     loadProfile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
+    updateDiagnosticsPanel(state.currentModel);
+    updateBoneDetectionPanel(detectStandardBones(state.currentModel.mesh.userData.mmdModel?.metadata?.bones ?? []));
     showModelCredits(state.currentModel, label);
     updateStageState();
     if (state.debugOutlineHidden) {
@@ -198,6 +201,8 @@ export async function loadModelFolder(files) {
     profile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
+    updateDiagnosticsPanel(state.currentModel);
+    updateBoneDetectionPanel(detectStandardBones(state.currentModel.mesh.userData.mmdModel?.metadata?.bones ?? []));
     showModelCredits(state.currentModel, modelFile.name);
     updateStageState();
     if (state.debugOutlineHidden) {
@@ -261,6 +266,8 @@ export async function switchFolderModel(modelFile) {
     profile?.mark("animation-ready");
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
+    updateDiagnosticsPanel(state.currentModel);
+    updateBoneDetectionPanel(detectStandardBones(state.currentModel.mesh.userData.mmdModel?.metadata?.bones ?? []));
     showModelCredits(state.currentModel, modelFile.name);
     updateStageState();
     if (state.debugOutlineHidden) {
@@ -290,6 +297,8 @@ export function clearModel(options = {}) {
   }
   state.currentModel = undefined;
   hideCreditPopup();
+  clearDiagnosticsPanel();
+  clearBoneDetectionPanel();
   disposeActivePhysicsBackend();
   if (!options.preserveMotion) {
     state.currentMotion = undefined;

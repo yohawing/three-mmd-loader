@@ -338,6 +338,78 @@ export function setSplitImpulsePenetrationThreshold(value) {
   return state.physicsTuningOptions.splitImpulsePenetrationThreshold;
 }
 
+export function captureCanvas() {
+  if (!state.renderer || !state.scene || !state.camera) {
+    return;
+  }
+  state.renderer.render(state.scene, state.camera);
+  const dataUrl = state.renderer.domElement.toDataURL("image/png");
+  const frame = Math.round(state.elapsedSeconds * (state.mmdFrameRate ?? 30));
+  const modelName = state.currentModel?.mesh.name ?? "capture";
+  const safeName = modelName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40) || "capture";
+  const link = document.createElement("a");
+  link.download = `${safeName}_f${frame}.png`;
+  link.href = dataUrl;
+  link.click();
+}
+
+export function markBeforeCapture() {
+  if (!state.renderer || !state.scene || !state.camera) {
+    return;
+  }
+  state.renderer.render(state.scene, state.camera);
+  state.debugBeforeCapture = state.renderer.domElement.toDataURL("image/png");
+  refreshDebugPanelState();
+}
+
+export function captureAfterAndCompare() {
+  if (!state.renderer || !state.scene || !state.camera || !state.debugBeforeCapture) {
+    return;
+  }
+  state.renderer.render(state.scene, state.camera);
+  const afterDataUrl = state.renderer.domElement.toDataURL("image/png");
+  showComparisonOverlay(state.debugBeforeCapture, afterDataUrl);
+}
+
+function showComparisonOverlay(beforeUrl, afterUrl) {
+  let overlay = document.querySelector("#debug-compare-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "debug-compare-overlay";
+    overlay.className = "debug-compare-overlay";
+    overlay.innerHTML = `
+      <div class="debug-compare-content">
+        <div class="debug-compare-header">
+          <span>Before / After</span>
+          <button class="debug-compare-close" type="button" aria-label="Close comparison">
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        </div>
+        <div class="debug-compare-images">
+          <div class="debug-compare-panel">
+            <span class="debug-compare-label">Before</span>
+            <img class="debug-compare-img" id="debug-compare-before" alt="Before capture" />
+          </div>
+          <div class="debug-compare-panel">
+            <span class="debug-compare-label">After</span>
+            <img class="debug-compare-img" id="debug-compare-after" alt="After capture" />
+          </div>
+        </div>
+      </div>
+    `;
+    overlay.querySelector(".debug-compare-close").addEventListener("click", () => {
+      overlay.hidden = true;
+    });
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) overlay.hidden = true;
+    });
+    document.body.appendChild(overlay);
+  }
+  overlay.querySelector("#debug-compare-before").src = beforeUrl;
+  overlay.querySelector("#debug-compare-after").src = afterUrl;
+  overlay.hidden = false;
+}
+
 export function refreshDebugPanelState() {
   if (dom.debugCollidersToggle) {
     dom.debugCollidersToggle.checked = state.debugCollidersVisible;
@@ -355,6 +427,9 @@ export function refreshDebugPanelState() {
       "aria-checked",
       String(state.debugSelfShadowEnabled)
     );
+  }
+  if (dom.debugCompareAfterButton) {
+    dom.debugCompareAfterButton.disabled = !state.debugBeforeCapture;
   }
 }
 

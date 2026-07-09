@@ -67,6 +67,7 @@
               <details class="load-category" id="model-load-category" open>
                 <summary data-i18n="menu.model">Model</summary>
                 <button id="choose-model-folder" type="button" role="menuitem" data-i18n="action.loadFromFolder">Load From Folder...</button>
+                <button id="choose-pmm-folder" type="button" role="menuitem">Load PMM Project...</button>
                 <div class="asset-load-row" hidden>
                   <label for="asset-model-select" data-i18n="menu.fixture">Fixture</label>
                   <select id="asset-model-select" aria-label="Local model asset" hidden></select>
@@ -107,6 +108,11 @@
                   <select id="asset-background-select" aria-label="Local background asset" hidden></select>
                   <button id="load-asset-background" type="button" role="menuitem" data-i18n="action.load" hidden>Load</button>
                 </div>
+              </details>
+
+              <details class="load-category" id="accessory-load-category">
+                <summary data-i18n="menu.accessory">Accessory</summary>
+                <button id="choose-accessory" type="button" role="menuitem">Load .x File...</button>
               </details>
 
               <details class="load-category" id="camera-load-category">
@@ -153,11 +159,13 @@
         <span class="status" id="status"></span>
 
         <input id="model-folder" type="file" webkitdirectory directory multiple />
+        <input id="pmm-folder" type="file" webkitdirectory directory multiple />
         <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
         <input id="pose-file" type="file" accept=".vpd,text/plain" />
         <input id="audio-file" type="file" accept=".wav,.mp3,.ogg,audio/wav,audio/mpeg,audio/ogg" />
         <input id="background-folder" type="file" webkitdirectory directory multiple />
         <input id="camera-file" type="file" accept=".vmd,application/octet-stream" />
+        <input id="accessory-file" type="file" accept=".x,application/octet-stream" />
         <audio id="bgm-audio" hidden></audio>
       </header>
 
@@ -179,6 +187,7 @@
             <div class="info-links">
               <a href="https://github.com/yohawing/three-mmd-loader" target="_blank" rel="noopener noreferrer">GitHub</a>
               <a href="https://www.npmjs.com/package/@yohawing/three-mmd-loader" target="_blank" rel="noopener noreferrer">npm</a>
+              <a href="../webgpu-poc/?backend=forcewebgl" target="_blank" rel="noopener noreferrer">WebGPU PoC</a>
             </div>
             <p class="info-version">v<span id="app-version">0.0.0</span></p>
           </div>
@@ -220,6 +229,28 @@
                 <span>Self shadow</span>
                 <input id="debug-self-shadow-toggle" type="checkbox" role="switch" checked />
               </label>
+            </div>
+            <div class="debug-capture-row">
+              <button id="debug-capture-button" class="debug-capture-button" type="button">
+                <span class="material-symbols-rounded" aria-hidden="true">photo_camera</span>
+                Capture
+              </button>
+              <button id="debug-before-button" class="debug-capture-button" type="button">
+                <span class="material-symbols-rounded" aria-hidden="true">compare</span>
+                Before
+              </button>
+              <button id="debug-compare-after-button" class="debug-capture-button" type="button" disabled>
+                <span class="material-symbols-rounded" aria-hidden="true">difference</span>
+                After &amp; Compare
+              </button>
+            </div>
+            <details class="debug-diagnostics" id="debug-diagnostics" hidden>
+              <summary>Diagnostics <span class="debug-diagnostics-count" id="debug-diagnostics-count"></span></summary>
+              <ul class="debug-diagnostics-list" id="debug-diagnostics-list" role="list"></ul>
+            </details>
+            <div class="debug-bone-detection" id="debug-bone-detection" hidden>
+              <span class="debug-bone-detection-label">Skeleton</span>
+              <span class="debug-bone-detection-content" id="debug-bone-detection-content"></span>
             </div>
           </div>
         </details>

@@ -56,6 +56,7 @@ export const state = {
   currentBackground: undefined,
   currentMotion: undefined,
   currentCameraMotion: undefined,
+  currentAccessory: undefined,
   currentFolderTextureMap: undefined,
   currentFolderPmxFiles: [],
   currentMotionVmdFiles: [],
@@ -140,6 +141,7 @@ export const state = {
   debugFpsSampleSeconds: 0,
   debugFpsSampleFrames: 0,
   debugFrameTimeSampleMs: 0,
+  debugBeforeCapture: undefined,
   restPoseAnimation: {
     kind: "vmd",
     metadata: {

@@ -1,13 +1,15 @@
+import { clearAccessory, loadAccessoryFile } from "./lib/accessory-loading.js";
 import { clearAudioSource, isAudioElement, loadAudioFile, setAudioOffsetFrame, switchAudioEntry } from "./lib/audio-loading.js";
 import { bindAssetLibraryControls, initializeAssetLibrary } from "./lib/asset-library.js";
 import { clearBackground, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
 import { clearCameraMotion, loadCameraFile, loadCameraFromUrl, switchCameraEntry } from "./lib/camera-loading.js";
 import { bindCreditPopupControls } from "./lib/credits.js";
-import { createViewerDebugApi, refreshDebugPanelState, setDebugMaterialMode, setOutlineHidden, setSelfShadowEnabled, toggleColliderHelpers } from "./lib/debug.js";
+import { captureCanvas, captureAfterAndCompare, createViewerDebugApi, markBeforeCapture, refreshDebugPanelState, setDebugMaterialMode, setOutlineHidden, setSelfShadowEnabled, toggleColliderHelpers } from "./lib/debug.js";
 import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updatePlayToggle, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
 import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
+import { loadPmmFolder } from "./lib/pmm-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
@@ -59,6 +61,7 @@ function bindControls() {
     updateChromeHeights();
   });
   document.querySelector("#choose-model-folder")?.addEventListener("click", () => dom.modelFolderInput?.click());
+  document.querySelector("#choose-pmm-folder")?.addEventListener("click", () => dom.pmmFolderInput?.click());
   document.querySelector("#choose-motion")?.addEventListener("click", () => dom.motionFileInput?.click());
   document.querySelector("#choose-pose")?.addEventListener("click", () => dom.poseFileInput?.click());
   document.querySelector("#choose-audio")?.addEventListener("click", () => dom.audioFileInput?.click());
@@ -71,6 +74,10 @@ function bindControls() {
   dom.modelFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
     if (files && files.length > 0) void loadModelFolder(Array.from(files));
+  });
+  dom.pmmFolderInput?.addEventListener("change", (event) => {
+    const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
+    if (files && files.length > 0) void loadPmmFolder(Array.from(files));
   });
   dom.modelSwitcher?.addEventListener("sl-change", () => {
     const selectedValue = loadedFileSwitcherValue(dom.modelSwitcher);
@@ -141,6 +148,11 @@ function bindControls() {
   dom.cameraFileInput?.addEventListener("change", (event) => {
     const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
     if (file) void loadCameraFile(file);
+  });
+  document.querySelector("#choose-accessory")?.addEventListener("click", () => dom.accessoryFileInput?.click());
+  dom.accessoryFileInput?.addEventListener("change", (event) => {
+    const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
+    if (file) void loadAccessoryFile(file);
   });
   dom.playToggle?.addEventListener("click", () => {
     void setPlaybackPlaying(!state.isPlaying);
@@ -259,6 +271,9 @@ function bindDebugControls() {
   dom.debugSelfShadowToggle?.addEventListener("change", () => {
     setSelfShadowEnabled(dom.debugSelfShadowToggle.checked);
   });
+  dom.debugCaptureButton?.addEventListener("click", captureCanvas);
+  dom.debugBeforeButton?.addEventListener("click", markBeforeCapture);
+  dom.debugCompareAfterButton?.addEventListener("click", captureAfterAndCompare);
   refreshDebugPanelState();
 }
 
@@ -449,6 +464,7 @@ function disposeViewerResources() {
   state.renderer.setAnimationLoop(null);
   clearModel();
   clearBackground();
+  clearAccessory();
   clearCameraMotion();
   resetFolderModelState();
   resetMotionSwitcherState();
