@@ -1,6 +1,17 @@
+export { parseAccessory } from "./accessory/index.js";
+export type {
+  AccessoryDiagnostic,
+  AccessoryMaterial,
+  AccessoryMeshSummary,
+  AccessoryParsedManifest,
+  AccessoryVacSettings,
+  AccessoryVertexColor
+} from "./accessory/index.js";
 export { detectModelFormat } from "./formatDetection.js";
 export type { MmdModelFormat } from "./formatDetection.js";
 export type {
+  Diagnostic,
+  DiagnosticCategory,
   InitCoreOptions,
   MmdAnimation,
   MmdCore,
@@ -35,6 +46,7 @@ export type {
 export {
   createPmmScenePlan,
   createPmmStaticPreviewPlan,
+  parsePmmDocument,
   parsePmmManifest,
   resolvePmmAssetPath,
   resolvePmmAssetReference
@@ -43,10 +55,33 @@ export type {
   PmmAssetReference,
   PmmAssetResolution,
   PmmAssetResolutionOptions,
+  PmmCameraKeyframeSummary,
+  PmmDocumentAccessoryBlockSummary,
+  PmmDocumentAccessoryKeyframeSummary,
+  PmmDocumentAccessorySummary,
+  PmmDocumentGlobalSummary,
+  PmmDocumentModelSummary,
+  PmmDocumentSettingsSummary,
+  PmmDocumentSummary,
   PmmManifest,
+  PmmParsedAssetReference,
+  PmmParsedManifest,
+  PmmParserDiagnostic,
+  PmmProjectAssetBinding,
+  PmmProjectGraph,
+  PmmProjectSceneSettings,
+  PmmSceneAsset,
   PmmScenePlan,
-  PmmStaticPreviewPlan
+  PmmStaticPreviewPlan,
+  PmmTimeline
 } from "./pmm/index.js";
+export { detectStandardBones, getStandardBoneDefinitions } from "./skeleton/index.js";
+export type {
+  StandardBoneDetectionResult,
+  StandardBoneEntry,
+  StandardBoneMatch,
+  StandardBoneMatchResult
+} from "./skeleton/index.js";
 export { parseVmd, parseVmdMetadata, parseVmdSectionInventory } from "./vmd/index.js";
 export type {
   VmdMetadata,

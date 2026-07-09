@@ -1,3 +1,17 @@
+import type { MmdCore } from "../model/modelTypes.js";
+import type { PmmParsedManifest } from "./PmmParsedTypes.js";
+
+export function parsePmmDocument(
+  bytes: ArrayBuffer | Uint8Array,
+  core: MmdCore
+): PmmParsedManifest {
+  const typed = core as { parsePmmDocument?(bytes: ArrayBuffer | Uint8Array): PmmParsedManifest };
+  if (typeof typed.parsePmmDocument !== "function") {
+    throw new Error("PMM document parsing requires WASM core (use initCore())");
+  }
+  return typed.parsePmmDocument(bytes);
+}
+
 export interface PmmAssetReference {
   path: string;
   normalizedPath: string;

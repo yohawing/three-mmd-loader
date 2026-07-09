@@ -612,7 +612,11 @@ describe("ThreeMmdLoader", () => {
       "load-textures",
       "material-metadata",
       "assemble-model",
-      "total"
+      "total",
+      "init-core",
+      "parse-only",
+      "init-runtime",
+      "create-proxies"
     ]);
     expect(onMeasure).toHaveBeenCalledWith(
       expect.objectContaining({ label: expect.stringContaining("bytes:"), name: "total" })

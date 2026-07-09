@@ -50,10 +50,18 @@ export { applyMmdCameraStateToThreeCamera } from "./camera.js";
 export { applyMmdLightStateToThreeDirectionalLight } from "./light.js";
 export { disposeMmdModel } from "./dispose.js";
 export type { DisposeMmdModelOptions } from "./dispose.js";
+export { classifyMmdAssetKind, createMmdFileIndex } from "./assets.js";
+export type { MmdAssetKind, MmdFileIndex } from "./assets.js";
 export {
   createMmdTextureMapFromFiles,
+  findMmdAccessoryFiles,
+  findMmdAudioFiles,
   findMmdModelFiles,
   findMmdMotionFiles,
+  isMmdAccessoryFile,
+  isMmdAudioFile,
+  isMmdModelFile,
+  isMmdMotionFile,
   isMmdTextureFile,
   normalizeMmdRelativePath
 } from "./folder.js";
@@ -356,6 +364,7 @@ export class ThreeMmdLoader {
       });
       profile?.mark("bytes");
       const core = await this.getCore();
+      profile?.mark("core-ready");
       const { model: parsedModel, coreDiagnostic } = this.loadCoreModel(core, bytes);
       const modelData = createLoaderMmdModelDataFromModel(parsedModel);
       let parsedModelDisposed = false;
@@ -370,8 +379,9 @@ export class ThreeMmdLoader {
         const materials = normalizeMeshMaterials(mesh.material);
         warnDeprecatedLoadModelOptions(options);
         const effectiveOutlines = options.outline ?? options.outlines ?? true;
+        const sourceDescriptor = createModelSourceDescriptor(source, bytes.byteLength);
         const materialDiagnostics: MaterialTransparencyDiagnostic[] = [];
-        const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
+        const texturePromise = applyThreeMmdMaterialTextures(materials, modelData.materials, {
           textureResolver: this.options.textureResolver,
           textureMap: this.options.textureMap,
           textureLoader: this.options.textureLoader,
@@ -383,6 +393,13 @@ export class ThreeMmdLoader {
           materialDiagnostics,
           textureCache: this.textureCache
         });
+        const runtime = this.createRuntime({
+          modelBytes: bytes,
+          mesh,
+          source: sourceDescriptor
+        });
+        profile?.mark("runtime-ready");
+        const textureDiagnostics = await texturePromise;
         profile?.mark("textures");
         const renderOrder = computeMmdMaterialRenderOrder(
           materials.map((material, materialIndex) => ({
@@ -397,14 +414,9 @@ export class ThreeMmdLoader {
         }
         syncMorphSplitBodyMeshRenderState(mesh, modelData.materials);
         profile?.mark("materials");
-        const sourceDescriptor = createModelSourceDescriptor(source, bytes.byteLength);
         const model = createThreeMmdModel({
           mesh,
-          runtime: this.createRuntime({
-            modelBytes: bytes,
-            mesh,
-            source: sourceDescriptor
-          }),
+          runtime,
           source: sourceDescriptor,
           sourceDiagnostic,
           coreDiagnostic,
@@ -423,6 +435,10 @@ export class ThreeMmdLoader {
         profile?.measure("material-metadata", "textures", "materials");
         profile?.measure("assemble-model", "materials", "assembled");
         profile?.measure("total", "start", "assembled");
+        profile?.measure("init-core", "bytes", "core-ready");
+        profile?.measure("parse-only", "core-ready", "parsed");
+        profile?.measure("init-runtime", "mesh", "runtime-ready");
+        profile?.measure("create-proxies", "materials", "assembled");
         return model;
       } finally {
         if (!parsedModelDisposed) {
