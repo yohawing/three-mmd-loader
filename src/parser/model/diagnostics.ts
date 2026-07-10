@@ -99,7 +99,7 @@ export function createModelDiagnostics(
       level: "warning",
       code: "BONE_FIXED_AXIS_CONSTRAINTS_UNSUPPORTED",
       message:
-        "Fixed-axis bone metadata is parsed, but the current runtime does not yet apply full MMD fixed-axis constraint behavior."
+        "Fixed-axis metadata is applied to IK links, but non-IK fixed-axis bone behavior is not yet enforced by the runtime."
     });
   }
   if (skeleton?.bones.some((bone) => bone.flags.localAxis)) {
@@ -107,7 +107,7 @@ export function createModelDiagnostics(
       level: "warning",
       code: "BONE_LOCAL_AXIS_CONSTRAINTS_UNSUPPORTED",
       message:
-        "Local-axis bone metadata is parsed, but the current runtime does not yet apply full MMD local-axis constraint behavior."
+        "Local-axis metadata is applied to IK link limits, but non-IK local-axis bone behavior is not yet enforced by the runtime."
     });
   }
   if (skeleton?.bones.some((bone) => bone.flags.externalParentTransform)) {

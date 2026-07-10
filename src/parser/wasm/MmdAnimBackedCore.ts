@@ -251,14 +251,16 @@ function buildAdapterDiagnostics(j: Record<string, unknown>): Diagnostic[] {
     diagnostics.push({
       level: "warning",
       code: "BONE_FIXED_AXIS_CONSTRAINTS_UNSUPPORTED",
-      message: "PMX fixed-axis bone constraints are parsed but not enforced by the runtime adapter."
+      message:
+        "Fixed-axis metadata is applied to IK links, but non-IK fixed-axis bone behavior is not yet enforced by the runtime."
     });
   }
   if (bones.some((bone) => bone.flags?.["localAxis"] === true)) {
     diagnostics.push({
       level: "warning",
       code: "BONE_LOCAL_AXIS_CONSTRAINTS_UNSUPPORTED",
-      message: "PMX local-axis bone constraints are parsed but not enforced by the runtime adapter."
+      message:
+        "Local-axis metadata is applied to IK link limits, but non-IK local-axis bone behavior is not yet enforced by the runtime."
     });
   }
   return diagnostics;
