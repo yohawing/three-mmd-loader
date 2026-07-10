@@ -387,6 +387,10 @@ describe("visual regression smoke scripts", () => {
     expect(renderGeneratedPmxWebgpuScript).toContain(
       "classification while loading. TSL appends its own outline groups"
     );
+    expect(renderGeneratedPmxWebgpuScript).toContain("legacySrgbFramebuffer: true");
+    expect(renderGeneratedPmxWebgpuScript).toContain(
+      "createdRenderer.outputColorSpace = THREE.LinearSRGBColorSpace"
+    );
     expect(scripts["visual:smoke:camera-light-vmd"]).toContain("visual:report:camera-light-vmd");
     expect(scripts["render:visual:camera-light-vmd"]).toContain("camera-light-vmd.manifest.json");
     expect(scripts["visual:smoke:generated-pmx:flip"]).toContain("visual:report:generated-pmx:flip");

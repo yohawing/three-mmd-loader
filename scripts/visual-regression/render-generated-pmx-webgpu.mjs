@@ -234,7 +234,10 @@ function rendererHtml() {
         model.update(visualCase.timeSeconds, { physics: false });
         replaceMmdModelMaterialsWithTsl(model.mesh, {
           appendOutlineGroups: true,
-          respectMaterialShadowFlags: true
+          respectMaterialShadowFlags: true,
+          // Pair with LinearSRGBColorSpace below for legacy WebGL gamma-space
+          // framebuffer blending parity against the generated-PMX WebGL baseline.
+          legacySrgbFramebuffer: true
         });
         // The WebGL generated-PMX baseline only synchronizes MMD material light uniforms
         // for light-VMD cases. This profile has static scene lights, so preserve the MMD
@@ -277,7 +280,9 @@ function rendererHtml() {
         createdRenderer.setSize(config.render.resolution.width, config.render.resolution.height, false);
         createdRenderer.setPixelRatio(config.render.pixelRatio);
         createdRenderer.setClearColor(config.render.background, 1);
-        createdRenderer.outputColorSpace = THREE.SRGBColorSpace;
+        // LinearSRGB + legacySrgbFramebuffer materials: blend in gamma space like
+        // the legacy WebGL MMD framebuffer (no material EOTF before the framebuffer).
+        createdRenderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         createdRenderer.toneMapping = THREE.NoToneMapping;
         await createdRenderer.init();
         document.body.append(createdRenderer.domElement);

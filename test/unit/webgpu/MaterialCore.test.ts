@@ -145,6 +145,13 @@ describe("TSL material core", () => {
     // Final EOTF is tied to the completed gamma composite, not to texture presence.
     expect(baseColorSource).toContain("const gammaComposite = TSL.clamp(sphereComposite.add(specularComposite), 0, 1);");
     expect(baseColorSource).not.toContain("if (options.gammaSpaceComposite !== true) {");
+    // Default experimental path stays linear for SRGBColorSpace output encode.
     expect(baseColorSource).toContain("return TSL.sRGBTransferEOTF(gammaComposite)");
+    // Explicit legacy path skips EOTF so blending can match the gamma-space framebuffer.
+    expect(baseColorSource).toContain("options.legacySrgbFramebuffer === true");
+    expect(baseColorSource).toMatch(
+      /if \(options\.legacySrgbFramebuffer === true\) \{\s*return gammaComposite/
+    );
+    expect(source).toContain("legacySrgbFramebuffer?: boolean");
   });
 });

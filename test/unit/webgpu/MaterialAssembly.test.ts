@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import * as THREE from "three/webgpu";
 import { describe, expect, it } from "vitest";
 
@@ -7,6 +9,18 @@ import {
 } from "../../../src/webgpu/material-assembly.js";
 
 describe("TSL material assembly", () => {
+  it("forwards legacySrgbFramebuffer into the material-core options", async () => {
+    const source = await readFile("src/webgpu/material-assembly.ts", "utf8");
+    const fromSourceStart = source.indexOf("export function createMmdTslMaterialFromSource");
+    const fromSourceEnd = source.indexOf("export function replaceMmdModelMaterialsWithTsl");
+    expect(fromSourceStart).toBeGreaterThanOrEqual(0);
+    expect(fromSourceEnd).toBeGreaterThan(fromSourceStart);
+    const fromSourceBody = source.slice(fromSourceStart, fromSourceEnd);
+
+    expect(source).toContain("readonly legacySrgbFramebuffer?: boolean");
+    expect(fromSourceBody).toContain("legacySrgbFramebuffer: options.legacySrgbFramebuffer === true");
+  });
+
   it("copies specular metadata into TSL material uniforms", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));

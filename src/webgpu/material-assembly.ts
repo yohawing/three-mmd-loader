@@ -32,6 +32,12 @@ export interface MmdTslMaterialAssemblyOptions {
   readonly respectMaterialShadowFlags?: boolean;
   readonly appendOutlineGroups?: boolean;
   readonly forceOutlineGroups?: boolean;
+  /**
+   * When true, materials emit gamma-space composite RGB and must be paired with
+   * `renderer.outputColorSpace = LinearSRGBColorSpace` for legacy WebGL framebuffer
+   * blending parity. Default false keeps experimental linear output + SRGBColorSpace.
+   */
+  readonly legacySrgbFramebuffer?: boolean;
 }
 
 export function createMmdTslMaterialFromSource(
@@ -50,7 +56,8 @@ export function createMmdTslMaterialFromSource(
     toonMap: source.gradientMap ?? undefined,
     sphereMap: sphereTexture,
     sphereMode: metadata.sphereMode ?? "none",
-    gammaSpaceComposite: source.map != null || source.gradientMap != null || sphereTexture !== undefined
+    gammaSpaceComposite: source.map != null || source.gradientMap != null || sphereTexture !== undefined,
+    legacySrgbFramebuffer: options.legacySrgbFramebuffer === true
   });
   material.userData.mmdMaterial = {
     ...metadata,

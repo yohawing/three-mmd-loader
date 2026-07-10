@@ -69,6 +69,13 @@ export interface MmdTslMaterialCoreOptions {
   readonly sphereMap?: THREE.Texture;
   readonly sphereMode?: "none" | "multiply" | "add" | "subTexture";
   readonly gammaSpaceComposite?: boolean;
+  /**
+   * When true, emit gamma-space composite RGB directly and pair the renderer with
+   * `outputColorSpace = LinearSRGBColorSpace`. Reproduces legacy WebGL gamma-space
+   * framebuffer blending (no material EOTF before the framebuffer). Default false
+   * keeps experimental linear output via sRGBTransferEOTF + SRGBColorSpace.
+   */
+  readonly legacySrgbFramebuffer?: boolean;
 }
 
 export interface MmdTslMaterialUniforms {
@@ -176,6 +183,11 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   // MMD composes in gamma space then always converts back to linear for Three's output
   // encode (ywMmdGammaToLinear), whether or not any texture contributed.
   const gammaComposite = TSL.clamp(sphereComposite.add(specularComposite), 0, 1);
+  // legacySrgbFramebuffer: skip EOTF so alpha blending happens in gamma space, matching
+  // the legacy WebGL MMD framebuffer path when paired with LinearSRGBColorSpace.
+  if (options.legacySrgbFramebuffer === true) {
+    return gammaComposite as ReturnType<typeof TSL.vec3>;
+  }
   return TSL.sRGBTransferEOTF(gammaComposite) as ReturnType<typeof TSL.vec3>;
 }
 
