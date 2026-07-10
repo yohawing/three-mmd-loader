@@ -219,6 +219,10 @@ function rendererHtml() {
         const scene = buildScene(config.render);
         const loader = new ThreeMmdLoader({
           textureResolver: createCaseTextureResolver(visualCase.modelUrl),
+          // The WebGL baseline enables outlines, which also enables geometry-aware alpha
+          // classification while loading. TSL appends its own outline groups, so request
+          // the same alpha classification explicitly instead of relying on that side effect.
+          geometryAwareAlpha: true,
           runtime: { physics: "none" }
         });
         const model = await loader.loadModel(visualCase.modelUrl, {

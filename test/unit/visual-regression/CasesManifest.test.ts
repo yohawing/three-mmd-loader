@@ -383,6 +383,10 @@ describe("visual regression smoke scripts", () => {
       "for light-VMD cases. This profile has static scene lights"
     );
     expect(renderGeneratedPmxWebgpuScript).not.toContain("syncTslMaterialLight(model.mesh.material");
+    expect(renderGeneratedPmxWebgpuScript).toContain("geometryAwareAlpha: true");
+    expect(renderGeneratedPmxWebgpuScript).toContain(
+      "classification while loading. TSL appends its own outline groups"
+    );
     expect(scripts["visual:smoke:camera-light-vmd"]).toContain("visual:report:camera-light-vmd");
     expect(scripts["render:visual:camera-light-vmd"]).toContain("camera-light-vmd.manifest.json");
     expect(scripts["visual:smoke:generated-pmx:flip"]).toContain("visual:report:generated-pmx:flip");
