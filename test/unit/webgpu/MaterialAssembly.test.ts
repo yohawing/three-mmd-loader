@@ -73,6 +73,51 @@ describe("TSL material assembly", () => {
     expect(nodeMaterial.depthWrite).toBe(false);
   });
 
+  it("renders double-sided MMD alpha blend materials in one pass without changing opacity", () => {
+    const sourceMaterial = new THREE.MeshToonMaterial({
+      opacity: 0.36,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+    sourceMaterial.userData.mmdMaterial = {
+      diffuse: [1, 1, 1, 0.36],
+      transparencyMode: "alphaBlend",
+      flags: { doubleSided: true }
+    };
+
+    const nodeMaterial = createMmdTslMaterialFromSource(sourceMaterial);
+
+    expect(nodeMaterial.forceSinglePass).toBe(true);
+    expect(nodeMaterial.opacity).toBeCloseTo(0.36);
+  });
+
+  it("keeps double-sided MMD materials single-pass across transparency changes", () => {
+    const oneSided = new THREE.MeshToonMaterial({ transparent: true, side: THREE.FrontSide });
+    oneSided.userData.mmdMaterial = {
+      diffuse: [1, 1, 1, 0.5],
+      transparencyMode: "alphaBlend",
+      flags: { doubleSided: false }
+    };
+    const opaqueDoubleSided = new THREE.MeshToonMaterial({ side: THREE.DoubleSide });
+    opaqueDoubleSided.userData.mmdMaterial = {
+      diffuse: [1, 1, 1, 1],
+      transparencyMode: "opaque",
+      flags: { doubleSided: true }
+    };
+
+    expect(createMmdTslMaterialFromSource(oneSided).forceSinglePass).toBe(false);
+    expect(createMmdTslMaterialFromSource(opaqueDoubleSided).forceSinglePass).toBe(true);
+  });
+
+  it("preserves the Three.js pass default for non-MMD double-sided materials", () => {
+    const sourceMaterial = new THREE.MeshToonMaterial({
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+
+    expect(createMmdTslMaterialFromSource(sourceMaterial).forceSinglePass).toBe(false);
+  });
+
   it("applies MMD transparency metadata before the initial runtime state sync", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));

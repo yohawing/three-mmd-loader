@@ -68,6 +68,9 @@ export function createMmdTslMaterialFromSource(
     depthWrite: sourceMaterial.depthWrite
   };
   material.side = sourceMaterial.side;
+  // MMD renders no-cull materials in one draw. Keep that contract if a material
+  // morph later changes an initially opaque material into a transparent one.
+  material.forceSinglePass = metadata.flags?.doubleSided === true && sourceMaterial.side === THREE.DoubleSide;
   material.alphaTest = sourceMaterial.alphaTest;
   syncMmdTslMaterialState(material, createMaterialRuntimeStateForSource(sourceMaterial, metadata, sphereTexture));
   if (options.respectMaterialShadowFlags !== false && !mmdMaterialCastsShadow(metadata.flags)) {
