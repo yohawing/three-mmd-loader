@@ -137,6 +137,8 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("outline: false");
     expect(pipelineSource).toContain("materialRenderOrder: false");
     expect(pipelineSource).toContain("syncMmdTslMaterialState(material, materialState)");
+    expect(pipelineSource).toContain("const syncedLightToonCoordinateOffset = 0.5;");
+    expect(pipelineSource).toContain("uniforms.toonCoordinateOffset.value = syncedLightToonCoordinateOffset;");
     expect(pipelineSource).toContain("outlineMetadata?.sourceMaterialIndex");
     expect(pipelineSource).toContain("syncTslOutlineMaterialState(material, materialState, outlineMetadata)");
     expect(pipelineSource).toContain("export function setCurrentModelTslOutlineHidden(hidden)");

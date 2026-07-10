@@ -39,6 +39,7 @@ export interface MmdTslMaterialUniforms {
   readonly ambient: THREE.Vector3;
   readonly specular: THREE.Vector3;
   readonly specularPower: ReturnType<typeof TSL.float> & { value: number };
+  readonly toonCoordinateOffset: ReturnType<typeof TSL.float> & { value: number };
   readonly lightColor: THREE.Vector3;
   readonly lightDirection: THREE.Vector3;
   readonly shadowTint: THREE.Vector3;
@@ -73,17 +74,20 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   const ambient = TSL.uniform(uniforms.ambient);
   const specular = TSL.uniform(uniforms.specular);
   const specularPower = uniforms.specularPower;
+  const toonCoordinateOffset = uniforms.toonCoordinateOffset;
   const lightColor = TSL.uniform(uniforms.lightColor);
   const textureFactor = TSL.uniform(uniforms.textureFactor);
   const sphereTextureFactor = TSL.uniform(uniforms.sphereTextureFactor);
   const toonTextureFactor = TSL.uniform(uniforms.toonTextureFactor);
   const lightDirectionNode = TSL.uniform(uniforms.lightDirection);
-  const normal = TSL.normalize(TSL.normalView);
-  const lightDirectionView = TSL.normalize(TSL.transformDirection(lightDirectionNode, TSL.cameraViewMatrix));
+  const normalWorld = TSL.normalize(TSL.normalWorld);
+  const normalView = TSL.normalize(TSL.normalView);
+  const lightDirectionWorld = TSL.normalize(lightDirectionNode);
+  const lightDirectionView = TSL.normalize(TSL.transformDirection(lightDirectionWorld, TSL.cameraViewMatrix));
   const halfDirection = TSL.normalize(TSL.positionViewDirection.add(lightDirectionView));
-  const lambert = TSL.max(0, TSL.dot(normal, lightDirectionView));
+  const lambert = TSL.max(0, TSL.dot(normalWorld, lightDirectionWorld));
   const toonCoordinate = TSL.clamp(
-    lambert.mul(0.5).add(options.toonCoordinateOffset ?? MMD_TSL_DEFAULT_TOON_COORD_OFFSET),
+    lambert.mul(0.5).add(toonCoordinateOffset),
     0,
     1
   );
@@ -118,7 +122,7 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
           ? TSL.mix(baseComposite, compositeSphere, sphereTextureFactor.a)
           : baseComposite;
   const specularGate = specularPower.greaterThan(0).select(1, 0);
-  const specularComposite = TSL.pow(TSL.max(0, TSL.dot(halfDirection, normal)), specularPower)
+  const specularComposite = TSL.pow(TSL.max(0, TSL.dot(halfDirection, normalView)), specularPower)
     .mul(specular)
     .mul(lightColor)
     .mul(specularGate);
@@ -214,6 +218,7 @@ function createMmdTslMaterialUniforms(options: MmdTslMaterialCoreOptions): MmdTs
     ambient: vectorFromTuple(options.ambient ?? [0, 0, 0]),
     specular: vectorFromTuple(options.specular ?? [0, 0, 0]),
     specularPower: TSL.uniform(options.specularPower ?? 0, "float") as unknown as ReturnType<typeof TSL.float> & { value: number },
+    toonCoordinateOffset: TSL.uniform(options.toonCoordinateOffset ?? MMD_TSL_DEFAULT_TOON_COORD_OFFSET, "float") as unknown as ReturnType<typeof TSL.float> & { value: number },
     lightColor: vectorFromTuple(options.lightColor ?? [
       MMD_TSL_DEFAULT_LIGHT_COLOR,
       MMD_TSL_DEFAULT_LIGHT_COLOR,

@@ -12,6 +12,7 @@ const pipelineDisplayNames = {
 const lightPositionScratch = new THREE.Vector3();
 const lightTargetScratch = new THREE.Vector3();
 const lightDirectionScratch = new THREE.Vector3();
+const syncedLightToonCoordinateOffset = 0.5;
 let webgpuPipelineModulePromise;
 let replaceMmdModelMaterialsWithTsl;
 let syncMmdTslMaterialState;
@@ -225,6 +226,9 @@ function syncTslMaterialLightUniforms(material, lightColor) {
     lightColor ? lightColor.g * state.keyLight.intensity : 0,
     lightColor ? lightColor.b * state.keyLight.intensity : 0
   );
+  if (uniforms.toonCoordinateOffset) {
+    uniforms.toonCoordinateOffset.value = syncedLightToonCoordinateOffset;
+  }
 }
 
 async function loadWebgpuPipelineModule() {

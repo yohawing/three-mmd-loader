@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -18,6 +20,7 @@ describe("TSL material core", () => {
       MMD_TSL_DEFAULT_LIGHT_COLOR
     ]);
     expect(MMD_TSL_DEFAULT_TOON_COORD_OFFSET).toBe(0.45);
+    expect(uniforms.toonCoordinateOffset.value).toBe(MMD_TSL_DEFAULT_TOON_COORD_OFFSET);
     expect(material.colorNode).toBeDefined();
     expect(material.receivedShadowNode).toBeDefined();
     expect(material.castShadowNode).toBeDefined();
@@ -30,6 +33,7 @@ describe("TSL material core", () => {
     const originalAmbient = uniforms.ambient;
     const originalSpecular = uniforms.specular;
     const originalSpecularPower = uniforms.specularPower;
+    const originalToonCoordinateOffset = uniforms.toonCoordinateOffset;
     const originalTextureFactor = uniforms.textureFactor;
     const originalSphereTextureFactor = uniforms.sphereTextureFactor;
     const originalToonTextureFactor = uniforms.toonTextureFactor;
@@ -48,6 +52,7 @@ describe("TSL material core", () => {
     expect(uniforms.ambient).toBe(originalAmbient);
     expect(uniforms.specular).toBe(originalSpecular);
     expect(uniforms.specularPower).toBe(originalSpecularPower);
+    expect(uniforms.toonCoordinateOffset).toBe(originalToonCoordinateOffset);
     expect(uniforms.textureFactor).toBe(originalTextureFactor);
     expect(uniforms.sphereTextureFactor).toBe(originalSphereTextureFactor);
     expect(uniforms.toonTextureFactor).toBe(originalToonTextureFactor);
@@ -97,5 +102,14 @@ describe("TSL material core", () => {
       toonTextureFactor: [1, 1, 1, 1]
     });
     expect(material.version).toBe(syncedVersion);
+  });
+
+  it("keeps ToonRamp lighting in world space so camera moves do not shift the ramp", async () => {
+    const source = await readFile("src/webgpu/material-core.ts", "utf8");
+
+    expect(source).toContain("const normalWorld = TSL.normalize(TSL.normalWorld);");
+    expect(source).toContain("const lightDirectionWorld = TSL.normalize(lightDirectionNode);");
+    expect(source).toContain("const lambert = TSL.max(0, TSL.dot(normalWorld, lightDirectionWorld));");
+    expect(source).toContain("lambert.mul(0.5).add(toonCoordinateOffset)");
   });
 });
