@@ -174,23 +174,6 @@
         </div>
 
         <span class="status" id="status"></span>
-        <dl class="pipeline-status" aria-label="Rendering pipeline">
-          <div class="pipeline-backend-row">
-            <dt>backend</dt>
-            <dd>
-              <span id="pipeline-backend">forcewebgl</span>
-              <sl-select id="pipeline-backend-switcher" size="small" hoist value="forcewebgl" aria-label="Renderer backend">
-                <sl-option value="forcewebgl">TSL WebGL</sl-option>
-                <sl-option value="webgpu">WebGPU</sl-option>
-                <sl-option value="baseline">Baseline</sl-option>
-              </sl-select>
-            </dd>
-          </div>
-          <div><dt>pipeline</dt><dd id="pipeline-name">TSL forceWebGL</dd></div>
-          <div><dt>model</dt><dd id="pipeline-model">(none)</dd></div>
-          <div><dt>renderer</dt><dd id="pipeline-renderer">pending</dd></div>
-        </dl>
-
         <input id="model-folder" type="file" webkitdirectory directory multiple />
         <input id="pmm-folder" type="file" webkitdirectory directory multiple />
         <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
@@ -231,6 +214,14 @@
           </summary>
           <div class="debug-menu-panel" role="menu" aria-label="Debug panel">
             <h2 class="debug-title">Debug</h2>
+            <label class="debug-backend-control">
+              <span>Backend</span>
+              <sl-select id="pipeline-backend-switcher" size="small" hoist value="forcewebgl" aria-label="Renderer backend">
+                <sl-option value="forcewebgl">TSL WebGL</sl-option>
+                <sl-option value="webgpu">WebGPU</sl-option>
+                <sl-option value="baseline">Baseline</sl-option>
+              </sl-select>
+            </label>
             <div class="debug-metrics" aria-label="Debug performance metrics">
               <div class="debug-metric">
                 <span>FPS</span>

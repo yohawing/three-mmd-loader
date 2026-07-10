@@ -64,14 +64,13 @@ describe("example viewer source", () => {
     expect(html).toContain('<sl-option value="forcewebgl">TSL WebGL</sl-option>');
     expect(html).toContain('<sl-option value="webgpu">WebGPU</sl-option>');
     expect(html).toContain('<sl-option value="baseline">Baseline</sl-option>');
-    expect(html).toContain('class="pipeline-status"');
-    expect(html).toContain('id="pipeline-backend"');
-    expect(html).toContain('id="pipeline-name"');
-    expect(html).toContain('id="pipeline-model"');
-    expect(html).toContain('id="pipeline-renderer"');
-    expect(domSource).toContain('pipelineBackendText: document.querySelector("#pipeline-backend")');
+    expect(html).toContain('class="debug-backend-control"');
+    expect(html).not.toContain('class="pipeline-status"');
+    expect(html).not.toContain('id="pipeline-backend"');
+    expect(html).not.toContain('id="pipeline-name"');
+    expect(html).not.toContain('id="pipeline-model"');
+    expect(html).not.toContain('id="pipeline-renderer"');
     expect(domSource).toContain('pipelineBackendSwitcher: document.querySelector("#pipeline-backend-switcher")');
-    expect(domSource).toContain('pipelineNameText: document.querySelector("#pipeline-name")');
     expect(stateSource).toContain('return "tsl-forcewebgl";');
     expect(stateSource).toContain('params.get("baseline") === "1"');
     expect(stateSource).toContain('backend === "baseline"');
@@ -148,8 +147,8 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("setCurrentModelTslOutlineHidden(state.debugOutlineHidden)");
     expect(playbackSource).toContain("syncCurrentModelTslLight()");
     expect(playbackSource).toContain("syncCurrentModelTslMaterialStates()");
-    expect(styles).toContain(".pipeline-status");
-    expect(styles).toContain("#pipeline-backend-switcher");
+    expect(styles).toContain(".debug-backend-control");
+    expect(styles).not.toContain(".pipeline-status");
   });
 
   it("adds loader root objects so split morph body meshes are rendered", async () => {

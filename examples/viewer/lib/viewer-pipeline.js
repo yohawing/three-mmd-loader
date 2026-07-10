@@ -3,12 +3,6 @@ import * as THREE from "three";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 
-const pipelineDisplayNames = {
-  "tsl-forcewebgl": "TSL forceWebGL",
-  "tsl-webgpu": "TSL WebGPU",
-  "baseline-webgl": "Baseline WebGL"
-};
-
 const lightPositionScratch = new THREE.Vector3();
 const lightTargetScratch = new THREE.Vector3();
 const lightDirectionScratch = new THREE.Vector3();
@@ -52,21 +46,9 @@ export function clearViewerPipelineModel() {
 }
 
 export function updateViewerPipelineStatus() {
-  if (dom.pipelineBackendText) {
-    dom.pipelineBackendText.textContent = state.rendererBackend;
-  }
   if (dom.pipelineBackendSwitcher && dom.pipelineBackendSwitcher.value !== state.rendererBackend) {
     dom.pipelineBackendSwitcher.value = state.rendererBackend;
     dom.pipelineBackendSwitcher.setAttribute("value", state.rendererBackend);
-  }
-  if (dom.pipelineNameText) {
-    dom.pipelineNameText.textContent = pipelineDisplayNames[state.viewerPipeline] ?? state.viewerPipeline;
-  }
-  if (dom.pipelineModelText) {
-    dom.pipelineModelText.textContent = state.pipelineModelName;
-  }
-  if (dom.pipelineRendererText) {
-    dom.pipelineRendererText.textContent = state.rendererStatus;
   }
 }
 
