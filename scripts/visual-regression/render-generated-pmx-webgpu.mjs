@@ -232,7 +232,9 @@ function rendererHtml() {
           appendOutlineGroups: true,
           respectMaterialShadowFlags: true
         });
-        syncTslMaterialLight(model.mesh.material, scene.userData.mmdDirectionalLight);
+        // The WebGL generated-PMX baseline only synchronizes MMD material light uniforms
+        // for light-VMD cases. This profile has static scene lights, so preserve the MMD
+        // material defaults here instead of injecting the host directional light.
         model.root.updateMatrixWorld(true);
         scene.add(model.root);
         const camera = createCamera(visualCase.camera, model.root, config.render.resolution);
@@ -294,34 +296,6 @@ function rendererHtml() {
         scene.add(light.target);
         scene.userData.mmdDirectionalLight = light;
         return scene;
-      }
-
-      function syncTslMaterialLight(material, light) {
-        light.updateMatrixWorld();
-        light.target.updateMatrixWorld();
-        const lightPosition = new THREE.Vector3().setFromMatrixPosition(light.matrixWorld);
-        const lightTarget = new THREE.Vector3().setFromMatrixPosition(light.target.matrixWorld);
-        const lightDirection = lightPosition.sub(lightTarget).normalize();
-        if (Array.isArray(material)) {
-          for (const entry of material) {
-            syncTslMaterialLightUniforms(entry, lightDirection, light);
-          }
-          return;
-        }
-        syncTslMaterialLightUniforms(material, lightDirection, light);
-      }
-
-      function syncTslMaterialLightUniforms(material, lightDirection, light) {
-        const uniforms = material?.userData?.mmdTslMaterialUniforms;
-        if (!uniforms) {
-          return;
-        }
-        uniforms.lightDirection.copy(lightDirection);
-        uniforms.lightColor.set(
-          light.visible ? light.color.r * light.intensity : 0,
-          light.visible ? light.color.g * light.intensity : 0,
-          light.visible ? light.color.b * light.intensity : 0
-        );
       }
 
       function createCaseTextureResolver(modelUrl) {

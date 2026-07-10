@@ -106,12 +106,18 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   const diffuseTexture = options.diffuseMap
     ? TSL.texture(options.diffuseMap).sample(TSL.uv()).rgb
     : TSL.vec3(1, 1, 1);
-  const compositeDiffuseTexture = options.gammaSpaceComposite === true
-    ? TSL.sRGBTransferOETF(diffuseTexture) as ReturnType<typeof TSL.vec3>
-    : diffuseTexture;
-  const compositeSphere = options.gammaSpaceComposite === true
-    ? TSL.sRGBTransferOETF(sampledSphere) as ReturnType<typeof TSL.vec3>
-    : sampledSphere;
+  // GLSL MMD path re-encodes only SRGBColorSpace samples (diffuse/sphere) before the
+  // gamma-space composite. Toon ramps are NoColorSpace: sampled RGB is already the
+  // authored ramp and must not be OETF-encoded again when gammaSpaceComposite is on
+  // solely because a toon map is present.
+  const compositeDiffuseTexture =
+    options.gammaSpaceComposite === true && options.diffuseMap
+      ? TSL.sRGBTransferOETF(diffuseTexture) as ReturnType<typeof TSL.vec3>
+      : diffuseTexture;
+  const compositeSphere =
+    options.gammaSpaceComposite === true && options.sphereMap
+      ? TSL.sRGBTransferOETF(sampledSphere) as ReturnType<typeof TSL.vec3>
+      : sampledSphere;
   const litBase = options.toonMap
     ? TSL.clamp(diffuse.mul(lightColor).add(ambient), 0, 1)
     : TSL.clamp(ambient.add(lambert.mul(diffuse).mul(lightColor)), 0, 1);
@@ -129,11 +135,10 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
     .mul(specular)
     .mul(lightColor)
     .mul(specularGate);
-  const linearComposite = TSL.clamp(sphereComposite.add(specularComposite), 0, 1);
-  if (options.gammaSpaceComposite !== true) {
-    return linearComposite;
-  }
-  return TSL.sRGBTransferEOTF(linearComposite) as ReturnType<typeof TSL.vec3>;
+  // MMD composes in gamma space then always converts back to linear for Three's output
+  // encode (ywMmdGammaToLinear), whether or not any texture contributed.
+  const gammaComposite = TSL.clamp(sphereComposite.add(specularComposite), 0, 1);
+  return TSL.sRGBTransferEOTF(gammaComposite) as ReturnType<typeof TSL.vec3>;
 }
 
 export function createMmdTslReceivedShadowNode(options: MmdTslMaterialCoreOptions & {

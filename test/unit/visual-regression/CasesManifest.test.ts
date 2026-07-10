@@ -10,6 +10,9 @@ const selfShadowManifestPath = path.resolve("scripts/visual-regression/self-shad
 const compareGeneratedPmxWebgpuScriptPath = path.resolve(
   "scripts/visual-regression/compare-generated-pmx-webgpu.mjs"
 );
+const renderGeneratedPmxWebgpuScriptPath = path.resolve(
+  "scripts/visual-regression/render-generated-pmx-webgpu.mjs"
+);
 const packageJsonPath = path.resolve("package.json");
 
 interface RealModelVisualCase {
@@ -375,6 +378,11 @@ describe("visual regression smoke scripts", () => {
     expect(compareGeneratedPmxWebgpuScript).toContain("visual-baselines");
     expect(compareGeneratedPmxWebgpuScript).toContain("generated-pmx");
     expect(compareGeneratedPmxWebgpuScript).toContain("write-visual-comparison-html.mjs");
+    const renderGeneratedPmxWebgpuScript = readFileSync(renderGeneratedPmxWebgpuScriptPath, "utf8");
+    expect(renderGeneratedPmxWebgpuScript).toContain(
+      "for light-VMD cases. This profile has static scene lights"
+    );
+    expect(renderGeneratedPmxWebgpuScript).not.toContain("syncTslMaterialLight(model.mesh.material");
     expect(scripts["visual:smoke:camera-light-vmd"]).toContain("visual:report:camera-light-vmd");
     expect(scripts["render:visual:camera-light-vmd"]).toContain("camera-light-vmd.manifest.json");
     expect(scripts["visual:smoke:generated-pmx:flip"]).toContain("visual:report:generated-pmx:flip");

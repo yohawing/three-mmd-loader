@@ -113,4 +113,35 @@ describe("TSL material core", () => {
     expect(source).toContain("const lambert = TSL.max(0, TSL.dot(normalView, lightDirectionView));");
     expect(source).toContain("lambert.mul(0.5).add(toonCoordinateOffset)");
   });
+
+  it("matches the GLSL MMD gamma-space color contract for sRGB maps and final EOTF", async () => {
+    const source = await readFile("src/webgpu/material-core.ts", "utf8");
+    const baseColorStart = source.indexOf("export function createMmdTslBaseColorNode");
+    const baseColorEnd = source.indexOf("export function createMmdTslReceivedShadowNode");
+    expect(baseColorStart).toBeGreaterThanOrEqual(0);
+    expect(baseColorEnd).toBeGreaterThan(baseColorStart);
+    const baseColorSource = source.slice(baseColorStart, baseColorEnd);
+
+    // OETF is only applied to real sRGB color textures (diffuse / sphere), not to the
+    // NoColorSpace toon ramp that is already authored in gamma space.
+    expect(baseColorSource).toContain(
+      "options.gammaSpaceComposite === true && options.diffuseMap"
+    );
+    expect(baseColorSource).toContain(
+      "options.gammaSpaceComposite === true && options.sphereMap"
+    );
+    expect(baseColorSource).toMatch(
+      /options\.gammaSpaceComposite === true && options\.diffuseMap\s*\n\s*\? TSL\.sRGBTransferOETF\(diffuseTexture\)/
+    );
+    expect(baseColorSource).toMatch(
+      /options\.gammaSpaceComposite === true && options\.sphereMap\s*\n\s*\? TSL\.sRGBTransferOETF\(sampledSphere\)/
+    );
+    expect(baseColorSource).not.toMatch(/sRGBTransferOETF\(\s*sampledToon/);
+    expect(baseColorSource).not.toMatch(/sRGBTransferOETF\(\s*toonMul/);
+
+    // Final EOTF is tied to the completed gamma composite, not to texture presence.
+    expect(baseColorSource).toContain("const gammaComposite = TSL.clamp(sphereComposite.add(specularComposite), 0, 1);");
+    expect(baseColorSource).not.toContain("if (options.gammaSpaceComposite !== true) {");
+    expect(baseColorSource).toContain("return TSL.sRGBTransferEOTF(gammaComposite)");
+  });
 });
