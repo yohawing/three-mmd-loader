@@ -104,12 +104,13 @@ describe("TSL material core", () => {
     expect(material.version).toBe(syncedVersion);
   });
 
-  it("keeps ToonRamp lighting in world space so camera moves do not shift the ramp", async () => {
+  it("transforms the ToonRamp light direction into view space with matrix-first order", async () => {
     const source = await readFile("src/webgpu/material-core.ts", "utf8");
 
-    expect(source).toContain("const normalWorld = TSL.normalize(TSL.normalWorld);");
-    expect(source).toContain("const lightDirectionWorld = TSL.normalize(lightDirectionNode);");
-    expect(source).toContain("const lambert = TSL.max(0, TSL.dot(normalWorld, lightDirectionWorld));");
+    expect(source).toContain("const normalView = TSL.normalize(TSL.normalView);");
+    expect(source).toContain('transformDirection(direction: THREE.Node<"vec3">): THREE.Node<"vec3">;');
+    expect(source).toContain('cameraViewMatrix.transformDirection(lightDirectionNode as unknown as THREE.Node<"vec3">)');
+    expect(source).toContain("const lambert = TSL.max(0, TSL.dot(normalView, lightDirectionView));");
     expect(source).toContain("lambert.mul(0.5).add(toonCoordinateOffset)");
   });
 });

@@ -80,12 +80,15 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   const sphereTextureFactor = TSL.uniform(uniforms.sphereTextureFactor);
   const toonTextureFactor = TSL.uniform(uniforms.toonTextureFactor);
   const lightDirectionNode = TSL.uniform(uniforms.lightDirection);
-  const normalWorld = TSL.normalize(TSL.normalWorld);
+  const cameraViewMatrix = TSL.cameraViewMatrix as unknown as {
+    transformDirection(direction: THREE.Node<"vec3">): THREE.Node<"vec3">;
+  };
   const normalView = TSL.normalize(TSL.normalView);
-  const lightDirectionWorld = TSL.normalize(lightDirectionNode);
-  const lightDirectionView = TSL.normalize(TSL.transformDirection(lightDirectionWorld, TSL.cameraViewMatrix));
+  const lightDirectionView = TSL.normalize(
+    cameraViewMatrix.transformDirection(lightDirectionNode as unknown as THREE.Node<"vec3">)
+  );
   const halfDirection = TSL.normalize(TSL.positionViewDirection.add(lightDirectionView));
-  const lambert = TSL.max(0, TSL.dot(normalWorld, lightDirectionWorld));
+  const lambert = TSL.max(0, TSL.dot(normalView, lightDirectionView));
   const toonCoordinate = TSL.clamp(
     lambert.mul(0.5).add(toonCoordinateOffset),
     0,
