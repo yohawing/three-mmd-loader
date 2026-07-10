@@ -7,6 +7,9 @@ const generatedPmxManifestPath = path.resolve("scripts/visual-regression/generat
 const cameraLightVmdManifestPath = path.resolve("scripts/visual-regression/camera-light-vmd.manifest.json");
 const skinningManifestPath = path.resolve("scripts/visual-regression/skinning.manifest.json");
 const selfShadowManifestPath = path.resolve("scripts/visual-regression/self-shadow.manifest.json");
+const compareGeneratedPmxWebgpuScriptPath = path.resolve(
+  "scripts/visual-regression/compare-generated-pmx-webgpu.mjs"
+);
 const packageJsonPath = path.resolve("package.json");
 
 interface RealModelVisualCase {
@@ -364,6 +367,14 @@ describe("visual regression smoke scripts", () => {
     expect(scripts["visual:report"]).toBeUndefined();
     expect(scripts["visual:report:flip"]).toBeUndefined();
     expect(scripts["visual:smoke:generated-pmx"]).toContain("visual:report:generated-pmx");
+    expect(scripts["render:visual:generated-pmx:webgpu"]).toContain("render-generated-pmx-webgpu.mjs");
+    expect(scripts["visual:smoke:generated-pmx:webgpu"]).toBeUndefined();
+    expect(scripts["visual:check:generated-pmx:webgpu"]).toBeUndefined();
+    expect(scripts["visual:report:generated-pmx:webgpu"]).toContain("compare-generated-pmx-webgpu.mjs");
+    const compareGeneratedPmxWebgpuScript = readFileSync(compareGeneratedPmxWebgpuScriptPath, "utf8");
+    expect(compareGeneratedPmxWebgpuScript).toContain("visual-baselines");
+    expect(compareGeneratedPmxWebgpuScript).toContain("generated-pmx");
+    expect(compareGeneratedPmxWebgpuScript).toContain("write-visual-comparison-html.mjs");
     expect(scripts["visual:smoke:camera-light-vmd"]).toContain("visual:report:camera-light-vmd");
     expect(scripts["render:visual:camera-light-vmd"]).toContain("camera-light-vmd.manifest.json");
     expect(scripts["visual:smoke:generated-pmx:flip"]).toContain("visual:report:generated-pmx:flip");
