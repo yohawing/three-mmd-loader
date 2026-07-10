@@ -154,4 +154,18 @@ describe("TSL material core", () => {
     );
     expect(source).toContain("legacySrgbFramebuffer?: boolean");
   });
+
+  it("adds the additive sphere sample once for GoldenOracle parity", async () => {
+    const source = await readFile("src/webgpu/material-core.ts", "utf8");
+    const addStart = source.indexOf('options.sphereMode === "add"');
+    const addEnd = source.indexOf('options.sphereMode === "subTexture"');
+    expect(addStart).toBeGreaterThanOrEqual(0);
+    expect(addEnd).toBeGreaterThan(addStart);
+    const addBranch = source.slice(addStart, addEnd);
+
+    expect(addBranch).toContain(
+      "baseComposite.add(compositeSphere.mul(sphereTextureFactor.rgb).mul(sphereTextureFactor.a))"
+    );
+    expect(addBranch).not.toContain(".mul(2)");
+  });
 });

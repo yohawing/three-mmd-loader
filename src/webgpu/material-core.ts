@@ -171,7 +171,9 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
     options.sphereMode === "multiply"
       ? baseComposite.mul(TSL.mix(TSL.vec3(1, 1, 1), compositeSphere.mul(sphereTextureFactor.rgb), sphereTextureFactor.a))
       : options.sphereMode === "add"
-        ? baseComposite.add(compositeSphere.mul(sphereTextureFactor.rgb).mul(sphereTextureFactor.a).mul(2))
+        // GoldenOracle full.fx and the MMD-generated baseline add the sampled sphere once.
+        // The WebGL injection keeps its separate apitrace SphC weight contract.
+        ? baseComposite.add(compositeSphere.mul(sphereTextureFactor.rgb).mul(sphereTextureFactor.a))
         : options.sphereMode === "subTexture"
           ? TSL.mix(baseComposite, compositeSphere, sphereTextureFactor.a)
           : baseComposite;
