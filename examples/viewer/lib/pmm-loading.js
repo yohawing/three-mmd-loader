@@ -1,7 +1,7 @@
 import { parsePmmManifest } from "../../../dist/parser/index.js";
 import { createMmdFileIndex } from "../../../dist/three/index.js";
 import { setStatus } from "./dom.js";
-import { createFolderTextureMap, createModelLoader, loadModel } from "./model-loading.js";
+import { createFolderTextureMap, createModelLoader, findModelFiles, loadModel } from "./model-loading.js";
 import { loadMotion } from "./motion-loading.js";
 import { loadCameraFile } from "./camera-loading.js";
 import { loadAudioFile } from "./audio-loading.js";
@@ -33,8 +33,17 @@ export async function loadPmmFolder(files) {
     state.currentFolderTextureMap = textureMap;
 
     // Load model
-    await loadModel(plan.modelFile, plan.modelFile.name, () =>
-      createModelLoader({ textureMap })
+    await loadModel(
+      plan.modelFile,
+      plan.modelFile.name,
+      () => createModelLoader({ textureMap }),
+      undefined,
+      plan.modelFile,
+      {
+        folderTextureMap: textureMap,
+        folderFiles: files,
+        folderModelFiles: findModelFiles(files)
+      }
     );
 
     // Load motion if found

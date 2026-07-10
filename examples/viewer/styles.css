@@ -186,6 +186,21 @@ select:focus-visible {
     color: var(--text);
 }
 
+.pipeline-status .pipeline-backend-row dd {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 180px;
+}
+
+.pipeline-status #pipeline-backend {
+    min-width: 48px;
+}
+
+.pipeline-status #pipeline-backend-switcher {
+    width: 104px;
+}
+
 .top-bar.is-error .status {
     color: var(--danger);
 }

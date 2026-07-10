@@ -1,17 +1,25 @@
 import { clearAccessory, loadAccessoryFile } from "./lib/accessory-loading.js";
-import { clearAudioSource, isAudioElement, loadAudioFile, setAudioOffsetFrame, switchAudioEntry } from "./lib/audio-loading.js";
+import { clearAudioSource, isAudioElement, loadAudioFile, loadAudioFromUrl, setAudioOffsetFrame, switchAudioEntry } from "./lib/audio-loading.js";
 import { bindAssetLibraryControls, initializeAssetLibrary } from "./lib/asset-library.js";
-import { clearBackground, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
+import { clearBackground, loadBackgroundFile, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
 import { clearCameraMotion, loadCameraFile, loadCameraFromUrl, switchCameraEntry } from "./lib/camera-loading.js";
 import { bindCreditPopupControls } from "./lib/credits.js";
 import { captureCanvas, captureAfterAndCompare, createViewerDebugApi, markBeforeCapture, refreshDebugPanelState, setDebugMaterialMode, setOutlineHidden, setSelfShadowEnabled, toggleColliderHelpers } from "./lib/debug.js";
 import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updatePlayToggle, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
-import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
+import { loadModel, loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { loadPmmFolder } from "./lib/pmm-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
+import {
+  consumeRendererSwitchSnapshot,
+  createRendererSwitchSnapshot,
+  hasRendererSwitchSnapshotState,
+  restoreFiles,
+  saveRendererSwitchSnapshot,
+  setRendererSwitchRestoreParam
+} from "./lib/renderer-switch-state.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
 import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
 import { updateViewerPipelineStatus } from "./lib/viewer-pipeline.js";
@@ -50,6 +58,7 @@ async function initializeViewer() {
     fetch(kurokoModelUrl).catch(() => {});
     bindControls();
     void initializeAssetLibrary();
+    await restoreRendererSwitchState();
     resize();
     updateViewerPipelineStatus();
     state.frameTimer.update();
@@ -72,6 +81,12 @@ function bindControls() {
     if (!dom.languageSelect) return;
     setLocale(dom.languageSelect.value);
     updateChromeHeights();
+  });
+  dom.pipelineBackendSwitcher?.addEventListener("sl-change", () => {
+    const backend = dom.pipelineBackendSwitcher?.value;
+    if (backend === "forcewebgl" || backend === "webgpu" || backend === "baseline") {
+      void switchRendererBackend(backend);
+    }
   });
   document.querySelector("#choose-model-folder")?.addEventListener("click", () => dom.modelFolderInput?.click());
   document.querySelector("#choose-pmm-folder")?.addEventListener("click", () => dom.pmmFolderInput?.click());
@@ -489,5 +504,185 @@ function disposeViewerResources() {
   state.controls?.dispose();
   state.renderer?.dispose();
   state.renderer?.forceContextLoss?.();
+}
+
+async function switchRendererBackend(backend) {
+  if (backend === state.rendererBackend) {
+    return;
+  }
+  const snapshot = createRendererSwitchSnapshot();
+  const url = new URL(window.location.href);
+  url.searchParams.delete("baseline");
+  url.searchParams.delete("pipeline");
+  url.searchParams.set("backend", backend);
+  if (hasRendererSwitchSnapshotState(snapshot)) {
+    try {
+      const restoreId = await saveRendererSwitchSnapshot(snapshot);
+      setRendererSwitchRestoreParam(url, restoreId);
+    } catch (error) {
+      window.console?.warn("[viewer] Failed to preserve renderer switch state:", error);
+      const confirmed = window.confirm("Changing renderer backend reloads the viewer. Loaded files could not be preserved. Continue?");
+      if (!confirmed) {
+        updateViewerPipelineStatus();
+        return;
+      }
+    }
+  }
+  window.location.assign(url);
+}
+
+async function restoreRendererSwitchState() {
+  const snapshot = await consumeRendererSwitchSnapshot();
+  if (!snapshot) {
+    return;
+  }
+  setStatus("Restoring renderer switch state", "loading");
+  if (snapshot.model) {
+    await restoreRendererSwitchModel(snapshot.model);
+  }
+  if (snapshot.motion) {
+    await restoreRendererSwitchMotion(snapshot.motion);
+  }
+  if (snapshot.pose) {
+    await restoreRendererSwitchPose(snapshot.pose);
+  }
+  if (snapshot.background) {
+    await restoreRendererSwitchBackground(snapshot.background);
+  }
+  if (snapshot.camera) {
+    await restoreRendererSwitchCamera(snapshot.camera);
+  }
+  if (snapshot.audio) {
+    restoreRendererSwitchAudio(snapshot.audio);
+  }
+  if (snapshot.accessory) {
+    await restoreRendererSwitchAccessory(snapshot.accessory);
+  }
+  if (typeof snapshot.elapsedSeconds === "number") {
+    state.elapsedSeconds = snapshot.elapsedSeconds;
+    if (dom.timeline) {
+      dom.timeline.value = snapshot.elapsedSeconds;
+    }
+    evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
+    syncAudioToMotionTime();
+    updatePlaybackDisplay();
+  }
+  if (snapshot.cameraView) {
+    restoreRendererSwitchCameraView(snapshot.cameraView);
+  }
+  if (typeof snapshot.debugSelfShadowEnabled === "boolean") {
+    setSelfShadowEnabled(snapshot.debugSelfShadowEnabled);
+  }
+  state.debugBeforeCapture = snapshot.debugBeforeCapture;
+  refreshDebugPanelState();
+  renderStillFrame();
+  setStatus("", "ready");
+}
+
+async function restoreRendererSwitchModel(model) {
+  if (model.kind === "url") {
+    await loadModelFromUrl(model.url);
+    return;
+  }
+  if (model.kind === "folder") {
+    const files = restoreFiles(model.files);
+    await loadModelFolder(files);
+    const selectedModel = state.currentFolderPmxFiles.find((file) => modelFileKey(file) === model.selectedKey);
+    if (selectedModel) {
+      await switchFolderModel(selectedModel);
+    }
+    return;
+  }
+  if (model.kind === "file") {
+    await loadModel(restoreFiles([model.file])[0]);
+  }
+}
+
+async function restoreRendererSwitchMotion(motion) {
+  if (motion.kind === "url") {
+    await loadMotionFromUrl(motion.url);
+    return;
+  }
+  if (motion.kind === "file") {
+    const motionFiles = restoreFiles(motion.files?.length > 0 ? motion.files : [motion.file]);
+    const selectedMotion = motionFiles.find((file) => motionFileKey(file) === motion.selectedKey) ?? restoreFiles([motion.file])[0];
+    state.currentMotionVmdFiles = motionFiles;
+    updateMotionSwitcher(selectedMotion);
+    await loadMotion(selectedMotion);
+  }
+}
+
+async function restoreRendererSwitchPose(pose) {
+  if (pose.kind === "url") {
+    await loadPose(pose.url, pose.label);
+    return;
+  }
+  if (pose.kind === "file") {
+    await loadPose(restoreFiles([pose.file])[0], pose.label);
+  }
+}
+
+async function restoreRendererSwitchBackground(background) {
+  if (background.kind === "url") {
+    await loadBackgroundFromUrl(background.url);
+    return;
+  }
+  if (background.kind === "folder") {
+    await loadBackgroundFolder(restoreFiles(background.files));
+    return;
+  }
+  if (background.kind === "file") {
+    await loadBackgroundFile(restoreFiles([background.file])[0]);
+  }
+}
+
+async function restoreRendererSwitchCamera(camera) {
+  if (camera.kind === "url") {
+    await loadCameraFromUrl(camera.url);
+    return;
+  }
+  if (camera.kind === "file") {
+    await loadCameraFile(restoreFiles([camera.file])[0]);
+  }
+}
+
+function restoreRendererSwitchCameraView(view) {
+  const camera = view.active === "orthographic" ? state.orthographicCamera : state.perspectiveCamera;
+  if (!camera || !state.controls) {
+    return;
+  }
+  state.camera = camera;
+  state.controls.object = camera;
+  camera.position.fromArray(view.position);
+  camera.quaternion.fromArray(view.quaternion);
+  camera.up.fromArray(view.up);
+  camera.near = view.near;
+  camera.far = view.far;
+  if (camera === state.perspectiveCamera && typeof view.fov === "number") {
+    camera.fov = view.fov;
+  }
+  if (typeof view.zoom === "number") {
+    camera.zoom = view.zoom;
+  }
+  state.controls.target.fromArray(view.target);
+  camera.updateProjectionMatrix();
+  state.controls.update();
+}
+
+function restoreRendererSwitchAudio(audio) {
+  if (audio.kind === "url") {
+    loadAudioFromUrl(audio.url, audio.name, { offsetFrame: audio.offsetFrame });
+    return;
+  }
+  if (audio.kind === "file") {
+    loadAudioFile(restoreFiles([audio.file])[0]);
+    setAudioOffsetFrame(audio.offsetFrame ?? 0, { sync: false });
+  }
+}
+
+async function restoreRendererSwitchAccessory(accessory) {
+  if (accessory.kind === "file") {
+    await loadAccessoryFile(restoreFiles([accessory.file])[0]);
+  }
 }
 

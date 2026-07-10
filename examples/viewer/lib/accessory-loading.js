@@ -29,6 +29,7 @@ export async function loadAccessoryFile(file) {
     clearAccessory();
     state.scene.add(group);
     state.currentAccessory = group;
+    state.currentAccessoryFile = file;
     setStatus("", "ready");
     renderStillFrame();
   } catch (error) {
@@ -42,6 +43,7 @@ export function clearAccessory() {
     disposeAccessoryGroup(state.currentAccessory);
     state.currentAccessory = undefined;
   }
+  state.currentAccessoryFile = undefined;
 }
 
 function buildAccessoryGroup(manifest, name) {

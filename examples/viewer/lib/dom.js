@@ -11,6 +11,7 @@ export const dom = {
   viewerShell: document.querySelector(".viewer-shell"),
   statusText: document.querySelector("#status"),
   pipelineBackendText: document.querySelector("#pipeline-backend"),
+  pipelineBackendSwitcher: document.querySelector("#pipeline-backend-switcher"),
   pipelineNameText: document.querySelector("#pipeline-name"),
   pipelineModelText: document.querySelector("#pipeline-model"),
   pipelineRendererText: document.querySelector("#pipeline-renderer"),

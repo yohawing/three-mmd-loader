@@ -22,7 +22,8 @@ const viewerSelfShadowQuality = {
 // smooth anti-aliased line. SSAA renders the edge at sub-pixel detail so the
 // downsample reproduces MMD's soft continuous edge. Cost scales with the square of
 // this factor; the cap bounds the drawing buffer on hi-DPI displays. Tunable.
-const viewerSupersample = 2;
+const viewerBaselineSupersample = 2;
+const viewerTslSupersample = 1;
 const viewerMaxPixelRatio = 3;
 const viewerDefaultCameraNear = 0.01;
 const viewerDefaultCameraFar = 2000;
@@ -47,6 +48,9 @@ export async function setupScene() {
   }
   state.renderer.outputColorSpace = THREE.SRGBColorSpace;
   state.renderer.toneMapping = THREE.NoToneMapping;
+  const viewerSupersample = state.viewerPipeline === "baseline-webgl"
+    ? viewerBaselineSupersample
+    : viewerTslSupersample;
   state.renderer.setPixelRatio(
     Math.min(Math.min(window.devicePixelRatio, 2) * viewerSupersample, viewerMaxPixelRatio)
   );

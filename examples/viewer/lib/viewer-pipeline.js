@@ -54,6 +54,10 @@ export function updateViewerPipelineStatus() {
   if (dom.pipelineBackendText) {
     dom.pipelineBackendText.textContent = state.rendererBackend;
   }
+  if (dom.pipelineBackendSwitcher && dom.pipelineBackendSwitcher.value !== state.rendererBackend) {
+    dom.pipelineBackendSwitcher.value = state.rendererBackend;
+    dom.pipelineBackendSwitcher.setAttribute("value", state.rendererBackend);
+  }
   if (dom.pipelineNameText) {
     dom.pipelineNameText.textContent = pipelineDisplayNames[state.viewerPipeline] ?? state.viewerPipeline;
   }

@@ -21,7 +21,11 @@ const initialSplitImpulsePenetrationThreshold = parseDebugNumber(
   query.get("splitImpulsePenetrationThreshold"),
   -0.04
 );
-const initialSelfShadowEnabled = query.get("selfShadow") === "0" ? false : true;
+const initialSelfShadowEnabled = query.get("selfShadow") === "1"
+  ? true
+  : query.get("selfShadow") === "0"
+    ? false
+    : initialViewerPipeline === "baseline-webgl";
 const initialPhysicsEnabled = query.get("physics") === "0" ? false : true;
 
 export const state = {
@@ -61,12 +65,17 @@ export const state = {
   currentModel: undefined,
   currentBackground: undefined,
   currentMotion: undefined,
+  currentPoseSource: undefined,
+  currentPoseLabel: undefined,
   currentCameraMotion: undefined,
   currentAccessory: undefined,
+  currentAccessoryFile: undefined,
   currentFolderTextureMap: undefined,
+  currentFolderFiles: [],
   currentFolderPmxFiles: [],
   currentMotionVmdFiles: [],
   currentAudioEntries: [],
+  currentBackgroundFiles: [],
   currentBackgroundEntries: [],
   currentCameraEntries: [],
   mmdFrameRate: viewerConfig.mmdFrameRate,
@@ -221,18 +230,26 @@ function parseDebugNumber(value, fallback) {
 function resolveInitialViewerPipeline(params) {
   const pipeline = params.get("pipeline")?.toLowerCase();
   const backend = params.get("backend")?.toLowerCase();
-  if (params.get("baseline") === "1" || pipeline === "baseline-webgl" || backend === "webgl") {
+  if (
+    params.get("baseline") === "1" ||
+    pipeline === "baseline-webgl" ||
+    backend === "baseline" ||
+    backend === "webgl"
+  ) {
     return "baseline-webgl";
   }
   if (pipeline === "tsl-webgpu" || backend === "webgpu") {
     return "tsl-webgpu";
+  }
+  if (pipeline === "tsl-forcewebgl" || backend === "forcewebgl") {
+    return "tsl-forcewebgl";
   }
   return "tsl-forcewebgl";
 }
 
 function rendererBackendForPipeline(pipeline) {
   if (pipeline === "baseline-webgl") {
-    return "webgl";
+    return "baseline";
   }
   if (pipeline === "tsl-webgpu") {
     return "webgpu";

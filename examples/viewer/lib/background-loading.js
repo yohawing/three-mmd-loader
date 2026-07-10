@@ -21,10 +21,13 @@ export async function loadBackgroundFromUrl(url) {
 }
 
 export async function loadBackgroundFile(file) {
-  await loadBackground(file, file.name, createBackgroundLoader, {
+  const loaded = await loadBackground(file, file.name, createBackgroundLoader, {
     id: `file:${file.name}:${file.lastModified}`,
     source: file
   });
+  if (loaded) {
+    state.currentBackgroundFiles = [file];
+  }
 }
 
 export async function loadBackgroundFolder(files) {
@@ -36,10 +39,13 @@ export async function loadBackgroundFolder(files) {
   }
   const textureMap = createMmdTextureMapFromFiles(files, modelFile);
   const folderLoader = createBackgroundLoader(undefined, { textureMap });
-  await loadBackground(modelFile, modelFile.name, () => folderLoader, {
+  const loaded = await loadBackground(modelFile, modelFile.name, () => folderLoader, {
     id: `folder:${modelFile.name}`,
     source: modelFile
   });
+  if (loaded) {
+    state.currentBackgroundFiles = files;
+  }
 }
 
 export async function switchBackgroundEntry(entry) {
@@ -78,6 +84,7 @@ async function loadBackground(source, label, loaderFactory, entry) {
 
 export function clearBackground() {
   if (!state.currentBackground) {
+    state.currentBackgroundFiles = [];
     state.currentBackgroundEntries = [];
     updateBackgroundSwitcher();
     updateStageState();
@@ -86,6 +93,7 @@ export function clearBackground() {
   state.scene.remove(state.currentBackground.root);
   disposeModelResources(state.currentBackground);
   state.currentBackground = undefined;
+  state.currentBackgroundFiles = [];
   state.currentBackgroundEntries = [];
   updateBackgroundSwitcher();
   updateStageState();

@@ -107,8 +107,11 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     }
     addModelToScene(state.currentModel);
     loadProfile?.mark("scene-ready");
-    state.currentFolderPmxFiles = [switcherEntry ?? createModelSwitcherEntry(source, label)];
-    updateModelSwitcher(state.currentFolderPmxFiles[0]);
+    const selectedModelEntry = switcherEntry ?? createModelSwitcherEntry(source, label);
+    state.currentFolderTextureMap = loadOptions.folderTextureMap ?? state.currentFolderTextureMap;
+    state.currentFolderFiles = loadOptions.folderFiles ?? (source instanceof window.File ? [source] : []);
+    state.currentFolderPmxFiles = loadOptions.folderModelFiles ?? [selectedModelEntry];
+    updateModelSwitcher(selectedModelEntry);
     state.elapsedSeconds = 0;
     dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
     dom.timeline.value = 0;
@@ -171,6 +174,7 @@ export async function loadModelFolder(files) {
   profile?.mark("start");
   profile?.mark("texture-map");
   state.currentFolderTextureMap = textureMap;
+  state.currentFolderFiles = files;
   state.currentFolderPmxFiles = modelFiles;
   updateModelSwitcher(modelFile);
 
@@ -318,6 +322,8 @@ export function clearModel(options = {}) {
   disposeActivePhysicsBackend();
   if (!options.preserveMotion) {
     state.currentMotion = undefined;
+    state.currentPoseSource = undefined;
+    state.currentPoseLabel = undefined;
   }
   if (!options.preserveModelSwitcher) {
     resetFolderModelState();
@@ -493,6 +499,7 @@ export function updateModelSwitcher(selectedFile) {
 
 export function resetFolderModelState() {
   state.currentFolderTextureMap = undefined;
+  state.currentFolderFiles = [];
   state.currentFolderPmxFiles = [];
   clearLoadedFileSwitcher(dom.modelSwitcher);
   if (dom.modelControl) {

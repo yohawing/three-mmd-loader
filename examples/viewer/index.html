@@ -12,9 +12,12 @@
     <script>
       {
         const query = new URLSearchParams(window.location.search);
+        const pipeline = query.get("pipeline")?.toLowerCase();
+        const backend = query.get("backend")?.toLowerCase();
         const baseline = query.get("baseline") === "1" ||
-          query.get("pipeline") === "baseline-webgl" ||
-          query.get("backend") === "webgl";
+          pipeline === "baseline-webgl" ||
+          backend === "baseline" ||
+          backend === "webgl";
         const threeBuild = baseline
           ? "/node_modules/three/build/three.module.js"
           : "/node_modules/three/build/three.webgpu.js";
@@ -172,7 +175,17 @@
 
         <span class="status" id="status"></span>
         <dl class="pipeline-status" aria-label="Rendering pipeline">
-          <div><dt>backend</dt><dd id="pipeline-backend">forcewebgl</dd></div>
+          <div class="pipeline-backend-row">
+            <dt>backend</dt>
+            <dd>
+              <span id="pipeline-backend">forcewebgl</span>
+              <sl-select id="pipeline-backend-switcher" size="small" hoist value="forcewebgl" aria-label="Renderer backend">
+                <sl-option value="forcewebgl">TSL WebGL</sl-option>
+                <sl-option value="webgpu">WebGPU</sl-option>
+                <sl-option value="baseline">Baseline</sl-option>
+              </sl-select>
+            </dd>
+          </div>
           <div><dt>pipeline</dt><dd id="pipeline-name">TSL forceWebGL</dd></div>
           <div><dt>model</dt><dd id="pipeline-model">(none)</dd></div>
           <div><dt>renderer</dt><dd id="pipeline-renderer">pending</dd></div>
