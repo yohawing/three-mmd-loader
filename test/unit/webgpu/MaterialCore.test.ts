@@ -24,6 +24,7 @@ describe("TSL material core", () => {
     expect(material.colorNode).toBeDefined();
     expect(material.receivedShadowNode).toBeDefined();
     expect(material.castShadowNode).toBeDefined();
+    expect(material.setupLightingModel().constructor.name).toBe("MmdTslLightingModel");
   });
 
   it("syncs runtime state without replacing preallocated uniform containers", () => {
@@ -110,8 +111,10 @@ describe("TSL material core", () => {
     expect(source).toContain("const normalView = TSL.normalize(TSL.normalView);");
     expect(source).toContain('transformDirection(direction: THREE.Node<"vec3">): THREE.Node<"vec3">;');
     expect(source).toContain('cameraViewMatrix.transformDirection(lightDirectionNode as unknown as THREE.Node<"vec3">)');
-    expect(source).toContain("const lambert = TSL.max(0, TSL.dot(normalView, lightDirectionView));");
-    expect(source).toContain("lambert.mul(0.5).add(toonCoordinateOffset)");
+    expect(source).toContain("const signedDot = TSL.dot(normalView, lightDirectionView);");
+    expect(source).toContain("const lambert = TSL.max(0, signedDot);");
+    expect(source).toContain("signedDot.mul(0.5).add(toonCoordinateOffset)");
+    expect(source).not.toContain("lambert.mul(0.5).add(toonCoordinateOffset)");
   });
 
   it("matches the GLSL MMD gamma-space color contract for sRGB maps and final EOTF", async () => {

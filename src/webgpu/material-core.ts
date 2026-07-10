@@ -15,6 +15,43 @@ interface MmdTslSourceRenderFlags {
   readonly depthWrite: boolean;
 }
 
+interface ShadowLightNode extends THREE.Node {
+  readonly shadowNode: THREE.Node<"vec4"> | null;
+}
+
+class MmdTslLightingModel extends THREE.LightingModel {
+  private readonly shadowTint = TSL.vec3(1, 1, 1).toVar("mmdShadowTint");
+
+  override direct({ lightNode }: Parameters<THREE.LightingModel["direct"]>[0]): void {
+    const shadowNode = (lightNode as ShadowLightNode).shadowNode;
+    if (shadowNode !== null) {
+      this.shadowTint.mulAssign(shadowNode.rgb);
+    }
+  }
+
+  override finish(builder: Parameters<THREE.LightingModel["finish"]>[0]): void {
+    const { outgoingLight } = (builder as unknown as {
+      readonly context: { readonly outgoingLight: unknown };
+    }).context;
+    const typedOutgoingLight = outgoingLight as {
+      readonly rgb: { assign(value: THREE.Node): void };
+    };
+    typedOutgoingLight.rgb.assign(TSL.diffuseColor.rgb.mul(this.shadowTint));
+  }
+}
+
+// MMD color nodes already include direct and ambient lighting. Keep Three's light
+// traversal only for shadow sampling instead of applying ToonLightingModel again.
+class MmdTslToonNodeMaterial extends THREE.MeshToonNodeMaterial {
+  override setupOutgoingLight(): THREE.Node {
+    return TSL.diffuseColor.rgb;
+  }
+
+  override setupLightingModel(): MmdTslLightingModel {
+    return new MmdTslLightingModel();
+  }
+}
+
 export interface MmdTslMaterialCoreOptions {
   readonly diffuse?: readonly [number, number, number];
   readonly ambient?: readonly [number, number, number];
@@ -49,7 +86,7 @@ export interface MmdTslMaterialUniforms {
 }
 
 export function createMmdTslToonMaterial(options: MmdTslMaterialCoreOptions = {}): THREE.MeshToonNodeMaterial {
-  const material = new THREE.MeshToonNodeMaterial({ color: 0xffffff });
+  const material = new MmdTslToonNodeMaterial({ color: 0xffffff });
   const uniforms = createMmdTslMaterialUniforms(options);
   material.userData.mmdTslMaterialUniforms = uniforms;
   material.colorNode = createMmdTslBaseColorNode({ ...options, uniforms });
@@ -88,9 +125,10 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
     cameraViewMatrix.transformDirection(lightDirectionNode as unknown as THREE.Node<"vec3">)
   );
   const halfDirection = TSL.normalize(TSL.positionViewDirection.add(lightDirectionView));
-  const lambert = TSL.max(0, TSL.dot(normalView, lightDirectionView));
+  const signedDot = TSL.dot(normalView, lightDirectionView);
+  const lambert = TSL.max(0, signedDot);
   const toonCoordinate = TSL.clamp(
-    lambert.mul(0.5).add(toonCoordinateOffset),
+    signedDot.mul(0.5).add(toonCoordinateOffset),
     0,
     1
   );

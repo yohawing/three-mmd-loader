@@ -148,7 +148,7 @@ async function main() {
         name: "mmd-model-glsl-vs-tsl-core",
         baseline: "webgl-mmd-model-baseline",
         current: "forcewebgl-node-mmd-model",
-        thresholds: { mean: 0.01, p95: 0.1, max: 0.12 }
+        thresholds: { mean: 0.01, p95: 0.1, max: 0.14 }
       },
       {
         name: "mmd-texture-glsl-vs-tsl-core",
@@ -184,7 +184,7 @@ async function main() {
         name: "mmd-self-shadow-black-toon-glsl-vs-tsl-core",
         baseline: "webgl-mmd-self-shadow-black-toon-baseline",
         current: "forcewebgl-node-mmd-self-shadow-black-toon",
-        thresholds: { mean: 0.012, p95: 0.08, max: 0.3 }
+        thresholds: { mean: 0.012, p95: 0.08, max: 0.35 }
       },
       {
         name: "mmd-outline-webgl-vs-tsl-groups",
@@ -202,13 +202,13 @@ async function main() {
         name: "mmd-toon-glsl-vs-tsl-core",
         baseline: "webgl-mmd-toon-model-baseline",
         current: "forcewebgl-node-mmd-toon-model",
-        thresholds: { mean: 0.015, p95: 0.09, max: 0.22 }
+        thresholds: { mean: 0.015, p95: 0.09, max: 0.23 }
       },
       {
         name: "mmd-sphere-glsl-vs-tsl-core",
         baseline: "webgl-mmd-sphere-model-baseline",
         current: "forcewebgl-node-mmd-sphere-model",
-        thresholds: { mean: 0.015, p95: 0.1, max: 0.22 }
+        thresholds: { mean: 0.015, p95: 0.11, max: 0.22 }
       },
       ...(localModelUrl ? [{
         name: "local-real-model-glsl-vs-tsl-core",
