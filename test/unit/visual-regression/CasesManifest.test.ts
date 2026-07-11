@@ -302,9 +302,10 @@ describe("visual regression threshold audit", () => {
     for (const profile of auditProfiles) {
       const manifest = readThresholdAuditManifest(profile.path);
       for (const visualCase of manifest.cases) {
-        expect(visualCase.thresholds, `${profile.name}/${visualCase.name} missing thresholds`).toBeDefined();
-        expect(visualCase.thresholds!.mean, `${profile.name}/${visualCase.name} missing mean`).toBeGreaterThan(0);
-        expect(visualCase.thresholds!.p95, `${profile.name}/${visualCase.name} missing p95`).toBeGreaterThan(0);
+        const thresholds = visualCase.thresholds;
+        expect(thresholds, `${profile.name}/${visualCase.name} missing thresholds`).toBeDefined();
+        expect(thresholds?.mean, `${profile.name}/${visualCase.name} missing mean`).toBeGreaterThan(0);
+        expect(thresholds?.p95, `${profile.name}/${visualCase.name} missing p95`).toBeGreaterThan(0);
       }
     }
   });
@@ -327,10 +328,11 @@ describe("visual regression threshold audit", () => {
     for (const profile of auditProfiles) {
       const manifest = readThresholdAuditManifest(profile.path);
       for (const visualCase of manifest.cases) {
-        if ((visualCase.thresholds?.p95 ?? 0) > 0.25) {
+        const p95 = visualCase.thresholds?.p95 ?? 0;
+        if (p95 > 0.25) {
           expect(
             visualCase.toleranceNote,
-            `${profile.name}/${visualCase.name}: p95=${visualCase.thresholds!.p95} exceeds 0.25 without a toleranceNote`
+            `${profile.name}/${visualCase.name}: p95=${p95} exceeds 0.25 without a toleranceNote`
           ).toBeTruthy();
         }
       }
