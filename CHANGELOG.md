@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Update the bundled mmd-anim WASM runtime to the v0.2.0 development line and
+- Update the bundled mmd-anim WASM runtime to the v0.2.0 release and
   carry PMX local-axis frames into IK link-limit evaluation.
 - Keep PMM and accessory support parser-only; remove incomplete PMM and `.x`
   scene-loading controls from the example viewer.
