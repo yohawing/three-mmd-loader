@@ -991,43 +991,20 @@ describe("example viewer source", () => {
     expect(serverSource).toContain('pathname.startsWith("/assets/")');
     expect(serverSource).toContain('return resolve(viewerRoot, "assets", relativePath)');
   });
-  it("loads .x accessory files and builds Three.js geometry", async () => {
-    const accessorySource = await readFile("examples/viewer/lib/accessory-loading.js", "utf8");
+
+  it("keeps PMM and accessory support parser-only", async () => {
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const html = await readFile("examples/viewer/index.html", "utf8");
 
-    expect(accessorySource).toContain('import { initCore, parseAccessory } from "../../../dist/parser/index.js"');
-    expect(accessorySource).toContain("function buildAccessoryGeometry(");
-    expect(accessorySource).toContain("function buildAccessoryMaterials(");
-    expect(accessorySource).toContain("function applyVacPlacement(");
-    expect(accessorySource).toContain("function loadAccessoryFile(");
-    expect(accessorySource).toContain("function clearAccessory()");
-    expect(mainSource).toContain("loadAccessoryFile");
-    expect(mainSource).toContain("clearAccessory");
-    expect(domSource).toContain("accessoryFileInput:");
-    expect(stateSource).toContain("currentAccessory:");
-    expect(html).toContain('id="accessory-load-category"');
-    expect(html).toContain('id="accessory-file"');
-  });
-
-  it("loads PMM project from a folder with model, motion, and audio resolution", async () => {
-    const pmmSource = await readFile("examples/viewer/lib/pmm-loading.js", "utf8");
-    const mainSource = await readFile("examples/viewer/main.js", "utf8");
-    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
-    const html = await readFile("examples/viewer/index.html", "utf8");
-
-    expect(pmmSource).toContain('import { parsePmmManifest } from "../../../dist/parser/index.js"');
-    expect(pmmSource).toContain('import { createMmdFileIndex } from "../../../dist/three/index.js"');
-    expect(pmmSource).toContain("function loadPmmFolder(");
-    expect(pmmSource).toContain("function findPmmFile(");
-    expect(pmmSource).toContain("function resolvePmmLoadPlan(");
-    expect(pmmSource).toContain("fileIndex.resolve(");
-    expect(mainSource).toContain("loadPmmFolder");
-    expect(domSource).toContain("pmmFolderInput:");
-    expect(html).toContain('id="choose-pmm-folder"');
-    expect(html).toContain('id="pmm-folder"');
+    expect(mainSource).not.toContain("loadPmmFolder");
+    expect(mainSource).not.toContain("loadAccessoryFile");
+    expect(domSource).not.toContain("pmmFolderInput:");
+    expect(domSource).not.toContain("accessoryFileInput:");
+    expect(stateSource).not.toContain("currentAccessory:");
+    expect(html).not.toContain('id="choose-pmm-folder"');
+    expect(html).not.toContain('id="accessory-load-category"');
   });
 
   it("shows bone detection results in the debug panel", async () => {

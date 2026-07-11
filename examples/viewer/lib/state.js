@@ -56,7 +56,6 @@ export const state = {
   currentBackground: undefined,
   currentMotion: undefined,
   currentCameraMotion: undefined,
-  currentAccessory: undefined,
   currentFolderTextureMap: undefined,
   currentFolderPmxFiles: [],
   currentMotionVmdFiles: [],
