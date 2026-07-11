@@ -27,8 +27,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: recursive
+
+      - name: Checkout mmd-anim fixtures
+        run: git submodule update --init native/third_party/mmd-anim
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
