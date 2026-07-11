@@ -77,15 +77,33 @@ export function mmdMaterialSuppressesColorAtAlpha(
   return alpha <= 0 && mmdMaterialCastsShadow(flags);
 }
 
+// Real MMD has no fixed alpha-test cutoff; its only fragment discard is `alpha == 0`
+// (docs/mmd-shading-notes.md §8.1). Discarding zero-alpha fragments keeps them from
+// writing depth, so the flat inverted-hull edge behind the body stays visible through
+// fully transparent texels (§12). 0.5/255 discards exact zeros while every alpha >=
+// 1/255 texel still blends.
+export const MMD_ALPHA_ZERO_DISCARD_THRESHOLD = 0.5 / 255;
+
 export function mmdMaterialAlphaTest(
   material: MaterialInfo,
   hasDiffuseTexture: boolean,
   textureTransparencyMode?: MmdMaterialTransparencyMode
 ): number {
-  return mmdMaterialTransparencyMode(material, hasDiffuseTexture, textureTransparencyMode) ===
-    "alphaTest"
-    ? 0.01
-    : 0;
+  if (mmdMaterialSuppressesColorAtAlpha(material.diffuse[3], material.flags)) {
+    return 0;
+  }
+  return mmdTransparencyModeAlphaTest(
+    mmdMaterialTransparencyMode(material, hasDiffuseTexture, textureTransparencyMode)
+  );
+}
+
+export function mmdTransparencyModeAlphaTest(
+  transparencyMode: MmdMaterialTransparencyMode
+): number {
+  if (transparencyMode === "alphaTest") {
+    return 0.01;
+  }
+  return transparencyMode === "alphaBlend" ? MMD_ALPHA_ZERO_DISCARD_THRESHOLD : 0;
 }
 
 export function mmdMaterialTransparencyMode(

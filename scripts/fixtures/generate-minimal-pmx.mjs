@@ -916,17 +916,17 @@ const SELF_SHADOW_CASES = {
     customToonTexture: true,
     comment: "self shadow body fixture with visible protruding caster disabled for shadow map"
   }),
-  "mmd-self-shadow-body-black-toon-on": selfShadowBodyCase({
+  "mmd-self-shadow-body-midband-black-toon-on": selfShadowBodyCase({
     receiverFlags: 0x09,
     casterFlags: 0x05,
-    customToonTexture: true,
-    comment: "self shadow body fixture using a black-bottom toon texture to catch black self-shadow collapse"
+    customToonTexture: "midband",
+    comment: "self shadow body fixture using a black mid-band toon texture to catch legacy self-shadow row selection"
   }),
-  "mmd-self-shadow-body-black-toon-caster-off": selfShadowBodyCase({
+  "mmd-self-shadow-body-midband-black-toon-caster-off": selfShadowBodyCase({
     receiverFlags: 0x09,
     casterFlags: 0x01,
-    customToonTexture: true,
-    comment: "black-toon self shadow body fixture with visible protruding caster disabled for shadow map"
+    customToonTexture: "midband",
+    comment: "mid-band black-toon self shadow body fixture with visible protruding caster disabled for shadow map"
   }),
   "mmd-self-shadow-on": selfShadowCase({
     receiverFlags: 0x09,
@@ -1680,11 +1680,11 @@ function selfShadowCase({ receiverFlags, casterFlags, probeCaster, probeReceiver
     comment,
     bones: [bone("center", "center", [0, 0, 0], -1, { tail: [0, 1, 0] })],
     geometry: mergeGeometries(geometries),
-    textures: ["self-shadow-black-toon.png"],
+    textures: ["self-shadow-midband-black-toon.png"],
     assets: [
       {
-        path: "self-shadow-black-toon.png",
-        bytes: () => selfShadowBlackToonPng()
+        path: "self-shadow-midband-black-toon.png",
+        bytes: () => selfShadowMidbandBlackToonPng()
       }
     ],
     materials
@@ -1692,6 +1692,18 @@ function selfShadowCase({ receiverFlags, casterFlags, probeCaster, probeReceiver
 }
 
 function selfShadowBodyCase({ receiverFlags, casterFlags, comment, customToonTexture = false }) {
+  const toonAsset =
+    customToonTexture === "midband"
+      ? {
+          path: "self-shadow-midband-black-toon.png",
+          bytes: () => selfShadowMidbandBlackToonPng()
+        }
+      : customToonTexture
+        ? {
+            path: "self-shadow-body-toon.png",
+            bytes: () => selfShadowBodyToonPng()
+          }
+        : undefined;
   const body = transformGeometry(
     boxGeometry({
       min: [-0.55, 0.28, -0.42],
@@ -1716,15 +1728,8 @@ function selfShadowBodyCase({ receiverFlags, casterFlags, comment, customToonTex
     comment,
     bones: [bone("center", "center", [0, 0, 0], -1, { tail: [0, 1, 0] })],
     geometry: mergeGeometries([body, protrudingCaster]),
-    textures: customToonTexture ? ["self-shadow-black-toon.png"] : [],
-    assets: customToonTexture
-      ? [
-          {
-            path: "self-shadow-black-toon.png",
-            bytes: () => selfShadowBlackToonPng()
-          }
-        ]
-      : [],
+    textures: toonAsset ? [toonAsset.path] : [],
+    assets: toonAsset ? [toonAsset] : [],
     materials: [
       material("mat_body_receiver", "BodyReceiver", {
         diffuse: [0.92, 0.78, 0.58, 1],
@@ -1732,7 +1737,7 @@ function selfShadowBodyCase({ receiverFlags, casterFlags, comment, customToonTex
         ambient: [0.32, 0.22, 0.14],
         edgeColor: [0, 0, 0, 0],
         edgeSize: 0,
-        ...(customToonTexture ? { toonShared: 0, toonTextureIndex: 0 } : {}),
+        ...(toonAsset ? { toonShared: 0, toonTextureIndex: 0 } : {}),
         flags: receiverFlags,
         faceVertexCount: body.indices.length,
         comment: "body receiver material for in-model self-shadow test"
@@ -1967,14 +1972,14 @@ function softAlphaOverlayPng(color) {
   return PNG.sync.write(png);
 }
 
-function selfShadowBlackToonPng() {
-  const size = 32;
+function selfShadowMidbandBlackToonPng() {
+  const size = 64;
   const png = new PNG({ width: size, height: size });
   for (let y = 0; y < size; y += 1) {
     const t = y / (size - 1);
     for (let x = 0; x < size; x += 1) {
       const index = (y * size + x) * 4;
-      if (t < 0.35) {
+      if (t < 0.2) {
         png.data[index] = 255;
         png.data[index + 1] = 255;
         png.data[index + 2] = 255;
@@ -1982,10 +1987,40 @@ function selfShadowBlackToonPng() {
         png.data[index] = 198;
         png.data[index + 1] = 166;
         png.data[index + 2] = 128;
-      } else {
+      } else if (t < 0.75) {
+        png.data[index] = 252;
+        png.data[index + 1] = 218;
+        png.data[index + 2] = 225;
+      } else if (t < 0.8) {
         png.data[index] = 4;
         png.data[index + 1] = 4;
         png.data[index + 2] = 4;
+      } else {
+        png.data[index] = 252;
+        png.data[index + 1] = 218;
+        png.data[index + 2] = 225;
+      }
+      png.data[index + 3] = 255;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+function selfShadowBodyToonPng() {
+  const size = 64;
+  const png = new PNG({ width: size, height: size });
+  for (let y = 0; y < size; y += 1) {
+    const t = y / (size - 1);
+    for (let x = 0; x < size; x += 1) {
+      const index = (y * size + x) * 4;
+      if (t < 0.9) {
+        png.data[index] = 252;
+        png.data[index + 1] = 218;
+        png.data[index + 2] = 225;
+      } else {
+        png.data[index] = 198;
+        png.data[index + 1] = 166;
+        png.data[index + 2] = 128;
       }
       png.data[index + 3] = 255;
     }

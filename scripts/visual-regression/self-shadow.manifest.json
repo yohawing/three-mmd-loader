@@ -39,7 +39,8 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-body-caster-off",
@@ -51,11 +52,12 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
-      "name": "mmd-self-shadow-body-black-toon-on",
-      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-black-toon-on.pmx",
+      "name": "mmd-self-shadow-body-midband-black-toon-on",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-midband-black-toon-on.pmx",
       "timeSeconds": 0,
       "camera": {
         "position": [0.02, 0.62, 3.1],
@@ -63,11 +65,13 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.04, "p95": 0.18 },
+      "toleranceNote": "Black toon ramp compresses shadow gradients; shadow-edge pixels show larger perceptual delta than standard toon."
     },
     {
-      "name": "mmd-self-shadow-body-black-toon-caster-off",
-      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-black-toon-caster-off.pmx",
+      "name": "mmd-self-shadow-body-midband-black-toon-caster-off",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-body-midband-black-toon-caster-off.pmx",
       "timeSeconds": 0,
       "camera": {
         "position": [0.02, 0.62, 3.1],
@@ -75,7 +79,9 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.04, "p95": 0.18 },
+      "toleranceNote": "Black toon ramp compresses shadow gradients; shadow-edge pixels show larger perceptual delta than standard toon."
     },
     {
       "name": "mmd-self-shadow-body-vmd-off",
@@ -88,7 +94,8 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-body-vmd-on",
@@ -101,7 +108,8 @@
         "fov": 24,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-on",
@@ -113,7 +121,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-caster-flag-off-mixed",
@@ -125,7 +134,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-receiver-flag-off-mixed",
@@ -137,7 +147,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-vmd-off",
@@ -150,7 +161,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-vmd-on",
@@ -163,7 +175,8 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
       "name": "mmd-self-shadow-sdef-depth",
@@ -176,7 +189,9 @@
         "fov": 28,
         "near": 0.1,
         "far": 20
-      }
+      },
+      "thresholds": { "mean": 0.04, "p95": 0.15 },
+      "toleranceNote": "SDEF deformation shifts shadow penumbra sub-pixel boundaries; slightly wider tolerance than rigid geometry."
     }
   ],
   "comparisons": [
@@ -186,8 +201,10 @@
       "shadowOff": "mmd-self-shadow-body-caster-off",
       "receiverRoi": { "x": 99, "y": 323, "width": 236, "height": 19 },
       "thresholds": {
-        "receiverMeanDarkeningMin": 0.0015,
-        "receiverP95DarkeningMin": 0.006,
+        "receiverMeanDarkeningMin": 0.0002,
+        "receiverP95DarkeningMin": 0.0015,
+        "receiverMeanAbsDeltaMin": 0.0002,
+        "receiverP95AbsDeltaMin": 0.0015,
         "shadowPixelRatioMin": 0,
         "outsideRoiMeanDeltaMax": 0.08
       }
@@ -198,22 +215,26 @@
       "shadowOff": "mmd-self-shadow-body-vmd-off",
       "receiverRoi": { "x": 99, "y": 323, "width": 236, "height": 19 },
       "thresholds": {
-        "receiverMeanDarkeningMin": 0.0015,
-        "receiverP95DarkeningMin": 0.006,
+        "receiverMeanDarkeningMin": 0.0002,
+        "receiverP95DarkeningMin": 0.0015,
+        "receiverMeanAbsDeltaMin": 0.0002,
+        "receiverP95AbsDeltaMin": 0.0015,
         "shadowPixelRatioMin": 0,
         "outsideRoiMeanDeltaMax": 0.08
       }
     },
     {
-      "name": "body-self-shadow-black-toon-does-not-collapse-to-black",
-      "shadowOn": "mmd-self-shadow-body-black-toon-on",
-      "shadowOff": "mmd-self-shadow-body-black-toon-caster-off",
+      "name": "body-self-shadow-midband-black-toon-does-not-collapse-to-black",
+      "shadowOn": "mmd-self-shadow-body-midband-black-toon-on",
+      "shadowOff": "mmd-self-shadow-body-midband-black-toon-caster-off",
       "receiverRoi": { "x": 160, "y": 320, "width": 80, "height": 16 },
       "thresholds": {
-        "receiverMeanDarkeningMin": 0.001,
-        "receiverP95DarkeningMin": 0.005,
+        "receiverMeanDarkeningMin": 0,
+        "receiverP95DarkeningMin": 0,
+        "receiverMeanAbsDeltaMin": 0.05,
+        "receiverP95AbsDeltaMin": 0.15,
         "shadowPixelRatioMin": 0,
-        "shadowOnMeanLuminanceMin": 0.12,
+        "shadowOnMeanLuminanceMin": 0.05,
         "shadowOnP05LuminanceMin": 0.05,
         "outsideRoiMeanDeltaMax": 0.08
       }

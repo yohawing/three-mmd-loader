@@ -23,6 +23,11 @@ export interface CcdIkLink {
   readonly boneIndex: number;
   readonly enabled?: boolean;
   readonly fixedAxis?: Vec3Tuple;
+  /**
+   * PMX local-axis frame used to interpret {@link angleLimit}. The quaternion
+   * maps the solver's unit XYZ frame onto the bone's PMX local axes.
+   */
+  readonly localAxisBasis?: QuatTuple;
   readonly angleLimit?: CcdIkLinkAngleLimit;
   readonly limitsKind?: "pmdKnee" | "pmxLinkLimit";
 }
@@ -443,7 +448,8 @@ function solveChain(
 
       const limits = toLinkLimitsInto(link.angleLimit, linkLimitsScratch[linkIndex]);
       const singleAxis = getSingleAxisLimit(limits);
-      if (limits && singleAxis !== null) {
+      const fixedAxis = usableFixedAxis(link.fixedAxis);
+      if (limits && singleAxis !== null && !fixedAxis) {
         solvePlaneLink({
           bones,
           translations,
@@ -493,11 +499,11 @@ function solveChain(
         vectorScratch[5]
       );
       const dot = clamp(dotVectors(chainTargetVector, chainIkVector), -1, 1);
-      let angle = link.fixedAxis
+      let angle = fixedAxis
         ? signedProjectedAngleInto(
             chainTargetVector,
             chainIkVector,
-            link.fixedAxis,
+            fixedAxis,
             vectorScratch[7],
             vectorScratch[8],
             vectorScratch[9],
@@ -510,10 +516,10 @@ function solveChain(
       }
       angle = clamp(angle, -limitAngle, limitAngle);
       const axis = vectorScratch[6];
-      if (link.fixedAxis) {
-        axis[0] = link.fixedAxis[0];
-        axis[1] = link.fixedAxis[1];
-        axis[2] = link.fixedAxis[2];
+      if (fixedAxis) {
+        axis[0] = fixedAxis[0];
+        axis[1] = fixedAxis[1];
+        axis[2] = fixedAxis[2];
         normalizeVectorInto(axis, axis);
       } else {
         normalizeVectorInto(crossVectorsInto(chainTargetVector, chainIkVector, axis), axis);
@@ -528,6 +534,14 @@ function solveChain(
       const delta = axisAngleQuaternionInto(axis, angle, quaternionScratch[0]);
       const baseRotation = baseRotations[link.boneIndex];
       const ikRotation = ikRotations[link.boneIndex];
+      const priorChainState = chainState[linkIndex];
+      const priorEulerX = priorChainState.previousAngle[0];
+      const priorEulerY = priorChainState.previousAngle[1];
+      const priorEulerZ = priorChainState.previousAngle[2];
+      const priorPlaneModeAngle = priorChainState.planeModeAngle;
+      if (fixedAxis) {
+        copyQuaternionInto(ikRotation, quaternionScratch[3]);
+      }
       const chainRotation = multiplyQuaternionsInto(
         multiplyQuaternionsInto(ikRotation, baseRotation, quaternionScratch[1]),
         delta,
@@ -539,8 +553,10 @@ function solveChain(
           limits,
           chainState[linkIndex],
           limitAngle,
+          link.localAxisBasis,
           rotation3Scratch,
           eulerScratch,
+          quaternionScratch,
           chainRotation
         );
       }
@@ -549,6 +565,27 @@ function solveChain(
         invertQuaternionInto(baseRotation, quaternionScratch[1]),
         ikRotation
       );
+      if (fixedAxis) {
+        projectQuaternionOntoAxisInto(ikRotation, fixedAxis, ikRotation);
+        if (
+          limits &&
+          !rotationIsWithinLimits(
+            ikRotation,
+            baseRotation,
+            limits,
+            link.localAxisBasis,
+            rotation3Scratch,
+            eulerScratch,
+            quaternionScratch
+          )
+        ) {
+          copyQuaternionInto(quaternionScratch[3], ikRotation);
+          priorChainState.previousAngle[0] = priorEulerX;
+          priorChainState.previousAngle[1] = priorEulerY;
+          priorChainState.previousAngle[2] = priorEulerZ;
+          priorChainState.planeModeAngle = priorPlaneModeAngle;
+        }
+      }
       applyEffectiveRotation(rotations, baseRotations, ikRotations, link.boneIndex);
       composeWorldMatrices(
         bones,
@@ -686,6 +723,14 @@ function solvePlaneLink({
     ),
     vectorScratch[10]
   );
+  const localAxisBasis = link.localAxisBasis;
+  const localAxisInverse = localAxisBasis
+    ? invertQuaternionInto(localAxisBasis, quaternionScratch[1])
+    : undefined;
+  if (localAxisInverse) {
+    rotateVectorByQuaternionInto(chainIkVector, localAxisInverse, chainIkVector);
+    rotateVectorByQuaternionInto(chainTargetVector, localAxisInverse, chainTargetVector);
+  }
   const dot = clamp(dotVectors(chainTargetVector, chainIkVector), -1, 1);
   const rawAngle = Math.acos(dot);
   const angle = Math.min(rawAngle, limitAngle);
@@ -721,9 +766,18 @@ function solvePlaneLink({
   newAngle = clamp(newAngle, limits.lower[axisIndex], limits.upper[axisIndex]);
   state.planeModeAngle = newAngle;
   const baseRotation = baseRotations[link.boneIndex];
+  const localChainRotation = axisAngleQuaternionInto(rotateAxis, newAngle, quaternionScratch[2]);
+  const chainRotation =
+    localAxisBasis && localAxisInverse
+      ? multiplyQuaternionsInto(
+          multiplyQuaternionsInto(localAxisBasis, localChainRotation, quaternionScratch[0]),
+          localAxisInverse,
+          quaternionScratch[2]
+        )
+      : localChainRotation;
   multiplyQuaternionsInto(
-    axisAngleQuaternionInto(rotateAxis, newAngle, quaternionScratch[0]),
-    invertQuaternionInto(baseRotation, quaternionScratch[1]),
+    chainRotation,
+    invertQuaternionInto(baseRotation, quaternionScratch[3]),
     ikRotations[link.boneIndex]
   );
   applyEffectiveRotation(rotations, baseRotations, ikRotations, link.boneIndex);
@@ -801,6 +855,12 @@ function validateChain(chain: CcdIkChain, bones: readonly CcdIkBone[]): void {
       link.limitsKind !== "pmxLinkLimit"
     ) {
       throw new RangeError("CCD IK link limitsKind must be pmdKnee or pmxLinkLimit");
+    }
+    if (link.fixedAxis !== undefined) {
+      assertFiniteVector(link.fixedAxis, "link fixedAxis");
+    }
+    if (link.localAxisBasis !== undefined) {
+      assertFiniteQuaternion(link.localAxisBasis, "link localAxisBasis");
     }
   }
 }
@@ -1091,12 +1151,25 @@ function clampLimitedRotationInto(
   limits: LinkLimits,
   state: IkChainState,
   limitAngle: number,
+  localAxisBasis: QuatTuple | undefined,
   rotation3Scratch: Rotation3Tuple,
   eulerScratch: MutableVec3Tuple[],
+  quaternionScratch: MutableQuatTuple[],
   target: MutableQuatTuple
 ): [number, number, number, number] {
+  const localAxisInverse = localAxisBasis
+    ? invertQuaternionInto(localAxisBasis, quaternionScratch[0])
+    : undefined;
+  const localRotation =
+    localAxisBasis && localAxisInverse
+      ? multiplyQuaternionsInto(
+          multiplyQuaternionsInto(localAxisInverse, rotation, quaternionScratch[1]),
+          localAxisBasis,
+          quaternionScratch[1]
+        )
+      : rotation;
   const euler = decomposeEulerXyzInto(
-    quaternionToRotation3Into(rotation, rotation3Scratch),
+    quaternionToRotation3Into(localRotation, rotation3Scratch),
     state.previousAngle,
     eulerScratch[0],
     eulerScratch[1]
@@ -1118,7 +1191,83 @@ function clampLimitedRotationInto(
   state.previousAngle[0] = limitedStep[0];
   state.previousAngle[1] = limitedStep[1];
   state.previousAngle[2] = limitedStep[2];
-  return eulerXyzToQuaternionInto(limitedStep, target);
+  const localClampedRotation = eulerXyzToQuaternionInto(limitedStep, target);
+  return localAxisBasis && localAxisInverse
+    ? multiplyQuaternionsInto(
+        multiplyQuaternionsInto(localAxisBasis, localClampedRotation, quaternionScratch[1]),
+        localAxisInverse,
+        target
+      )
+    : localClampedRotation;
+}
+
+function projectQuaternionOntoAxisInto(
+  rotation: QuatTuple,
+  axis: Vec3Tuple,
+  target: MutableQuatTuple
+): MutableQuatTuple {
+  const axisLength = Math.hypot(axis[0], axis[1], axis[2]);
+  if (!Number.isFinite(axisLength) || axisLength < 1e-12) {
+    copyQuaternionInto(rotation, target);
+    return target;
+  }
+  const axisX = axis[0] / axisLength;
+  const axisY = axis[1] / axisLength;
+  const axisZ = axis[2] / axisLength;
+  const projection = rotation[0] * axisX + rotation[1] * axisY + rotation[2] * axisZ;
+  target[0] = axisX * projection;
+  target[1] = axisY * projection;
+  target[2] = axisZ * projection;
+  target[3] = rotation[3];
+  return normalizeQuaternionInto(target, target);
+}
+
+function usableFixedAxis(axis: Vec3Tuple | undefined): Vec3Tuple | undefined {
+  if (!axis || !axis.every(Number.isFinite) || Math.hypot(axis[0], axis[1], axis[2]) < 1e-12) {
+    return undefined;
+  }
+  return axis;
+}
+
+function rotationIsWithinLimits(
+  ikRotation: QuatTuple,
+  baseRotation: QuatTuple,
+  limits: LinkLimits,
+  localAxisBasis: QuatTuple | undefined,
+  rotation3Scratch: Rotation3Tuple,
+  eulerScratch: MutableVec3Tuple[],
+  quaternionScratch: MutableQuatTuple[]
+): boolean {
+  const chainRotation = multiplyQuaternionsInto(ikRotation, baseRotation, quaternionScratch[0]);
+  const localAxisInverse = localAxisBasis
+    ? invertQuaternionInto(localAxisBasis, quaternionScratch[1])
+    : undefined;
+  const localRotation =
+    localAxisBasis && localAxisInverse
+      ? multiplyQuaternionsInto(
+          multiplyQuaternionsInto(localAxisInverse, chainRotation, quaternionScratch[2]),
+          localAxisBasis,
+          quaternionScratch[2]
+        )
+      : chainRotation;
+  const preferredEuler = eulerScratch[0];
+  preferredEuler[0] = 0;
+  preferredEuler[1] = 0;
+  preferredEuler[2] = 0;
+  const euler = decomposeEulerXyzInto(
+    quaternionToRotation3Into(localRotation, rotation3Scratch),
+    preferredEuler,
+    eulerScratch[1],
+    eulerScratch[2]
+  );
+  return (
+    euler[0] >= limits.lower[0] - 1e-5 &&
+    euler[0] <= limits.upper[0] + 1e-5 &&
+    euler[1] >= limits.lower[1] - 1e-5 &&
+    euler[1] <= limits.upper[1] + 1e-5 &&
+    euler[2] >= limits.lower[2] - 1e-5 &&
+    euler[2] <= limits.upper[2] + 1e-5
+  );
 }
 
 function assertBoneIndex(bones: readonly CcdIkBone[], index: number, name: string): void {

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Load and play MikuMikuDance (MMD) models (PMX/PMD) and motions (VMD) with physics, right in your browser. Files stay on your device — nothing is uploaded." />
-    <meta name="mmd-viewer-version" content="0.5.0" />
+    <meta name="mmd-viewer-version" content="0.6.0" />
     <title>MMD Loader for Three.js · three-mmd-loader</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" />
@@ -179,6 +179,7 @@
             <div class="info-links">
               <a href="https://github.com/yohawing/three-mmd-loader" target="_blank" rel="noopener noreferrer">GitHub</a>
               <a href="https://www.npmjs.com/package/@yohawing/three-mmd-loader" target="_blank" rel="noopener noreferrer">npm</a>
+              <a href="../webgpu-poc/?backend=forcewebgl" target="_blank" rel="noopener noreferrer">WebGPU PoC</a>
             </div>
             <p class="info-version">v<span id="app-version">0.0.0</span></p>
           </div>
@@ -220,6 +221,28 @@
                 <span>Self shadow</span>
                 <input id="debug-self-shadow-toggle" type="checkbox" role="switch" checked />
               </label>
+            </div>
+            <div class="debug-capture-row">
+              <button id="debug-capture-button" class="debug-capture-button" type="button">
+                <span class="material-symbols-rounded" aria-hidden="true">photo_camera</span>
+                Capture
+              </button>
+              <button id="debug-before-button" class="debug-capture-button" type="button">
+                <span class="material-symbols-rounded" aria-hidden="true">compare</span>
+                Before
+              </button>
+              <button id="debug-compare-after-button" class="debug-capture-button" type="button" disabled>
+                <span class="material-symbols-rounded" aria-hidden="true">difference</span>
+                After &amp; Compare
+              </button>
+            </div>
+            <details class="debug-diagnostics" id="debug-diagnostics" hidden>
+              <summary>Diagnostics <span class="debug-diagnostics-count" id="debug-diagnostics-count"></span></summary>
+              <ul class="debug-diagnostics-list" id="debug-diagnostics-list" role="list"></ul>
+            </details>
+            <div class="debug-bone-detection" id="debug-bone-detection" hidden>
+              <span class="debug-bone-detection-label">Skeleton</span>
+              <span class="debug-bone-detection-content" id="debug-bone-detection-content"></span>
             </div>
           </div>
         </details>

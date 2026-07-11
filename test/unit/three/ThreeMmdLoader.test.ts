@@ -612,7 +612,11 @@ describe("ThreeMmdLoader", () => {
       "load-textures",
       "material-metadata",
       "assemble-model",
-      "total"
+      "total",
+      "init-core",
+      "parse-only",
+      "init-runtime",
+      "create-proxies"
     ]);
     expect(onMeasure).toHaveBeenCalledWith(
       expect.objectContaining({ label: expect.stringContaining("bytes:"), name: "total" })
@@ -697,14 +701,28 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.skeleton.bones[2]?.userData.mmdIkStateName).toBe("enabled IK state");
   });
 
-  it("passes PMX fixed-axis links only for hand-twist IK chains", async () => {
+  it("passes PMX fixed-axis and local-axis frames to every IK link", async () => {
     const loader = new ThreeMmdLoader({ core: createFixedAxisIkCore() });
 
     const model = await loader.loadModel(new Uint8Array([1]));
     const chains = model.mesh.userData.mmdIkChains;
 
-    expect(chains[0]?.links[0]?.fixedAxis).toBeUndefined();
-    expect(chains[1]?.links[0]?.fixedAxis).toEqual([-1, 0, 0]);
+    expect(chains[0]?.links[0]?.fixedAxis).toEqual([0, 1, 0]);
+    expect(chains[0]?.links[0]?.localAxisBasis).toEqual([
+      0,
+      0,
+      expect.closeTo(Math.SQRT1_2, 12),
+      expect.closeTo(Math.SQRT1_2, 12)
+    ]);
+    expect(chains[1]?.links[0]?.fixedAxis).toEqual([1, 0, 0]);
+  });
+
+  it("does not turn a zero-length PMX fixed axis into an IK constraint", async () => {
+    const loader = new ThreeMmdLoader({ core: createFixedAxisIkCore([0, 0, 0]) });
+
+    const model = await loader.loadModel(new Uint8Array([1]));
+
+    expect(model.mesh.userData.mmdIkChains[0]?.links[0]?.fixedAxis).toBeUndefined();
   });
 
   it("evaluates a runtime frame for an IK-enabled mesh without throwing", async () => {
@@ -1203,7 +1221,7 @@ function createIkFlagModel(): MmdModel {
   };
 }
 
-function createFixedAxisIkCore(): MmdCore {
+function createFixedAxisIkCore(ordinaryFixedAxis: [number, number, number] = [0, 1, 0]): MmdCore {
   const model: MmdModel = {
     ...createIkFlagModel(),
     metadata: () => ({
@@ -1218,7 +1236,10 @@ function createFixedAxisIkCore(): MmdCore {
     skeleton: () => ({
       bones: [
         createIkFlagBone("root", -1, true),
-        createIkFlagBone("ordinary link", 0, true, undefined, { fixedAxis: [0, 1, 0] }),
+        createIkFlagBone("ordinary link", 0, true, undefined, {
+          fixedAxis: ordinaryFixedAxis,
+          localAxis: { x: [0, 1, 0], z: [0, 0, 1] }
+        }),
         createIkFlagBone("ordinary IK", 0, true, {
           targetIndex: 1,
           loopCount: 1,
@@ -1248,6 +1269,7 @@ function createIkFlagBone(
   ik?: ReturnType<MmdModel["skeleton"]>["bones"][number]["ik"],
   options: {
     readonly fixedAxis?: [number, number, number];
+    readonly localAxis?: { readonly x: [number, number, number]; readonly z: [number, number, number] };
     readonly ikStateName?: string;
   } = {}
 ): ReturnType<MmdModel["skeleton"]>["bones"][number] {
@@ -1270,11 +1292,12 @@ function createIkFlagBone(
       appendRotate: false,
       appendTranslate: false,
       fixedAxis: options.fixedAxis !== undefined,
-      localAxis: false,
+      localAxis: options.localAxis !== undefined,
       transformAfterPhysics: false,
       externalParentTransform: false
     },
     fixedAxis: options.fixedAxis,
+    localAxis: options.localAxis,
     ikStateName: options.ikStateName,
     ik
   };

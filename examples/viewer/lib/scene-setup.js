@@ -38,7 +38,7 @@ export function setupScene() {
   );
   state.renderer.setClearColor(0xffffff, 1);
   state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled;
-  state.renderer.shadowMap.type = THREE.PCFShadowMap;
+  state.renderer.shadowMap.type = THREE.BasicShadowMap;
   state.scene = new THREE.Scene();
   state.perspectiveCamera = new THREE.PerspectiveCamera(
     22,

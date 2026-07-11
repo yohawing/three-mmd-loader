@@ -435,6 +435,9 @@ export async function loadToonTexture(
   texture.generateMipmaps = false;
   texture.colorSpace = THREE.NoColorSpace;
   texture.flipY = true;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
   texture.userData.mmdToonTexturePath = toonTexture.path;
   texture.userData.mmdToonTextureShared = toonTexture.shared;
   return texture;

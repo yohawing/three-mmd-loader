@@ -26,6 +26,7 @@ export function createModelDiagnostics(
     diagnostics.push({
       level: "warning",
       code: "MATERIAL_DRAW_FLAG_UNSUPPORTED",
+      category: "material",
       message:
         "Vertex-color, point-draw, or line-draw material flags were parsed but are not rendered by the current adapter."
     });
@@ -63,6 +64,7 @@ export function createModelDiagnostics(
     diagnostics.push({
       level: "warning",
       code: "MORPH_TYPE_UNSUPPORTED",
+      category: "morph",
       message: `Unsupported morph types are present: ${Array.from(unsupportedMorphTypes).join(", ")}.`
     });
   }
@@ -70,6 +72,7 @@ export function createModelDiagnostics(
     diagnostics.push({
       level: "warning",
       code: "IMPULSE_MORPH_EXTERNAL_PHYSICS_ONLY",
+      category: "morph",
       message:
         "PMX impulse morph offsets are parsed and forwarded to external physics backends; the built-in provisional physics backend does not simulate them."
     });
@@ -82,6 +85,7 @@ export function createModelDiagnostics(
     diagnostics.push({
       level: "warning",
       code: "IK_PMD_KNEE_LIMITS_APPROXIMATE",
+      category: "skeleton",
       message:
         "PMD-style knee IK link limits are applied as an approximate Euler clamp in the current runtime IK solver."
     });
@@ -90,6 +94,7 @@ export function createModelDiagnostics(
     diagnostics.push({
       level: "warning",
       code: "IK_PMX_LINK_LIMITS_APPROXIMATE",
+      category: "skeleton",
       message:
         "PMX IK link limits are applied with an MMD axis-limit approximation; native parity still depends on local-axis and solver convergence details."
     });
@@ -98,22 +103,25 @@ export function createModelDiagnostics(
     diagnostics.push({
       level: "warning",
       code: "BONE_FIXED_AXIS_CONSTRAINTS_UNSUPPORTED",
+      category: "skeleton",
       message:
-        "Fixed-axis bone metadata is parsed, but the current runtime does not yet apply full MMD fixed-axis constraint behavior."
+        "Fixed-axis metadata is applied to IK links, but non-IK fixed-axis bone behavior is not yet enforced by the runtime."
     });
   }
   if (skeleton?.bones.some((bone) => bone.flags.localAxis)) {
     diagnostics.push({
       level: "warning",
       code: "BONE_LOCAL_AXIS_CONSTRAINTS_UNSUPPORTED",
+      category: "skeleton",
       message:
-        "Local-axis bone metadata is parsed, but the current runtime does not yet apply full MMD local-axis constraint behavior."
+        "Local-axis metadata is applied to IK link limits, but non-IK local-axis bone behavior is not yet enforced by the runtime."
     });
   }
   if (skeleton?.bones.some((bone) => bone.flags.externalParentTransform)) {
     diagnostics.push({
       level: "warning",
       code: "BONE_EXTERNAL_PARENT_TRANSFORM_REQUIRES_PROVIDER",
+      category: "skeleton",
       message:
         "External-parent bone metadata is parsed, but runtime playback requires an externalParentTransforms provider to supply keyed parent matrices."
     });
@@ -122,6 +130,7 @@ export function createModelDiagnostics(
     diagnostics.push({
       level: "warning",
       code: "RIGID_BODY_TYPE_UNSUPPORTED",
+      category: "physics",
       message:
         "Unknown MMD rigid-body shape or mode values were parsed but cannot be simulated by the current physics backends."
     });
@@ -130,6 +139,7 @@ export function createModelDiagnostics(
     diagnostics.push({
       level: "warning",
       code: "JOINT_TYPE_UNSUPPORTED",
+      category: "physics",
       message:
         "Unknown PMX joint type values were parsed but cannot be mapped to the current physics backend constraints."
     });
@@ -142,6 +152,7 @@ export function createModelDiagnostics(
     diagnostics.push({
       level: "warning",
       code: "DISPLAY_FRAME_TYPE_UNSUPPORTED",
+      category: "core",
       message:
         "Unknown display-frame entry types were parsed but cannot be mapped to bone or morph display items."
     });

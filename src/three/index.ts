@@ -50,10 +50,18 @@ export { applyMmdCameraStateToThreeCamera } from "./camera.js";
 export { applyMmdLightStateToThreeDirectionalLight } from "./light.js";
 export { disposeMmdModel } from "./dispose.js";
 export type { DisposeMmdModelOptions } from "./dispose.js";
+export { classifyMmdAssetKind, createMmdFileIndex } from "./assets.js";
+export type { MmdAssetKind, MmdFileIndex } from "./assets.js";
 export {
   createMmdTextureMapFromFiles,
+  findMmdAccessoryFiles,
+  findMmdAudioFiles,
   findMmdModelFiles,
   findMmdMotionFiles,
+  isMmdAccessoryFile,
+  isMmdAudioFile,
+  isMmdModelFile,
+  isMmdMotionFile,
   isMmdTextureFile,
   normalizeMmdRelativePath
 } from "./folder.js";
@@ -356,6 +364,7 @@ export class ThreeMmdLoader {
       });
       profile?.mark("bytes");
       const core = await this.getCore();
+      profile?.mark("core-ready");
       const { model: parsedModel, coreDiagnostic } = this.loadCoreModel(core, bytes);
       const modelData = createLoaderMmdModelDataFromModel(parsedModel);
       let parsedModelDisposed = false;
@@ -370,8 +379,9 @@ export class ThreeMmdLoader {
         const materials = normalizeMeshMaterials(mesh.material);
         warnDeprecatedLoadModelOptions(options);
         const effectiveOutlines = options.outline ?? options.outlines ?? true;
+        const sourceDescriptor = createModelSourceDescriptor(source, bytes.byteLength);
         const materialDiagnostics: MaterialTransparencyDiagnostic[] = [];
-        const textureDiagnostics = await applyThreeMmdMaterialTextures(materials, modelData.materials, {
+        const texturePromise = applyThreeMmdMaterialTextures(materials, modelData.materials, {
           textureResolver: this.options.textureResolver,
           textureMap: this.options.textureMap,
           textureLoader: this.options.textureLoader,
@@ -383,6 +393,13 @@ export class ThreeMmdLoader {
           materialDiagnostics,
           textureCache: this.textureCache
         });
+        const runtime = this.createRuntime({
+          modelBytes: bytes,
+          mesh,
+          source: sourceDescriptor
+        });
+        profile?.mark("runtime-ready");
+        const textureDiagnostics = await texturePromise;
         profile?.mark("textures");
         const renderOrder = computeMmdMaterialRenderOrder(
           materials.map((material, materialIndex) => ({
@@ -397,14 +414,9 @@ export class ThreeMmdLoader {
         }
         syncMorphSplitBodyMeshRenderState(mesh, modelData.materials);
         profile?.mark("materials");
-        const sourceDescriptor = createModelSourceDescriptor(source, bytes.byteLength);
         const model = createThreeMmdModel({
           mesh,
-          runtime: this.createRuntime({
-            modelBytes: bytes,
-            mesh,
-            source: sourceDescriptor
-          }),
+          runtime,
           source: sourceDescriptor,
           sourceDiagnostic,
           coreDiagnostic,
@@ -423,6 +435,10 @@ export class ThreeMmdLoader {
         profile?.measure("material-metadata", "textures", "materials");
         profile?.measure("assemble-model", "materials", "assembled");
         profile?.measure("total", "start", "assembled");
+        profile?.measure("init-core", "bytes", "core-ready");
+        profile?.measure("parse-only", "core-ready", "parsed");
+        profile?.measure("init-runtime", "mesh", "runtime-ready");
+        profile?.measure("create-proxies", "materials", "assembled");
         return model;
       } finally {
         if (!parsedModelDisposed) {
@@ -1104,7 +1120,8 @@ function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {
         links: bone.ik.links.map((link) => ({
           boneIndex: link.boneIndex,
           enabled: true,
-          fixedAxis: createRuntimeIkLinkFixedAxis(modelData, boneIndex, link.boneIndex),
+          fixedAxis: createRuntimeIkLinkFixedAxis(modelData, link.boneIndex),
+          localAxisBasis: createRuntimeIkLinkLocalAxisBasis(modelData, link.boneIndex),
           limitsKind:
             link.limits === undefined
               ? undefined
@@ -1125,27 +1142,52 @@ function createRuntimeIkChains(modelData: LoaderMmdModelData): unknown[] {
 
 function createRuntimeIkLinkFixedAxis(
   modelData: LoaderMmdModelData,
-  chainBoneIndex: number,
   boneIndex: number
 ): [number, number, number] | undefined {
-  const chainBone = modelData.skeleton.bones[chainBoneIndex];
   const bone = modelData.skeleton.bones[boneIndex];
   const fixedAxis = bone?.fixedAxis;
-  if (!isHandTwistIkChain(chainBone) || !bone?.flags?.hasFixedAxis || !fixedAxis) {
+  if (
+    !bone?.flags?.hasFixedAxis ||
+    !fixedAxis ||
+    !fixedAxis.every(Number.isFinite) ||
+    Math.hypot(fixedAxis[0], fixedAxis[1], fixedAxis[2]) < 1e-12
+  ) {
     return undefined;
   }
-  return [normalizeSignedZero(-fixedAxis[0]), normalizeSignedZero(-fixedAxis[1]), normalizeSignedZero(fixedAxis[2])];
+  return [fixedAxis[0], fixedAxis[1], fixedAxis[2]];
 }
 
-function normalizeSignedZero(value: number): number {
-  return Object.is(value, -0) ? 0 : value;
-}
-
-function isHandTwistIkChain(bone: LoaderMmdModelData["skeleton"]["bones"][number] | undefined): boolean {
-  return (
-    bone?.name.includes("手捩IK") === true ||
-    bone?.englishName.includes("lwr-arm-twistIK") === true
+function createRuntimeIkLinkLocalAxisBasis(
+  modelData: LoaderMmdModelData,
+  boneIndex: number
+): [number, number, number, number] | undefined {
+  const bone = modelData.skeleton.bones[boneIndex];
+  const localAxis = bone?.localAxis;
+  if (!bone?.flags?.hasLocalAxis || !localAxis) {
+    return undefined;
+  }
+  const x = new THREE.Vector3(...localAxis.x);
+  const z = new THREE.Vector3(...localAxis.z);
+  if (
+    !localAxis.x.every(Number.isFinite) ||
+    !localAxis.z.every(Number.isFinite) ||
+    x.lengthSq() < 1e-12 ||
+    z.lengthSq() < 1e-12
+  ) {
+    return undefined;
+  }
+  x.normalize();
+  z.addScaledVector(x, -z.dot(x));
+  if (z.lengthSq() < 1e-12) {
+    return undefined;
+  }
+  z.normalize();
+  const y = new THREE.Vector3().crossVectors(z, x).normalize();
+  z.crossVectors(x, y).normalize();
+  const basis = new THREE.Quaternion().setFromRotationMatrix(
+    new THREE.Matrix4().makeBasis(x, y, z)
   );
+  return [basis.x, basis.y, basis.z, basis.w];
 }
 
 function createMorphTargetDictionary(

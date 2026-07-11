@@ -3,7 +3,7 @@ import { bindAssetLibraryControls, initializeAssetLibrary } from "./lib/asset-li
 import { clearBackground, loadBackgroundFolder, loadBackgroundFromUrl, switchBackgroundEntry } from "./lib/background-loading.js";
 import { clearCameraMotion, loadCameraFile, loadCameraFromUrl, switchCameraEntry } from "./lib/camera-loading.js";
 import { bindCreditPopupControls } from "./lib/credits.js";
-import { createViewerDebugApi, refreshDebugPanelState, setDebugMaterialMode, setOutlineHidden, setSelfShadowEnabled, toggleColliderHelpers } from "./lib/debug.js";
+import { captureCanvas, captureAfterAndCompare, createViewerDebugApi, markBeforeCapture, refreshDebugPanelState, setDebugMaterialMode, setOutlineHidden, setSelfShadowEnabled, toggleColliderHelpers } from "./lib/debug.js";
 import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updatePlayToggle, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
@@ -259,6 +259,9 @@ function bindDebugControls() {
   dom.debugSelfShadowToggle?.addEventListener("change", () => {
     setSelfShadowEnabled(dom.debugSelfShadowToggle.checked);
   });
+  dom.debugCaptureButton?.addEventListener("click", captureCanvas);
+  dom.debugBeforeButton?.addEventListener("click", markBeforeCapture);
+  dom.debugCompareAfterButton?.addEventListener("click", captureAfterAndCompare);
   refreshDebugPanelState();
 }
 

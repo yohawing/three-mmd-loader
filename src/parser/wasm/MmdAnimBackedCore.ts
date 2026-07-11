@@ -16,6 +16,8 @@ import type {
   SkeletonData,
   SoftBodyData
 } from "../model/modelTypes.js";
+import type { AccessoryParsedManifest } from "../accessory/AccessoryParsedTypes.js";
+import type { PmmParsedManifest } from "../pmm/PmmParsedTypes.js";
 import { parsePmd } from "../model/PmdModelParser.js";
 import { parseVmd } from "../vmd/index.js";
 import { parseVpd, vpdPoseToAnimation } from "../vpd/index.js";
@@ -244,6 +246,7 @@ function buildAdapterDiagnostics(j: Record<string, unknown>): Diagnostic[] {
     diagnostics.push({
       level: "warning",
       code: "IK_PMX_LINK_LIMITS_APPROXIMATE",
+      category: "skeleton",
       message: "PMX IK link limits are parsed but are approximated by the runtime solver."
     });
   }
@@ -251,14 +254,16 @@ function buildAdapterDiagnostics(j: Record<string, unknown>): Diagnostic[] {
     diagnostics.push({
       level: "warning",
       code: "BONE_FIXED_AXIS_CONSTRAINTS_UNSUPPORTED",
-      message: "PMX fixed-axis bone constraints are parsed but not enforced by the runtime adapter."
+      message:
+        "Fixed-axis metadata is applied to IK links, but non-IK fixed-axis bone behavior is not yet enforced by the runtime."
     });
   }
   if (bones.some((bone) => bone.flags?.["localAxis"] === true)) {
     diagnostics.push({
       level: "warning",
       code: "BONE_LOCAL_AXIS_CONSTRAINTS_UNSUPPORTED",
-      message: "PMX local-axis bone constraints are parsed but not enforced by the runtime adapter."
+      message:
+        "Local-axis metadata is applied to IK link limits, but non-IK local-axis bone behavior is not yet enforced by the runtime."
     });
   }
   return diagnostics;
@@ -339,5 +344,24 @@ export class MmdAnimBackedCore implements MmdCore {
 
   loadVpdAnimation(bytes: ArrayBuffer | Uint8Array, name?: string): MmdAnimation {
     return vpdPoseToAnimation(this.loadVpd(bytes), name);
+  }
+
+  parsePmmDocument(bytes: ArrayBuffer | Uint8Array): PmmParsedManifest {
+    return this.parseWasmJson<PmmParsedManifest>(bytes, "project.pmm");
+  }
+
+  parseAccessory(
+    bytes: ArrayBuffer | Uint8Array,
+    fileName?: string
+  ): AccessoryParsedManifest {
+    return this.parseWasmJson<AccessoryParsedManifest>(bytes, fileName ?? "accessory.x");
+  }
+
+  private parseWasmJson<T>(bytes: ArrayBuffer | Uint8Array, fileName: string): T {
+    const input = toUint8Array(bytes);
+    if (this.wasm.parseMmdFormatJson == null) {
+      throw new Error(`${fileName} parsing requires parseMmdFormatJson WASM export`);
+    }
+    return JSON.parse(this.wasm.parseMmdFormatJson(input, fileName)) as T;
   }
 }

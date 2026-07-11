@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile as readRawFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
@@ -80,6 +80,8 @@ describe("example viewer source", () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('id="credit-close"');
     expect(html).toContain("close</span>");
+    expect(html).toContain('href="../webgpu-poc/?backend=forcewebgl"');
+    expect(html).toContain("WebGPU PoC");
     expect(domSource).toContain('creditPopup: document.querySelector("#credit-popup")');
     expect(domSource).toContain('creditCommentText: document.querySelector("#credit-comment")');
     expect(domSource).toContain('creditCloseButton: document.querySelector("#credit-close")');
@@ -471,6 +473,7 @@ describe("example viewer source", () => {
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
 
     expect(sceneSource).toContain("state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled");
+    expect(sceneSource).toContain("state.renderer.shadowMap.type = THREE.BasicShadowMap");
     expect(sceneSource).toContain("state.keyLight.castShadow = state.debugSelfShadowEnabled");
     expect(sceneSource).toContain("configureMmdSelfShadowDirectionalLight");
     expect(sceneSource).toContain("fitMmdSelfShadowDirectionalLightToBox");
@@ -874,6 +877,76 @@ describe("example viewer source", () => {
     expect(styles).toContain(".debug-toggle input:checked");
   });
 
+  it("provides a canvas capture button in the debug panel that downloads a PNG", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('id="debug-capture-button"');
+    expect(html).toContain("photo_camera");
+    expect(html).toContain("Capture");
+    expect(domSource).toContain('debugCaptureButton: document.querySelector("#debug-capture-button")');
+    expect(debugSource).toContain("export function captureCanvas()");
+    expect(debugSource).toContain("state.renderer.render(state.scene, state.camera)");
+    expect(debugSource).toContain('state.renderer.domElement.toDataURL("image/png")');
+    expect(debugSource).toContain("link.download =");
+    expect(debugSource).toContain("link.click()");
+    expect(mainSource).toContain('dom.debugCaptureButton?.addEventListener("click", captureCanvas)');
+    expect(mainSource).toContain("captureCanvas");
+    expect(styles).toContain(".debug-capture-button");
+  });
+
+  it("provides before/after capture comparison in the debug panel", async () => {
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const html = await readFile("examples/viewer/index.html", "utf8");
+
+    expect(debugSource).toContain("function markBeforeCapture()");
+    expect(debugSource).toContain("function captureAfterAndCompare()");
+    expect(debugSource).toContain("function showComparisonOverlay(");
+    expect(debugSource).toContain("state.debugBeforeCapture");
+    expect(mainSource).toContain("markBeforeCapture");
+    expect(mainSource).toContain("captureAfterAndCompare");
+    expect(domSource).toContain("debugBeforeButton:");
+    expect(domSource).toContain("debugCompareAfterButton:");
+    expect(stateSource).toContain("debugBeforeCapture:");
+    expect(html).toContain('id="debug-before-button"');
+    expect(html).toContain('id="debug-compare-after-button"');
+  });
+
+  it("shows model diagnostics in a collapsible debug panel section", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const diagnosticsSource = await readFile("examples/viewer/lib/diagnostics.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+
+    expect(html).toContain('id="debug-diagnostics"');
+    expect(html).toContain('id="debug-diagnostics-count"');
+    expect(html).toContain('id="debug-diagnostics-list"');
+    expect(domSource).toContain('debugDiagnostics: document.querySelector("#debug-diagnostics")');
+    expect(domSource).toContain('debugDiagnosticsCount: document.querySelector("#debug-diagnostics-count")');
+    expect(domSource).toContain('debugDiagnosticsList: document.querySelector("#debug-diagnostics-list")');
+    expect(diagnosticsSource).toContain("export function updateDiagnosticsPanel(model)");
+    expect(diagnosticsSource).toContain("metadata?.diagnostics ?? []");
+    expect(diagnosticsSource).toContain("diagnostic.category ?? diagnostic.level");
+    expect(diagnosticsSource).toContain("diagnostic.code");
+    expect(diagnosticsSource).toContain("diagnostic.message");
+    expect(diagnosticsSource).toContain("export function clearDiagnosticsPanel()");
+    expect(modelSource).toContain("updateDiagnosticsPanel(state.currentModel)");
+    expect(modelSource).toContain("clearDiagnosticsPanel()");
+    expect(styles).toContain(".debug-diagnostics");
+    expect(styles).toContain(".debug-diagnostics-list");
+    expect(styles).toContain(".debug-diagnostic-item");
+    expect(styles).toContain(".debug-diagnostic-badge");
+    expect(styles).toContain(".debug-diagnostic-warning");
+    expect(styles).toContain(".debug-diagnostic-error");
+  });
+
   it("does not keep transient debug console logs in the viewer", async () => {
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
@@ -918,7 +991,43 @@ describe("example viewer source", () => {
     expect(serverSource).toContain('pathname.startsWith("/assets/")');
     expect(serverSource).toContain('return resolve(viewerRoot, "assets", relativePath)');
   });
+
+  it("keeps PMM and accessory support parser-only", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const html = await readFile("examples/viewer/index.html", "utf8");
+
+    expect(mainSource).not.toContain("loadPmmFolder");
+    expect(mainSource).not.toContain("loadAccessoryFile");
+    expect(domSource).not.toContain("pmmFolderInput:");
+    expect(domSource).not.toContain("accessoryFileInput:");
+    expect(stateSource).not.toContain("currentAccessory:");
+    expect(html).not.toContain('id="choose-pmm-folder"');
+    expect(html).not.toContain('id="accessory-load-category"');
+  });
+
+  it("shows bone detection results in the debug panel", async () => {
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const diagnosticsSource = await readFile("examples/viewer/lib/diagnostics.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const html = await readFile("examples/viewer/index.html", "utf8");
+
+    expect(modelSource).toContain('import { detectStandardBones } from "../../../dist/parser/index.js"');
+    expect(modelSource).toContain("detectStandardBones(");
+    expect(modelSource).toContain("updateBoneDetectionPanel(");
+    expect(modelSource).toContain("clearBoneDetectionPanel()");
+    expect(diagnosticsSource).toContain("function updateBoneDetectionPanel(");
+    expect(diagnosticsSource).toContain("function clearBoneDetectionPanel(");
+    expect(domSource).toContain('debugBoneDetection:');
+    expect(domSource).toContain('debugBoneDetectionContent:');
+    expect(html).toContain('id="debug-bone-detection"');
+  });
 });
+
+async function readFile(path: string, encoding: BufferEncoding): Promise<string> {
+  return (await readRawFile(path, encoding)).replaceAll("\r\n", "\n");
+}
 
 async function readLocalOptionalText(path: string): Promise<string | undefined> {
   try {

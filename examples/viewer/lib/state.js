@@ -140,6 +140,7 @@ export const state = {
   debugFpsSampleSeconds: 0,
   debugFpsSampleFrames: 0,
   debugFrameTimeSampleMs: 0,
+  debugBeforeCapture: undefined,
   restPoseAnimation: {
     kind: "vmd",
     metadata: {

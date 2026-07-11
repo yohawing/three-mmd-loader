@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.6.0] - 2026-07-11
+
+### Added
+
+- Add experimental structured parser APIs for PMM projects and DirectX `.x` /
+  `.vac` accessory data, backed by the bundled mmd-anim WASM module. Asset
+  resolution, scene construction, textures, attachment, and playback remain
+  application responsibilities.
+- Add public MMD asset classification and file-index helpers for resolving
+  models, motions, audio, backgrounds, and accessory files from local folders.
+- Add standard and semi-standard MMD bone detection APIs and surface the result
+  in the example viewer diagnostics.
+- Add viewer diagnostics, frame capture, and before/after comparison tools, plus
+  a phase-oriented model load benchmark.
+
+### Changed
+
+- Update the bundled mmd-anim WASM runtime to the v0.2.0 release and
+  carry PMX local-axis frames into IK link-limit evaluation.
+- Keep PMM and accessory support parser-only; remove incomplete PMM and `.x`
+  scene-loading controls from the example viewer.
+- Avoid redundant rest-pose evaluation during runtime initialization.
+- Expand structured diagnostics with categories and improve local fixture
+  classification without treating local-only assets as portable release gates.
+
+### Fixed
+
+- Align toon and self-shadow composition more closely with MMD reference output,
+  including the non-self-shadow toon ramp.
+- Correct sphere UVs, additive sphere contribution, non-toon lighting, texture
+  alpha handling, transparency classification, and outline polygon offset for
+  generated and real-model visual cases.
+- Apply PMX local-axis bases while solving constrained IK links and add focused
+  regression coverage for fixed/local-axis rigs.
+
 ## [0.5.0] - 2026-07-03
 
 ### Added

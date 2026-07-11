@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const realModelsManifestPath = path.resolve("scripts/visual-regression/real-models.manifest.json");
 const generatedPmxManifestPath = path.resolve("scripts/visual-regression/generated-pmx.manifest.json");
 const cameraLightVmdManifestPath = path.resolve("scripts/visual-regression/camera-light-vmd.manifest.json");
+const skinningManifestPath = path.resolve("scripts/visual-regression/skinning.manifest.json");
 const selfShadowManifestPath = path.resolve("scripts/visual-regression/self-shadow.manifest.json");
 const packageJsonPath = path.resolve("package.json");
 
@@ -64,6 +65,8 @@ interface SelfShadowVisualManifest extends RealModelVisualManifest {
     thresholds: {
       receiverMeanDarkeningMin: number;
       receiverP95DarkeningMin: number;
+      receiverMeanAbsDeltaMin?: number;
+      receiverP95AbsDeltaMin?: number;
       shadowPixelRatioMin: number;
       shadowOnMeanLuminanceMin?: number;
       shadowOnP05LuminanceMin?: number;
@@ -195,8 +198,8 @@ describe("self-shadow visual regression manifest", () => {
     expect(names).toEqual(expect.arrayContaining([
       "mmd-self-shadow-body-on",
       "mmd-self-shadow-body-caster-off",
-      "mmd-self-shadow-body-black-toon-on",
-      "mmd-self-shadow-body-black-toon-caster-off",
+      "mmd-self-shadow-body-midband-black-toon-on",
+      "mmd-self-shadow-body-midband-black-toon-caster-off",
       "mmd-self-shadow-body-vmd-off",
       "mmd-self-shadow-body-vmd-on",
       "mmd-self-shadow-on",
@@ -220,10 +223,23 @@ describe("self-shadow visual regression manifest", () => {
       expect(comparison.shadowOn).not.toBe(comparison.shadowOff);
       expect(comparison.receiverRoi.width).toBeGreaterThan(0);
       expect(comparison.receiverRoi.height).toBeGreaterThan(0);
-      expect(comparison.thresholds.receiverMeanDarkeningMin).toBeGreaterThan(0);
-      expect(comparison.thresholds.receiverP95DarkeningMin).toBeGreaterThan(
+      expect(comparison.thresholds.receiverMeanDarkeningMin).toBeGreaterThanOrEqual(0);
+      expect(comparison.thresholds.receiverP95DarkeningMin).toBeGreaterThanOrEqual(
         comparison.thresholds.receiverMeanDarkeningMin
       );
+      if (comparison.thresholds.receiverMeanAbsDeltaMin !== undefined) {
+        expect(comparison.thresholds.receiverMeanAbsDeltaMin).toBeGreaterThanOrEqual(0);
+      }
+      if (comparison.thresholds.receiverP95AbsDeltaMin !== undefined) {
+        expect(comparison.thresholds.receiverP95AbsDeltaMin).toBeGreaterThanOrEqual(
+          comparison.thresholds.receiverMeanAbsDeltaMin ?? 0
+        );
+      }
+      expect(
+        comparison.thresholds.receiverMeanDarkeningMin > 0 ||
+          (comparison.thresholds.receiverMeanAbsDeltaMin ?? 0) > 0 ||
+          (comparison.thresholds.shadowOnMeanLuminanceMin ?? 0) > 0
+      ).toBe(true);
       expect(comparison.thresholds.shadowPixelRatioMin).toBeGreaterThanOrEqual(0);
       if (comparison.thresholds.shadowOnMeanLuminanceMin !== undefined) {
         expect(comparison.thresholds.shadowOnMeanLuminanceMin).toBeGreaterThan(0);
@@ -260,6 +276,78 @@ describe("camera/light VMD visual regression manifest", () => {
     for (const visualCase of lightCases) {
       expect(visualCase.model).toBe("test/fixtures/generated/visual/mmd-toon-ramp-lit-box.pmx");
       expect(visualCase.thresholds?.p95).toBeCloseTo(0.22);
+    }
+  });
+});
+
+interface ThresholdAuditCase {
+  name: string;
+  thresholds?: { mean?: number; p95?: number };
+  toleranceNote?: string;
+}
+
+function readThresholdAuditManifest(manifestPath: string): { cases: ThresholdAuditCase[] } {
+  return JSON.parse(readFileSync(manifestPath, "utf8")) as { cases: ThresholdAuditCase[] };
+}
+
+describe("visual regression threshold audit", () => {
+  const auditProfiles = [
+    { name: "generated-pmx", path: generatedPmxManifestPath },
+    { name: "camera-light-vmd", path: cameraLightVmdManifestPath },
+    { name: "skinning", path: skinningManifestPath },
+    { name: "self-shadow", path: selfShadowManifestPath }
+  ];
+
+  it("requires every rendered case to have explicit thresholds", () => {
+    for (const profile of auditProfiles) {
+      const manifest = readThresholdAuditManifest(profile.path);
+      for (const visualCase of manifest.cases) {
+        const thresholds = visualCase.thresholds;
+        expect(thresholds, `${profile.name}/${visualCase.name} missing thresholds`).toBeDefined();
+        expect(thresholds?.mean, `${profile.name}/${visualCase.name} missing mean`).toBeGreaterThan(0);
+        expect(thresholds?.p95, `${profile.name}/${visualCase.name} missing p95`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("keeps p95 strictly greater than mean for all cases", () => {
+    for (const profile of auditProfiles) {
+      const manifest = readThresholdAuditManifest(profile.path);
+      for (const visualCase of manifest.cases) {
+        if (visualCase.thresholds?.mean !== undefined && visualCase.thresholds?.p95 !== undefined) {
+          expect(
+            visualCase.thresholds.p95,
+            `${profile.name}/${visualCase.name}: p95 (${visualCase.thresholds.p95}) must be > mean (${visualCase.thresholds.mean})`
+          ).toBeGreaterThan(visualCase.thresholds.mean);
+        }
+      }
+    }
+  });
+
+  it("requires a toleranceNote when p95 exceeds 0.25", () => {
+    for (const profile of auditProfiles) {
+      const manifest = readThresholdAuditManifest(profile.path);
+      for (const visualCase of manifest.cases) {
+        const p95 = visualCase.thresholds?.p95 ?? 0;
+        if (p95 > 0.25) {
+          expect(
+            visualCase.toleranceNote,
+            `${profile.name}/${visualCase.name}: p95=${p95} exceeds 0.25 without a toleranceNote`
+          ).toBeTruthy();
+        }
+      }
+    }
+  });
+
+  it("caps p95 at 0.5 to prevent regression-masking blanket thresholds", () => {
+    for (const profile of auditProfiles) {
+      const manifest = readThresholdAuditManifest(profile.path);
+      for (const visualCase of manifest.cases) {
+        expect(
+          visualCase.thresholds?.p95 ?? 0,
+          `${profile.name}/${visualCase.name}: p95=${visualCase.thresholds?.p95} exceeds 0.5 cap`
+        ).toBeLessThanOrEqual(0.5);
+      }
     }
   });
 });

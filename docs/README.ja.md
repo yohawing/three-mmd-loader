@@ -19,13 +19,15 @@ Three.js 上で MMD モデルとモーションを読み込み・再生するた
 | PMD (モデル) | ✅ | ✅ |
 | VMD (モーション) | ✅ | ✅ |
 | VPD (ポーズ) | ✅ | ✅ |
-| PMM (プロジェクト) | ❌ | ❌ |
+| PMM (プロジェクト) | ⚠️ parser API | ❌ |
+| DirectX `.x` (アクセサリ) | ⚠️ parser API | ❌ |
+| VAC (アクセサリ配置) | ⚠️ parser API | ❌ |
 
 ### 機能
 
 | 機能 | 状態 |
 | --- | --- |
-| パーサー | ✅ PMX / PMD / VMD / VPD |
+| パーサー | ✅ PMX / PMD / VMD / VPD、⚠️ PMM / `.x` / `.vac` は構造化解析 API のみ |
 | 変形 / スキニング | ✅ BDEF1/2/4, SDEF, QDEF |
 | MMD マテリアル / Toon シェーダー | ✅ Toon、AlphaBlend 判定、描画順、自己影 |
 | IK / 付与変形などのリギング | ✅ mmd-anim/WASM 経路で検証 |
@@ -33,7 +35,7 @@ Three.js 上で MMD モデルとモーションを読み込み・再生するた
 | 物理 | ✅ MMD 向け Bullet Physics |
 | ソフトボディ | ⚠️ PMX データは解析 / ランタイムシミュレーションは未実装 |
 
-PMX パーサーとアニメーション処理の主要経路には
+PMX パーサー、PMM / `.x` / `.vac` の構造化解析、アニメーション処理の主要経路には
 [yohawing/mmd-anim](https://github.com/yohawing/mmd-anim) を使用しています。
 
 ## Acknowledgements

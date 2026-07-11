@@ -19,13 +19,15 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | PMD (model) | ✅ | ✅ |
 | VMD (motion) | ✅ | ✅ |
 | VPD (pose) | ✅ | ✅ |
-| PMM (project) | ❌ | ❌ |
+| PMM (project) | ⚠️ parser API | ❌ |
+| DirectX `.x` (accessory) | ⚠️ parser API | ❌ |
+| VAC (accessory placement) | ⚠️ parser API | ❌ |
 
 ### Features
 
 | Feature | Status |
 | --- | --- |
-| Parser | ✅ PMX / PMD / VMD / VPD |
+| Parser | ✅ PMX / PMD / VMD / VPD; ⚠️ PMM / `.x` / `.vac` expose structured parsing APIs only |
 | Deform / skinning | ✅ BDEF1/2/4, SDEF, QDEF |
 | MMD material / toon shader | ✅ Toon textures, alpha blending decisions, render ordering, and self shadow |
 | IK / append-transform rigging | ✅ Verified through the mmd-anim/WASM-backed path |
@@ -33,7 +35,7 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | Physics | ✅ MMD-focused Bullet Physics. |
 | Soft Body | ⚠️ PMX data parsed; runtime simulation not implemented |
 
-The main PMX parser and animation path are backed by
+The main PMX parser, structured PMM / `.x` / `.vac` parsing, and animation path are backed by
 [yohawing/mmd-anim](https://github.com/yohawing/mmd-anim).
 
 ## Acknowledgements
@@ -84,9 +86,6 @@ if (cameraState) {
   renderer.render(scene, activeCamera);
 }
 ```
-
-`applyMmdCameraStateToThreeCamera(...)` converts MMD camera coordinates for
-Three.js and returns the active camera.
 
 ## Usage - Physics
 

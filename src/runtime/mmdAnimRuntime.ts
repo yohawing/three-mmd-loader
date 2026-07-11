@@ -301,6 +301,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   private externalPhysicsData: RuntimeExternalPhysicsData | undefined;
   private previousEvaluateSeconds: number | undefined;
   private physicsDisabled = false;
+  private _restPoseDirty = true;
 
   constructor(options: MmdAnimRuntimeOptions) {
     this.frameRate = normalizeFrameRate(options.frameRate ?? 30);
@@ -336,16 +337,22 @@ export class MmdAnimRuntime implements MmdRuntime {
       const state = this.parsedTrackRuntime.evaluate(seconds, options);
       return copyFrameStateInto(this.evaluateReturnState, state);
     }
+    let poseEvaluated = false;
     if (this.wasmClip) {
       this.evaluateWasmClipFrame(this.wasmClip, this.state.frame);
-    } else {
+      poseEvaluated = true;
+    } else if (this._restPoseDirty) {
       this.wasmRuntime.evaluateRestPose();
+      this._restPoseDirty = false;
+      poseEvaluated = true;
     }
-    this.copyWasmOutput();
-    this.syncBoundMesh();
-    this.captureDebugStage("vmdInterpolation");
-    this.captureDebugStage("appendTransform");
-    this.captureDebugStage("ik");
+    if (poseEvaluated) {
+      this.copyWasmOutput();
+      this.syncBoundMesh();
+      this.captureDebugStage("vmdInterpolation");
+      this.captureDebugStage("appendTransform");
+      this.captureDebugStage("ik");
+    }
     if (options?.physics === false) {
       if (!this.physicsDisabled) {
         this.resetPhysicsState();
@@ -402,7 +409,9 @@ export class MmdAnimRuntime implements MmdRuntime {
       this.parsedTrackRuntime.resetPose();
       return;
     }
+    this._restPoseDirty = true;
     this.wasmRuntime.evaluateRestPose();
+    this._restPoseDirty = false;
     this.copyWasmOutput();
     this.syncBoundMesh();
   }
@@ -415,6 +424,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.mmdAnimation = undefined;
     this.parsedTrackRuntime = undefined;
     this.scratchCameraFrameHint.index = 0;
+    this._restPoseDirty = true;
   }
 
   cameraState(): CameraState | undefined {
@@ -475,6 +485,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     if (animation.kind !== "vmd") {
       throw new TypeError("MmdAnimRuntime animation must be an MmdAnimation");
     }
+    this._restPoseDirty = true;
     this.mesh = mesh;
     this.mmdAnimation = animation;
     this.parsedTrackRuntime = undefined;
@@ -752,6 +763,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   private resetPhysicsState(): void {
     this.physicsBackend?.reset?.(createPhysicsResetContext(this.state));
   }
+
 
   private releaseOwnedClip(): void {
     if (this.ownsWasmClip) {

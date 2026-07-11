@@ -28,26 +28,47 @@ export function createMmdTextureMapFromFiles(
 }
 
 export function findMmdModelFiles(files: readonly File[]): File[] {
-  return files
-    .filter((file) => {
-      const lowerName = file.name.toLowerCase();
-      return lowerName.endsWith(".pmx") || lowerName.endsWith(".pmd");
-    })
-    .sort((a, b) => fileKey(a).localeCompare(fileKey(b), undefined, { numeric: true }));
+  return files.filter(isMmdModelFile).sort(compareFileKey);
 }
 
 export function findMmdMotionFiles(files: readonly File[]): File[] {
-  return files
-    .filter((file) => file.name.toLowerCase().endsWith(".vmd"))
-    .sort((a, b) => fileKey(a).localeCompare(fileKey(b), undefined, { numeric: true }));
+  return files.filter(isMmdMotionFile).sort(compareFileKey);
 }
 
-export function isMmdTextureFile(file: File): boolean {
+export function findMmdAccessoryFiles(files: readonly File[]): File[] {
+  return files.filter(isMmdAccessoryFile).sort(compareFileKey);
+}
+
+export function findMmdAudioFiles(files: readonly File[]): File[] {
+  return files.filter(isMmdAudioFile).sort(compareFileKey);
+}
+
+export function isMmdModelFile(file: { readonly name: string }): boolean {
+  return /\.(?:pmx|pmd)$/i.test(file.name);
+}
+
+export function isMmdMotionFile(file: { readonly name: string }): boolean {
+  return /\.vmd$/i.test(file.name);
+}
+
+export function isMmdTextureFile(file: { readonly name: string }): boolean {
   return /\.(bmp|dds|gif|jpe?g|png|tga|webp)$/i.test(file.name);
+}
+
+export function isMmdAccessoryFile(file: { readonly name: string }): boolean {
+  return /\.(?:x|vac)$/i.test(file.name);
+}
+
+export function isMmdAudioFile(file: { readonly name: string }): boolean {
+  return /\.wav$/i.test(file.name);
 }
 
 export function normalizeMmdRelativePath(path: string): string {
   return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+export function compareFileKey(a: File, b: File): number {
+  return fileKey(a).localeCompare(fileKey(b), undefined, { numeric: true });
 }
 
 function fileKey(file: File): string {

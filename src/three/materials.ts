@@ -6,7 +6,8 @@ import {
   mmdMaterialAlphaTest,
   mmdMaterialDepthWrite,
   mmdMaterialSuppressesColorAtAlpha,
-  mmdMaterialTransparencyMode
+  mmdMaterialTransparencyMode,
+  mmdTransparencyModeAlphaTest
 } from "./material/material-metadata.js";
 import { attachMmdMaterialFactors, attachMmdSphereTexture } from "./material/material-shader-hooks.js";
 import {
@@ -140,11 +141,14 @@ export async function applyThreeMmdMaterialTextures(
           );
         material.transparent = transparencyMode === "alphaBlend";
         material.depthWrite = mmdMaterialDepthWrite(transparencyMode);
-        material.colorWrite = !mmdMaterialSuppressesColorAtAlpha(
+        const suppressesColor = mmdMaterialSuppressesColorAtAlpha(
           mmdMaterial.diffuse[3],
           mmdMaterial.flags
         );
-        material.alphaTest = transparencyMode === "alphaTest" ? 0.01 : 0;
+        material.colorWrite = !suppressesColor;
+        // Color-suppressed materials (alpha 0 + shadow flags) must keep writing depth,
+        // so they never get the zero-alpha discard.
+        material.alphaTest = suppressesColor ? 0 : mmdTransparencyModeAlphaTest(transparencyMode);
         attachMmdMaterialMetadata(material, mmdMaterial, materialIndex, transparencyMode);
         material.userData.mmdMaterial.textureTransparencyMode = textureTransparencyMode;
         if (morphAlphaTransparent) {

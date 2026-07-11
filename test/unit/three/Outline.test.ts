@@ -43,7 +43,9 @@ describe("MMD outline meshes", () => {
     expect(material?.depthTest).toBe(true);
     expect(material?.depthWrite).toBe(true);
     expect(material?.polygonOffset).toBe(true);
-    expect(material?.polygonOffsetFactor).toBe(1);
+    // 1 + 2 * outlineWidth: the hull shifts ~2*width screen px, so the slope factor
+    // must cover that shift for DoubleSide hull fronts to stay behind the body.
+    expect(material?.polygonOffsetFactor).toBeCloseTo(2.2);
     expect(material?.polygonOffsetUnits).toBe(1);
     expect(shader.uniforms.mmdOutlineViewport?.value).toBeInstanceOf(THREE.Vector2);
     expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(512, 512));

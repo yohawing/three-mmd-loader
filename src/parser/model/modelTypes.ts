@@ -39,10 +39,21 @@ export interface ModelMetadata {
   diagnostics: Diagnostic[];
 }
 
+export type DiagnosticCategory =
+  | "material"
+  | "morph"
+  | "skeleton"
+  | "physics"
+  | "texture"
+  | "accessory"
+  | "project"
+  | "core";
+
 export interface Diagnostic {
   level: "warning" | "error";
   code: string;
   message: string;
+  category?: DiagnosticCategory;
 }
 
 export interface GeometryBuffers {
