@@ -54,32 +54,6 @@ This project was developed with reference to:
 npm install @yohawing/three-mmd-loader three
 ```
 
-## Usage - Parsing PMM / `.x` / `.vac`
-
-PMM and accessory formats are exposed as parser APIs only. Resolving asset
-paths, building Three.js geometry and materials, loading textures, applying
-`.vac` attachments, and reconstructing or playing a PMM scene are application
-responsibilities. The viewer does not provide loaders for these formats.
-
-```ts
-import {
-  initCore,
-  parseAccessory,
-  parsePmmDocument
-} from "@yohawing/three-mmd-loader/parser";
-
-const core = await initCore();
-
-const project = parsePmmDocument(pmmBytes, core);
-const accessory = parseAccessory(xBytes, core, "stage.x");
-const placement = parseAccessory(vacBytes, core, "stage.vac");
-```
-
-These parsing surfaces are currently experimental while their real-asset
-corpus is expanded. They do not promise complete MMD or MikuMikuMoving
-compatibility. Check `diagnostics` and optional fields before consuming the
-result.
-
 ## Usage - Model Loading
 
 ```ts
@@ -112,9 +86,6 @@ if (cameraState) {
   renderer.render(scene, activeCamera);
 }
 ```
-
-`applyMmdCameraStateToThreeCamera(...)` converts MMD camera coordinates for
-Three.js and returns the active camera.
 
 ## Usage - Physics
 
