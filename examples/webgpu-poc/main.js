@@ -28,6 +28,7 @@ let renderer;
 let scene;
 let camera;
 let model;
+let computeStatus = "none";
 
 setStatus(createLoadingStatus());
 
@@ -96,7 +97,11 @@ async function init() {
     renderer.shadowMap.transmitted = true;
   }
 
-  if (sceneMode === "ordering" || sceneMode === "draw-index") {
+  if (sceneMode === "compute-attribute") {
+    await createComputeAttributeScene(scene, renderer);
+    camera.position.set(0, 0, 3);
+    camera.lookAt(0, 0, 0);
+  } else if (sceneMode === "ordering" || sceneMode === "draw-index") {
     scene.add(createOrderingMesh({ nodeDrawIndex: sceneMode === "draw-index" }));
     camera.position.set(0, 0, 4);
     camera.lookAt(0, 0, 0);
@@ -272,6 +277,7 @@ function createReadyStatus() {
   const meshCount = countMeshes(scene);
   const primaryMesh =
     model?.mesh ??
+    scene.getObjectByName("compute-attribute-triangle") ??
     scene.getObjectByName("ordering-overlap") ??
     scene.getObjectByName("node-mmd-gamma-cube") ??
     scene.getObjectByName("node-mmd-sphere-cube") ??
@@ -295,6 +301,8 @@ function createReadyStatus() {
     `meshes=${meshCount}`,
     `materials=${materialCount}`,
     `groups=${groupCount}`,
+    `rendererBackend=${renderer.backend?.isWebGPUBackend === true ? "native-webgpu" : backend}`,
+    `compute=${computeStatus}`,
     "ready"
   ].join("\n");
 }
@@ -305,6 +313,40 @@ function countMeshes(object) {
     count += countMeshes(child);
   }
   return count;
+}
+
+async function createComputeAttributeScene(targetScene, activeRenderer) {
+  if (activeRenderer.backend?.isWebGPUBackend !== true) {
+    throw new Error("compute-attribute requires the native WebGPU backend");
+  }
+
+  const computedPositions = TSL.attributeArray(3, "vec3");
+  const computedPosition = TSL.instanceIndex.equal(0).select(
+    TSL.vec3(-0.9, -0.65, 0),
+    TSL.instanceIndex.equal(1).select(
+      TSL.vec3(0.9, -0.65, 0),
+      TSL.vec3(0, 0.9, 0)
+    )
+  );
+  const computePositions = TSL.Fn(() => {
+    computedPositions.element(TSL.instanceIndex).assign(computedPosition);
+  })().compute(3);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(9, 3));
+  geometry.setIndex([0, 1, 2]);
+  const material = new THREE.MeshBasicNodeMaterial({
+    color: 0x32e875,
+    side: THREE.DoubleSide
+  });
+  material.positionNode = computedPositions.toAttribute();
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = "compute-attribute-triangle";
+  mesh.frustumCulled = false;
+  targetScene.add(mesh);
+
+  await activeRenderer.computeAsync(computePositions);
+  computeStatus = "storage-to-attribute";
 }
 
 function replaceModelMaterialsWithNodeMaterials(mesh, options = {}) {
@@ -925,6 +967,7 @@ function appendBox(positions, normals, indices, groups, options) {
 function normalizeSceneMode(value) {
   const normalized = value?.toLowerCase();
   return normalized === "ordering" ||
+    normalized === "compute-attribute" ||
     normalized === "draw-index" ||
     normalized === "node-slots" ||
     normalized === "node-shadow-toon" ||

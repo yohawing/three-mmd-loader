@@ -5,6 +5,7 @@ const TSL = await import("three/tsl");
 const material = new THREE.MeshToonNodeMaterial();
 const requiredThreeExports = [
   "WebGPURenderer",
+  "StorageBufferAttribute",
   "MeshToonNodeMaterial",
   "MeshBasicNodeMaterial",
   "NodeMaterial",
@@ -13,6 +14,8 @@ const requiredThreeExports = [
 ];
 const requiredTslExports = [
   "Fn",
+  "attributeArray",
+  "instanceIndex",
   "shadow",
   "positionLocal",
   "normalLocal",

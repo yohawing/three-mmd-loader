@@ -115,6 +115,14 @@ async function main() {
       cases.push({ name: "forcewebgl-node-local-real-model", backend: "forcewebgl", scene: "node-mmd-model", model: localModelUrl, spin: false });
     }
     if (options.includeWebgpu) {
+      cases.push({
+        name: "webgpu-compute-attribute",
+        backend: "webgpu",
+        scene: "compute-attribute",
+        expectedGroups: 0,
+        expectedTint: "center-green",
+        expectedStatus: "rendererBackend=native-webgpu\ncompute=storage-to-attribute"
+      });
       cases.push({ name: "webgpu-ordering", backend: "webgpu", scene: "ordering", expectedGroups: 2, optional: true });
       cases.push({ name: "webgpu-draw-index", backend: "webgpu", scene: "draw-index", expectedGroups: 2, expectedTint: "center-green", optional: true });
       cases.push({ name: "webgpu-node-skinning", backend: "webgpu", scene: "node-skinning", expectedGroups: 1, optional: true });
@@ -306,6 +314,7 @@ async function checkCaseWithBrowser(browser, origin, checkCase, outputDir) {
     const statusSummary = status.replace(/\n/g, " | ");
     const statusPass = status.includes("ready") &&
       status.includes(`scene=${checkCase.scene}`) &&
+      (checkCase.expectedStatus === undefined || status.includes(checkCase.expectedStatus)) &&
       (checkCase.expectedGroups === undefined || status.includes(`groups=${checkCase.expectedGroups}`));
     const imagePass = stats.variedSamples > 100;
     const orderingPass = checkCase.scene !== "ordering" || stats.center.g > stats.center.r + 6;
