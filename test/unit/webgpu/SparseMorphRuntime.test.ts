@@ -21,6 +21,10 @@ describe("sparse position morph runtime", () => {
       count: 3,
       itemSize: 3
     });
+    expect(mesh.geometry.getAttribute("uv")).toHaveProperty("isStorageBufferAttribute", true);
+    expect(mesh.geometry.getAttribute("uv1")).toHaveProperty("isStorageBufferAttribute", true);
+    expect(mesh.geometry.morphAttributes.uv).toEqual([]);
+    expect(mesh.geometry.morphAttributes.uv1).toEqual([]);
   });
 
   it("syncs weights and submits compute only to a native WebGPU renderer", () => {
@@ -36,7 +40,11 @@ describe("sparse position morph runtime", () => {
       )
     ).toBe(true);
     expect(compute).toHaveBeenCalledOnce();
-    expect(compute.mock.calls[0]?.[0]).toMatchObject({ isComputeNode: true, count: 3 });
+    expect(compute.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({ isComputeNode: true, count: 3 }),
+      expect.objectContaining({ isComputeNode: true, count: 3 }),
+      expect.objectContaining({ isComputeNode: true, count: 3 })
+    ]);
     expect(() =>
       computeMmdTslSparsePositionMorphs(
         { backend: { isWebGPUBackend: false }, compute },
@@ -62,7 +70,11 @@ describe("sparse position morph runtime", () => {
 
 function createMesh(): THREE.SkinnedMesh {
   const geometry = createThreeBufferGeometry(createBuffers(), [], [
-    { vertexOffsets: [{ vertexIndex: 0, position: [0.5, 0, 0] }] },
+    {
+      vertexOffsets: [{ vertexIndex: 0, position: [0.5, 0, 0] }],
+      uvOffsets: [{ vertexIndex: 0, uv: [0.1, 0.2] }],
+      additionalUvOffsets: [{ vertexIndex: 0, uvIndex: 0, uv: [0.1, 0.2, 0.3, 0.4] }]
+    },
     { vertexOffsets: [{ vertexIndex: 2, position: [0, 0.25, 0] }] }
   ]);
   const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshBasicNodeMaterial());
@@ -75,6 +87,7 @@ function createBuffers() {
     positions: new Float32Array([-1, -1, 0, 1, -1, 0, 0, 1, 0]),
     normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
     uvs: new Float32Array([0, 0, 1, 0, 0.5, 1]),
+    additionalUvs: [new Float32Array(12)],
     indices: new Uint16Array([0, 1, 2]),
     skinIndices: new Uint16Array(12),
     skinWeights: new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0])

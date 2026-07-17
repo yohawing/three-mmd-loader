@@ -107,6 +107,10 @@ async function init() {
     createComputePositionMorphScene(scene, renderer);
     camera.position.set(0, 0, 3);
     camera.lookAt(0, 0, 0);
+  } else if (sceneMode === "compute-uv-morph") {
+    createComputeUvMorphScene(scene, renderer);
+    camera.position.set(0, 0, 3);
+    camera.lookAt(0, 0, 0);
   } else if (sceneMode === "ordering" || sceneMode === "draw-index") {
     scene.add(createOrderingMesh({ nodeDrawIndex: sceneMode === "draw-index" }));
     camera.position.set(0, 0, 4);
@@ -285,6 +289,7 @@ function createReadyStatus() {
     model?.mesh ??
     scene.getObjectByName("compute-attribute-triangle") ??
     scene.getObjectByName("compute-position-morph-triangle") ??
+    scene.getObjectByName("compute-uv-morph-triangle") ??
     scene.getObjectByName("ordering-overlap") ??
     scene.getObjectByName("node-mmd-gamma-cube") ??
     scene.getObjectByName("node-mmd-sphere-cube") ??
@@ -392,6 +397,46 @@ function createComputePositionMorphScene(targetScene, activeRenderer) {
   computeMmdTslSparsePositionMorphs(activeRenderer, mesh);
   targetScene.add(mesh);
   computeStatus = "sparse-position-morph";
+}
+
+function createComputeUvMorphScene(targetScene, activeRenderer) {
+  if (activeRenderer.backend?.isWebGPUBackend !== true) {
+    throw new Error("compute-uv-morph requires the native WebGPU backend");
+  }
+  const geometry = createThreeBufferGeometry(
+    {
+      positions: new Float32Array([-0.9, -0.65, 0, 0.9, -0.65, 0, 0, 0.9, 0]),
+      normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+      uvs: new Float32Array(6),
+      additionalUvs: [new Float32Array(12)],
+      indices: new Uint16Array([0, 1, 2]),
+      skinIndices: new Uint16Array(12),
+      skinWeights: new Float32Array(12)
+    },
+    [],
+    [{
+      uvOffsets: [0, 1, 2].map(vertexIndex => ({ vertexIndex, uv: [1, 0] })),
+      additionalUvOffsets: [0, 1, 2].map(vertexIndex =>
+        ({ vertexIndex, uvIndex: 0, uv: [0.25, 0.5, 0.75, 1] }))
+    }]
+  );
+  const texture = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255]), 2, 1);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.needsUpdate = true;
+  const material = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide });
+  material.colorNode = TSL.texture(texture).sample(TSL.uv()).rgb;
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = "compute-uv-morph-triangle";
+  mesh.frustumCulled = false;
+  mesh.morphTargetInfluences = [1];
+  if (!enableMmdTslSparsePositionMorphs(mesh)) {
+    throw new Error("compute UV morph was not enabled");
+  }
+  computeMmdTslSparsePositionMorphs(activeRenderer, mesh);
+  targetScene.add(mesh);
+  computeStatus = "sparse-uv-morph";
 }
 
 function replaceModelMaterialsWithNodeMaterials(mesh, options = {}) {
@@ -1014,6 +1059,7 @@ function normalizeSceneMode(value) {
   return normalized === "ordering" ||
     normalized === "compute-attribute" ||
     normalized === "compute-position-morph" ||
+    normalized === "compute-uv-morph" ||
     normalized === "draw-index" ||
     normalized === "node-slots" ||
     normalized === "node-shadow-toon" ||

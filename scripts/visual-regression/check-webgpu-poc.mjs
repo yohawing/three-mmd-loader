@@ -131,6 +131,14 @@ async function main() {
         expectedTint: "center-green",
         expectedStatus: "rendererBackend=native-webgpu\ncompute=sparse-position-morph"
       });
+      cases.push({
+        name: "webgpu-compute-uv-morph",
+        backend: "webgpu",
+        scene: "compute-uv-morph",
+        expectedGroups: 0,
+        expectedTint: "center-green",
+        expectedStatus: "rendererBackend=native-webgpu\ncompute=sparse-uv-morph"
+      });
       cases.push({ name: "webgpu-ordering", backend: "webgpu", scene: "ordering", expectedGroups: 2, optional: true });
       cases.push({ name: "webgpu-draw-index", backend: "webgpu", scene: "draw-index", expectedGroups: 2, expectedTint: "center-green", optional: true });
       cases.push({ name: "webgpu-node-skinning", backend: "webgpu", scene: "node-skinning", expectedGroups: 1, optional: true });

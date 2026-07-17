@@ -5,7 +5,10 @@ import {
   type DenseMorphProvider
 } from "../../../src/parser/model/denseMorphProvider.js";
 import type { ThreeMmdGeometryMorph } from "../../../src/three/geometry.js";
-import { packMmdPositionMorphsToVertexCsr } from "../../../src/webgpu/sparse-morph.js";
+import {
+  packMmdPositionMorphsToVertexCsr,
+  packMmdUvMorphsToVertexCsr
+} from "../../../src/webgpu/sparse-morph.js";
 
 describe("position morph CSR packing", () => {
   it("packs sparse offsets in vertex-major and morph-index order", () => {
@@ -97,5 +100,29 @@ describe("position morph CSR packing", () => {
     expect(() => packMmdPositionMorphsToVertexCsr(1, [
       { densePositionOffsets: new Float32Array(2) }
     ])).toThrow("MMD_POSITION_MORPH_CSR_DENSE_LENGTH_INVALID");
+  });
+});
+
+describe("UV morph CSR packing", () => {
+  it("packs main UV offsets with last-write-wins ordering", () => {
+    const packed = packMmdUvMorphsToVertexCsr(2, [
+      { uvOffsets: [{ vertexIndex: 1, uv: [0.1, 0.2] }, { vertexIndex: 1, uv: [0.3, 0.4] }] },
+      { denseUvOffsets: new Float32Array([0.5, 0.6, 0, 0]) }
+    ]);
+    expect(packed.componentCount).toBe(2);
+    expect(Array.from(packed.rowOffsets)).toEqual([0, 1, 2]);
+    expect(Array.from(packed.morphIndices)).toEqual([1, 0]);
+    expect(Array.from(packed.values)).toEqual(
+      [0.5, 0.6, 0.3, 0.4].map((value) => expect.closeTo(value))
+    );
+  });
+
+  it("packs only the selected additional UV channel", () => {
+    const packed = packMmdUvMorphsToVertexCsr(1, [{ additionalUvOffsets: [
+      { vertexIndex: 0, uvIndex: 0, uv: [1, 2, 3, 4] },
+      { vertexIndex: 0, uvIndex: 1, uv: [5, 6, 7, 8] }
+    ] }], 1);
+    expect(packed.componentCount).toBe(4);
+    expect(Array.from(packed.values)).toEqual([5, 6, 7, 8]);
   });
 });

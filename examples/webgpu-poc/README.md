@@ -16,7 +16,7 @@ Open `/examples/webgpu-poc/`.
 Useful query parameters:
 
 - `backend=forcewebgl|webgpu|webgl`
-- `scene=model|ordering|compute-attribute|compute-position-morph|node-mmd-model|node-mmd-outline-groups`
+- `scene=model|ordering|compute-attribute|compute-position-morph|compute-uv-morph|node-mmd-model|node-mmd-outline-groups`
 - `model=/test/fixtures/generated/minimal-loader-smoke.pmx`
 - `motion=/test/fixtures/generated/skinning/bend-two-bone-90.vmd`
 - `shadow=1`
@@ -45,6 +45,8 @@ with `computeAsync()` into a storage buffer and renders the same buffer through
 `compute-position-morph` exercises the library CSR integration. Its base triangle
 starts off-screen and becomes visible only when a sparse position morph weight is
 applied through native WebGPU compute into the geometry position storage attribute.
+`compute-uv-morph` similarly changes a texture sample from red to green and also
+compiles the additional-UV vec4 storage compute path.
 
 Optional local real-model observation:
 

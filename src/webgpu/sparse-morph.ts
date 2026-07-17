@@ -16,6 +16,10 @@ export interface MmdPositionMorphCsr {
   readonly values: Float32Array;
 }
 
+export interface MmdUvMorphCsr extends MmdPositionMorphCsr {
+  readonly componentCount: 2 | 4;
+}
+
 export function packMmdPositionMorphsToVertexCsr(
   vertexCount: number,
   morphs: readonly ThreeMmdGeometryMorph[]
@@ -186,4 +190,103 @@ function writeEntry(
 
 function hasNonZeroComponent(position: readonly [number, number, number]): boolean {
   return position[0] !== 0 || position[1] !== 0 || position[2] !== 0;
+}
+
+export function packMmdUvMorphsToVertexCsr(
+  vertexCount: number,
+  morphs: readonly ThreeMmdGeometryMorph[],
+  additionalUvIndex?: number
+): MmdUvMorphCsr {
+  if (!Number.isSafeInteger(vertexCount) || vertexCount < 0) {
+    throw new RangeError(`MMD_UV_MORPH_CSR_VERTEX_COUNT_INVALID:${vertexCount}`);
+  }
+  const componentCount = additionalUvIndex === undefined ? 2 : 4;
+  const entriesPerVertex = new Uint32Array(vertexCount);
+  const valuesByMorph = new Array<Map<number, readonly number[]> | undefined>(morphs.length);
+
+  for (let morphIndex = 0; morphIndex < morphs.length; morphIndex += 1) {
+    const morph = morphs[morphIndex];
+    if (!morph) continue;
+    const values = resolveUvOffsets(morph, vertexCount, morphIndex, additionalUvIndex);
+    if (values.size === 0) continue;
+    valuesByMorph[morphIndex] = values;
+    for (const [vertexIndex, value] of values) {
+      if (hasNonZeroValues(value)) {
+        entriesPerVertex[vertexIndex] = (entriesPerVertex[vertexIndex] ?? 0) + 1;
+      }
+    }
+  }
+
+  const rowOffsets = new Uint32Array(vertexCount + 1);
+  for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex += 1) {
+    rowOffsets[vertexIndex + 1] = (rowOffsets[vertexIndex] ?? 0) + (entriesPerVertex[vertexIndex] ?? 0);
+  }
+  const entryCount = rowOffsets[vertexCount] ?? 0;
+  const morphIndices = new Uint32Array(entryCount);
+  const values = new Float32Array(entryCount * componentCount);
+  const cursors = rowOffsets.slice(0, vertexCount);
+  for (let morphIndex = 0; morphIndex < valuesByMorph.length; morphIndex += 1) {
+    for (const [vertexIndex, value] of valuesByMorph[morphIndex] ?? []) {
+      if (!hasNonZeroValues(value)) continue;
+      const entryIndex = cursors[vertexIndex] ?? 0;
+      cursors[vertexIndex] = entryIndex + 1;
+      morphIndices[entryIndex] = morphIndex;
+      for (let component = 0; component < componentCount; component += 1) {
+        values[entryIndex * componentCount + component] = value[component] ?? 0;
+      }
+    }
+  }
+  return { vertexCount, morphCount: morphs.length, componentCount, rowOffsets, morphIndices, values };
+}
+
+function resolveUvOffsets(
+  morph: ThreeMmdGeometryMorph,
+  vertexCount: number,
+  morphIndex: number,
+  additionalUvIndex: number | undefined
+): Map<number, readonly number[]> {
+  const componentCount = additionalUvIndex === undefined ? 2 : 4;
+  const provider = (morph as DenseProviderMorph)[denseMorphProviderSymbol];
+  const dense = additionalUvIndex === undefined
+    ? provider?.createUvOffsets(vertexCount) ?? morph.denseUvOffsets
+    : provider?.createAdditionalUvOffsets(additionalUvIndex, vertexCount) ??
+      morph.denseAdditionalUvOffsets?.[additionalUvIndex];
+  const byVertex = new Map<number, readonly number[]>();
+  if (dense) {
+    if (dense.length !== vertexCount * componentCount) {
+      throw new RangeError(`MMD_UV_MORPH_CSR_DENSE_LENGTH_INVALID:${morphIndex}:${dense.length}`);
+    }
+    for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex += 1) {
+      const base = vertexIndex * componentCount;
+      const x = dense[base] ?? 0;
+      const y = dense[base + 1] ?? 0;
+      const z = componentCount === 4 ? (dense[base + 2] ?? 0) : 0;
+      const w = componentCount === 4 ? (dense[base + 3] ?? 0) : 0;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z) || !Number.isFinite(w)) {
+        throw new RangeError(`MMD_UV_MORPH_CSR_DENSE_VALUE_INVALID:${morphIndex}:${vertexIndex}`);
+      }
+      if (x !== 0 || y !== 0 || z !== 0 || w !== 0) {
+        byVertex.set(vertexIndex, componentCount === 2 ? [x, y] : [x, y, z, w]);
+      }
+    }
+    return byVertex;
+  }
+  const offsets = additionalUvIndex === undefined ? morph.uvOffsets : morph.additionalUvOffsets;
+  for (let offsetIndex = 0; offsetIndex < (offsets?.length ?? 0); offsetIndex += 1) {
+    const offset = offsets?.[offsetIndex];
+    if (!offset || ("uvIndex" in offset && offset.uvIndex !== additionalUvIndex)) continue;
+    if (!Number.isSafeInteger(offset.vertexIndex) || offset.vertexIndex < 0 || offset.vertexIndex >= vertexCount) {
+      throw new RangeError(`MMD_UV_MORPH_CSR_VERTEX_INDEX_INVALID:${morphIndex}:${offsetIndex}`);
+    }
+    const value = Array.from(offset.uv, (component) => component ?? 0).slice(0, componentCount);
+    if (value.length !== componentCount || !value.every(Number.isFinite)) {
+      throw new RangeError(`MMD_UV_MORPH_CSR_VALUE_INVALID:${morphIndex}:${offsetIndex}`);
+    }
+    byVertex.set(offset.vertexIndex, value);
+  }
+  return byVertex;
+}
+
+function hasNonZeroValues(values: readonly number[]): boolean {
+  return values.some((value) => value !== 0);
 }
