@@ -11,6 +11,7 @@ import {
 } from "../../../dist/three/index.js";
 import { fitShadowCameraToObject } from "./scene-setup.js";
 import {
+  computeCurrentModelTslSparsePositionMorphs,
   isTslViewerPipeline,
   syncCurrentModelTslLight,
   syncCurrentModelTslMaterialStates
@@ -29,6 +30,7 @@ export function render() {
   updateColliderHelpers();
   state.controls.update();
   applyCameraMotion();
+  computeCurrentModelTslSparsePositionMorphs();
   state.renderer.render(state.scene, state.camera);
 }
 
@@ -37,6 +39,7 @@ export function renderStillFrame() {
   updateColliderHelpers();
   state.controls.update();
   applyCameraMotion();
+  computeCurrentModelTslSparsePositionMorphs();
   state.renderer.render(state.scene, state.camera);
 }
 

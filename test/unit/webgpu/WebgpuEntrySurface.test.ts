@@ -10,10 +10,12 @@ describe("experimental WebGPU TSL entry surface", () => {
       "MMD_TSL_DEFAULT_LIGHT_COLOR",
       "MMD_TSL_DEFAULT_TOON_COORD_OFFSET",
       "appendMmdTslOutlineGroups",
+      "computeMmdTslSparsePositionMorphs",
       "createMmdTslBaseColorNode",
       "createMmdTslMaterialFromSource",
       "createMmdTslReceivedShadowNode",
       "createMmdTslToonMaterial",
+      "enableMmdTslSparsePositionMorphs",
       "replaceMmdModelMaterialsWithTsl",
       "syncMmdTslMaterialState"
     ]);

@@ -4,6 +4,7 @@ import {
   denseMorphProviderSymbol,
   type DenseMorphProvider
 } from "../parser/model/denseMorphProvider.js";
+import { setMmdGeometryMorphSource } from "./internal-morph-source.js";
 import { computeMmdMaterialRenderOrder } from "./material/material-metadata.js";
 import type { MmdMaterialTransparencyMode } from "./textures.js";
 
@@ -168,6 +169,7 @@ export function createThreeBufferGeometry(
 
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   if (morphs.length > 0) {
+    setMmdGeometryMorphSource(geometry, morphs);
     const morphAttributes = geometry.morphAttributes as Record<string, THREE.BufferAttribute[]>;
     geometry.morphTargetsRelative = true;
     if (morphs.some(hasPositionMorphOffsets)) {

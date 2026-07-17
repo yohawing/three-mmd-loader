@@ -12,3 +12,8 @@ export {
   createMmdTslMaterialFromSource,
   replaceMmdModelMaterialsWithTsl
 } from "./material-assembly.js";
+
+export {
+  computeMmdTslSparsePositionMorphs,
+  enableMmdTslSparsePositionMorphs
+} from "./sparse-morph-runtime.js";

@@ -10,6 +10,8 @@ const syncedLightToonCoordinateOffset = 0.5;
 let webgpuPipelineModulePromise;
 let replaceMmdModelMaterialsWithTsl;
 let syncMmdTslMaterialState;
+let computeMmdTslSparsePositionMorphs;
+let enableMmdTslSparsePositionMorphs;
 
 export function isTslViewerPipeline() {
   return state.viewerPipeline !== "baseline-webgl";
@@ -34,6 +36,9 @@ export async function applyViewerPipelineToModel(model, label) {
       appendOutlineGroups: true,
       respectMaterialShadowFlags: true
     });
+    if (state.renderer?.backend?.isWebGPUBackend === true) {
+      enableMmdTslSparsePositionMorphs(model.mesh);
+    }
     syncTslMaterialStates(model.mesh.material);
     syncTslMaterialLight(model.mesh.material);
   }
@@ -64,6 +69,18 @@ export function syncCurrentModelTslMaterialStates() {
     return;
   }
   syncTslMaterialStates(state.currentModel.mesh.material);
+}
+
+export function computeCurrentModelTslSparsePositionMorphs() {
+  if (
+    !isTslViewerPipeline() ||
+    state.renderer?.backend?.isWebGPUBackend !== true ||
+    !state.currentModel?.mesh ||
+    !computeMmdTslSparsePositionMorphs
+  ) {
+    return false;
+  }
+  return computeMmdTslSparsePositionMorphs(state.renderer, state.currentModel.mesh);
 }
 
 export function setCurrentModelTslOutlineHidden(hidden) {
@@ -218,6 +235,8 @@ async function loadWebgpuPipelineModule() {
     webgpuPipelineModulePromise = import("../../../dist/webgpu/index.js").then((module) => {
       replaceMmdModelMaterialsWithTsl = module.replaceMmdModelMaterialsWithTsl;
       syncMmdTslMaterialState = module.syncMmdTslMaterialState;
+      computeMmdTslSparsePositionMorphs = module.computeMmdTslSparsePositionMorphs;
+      enableMmdTslSparsePositionMorphs = module.enableMmdTslSparsePositionMorphs;
       return module;
     });
   }
