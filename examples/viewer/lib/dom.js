@@ -81,13 +81,11 @@ export const dom = {
   viewportGridToggle: document.querySelector("#viewport-grid-toggle"),
   viewportAxesToggle: document.querySelector("#viewport-axes-toggle"),
   modelFolderInput: document.querySelector("#model-folder"),
-  pmmFolderInput: document.querySelector("#pmm-folder"),
   motionFileInput: document.querySelector("#motion-file"),
   poseFileInput: document.querySelector("#pose-file"),
   audioFileInput: document.querySelector("#audio-file"),
   backgroundFolderInput: document.querySelector("#background-folder"),
   cameraFileInput: document.querySelector("#camera-file"),
-  accessoryFileInput: document.querySelector("#accessory-file"),
   bgmAudio: document.querySelector("#bgm-audio")
 };
 

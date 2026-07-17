@@ -68,8 +68,6 @@ export const state = {
   currentPoseSource: undefined,
   currentPoseLabel: undefined,
   currentCameraMotion: undefined,
-  currentAccessory: undefined,
-  currentAccessoryFile: undefined,
   currentFolderTextureMap: undefined,
   currentFolderFiles: [],
   currentFolderPmxFiles: [],

@@ -16,7 +16,6 @@ export function createRendererSwitchSnapshot() {
     camera: snapshotCamera(),
     cameraView: snapshotCameraView(),
     audio: snapshotAudio(),
-    accessory: snapshotAccessory(),
     debugSelfShadowEnabled: state.debugSelfShadowEnabled,
     debugBeforeCapture: state.debugBeforeCapture,
     elapsedSeconds: state.elapsedSeconds
@@ -32,7 +31,6 @@ export function hasRendererSwitchSnapshotState(snapshot) {
     snapshot.camera ||
     snapshot.cameraView ||
     snapshot.audio ||
-    snapshot.accessory ||
     snapshot.debugBeforeCapture
   );
 }
@@ -213,15 +211,6 @@ function snapshotAudio() {
         url: src,
         name: selected.name,
         offsetFrame: state.audioOffsetFrame
-      }
-    : undefined;
-}
-
-function snapshotAccessory() {
-  return state.currentAccessoryFile instanceof window.File
-    ? {
-        kind: "file",
-        file: fileRecord(state.currentAccessoryFile)
       }
     : undefined;
 }

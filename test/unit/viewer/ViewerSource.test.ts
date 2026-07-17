@@ -43,7 +43,6 @@ describe("example viewer source", () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
     const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
-    const pmmSource = await readFile("examples/viewer/lib/pmm-loading.js", "utf8");
     const rendererSwitchSource = await readFile("examples/viewer/lib/renderer-switch-state.js", "utf8");
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
@@ -96,7 +95,6 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("async function restoreRendererSwitchState()");
     expect(mainSource).toContain("state.debugBeforeCapture = snapshot.debugBeforeCapture");
     expect(mainSource).toContain("await restoreRendererSwitchPose(snapshot.pose)");
-    expect(mainSource).toContain("await restoreRendererSwitchAccessory(snapshot.accessory)");
     expect(mainSource).toContain("restoreRendererSwitchCameraView(snapshot.cameraView)");
     expect(mainSource).toContain("camera.position.fromArray(view.position)");
     expect(mainSource).toContain("state.controls.target.fromArray(view.target)");
@@ -106,12 +104,10 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("loadOptions.folderFiles");
     expect(modelSource).toContain("loadOptions.folderModelFiles");
     expect(modelSource).toContain("loadOptions.folderTextureMap");
-    expect(pmmSource).toContain("folderTextureMap: textureMap");
     expect(modelSource).toContain("source instanceof window.File ? [source] : []");
     expect(modelSource).toContain("state.currentFolderFiles = files");
     expect(stateSource).toContain("currentFolderFiles: []");
     expect(stateSource).toContain("currentPoseSource: undefined");
-    expect(stateSource).toContain("currentAccessoryFile: undefined");
     expect(stateSource).toContain("currentBackgroundFiles: []");
     expect(modelSource).toContain("createViewerModelLoadOptions()");
     expect(modelSource).toContain("await applyViewerPipelineToModel(state.currentModel");
@@ -123,7 +119,6 @@ describe("example viewer source", () => {
     expect(rendererSwitchSource).toContain("snapshotCameraView()");
     expect(rendererSwitchSource).toContain("state.controls.target.toArray()");
     expect(rendererSwitchSource).toContain("snapshotAudio()");
-    expect(rendererSwitchSource).toContain("snapshotAccessory()");
     expect(rendererSwitchSource).toContain("debugSelfShadowEnabled: state.debugSelfShadowEnabled");
     expect(rendererSwitchSource).toContain("relativePath: file.webkitRelativePath || \"\"");
     expect(pipelineSource).not.toContain('from "../../../dist/webgpu/index.js"');
@@ -1108,43 +1103,20 @@ describe("example viewer source", () => {
     expect(serverSource).toContain('pathname.startsWith("/assets/")');
     expect(serverSource).toContain('return resolve(viewerRoot, "assets", relativePath)');
   });
-  it("loads .x accessory files and builds Three.js geometry", async () => {
-    const accessorySource = await readFile("examples/viewer/lib/accessory-loading.js", "utf8");
+
+  it("keeps PMM and accessory support parser-only", async () => {
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const html = await readFile("examples/viewer/index.html", "utf8");
 
-    expect(accessorySource).toContain('import { initCore, parseAccessory } from "../../../dist/parser/index.js"');
-    expect(accessorySource).toContain("function buildAccessoryGeometry(");
-    expect(accessorySource).toContain("function buildAccessoryMaterials(");
-    expect(accessorySource).toContain("function applyVacPlacement(");
-    expect(accessorySource).toContain("function loadAccessoryFile(");
-    expect(accessorySource).toContain("function clearAccessory()");
-    expect(mainSource).toContain("loadAccessoryFile");
-    expect(mainSource).toContain("clearAccessory");
-    expect(domSource).toContain("accessoryFileInput:");
-    expect(stateSource).toContain("currentAccessory:");
-    expect(html).toContain('id="accessory-load-category"');
-    expect(html).toContain('id="accessory-file"');
-  });
-
-  it("loads PMM project from a folder with model, motion, and audio resolution", async () => {
-    const pmmSource = await readFile("examples/viewer/lib/pmm-loading.js", "utf8");
-    const mainSource = await readFile("examples/viewer/main.js", "utf8");
-    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
-    const html = await readFile("examples/viewer/index.html", "utf8");
-
-    expect(pmmSource).toContain('import { parsePmmManifest } from "../../../dist/parser/index.js"');
-    expect(pmmSource).toContain('import { createMmdFileIndex } from "../../../dist/three/index.js"');
-    expect(pmmSource).toContain("function loadPmmFolder(");
-    expect(pmmSource).toContain("function findPmmFile(");
-    expect(pmmSource).toContain("function resolvePmmLoadPlan(");
-    expect(pmmSource).toContain("fileIndex.resolve(");
-    expect(mainSource).toContain("loadPmmFolder");
-    expect(domSource).toContain("pmmFolderInput:");
-    expect(html).toContain('id="choose-pmm-folder"');
-    expect(html).toContain('id="pmm-folder"');
+    expect(mainSource).not.toContain("loadPmmFolder");
+    expect(mainSource).not.toContain("loadAccessoryFile");
+    expect(domSource).not.toContain("pmmFolderInput:");
+    expect(domSource).not.toContain("accessoryFileInput:");
+    expect(stateSource).not.toContain("currentAccessory:");
+    expect(html).not.toContain('id="choose-pmm-folder"');
+    expect(html).not.toContain('id="accessory-load-category"');
   });
 
   it("shows bone detection results in the debug panel", async () => {
