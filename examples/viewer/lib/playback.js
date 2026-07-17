@@ -9,7 +9,7 @@ import {
   applyMmdSelfShadowStateToThreeDirectionalLight,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
-import { fitShadowCameraToObject } from "./scene-setup.js";
+import { updateShadowCameraForFrame } from "./scene-setup.js";
 import {
   isTslViewerPipeline,
   submitViewerRender,
@@ -34,6 +34,7 @@ export function render() {
 }
 
 export function renderStillFrame() {
+  state.selfShadowBoundsRefreshCountdown = 0;
   evaluateRuntime();
   updateColliderHelpers();
   state.controls.update();
@@ -57,7 +58,7 @@ export function evaluateRuntime(options) {
   }
   applyLightMotion();
   if (state.currentModel?.mesh) {
-    fitShadowCameraToObject(state.currentModel.mesh);
+    updateShadowCameraForFrame(state.currentModel.mesh);
   }
   applySelfShadowMotion();
   if (dom.timeline) {

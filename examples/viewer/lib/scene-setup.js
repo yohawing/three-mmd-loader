@@ -9,12 +9,17 @@ import { dom, updateChromeHeights } from "./dom.js";
 import { persistViewportSettings, state } from "./state.js";
 import { updateViewerPipelineStatus } from "./viewer-pipeline.js";
 
-const viewerSelfShadowQuality = {
+const viewerBaselineSelfShadowQuality = {
   mapSize: 4096,
   shadowIntensity: 1.0,
   bias: -0.00035,
   normalBias: 0.006
 };
+const viewerTslSelfShadowQuality = {
+  ...viewerBaselineSelfShadowQuality,
+  mapSize: 2048
+};
+const viewerTslShadowBoundsRefreshFrames = 6;
 
 // Supersampling (SSAA): render at a higher internal resolution then downsample.
 // MSAA (antialias: true) alone leaves the hard inverted-hull edge aliased on fine
@@ -94,7 +99,12 @@ export async function setupScene() {
   state.keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
   state.keyLight.position.set(3, 4, 5);
   state.keyLight.castShadow = state.debugSelfShadowEnabled;
-  configureMmdSelfShadowDirectionalLight(state.keyLight, viewerSelfShadowQuality);
+  configureMmdSelfShadowDirectionalLight(
+    state.keyLight,
+    state.viewerPipeline === "baseline-webgl"
+      ? viewerBaselineSelfShadowQuality
+      : viewerTslSelfShadowQuality
+  );
   state.keyLight.target.position.set(0, 0.9, 0);
   state.scene.add(state.keyLight.target);
   state.scene.add(state.keyLight);
@@ -175,7 +185,29 @@ export function fitShadowCameraToObject(object) {
   if (state.selfShadowBoundsScratch.isEmpty()) {
     return;
   }
+  state.selfShadowBoundsRefreshCountdown = shadowBoundsRefreshFrames() - 1;
   fitShadowCameraToBounds(state.selfShadowBoundsScratch);
+}
+
+export function updateShadowCameraForFrame(object) {
+  if (!state.keyLight) {
+    return;
+  }
+  if (state.selfShadowBoundsRefreshCountdown <= 0) {
+    state.selfShadowBoundsScratch.setFromObject(object);
+    state.selfShadowBoundsRefreshCountdown = shadowBoundsRefreshFrames() - 1;
+  } else {
+    state.selfShadowBoundsRefreshCountdown -= 1;
+  }
+  if (!state.selfShadowBoundsScratch.isEmpty()) {
+    fitShadowCameraToBounds(state.selfShadowBoundsScratch);
+  }
+}
+
+function shadowBoundsRefreshFrames() {
+  return state.viewerPipeline === "baseline-webgl"
+    ? 1
+    : viewerTslShadowBoundsRefreshFrames;
 }
 
 function fitShadowCameraToBounds(bounds) {

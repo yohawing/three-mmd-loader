@@ -108,6 +108,7 @@ export const state = {
   cameraUpScratch: new THREE.Vector3(),
   lightDirectionScratch: new THREE.Vector3(),
   selfShadowBoundsScratch: new THREE.Box3(),
+  selfShadowBoundsRefreshCountdown: 0,
   selfShadowStateScratch: {
     mode: 1,
     distance: 0.4
