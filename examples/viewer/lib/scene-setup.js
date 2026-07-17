@@ -63,7 +63,9 @@ export async function setupScene() {
   state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled;
   state.renderer.shadowMap.type = THREE.BasicShadowMap;
   if (state.viewerPipeline !== "baseline-webgl") {
-    state.renderer.shadowMap.transmitted = true;
+    // The TSL viewer uses a depth-only shadow proxy. Avoid the color attachment
+    // required by transmitted/colored shadows; toon tint remains receiver-side.
+    state.renderer.shadowMap.transmitted = false;
   }
   if (typeof state.renderer.init === "function") {
     await state.renderer.init();

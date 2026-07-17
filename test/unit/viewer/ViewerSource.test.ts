@@ -84,7 +84,7 @@ describe("example viewer source", () => {
     expect(sceneSetupSource).toContain('await import("three/webgpu")');
     expect(sceneSetupSource).toContain("new WebGPURenderer({");
     expect(sceneSetupSource).toContain('forceWebGL: state.viewerPipeline === "tsl-forcewebgl"');
-    expect(sceneSetupSource).toContain("state.renderer.shadowMap.transmitted = true");
+    expect(sceneSetupSource).toContain("state.renderer.shadowMap.transmitted = false");
     expect(sceneSetupSource).toContain("await state.renderer.init()");
     expect(mainSource).toContain("void initializeViewer();");
     expect(mainSource).toContain("await setupScene();");
@@ -126,6 +126,8 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("dom.pipelineBackendSwitcher.value = state.rendererBackend");
     expect(pipelineSource).toContain('dom.pipelineBackendSwitcher.setAttribute("value", state.rendererBackend)');
     expect(pipelineSource).toContain('replaceMmdModelMaterialsWithTsl(model.mesh, {');
+    expect(pipelineSource).toContain("createMmdTslShadowCaster(model.mesh);");
+    expect(pipelineSource).toContain("disposeMmdTslShadowCaster?.(model.mesh)");
     expect(pipelineSource).toContain("appendOutlineGroups: true");
     expect(pipelineSource).toContain("morphSplit: false");
     expect(pipelineSource).toContain("outline: false");

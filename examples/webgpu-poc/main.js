@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import * as TSL from "three/tsl";
-import { ThreeMmdLoader, createThreeBufferGeometry } from "/dist/three/index.js";
+import { MMD_SELF_SHADOW_LAYER, ThreeMmdLoader, createThreeBufferGeometry } from "/dist/three/index.js";
 import {
   computeMmdTslSparsePositionMorphs,
+  createMmdTslShadowCaster,
   createMmdTslToonMaterial,
   enableMmdTslSparsePositionMorphs,
   replaceMmdModelMaterialsWithTsl,
@@ -195,8 +196,14 @@ async function init() {
       replaceModelMaterialsWithFlatMaterials(model.mesh);
     }
     if (enableModelShadows) {
-      model.mesh.castShadow = true;
       model.mesh.receiveShadow = true;
+      if (sceneMode === "node-mmd-model" || sceneMode === "node-mmd-outline-groups") {
+        createMmdTslShadowCaster(model.mesh);
+        light.shadow.camera.layers.set(MMD_SELF_SHADOW_LAYER);
+        renderer.shadowMap.transmitted = false;
+      } else {
+        model.mesh.castShadow = true;
+      }
     }
     model.root.position.y = 0;
     scene.add(model.root);
@@ -301,6 +308,8 @@ function createReadyStatus() {
     scene.getObjectByName("node-slot-cube");
   const materialCount = Array.isArray(primaryMesh?.material) ? primaryMesh.material.length : 1;
   const groupCount = primaryMesh?.geometry.groups.length ?? 0;
+  const shadowCaster = findTslShadowCaster(scene);
+  const shadowGroupCount = shadowCaster?.geometry.groups.length ?? 0;
   return [
     `backend=${backend}`,
     `scene=${sceneMode}`,
@@ -313,10 +322,22 @@ function createReadyStatus() {
     `meshes=${meshCount}`,
     `materials=${materialCount}`,
     `groups=${groupCount}`,
+    `shadowGroups=${shadowGroupCount}`,
     `rendererBackend=${renderer.backend?.isWebGPUBackend === true ? "native-webgpu" : backend}`,
     `compute=${computeStatus}`,
     "ready"
   ].join("\n");
+}
+
+function findTslShadowCaster(object) {
+  if (object.userData?.mmdTslShadowCaster) {
+    return object;
+  }
+  for (const child of object.children) {
+    const match = findTslShadowCaster(child);
+    if (match) return match;
+  }
+  return undefined;
 }
 
 function countMeshes(object) {

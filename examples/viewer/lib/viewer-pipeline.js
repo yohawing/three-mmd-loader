@@ -9,6 +9,8 @@ const lightDirectionScratch = new THREE.Vector3();
 const syncedLightToonCoordinateOffset = 0.5;
 let webgpuPipelineModulePromise;
 let replaceMmdModelMaterialsWithTsl;
+let createMmdTslShadowCaster;
+let disposeMmdTslShadowCaster;
 let syncMmdTslMaterialState;
 let computeMmdTslSparsePositionMorphs;
 let disposeMmdTslSparsePositionMorphs;
@@ -33,13 +35,14 @@ export async function applyViewerPipelineToModel(model, label) {
   state.pipelineModelName = label || model.mesh.name || "model";
   if (isTslViewerPipeline()) {
     await loadWebgpuPipelineModule();
+    if (state.renderer?.backend?.isWebGPUBackend === true) {
+      enableMmdTslSparsePositionMorphs(model.mesh);
+    }
     replaceMmdModelMaterialsWithTsl(model.mesh, {
       appendOutlineGroups: true,
       respectMaterialShadowFlags: true
     });
-    if (state.renderer?.backend?.isWebGPUBackend === true) {
-      enableMmdTslSparsePositionMorphs(model.mesh);
-    }
+    createMmdTslShadowCaster(model.mesh);
     syncTslMaterialStates(model.mesh.material);
     syncTslMaterialLight(model.mesh.material);
   }
@@ -94,10 +97,12 @@ export function submitViewerRender() {
 }
 
 export function disposeViewerPipelineModel(model) {
-  if (!disposeMmdTslSparsePositionMorphs || !model?.mesh) {
+  if (!model?.mesh) {
     return false;
   }
-  return disposeMmdTslSparsePositionMorphs(model.mesh);
+  const disposedCaster = disposeMmdTslShadowCaster?.(model.mesh) ?? false;
+  const disposedSparseMorphs = disposeMmdTslSparsePositionMorphs?.(model.mesh) ?? false;
+  return disposedCaster || disposedSparseMorphs;
 }
 
 export function setCurrentModelTslOutlineHidden(hidden) {
@@ -251,6 +256,8 @@ async function loadWebgpuPipelineModule() {
   if (!webgpuPipelineModulePromise) {
     webgpuPipelineModulePromise = import("../../../dist/webgpu/index.js").then((module) => {
       replaceMmdModelMaterialsWithTsl = module.replaceMmdModelMaterialsWithTsl;
+      createMmdTslShadowCaster = module.createMmdTslShadowCaster;
+      disposeMmdTslShadowCaster = module.disposeMmdTslShadowCaster;
       syncMmdTslMaterialState = module.syncMmdTslMaterialState;
       computeMmdTslSparsePositionMorphs = module.computeMmdTslSparsePositionMorphs;
       disposeMmdTslSparsePositionMorphs = module.disposeMmdTslSparsePositionMorphs;

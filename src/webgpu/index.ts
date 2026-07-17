@@ -14,6 +14,12 @@ export {
 } from "./material-assembly.js";
 
 export {
+  createMmdTslShadowCaster,
+  disposeMmdTslShadowCaster,
+  type CreateMmdTslShadowCasterOptions
+} from "./shadow-caster.js";
+
+export {
   computeMmdTslSparsePositionMorphs,
   disposeMmdTslSparsePositionMorphs,
   enableMmdTslSparsePositionMorphs

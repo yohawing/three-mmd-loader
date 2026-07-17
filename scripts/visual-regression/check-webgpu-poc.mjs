@@ -71,10 +71,10 @@ async function main() {
       { name: "webgl-mmd-specular-model-baseline", backend: "webgl", scene: "model", model: bdefSkinningModel, spin: false },
       { name: "forcewebgl-node-mmd-specular-model", backend: "forcewebgl", scene: "node-mmd-model", model: bdefSkinningModel, spin: false },
       { name: "webgl-mmd-self-shadow-body-baseline", backend: "webgl", scene: "model", model: selfShadowBodyModel, spin: false, shadow: true, view: "self-shadow-body" },
-      { name: "forcewebgl-node-mmd-self-shadow-body", backend: "forcewebgl", scene: "node-mmd-model", model: selfShadowBodyModel, spin: false, shadow: true, view: "self-shadow-body" },
+      { name: "forcewebgl-node-mmd-self-shadow-body", backend: "forcewebgl", scene: "node-mmd-model", model: selfShadowBodyModel, spin: false, shadow: true, view: "self-shadow-body", expectedShadowGroups: 1 },
       { name: "webgl-mmd-self-shadow-black-toon-baseline", backend: "webgl", scene: "model", model: selfShadowBlackToonModel, spin: false, shadow: true, view: "self-shadow-body" },
-      { name: "forcewebgl-node-mmd-self-shadow-black-toon", backend: "forcewebgl", scene: "node-mmd-model", model: selfShadowBlackToonModel, spin: false, shadow: true, view: "self-shadow-body" },
-      { name: "forcewebgl-node-mmd-self-shadow-outline-groups", backend: "forcewebgl", scene: "node-mmd-outline-groups", model: selfShadowBodyModel, spin: false, shadow: true, view: "self-shadow-body", expectedGroups: 4 },
+      { name: "forcewebgl-node-mmd-self-shadow-black-toon", backend: "forcewebgl", scene: "node-mmd-model", model: selfShadowBlackToonModel, spin: false, shadow: true, view: "self-shadow-body", expectedShadowGroups: 1 },
+      { name: "forcewebgl-node-mmd-self-shadow-outline-groups", backend: "forcewebgl", scene: "node-mmd-outline-groups", model: selfShadowBodyModel, spin: false, shadow: true, view: "self-shadow-body", expectedGroups: 4, expectedShadowGroups: 1 },
       { name: "forcewebgl-node-mmd-alpha-outline-groups", backend: "forcewebgl", scene: "node-mmd-outline-groups", model: visualAlphaBlendModel, spin: false, expectedGroups: 4 },
       { name: "webgl-mmd-outline-baseline", backend: "webgl", scene: "model", model: visualOutlineModel, spin: false, outline: true },
       { name: "forcewebgl-node-mmd-outline-model", backend: "forcewebgl", scene: "node-mmd-outline-groups", model: visualOutlineModel, spin: false, expectedGroups: 2 },
@@ -146,7 +146,7 @@ async function main() {
       cases.push({ name: "webgpu-node-custom-skinning", backend: "webgpu", scene: "node-custom-skinning", expectedGroups: 1, optional: true });
       cases.push({ name: "webgpu-node-mmd-model", backend: "webgpu", scene: "node-mmd-model", spin: false, optional: true });
       cases.push({ name: "webgpu-node-mmd-outline-groups", backend: "webgpu", scene: "node-mmd-outline-groups", spin: false, expectedGroups: 2, optional: true });
-      cases.push({ name: "webgpu-node-mmd-self-shadow-outline-groups", backend: "webgpu", scene: "node-mmd-outline-groups", model: selfShadowBodyModel, spin: false, shadow: true, view: "self-shadow-body", expectedGroups: 4, optional: true });
+      cases.push({ name: "webgpu-node-mmd-self-shadow-outline-groups", backend: "webgpu", scene: "node-mmd-outline-groups", model: selfShadowBodyModel, spin: false, shadow: true, view: "self-shadow-body", expectedGroups: 4, expectedShadowGroups: 1, optional: true });
       cases.push({ name: "webgpu-node-mmd-alpha-outline-groups", backend: "webgpu", scene: "node-mmd-outline-groups", model: visualAlphaBlendModel, spin: false, expectedGroups: 4, optional: true });
       cases.push({ name: "webgpu-node-custom-sdef-skinning", backend: "webgpu", scene: "node-custom-skinning", model: sdefSkinningModel, optional: true });
       cases.push({ name: "webgpu-node-sdef-skinning", backend: "webgpu", scene: "node-sdef-skinning", model: sdefSkinningModel, motion: bendMotion, spin: false, optional: true });
@@ -331,7 +331,8 @@ async function checkCaseWithBrowser(browser, origin, checkCase, outputDir) {
     const statusPass = status.includes("ready") &&
       status.includes(`scene=${checkCase.scene}`) &&
       (checkCase.expectedStatus === undefined || status.includes(checkCase.expectedStatus)) &&
-      (checkCase.expectedGroups === undefined || status.includes(`groups=${checkCase.expectedGroups}`));
+      (checkCase.expectedGroups === undefined || status.includes(`groups=${checkCase.expectedGroups}`)) &&
+      (checkCase.expectedShadowGroups === undefined || status.includes(`shadowGroups=${checkCase.expectedShadowGroups}`));
     const imagePass = stats.variedSamples > 100;
     const orderingPass = checkCase.scene !== "ordering" || stats.center.g > stats.center.r + 6;
     const tintPass =
