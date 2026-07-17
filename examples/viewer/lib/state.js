@@ -21,11 +21,7 @@ const initialSplitImpulsePenetrationThreshold = parseDebugNumber(
   query.get("splitImpulsePenetrationThreshold"),
   -0.04
 );
-const initialSelfShadowEnabled = query.get("selfShadow") === "1"
-  ? true
-  : query.get("selfShadow") === "0"
-    ? false
-    : initialViewerPipeline === "baseline-webgl";
+const initialSelfShadowEnabled = query.get("selfShadow") !== "0";
 const initialPhysicsEnabled = query.get("physics") === "0" ? false : true;
 
 export const state = {

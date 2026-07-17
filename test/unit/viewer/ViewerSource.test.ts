@@ -76,7 +76,7 @@ describe("example viewer source", () => {
     expect(stateSource).toContain('backend === "webgl"');
     expect(stateSource).toContain('backend === "forcewebgl"');
     expect(stateSource).toContain('backend === "webgpu"');
-    expect(stateSource).toContain('initialViewerPipeline === "baseline-webgl"');
+    expect(stateSource).toContain('query.get("selfShadow") !== "0"');
     expect(sceneSetupSource).toContain("export async function setupScene()");
     expect(sceneSetupSource).toContain("const viewerTslSupersample = 1;");
     expect(sceneSetupSource).toContain('state.viewerPipeline === "baseline-webgl"');
