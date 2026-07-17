@@ -4,6 +4,7 @@ import * as THREE from "three/webgpu";
 import { createThreeBufferGeometry } from "../../../src/three/geometry.js";
 import {
   computeMmdTslSparsePositionMorphs,
+  disposeMmdTslSparsePositionMorphs,
   enableMmdTslSparsePositionMorphs
 } from "../../../src/webgpu/sparse-morph-runtime.js";
 
@@ -51,6 +52,50 @@ describe("sparse position morph runtime", () => {
         mesh
       )
     ).toThrow("MMD_TSL_SPARSE_POSITION_MORPH_REQUIRES_WEBGPU");
+  });
+
+  it("restores original attributes and morph attributes through idempotent cleanup", () => {
+    const mesh = createMesh();
+    const position = mesh.geometry.getAttribute("position");
+    const uv = mesh.geometry.getAttribute("uv");
+    const uv1 = mesh.geometry.getAttribute("uv1");
+    const positionMorphs = mesh.geometry.morphAttributes.position;
+    const uvMorphs = mesh.geometry.morphAttributes.uv;
+    const uv1Morphs = mesh.geometry.morphAttributes.uv1;
+
+    expect(enableMmdTslSparsePositionMorphs(mesh)).toBe(true);
+    const compute = vi.fn();
+    computeMmdTslSparsePositionMorphs({ backend: { isWebGPUBackend: true }, compute }, mesh);
+    const submittedNodes = compute.mock.calls[0]?.[0];
+    const computeNodes = Array.isArray(submittedNodes) ? submittedNodes : [submittedNodes];
+    const nodeDisposeSpies = computeNodes
+      .filter((node): node is THREE.Node => node != null)
+      .map((node) => vi.spyOn(node, "dispose"));
+    const outputAttributeDisposeSpies = ["position", "uv", "uv1"]
+      .map((name) => mesh.geometry.getAttribute(name))
+      .filter((attribute): attribute is THREE.BufferAttribute => attribute != null)
+      .map((attribute) => vi.spyOn(attribute, "dispose"));
+
+    expect(disposeMmdTslSparsePositionMorphs(mesh)).toBe(true);
+    expect(mesh.geometry.getAttribute("position")).toBe(position);
+    expect(mesh.geometry.getAttribute("uv")).toBe(uv);
+    expect(mesh.geometry.getAttribute("uv1")).toBe(uv1);
+    expect(mesh.geometry.morphAttributes.position).toBe(positionMorphs);
+    expect(mesh.geometry.morphAttributes.uv).toBe(uvMorphs);
+    expect(mesh.geometry.morphAttributes.uv1).toBe(uv1Morphs);
+    for (const disposeSpy of nodeDisposeSpies) {
+      expect(disposeSpy).toHaveBeenCalledOnce();
+    }
+    for (const disposeSpy of outputAttributeDisposeSpies) {
+      expect(disposeSpy).toHaveBeenCalledOnce();
+    }
+    expect(disposeMmdTslSparsePositionMorphs(mesh)).toBe(false);
+    expect(
+      computeMmdTslSparsePositionMorphs(
+        { backend: { isWebGPUBackend: true }, compute: vi.fn() },
+        mesh
+      )
+    ).toBe(false);
   });
 
   it("leaves meshes without position morph entries unchanged", () => {

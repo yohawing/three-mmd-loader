@@ -11,6 +11,7 @@ let webgpuPipelineModulePromise;
 let replaceMmdModelMaterialsWithTsl;
 let syncMmdTslMaterialState;
 let computeMmdTslSparsePositionMorphs;
+let disposeMmdTslSparsePositionMorphs;
 let enableMmdTslSparsePositionMorphs;
 
 export function isTslViewerPipeline() {
@@ -81,6 +82,22 @@ export function computeCurrentModelTslSparsePositionMorphs() {
     return false;
   }
   return computeMmdTslSparsePositionMorphs(state.renderer, state.currentModel.mesh);
+}
+
+export function submitViewerRender() {
+  computeCurrentModelTslSparsePositionMorphs();
+  if (!state.renderer || !state.scene || !state.camera) {
+    return false;
+  }
+  state.renderer.render(state.scene, state.camera);
+  return true;
+}
+
+export function disposeViewerPipelineModel(model) {
+  if (!disposeMmdTslSparsePositionMorphs || !model?.mesh) {
+    return false;
+  }
+  return disposeMmdTslSparsePositionMorphs(model.mesh);
 }
 
 export function setCurrentModelTslOutlineHidden(hidden) {
@@ -236,6 +253,7 @@ async function loadWebgpuPipelineModule() {
       replaceMmdModelMaterialsWithTsl = module.replaceMmdModelMaterialsWithTsl;
       syncMmdTslMaterialState = module.syncMmdTslMaterialState;
       computeMmdTslSparsePositionMorphs = module.computeMmdTslSparsePositionMorphs;
+      disposeMmdTslSparsePositionMorphs = module.disposeMmdTslSparsePositionMorphs;
       enableMmdTslSparsePositionMorphs = module.enableMmdTslSparsePositionMorphs;
       return module;
     });

@@ -138,6 +138,12 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("export function setCurrentModelTslOutlineHidden(hidden)");
     expect(pipelineSource).toContain("material.visible = !state.debugOutlineHidden && runtimeVisible");
     expect(pipelineSource).toContain("setTslOutlineMaterialHidden(material, hidden)");
+    expect(pipelineSource).toContain("export function submitViewerRender()");
+    expect(pipelineSource).toContain("computeCurrentModelTslSparsePositionMorphs();");
+    expect(debugSource).toContain("submitViewerRender();");
+    expect(debugSource).not.toContain("state.renderer.render(state.scene, state.camera)");
+    expect(playbackSource).toContain("submitViewerRender();");
+    expect(playbackSource).not.toContain("state.renderer.render(state.scene, state.camera)");
     expect(pipelineSource).not.toContain("Array.isArray(material) ? material : [material]");
     expect(debugSource).toContain("setCurrentModelTslOutlineHidden(state.debugOutlineHidden)");
     expect(playbackSource).toContain("syncCurrentModelTslLight()");
@@ -1001,7 +1007,7 @@ describe("example viewer source", () => {
     expect(html).toContain("Capture");
     expect(domSource).toContain('debugCaptureButton: document.querySelector("#debug-capture-button")');
     expect(debugSource).toContain("export function captureCanvas()");
-    expect(debugSource).toContain("state.renderer.render(state.scene, state.camera)");
+    expect(debugSource).toContain("submitViewerRender();");
     expect(debugSource).toContain('state.renderer.domElement.toDataURL("image/png")');
     expect(debugSource).toContain("link.download =");
     expect(debugSource).toContain("link.click()");

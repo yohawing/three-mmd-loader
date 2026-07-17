@@ -15,5 +15,6 @@ export {
 
 export {
   computeMmdTslSparsePositionMorphs,
+  disposeMmdTslSparsePositionMorphs,
   enableMmdTslSparsePositionMorphs
 } from "./sparse-morph-runtime.js";

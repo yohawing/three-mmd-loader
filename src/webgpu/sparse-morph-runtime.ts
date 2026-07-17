@@ -12,6 +12,15 @@ interface MmdSparsePositionMorphState {
   readonly computeNodes: THREE.Node[];
   readonly weights: Float32Array;
   readonly weightsAttributes: THREE.BufferAttribute[];
+  readonly storageAttributes: THREE.BufferAttribute[];
+  readonly replacedAttributes: MmdSparseMorphAttributeState[];
+}
+
+interface MmdSparseMorphAttributeState {
+  readonly name: string;
+  readonly attribute: THREE.BufferAttribute;
+  readonly morphAttributes: THREE.BufferAttribute[] | undefined;
+  readonly hadMorphAttributes: boolean;
 }
 
 interface MmdWebGpuRenderer {
@@ -35,18 +44,32 @@ export function enableMmdTslSparsePositionMorphs(mesh: THREE.SkinnedMesh): boole
   const vertexCount = position.count;
   const weights = new Float32Array(morphs.length);
   const weightsAttributes: THREE.BufferAttribute[] = [];
+  const storageAttributes: THREE.BufferAttribute[] = [];
   const computeNodes: THREE.Node[] = [];
+  const replacedAttributes: MmdSparseMorphAttributeState[] = [];
   const packedPosition = packMmdPositionMorphsToVertexCsr(vertexCount, morphs);
   if (packedPosition.morphIndices.length > 0) {
     const output = createSparseMorphCompute(position as THREE.BufferAttribute, packedPosition, weights, "vec3");
+    replacedAttributes.push(captureSparseMorphAttribute(mesh.geometry, "position", position as THREE.BufferAttribute));
     mesh.geometry.setAttribute("position", output.attribute);
     mesh.geometry.morphAttributes.position = [];
     computeNodes.push(output.computeNode);
     weightsAttributes.push(output.weightsAttribute);
+    storageAttributes.push(...output.storageAttributes);
   }
   const uv = mesh.geometry.getAttribute("uv");
   if (uv?.array instanceof Float32Array) {
-    appendUvCompute(mesh.geometry, "uv", uv as THREE.BufferAttribute, packMmdUvMorphsToVertexCsr(vertexCount, morphs), weights, computeNodes, weightsAttributes);
+    appendUvCompute(
+      mesh.geometry,
+      "uv",
+      uv as THREE.BufferAttribute,
+      packMmdUvMorphsToVertexCsr(vertexCount, morphs),
+      weights,
+      computeNodes,
+      weightsAttributes,
+      storageAttributes,
+      replacedAttributes
+    );
   }
   for (let uvIndex = 0; uvIndex < 4; uvIndex += 1) {
     const attributeName = `uv${uvIndex + 1}`;
@@ -59,7 +82,9 @@ export function enableMmdTslSparsePositionMorphs(mesh: THREE.SkinnedMesh): boole
         packMmdUvMorphsToVertexCsr(vertexCount, morphs, uvIndex),
         weights,
         computeNodes,
-        weightsAttributes
+        weightsAttributes,
+        storageAttributes,
+        replacedAttributes
       );
     }
   }
@@ -67,8 +92,43 @@ export function enableMmdTslSparsePositionMorphs(mesh: THREE.SkinnedMesh): boole
   sparsePositionMorphStates.set(mesh, {
     computeNodes,
     weights,
-    weightsAttributes
+    weightsAttributes,
+    storageAttributes,
+    replacedAttributes
   });
+  return true;
+}
+
+/** Restores the replaced dense attributes and disposes the public compute nodes. */
+export function disposeMmdTslSparsePositionMorphs(mesh: THREE.SkinnedMesh): boolean {
+  const state = sparsePositionMorphStates.get(mesh);
+  if (!state) {
+    return false;
+  }
+  const morphAttributes = mesh.geometry.morphAttributes as Record<string, THREE.BufferAttribute[] | undefined>;
+  for (const replacedAttribute of state.replacedAttributes) {
+    mesh.geometry.setAttribute(replacedAttribute.name, replacedAttribute.attribute);
+    if (replacedAttribute.hadMorphAttributes) {
+      morphAttributes[replacedAttribute.name] = replacedAttribute.morphAttributes;
+    } else {
+      delete morphAttributes[replacedAttribute.name];
+    }
+  }
+  // Node.dispose() is the supported Three.js lifecycle hook for compute-node
+  // bindings and pipelines. StorageBufferAttribute has no public dispose API;
+  // after restoring the geometry and dropping this state, those temporary
+  // attributes are no longer strongly reachable by this integration.
+  for (const computeNode of state.computeNodes) {
+    computeNode.dispose();
+  }
+  for (const storageAttribute of state.storageAttributes) {
+    storageAttribute.dispose();
+  }
+  state.computeNodes.length = 0;
+  state.weightsAttributes.length = 0;
+  state.storageAttributes.length = 0;
+  state.replacedAttributes.length = 0;
+  sparsePositionMorphStates.delete(mesh);
   return true;
 }
 
@@ -102,15 +162,32 @@ function appendUvCompute(
   packed: MmdPositionMorphCsr,
   weights: Float32Array,
   computeNodes: THREE.Node[],
-  weightsAttributes: THREE.BufferAttribute[]
+  weightsAttributes: THREE.BufferAttribute[],
+  storageAttributes: THREE.BufferAttribute[],
+  replacedAttributes: MmdSparseMorphAttributeState[]
 ): void {
   if (packed.morphIndices.length === 0) return;
   const nodeType = base.itemSize === 2 ? "vec2" : "vec4";
   const output = createSparseMorphCompute(base, packed, weights, nodeType);
+  replacedAttributes.push(captureSparseMorphAttribute(geometry, attributeName, base));
   geometry.setAttribute(attributeName, output.attribute);
   (geometry.morphAttributes as Record<string, THREE.BufferAttribute[]>)[attributeName] = [];
   computeNodes.push(output.computeNode);
   weightsAttributes.push(output.weightsAttribute);
+  storageAttributes.push(...output.storageAttributes);
+}
+
+function captureSparseMorphAttribute(
+  geometry: THREE.BufferGeometry,
+  name: string,
+  attribute: THREE.BufferAttribute
+): MmdSparseMorphAttributeState {
+  return {
+    name,
+    attribute,
+    morphAttributes: (geometry.morphAttributes as Record<string, THREE.BufferAttribute[]>)[name],
+    hadMorphAttributes: Object.prototype.hasOwnProperty.call(geometry.morphAttributes, name)
+  };
 }
 
 function createSparseMorphCompute(
@@ -118,7 +195,12 @@ function createSparseMorphCompute(
   packed: MmdPositionMorphCsr,
   weights: Float32Array,
   nodeType: "vec2" | "vec3" | "vec4"
-): { readonly attribute: THREE.BufferAttribute; readonly computeNode: THREE.Node; readonly weightsAttribute: THREE.BufferAttribute } {
+): {
+  readonly attribute: THREE.BufferAttribute;
+  readonly computeNode: THREE.Node;
+  readonly weightsAttribute: THREE.BufferAttribute;
+  readonly storageAttributes: THREE.BufferAttribute[];
+} {
   if (nodeType === "vec2") return createVec2MorphCompute(base, packed, weights);
   if (nodeType === "vec3") return createVec3MorphCompute(base, packed, weights);
   return createVec4MorphCompute(base, packed, weights);
@@ -130,10 +212,14 @@ function createVec2MorphCompute(
   weights: Float32Array
 ) {
   const weightStorage = TSL.attributeArray(weights, "float");
-  const baseValues = TSL.attributeArray(base.array as Float32Array, "vec2").toReadOnly();
-  const rowOffsets = TSL.attributeArray(packed.rowOffsets, "uint").toReadOnly();
-  const morphIndices = TSL.attributeArray(packed.morphIndices, "uint").toReadOnly();
-  const values = TSL.attributeArray(packed.values, "vec2").toReadOnly();
+  const baseStorage = TSL.attributeArray(base.array as Float32Array, "vec2");
+  const rowOffsetStorage = TSL.attributeArray(packed.rowOffsets, "uint");
+  const morphIndexStorage = TSL.attributeArray(packed.morphIndices, "uint");
+  const valueStorage = TSL.attributeArray(packed.values, "vec2");
+  const baseValues = baseStorage.toReadOnly();
+  const rowOffsets = rowOffsetStorage.toReadOnly();
+  const morphIndices = morphIndexStorage.toReadOnly();
+  const values = valueStorage.toReadOnly();
   const outputValues = TSL.attributeArray(base.count, "vec2");
   const computeNode = TSL.Fn(() => {
     const vertexIndex = TSL.instanceIndex;
@@ -147,7 +233,19 @@ function createVec2MorphCompute(
     );
     outputValues.element(vertexIndex).assign(baseValues.element(vertexIndex).add(delta));
   })().compute(base.count);
-  return { attribute: outputValues.value as THREE.BufferAttribute, computeNode, weightsAttribute: weightStorage.value as THREE.BufferAttribute };
+  return {
+    attribute: outputValues.value as THREE.BufferAttribute,
+    computeNode,
+    weightsAttribute: weightStorage.value as THREE.BufferAttribute,
+    storageAttributes: [
+      weightStorage.value,
+      baseStorage.value,
+      rowOffsetStorage.value,
+      morphIndexStorage.value,
+      valueStorage.value,
+      outputValues.value
+    ] as THREE.BufferAttribute[]
+  };
 }
 
 function createVec3MorphCompute(
@@ -156,10 +254,14 @@ function createVec3MorphCompute(
   weights: Float32Array
 ) {
   const weightStorage = TSL.attributeArray(weights, "float");
-  const baseValues = TSL.attributeArray(base.array as Float32Array, "vec3").toReadOnly();
-  const rowOffsets = TSL.attributeArray(packed.rowOffsets, "uint").toReadOnly();
-  const morphIndices = TSL.attributeArray(packed.morphIndices, "uint").toReadOnly();
-  const values = TSL.attributeArray(packed.values, "vec3").toReadOnly();
+  const baseStorage = TSL.attributeArray(base.array as Float32Array, "vec3");
+  const rowOffsetStorage = TSL.attributeArray(packed.rowOffsets, "uint");
+  const morphIndexStorage = TSL.attributeArray(packed.morphIndices, "uint");
+  const valueStorage = TSL.attributeArray(packed.values, "vec3");
+  const baseValues = baseStorage.toReadOnly();
+  const rowOffsets = rowOffsetStorage.toReadOnly();
+  const morphIndices = morphIndexStorage.toReadOnly();
+  const values = valueStorage.toReadOnly();
   const outputValues = TSL.attributeArray(base.count, "vec3");
   const computeNode = TSL.Fn(() => {
     const vertexIndex = TSL.instanceIndex;
@@ -173,7 +275,19 @@ function createVec3MorphCompute(
     );
     outputValues.element(vertexIndex).assign(baseValues.element(vertexIndex).add(delta));
   })().compute(base.count);
-  return { attribute: outputValues.value as THREE.BufferAttribute, computeNode, weightsAttribute: weightStorage.value as THREE.BufferAttribute };
+  return {
+    attribute: outputValues.value as THREE.BufferAttribute,
+    computeNode,
+    weightsAttribute: weightStorage.value as THREE.BufferAttribute,
+    storageAttributes: [
+      weightStorage.value,
+      baseStorage.value,
+      rowOffsetStorage.value,
+      morphIndexStorage.value,
+      valueStorage.value,
+      outputValues.value
+    ] as THREE.BufferAttribute[]
+  };
 }
 
 function createVec4MorphCompute(
@@ -182,10 +296,14 @@ function createVec4MorphCompute(
   weights: Float32Array
 ) {
   const weightStorage = TSL.attributeArray(weights, "float");
-  const baseValues = TSL.attributeArray(base.array as Float32Array, "vec4").toReadOnly();
-  const rowOffsets = TSL.attributeArray(packed.rowOffsets, "uint").toReadOnly();
-  const morphIndices = TSL.attributeArray(packed.morphIndices, "uint").toReadOnly();
-  const values = TSL.attributeArray(packed.values, "vec4").toReadOnly();
+  const baseStorage = TSL.attributeArray(base.array as Float32Array, "vec4");
+  const rowOffsetStorage = TSL.attributeArray(packed.rowOffsets, "uint");
+  const morphIndexStorage = TSL.attributeArray(packed.morphIndices, "uint");
+  const valueStorage = TSL.attributeArray(packed.values, "vec4");
+  const baseValues = baseStorage.toReadOnly();
+  const rowOffsets = rowOffsetStorage.toReadOnly();
+  const morphIndices = morphIndexStorage.toReadOnly();
+  const values = valueStorage.toReadOnly();
   const outputValues = TSL.attributeArray(base.count, "vec4");
   const computeNode = TSL.Fn(() => {
     const vertexIndex = TSL.instanceIndex;
@@ -199,5 +317,17 @@ function createVec4MorphCompute(
     );
     outputValues.element(vertexIndex).assign(baseValues.element(vertexIndex).add(delta));
   })().compute(base.count);
-  return { attribute: outputValues.value as THREE.BufferAttribute, computeNode, weightsAttribute: weightStorage.value as THREE.BufferAttribute };
+  return {
+    attribute: outputValues.value as THREE.BufferAttribute,
+    computeNode,
+    weightsAttribute: weightStorage.value as THREE.BufferAttribute,
+    storageAttributes: [
+      weightStorage.value,
+      baseStorage.value,
+      rowOffsetStorage.value,
+      morphIndexStorage.value,
+      valueStorage.value,
+      outputValues.value
+    ] as THREE.BufferAttribute[]
+  };
 }

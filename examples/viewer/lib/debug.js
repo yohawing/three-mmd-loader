@@ -4,7 +4,7 @@ import { dom } from "./dom.js";
 import { normalizeMaterials } from "./dispose.js";
 import { evaluateRuntime } from "./playback.js";
 import { debugEnabled, state } from "./state.js";
-import { setCurrentModelTslOutlineHidden } from "./viewer-pipeline.js";
+import { setCurrentModelTslOutlineHidden, submitViewerRender } from "./viewer-pipeline.js";
 
 export function createViewerDebugApi() {
   return {
@@ -31,13 +31,13 @@ export function createViewerDebugApi() {
     },
     showColliders() {
       showColliderHelpers();
-      state.renderer.render(state.scene, state.camera);
+      submitViewerRender();
       refreshDebugPanelState();
       return "collider helpers enabled";
     },
     hideColliders() {
       hideColliderHelpers();
-      state.renderer.render(state.scene, state.camera);
+      submitViewerRender();
       refreshDebugPanelState();
       return "collider helpers hidden";
     },
@@ -49,7 +49,7 @@ export function createViewerDebugApi() {
       evaluateRuntime(options);
       state.controls.update();
       updateColliderHelpers();
-      state.renderer.render(state.scene, state.camera);
+      submitViewerRender();
       return this.state();
     },
     state() {
@@ -235,7 +235,7 @@ export function toggleColliderHelpers() {
     showColliderHelpers();
   }
   state.showDebugColliders = state.debugCollidersVisible;
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   return state.debugCollidersVisible;
 }
 
@@ -250,7 +250,7 @@ export function setDebugMaterialMode(mode) {
       mesh.material = normalMaterial;
     }
   }
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   refreshDebugPanelState();
   return state.debugMaterialMode;
 }
@@ -261,7 +261,7 @@ export function setOutlineHidden(hidden) {
     outline.visible = !state.debugOutlineHidden;
   });
   setCurrentModelTslOutlineHidden(state.debugOutlineHidden);
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   refreshDebugPanelState();
   return state.debugOutlineHidden;
 }
@@ -279,7 +279,7 @@ export function setSelfShadowEnabled(enabled) {
     state.runtimePhysicsDisabledOptionsScratch.physics = false;
     evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
   }
-  state.renderer?.render(state.scene, state.camera);
+  submitViewerRender();
   refreshDebugPanelState();
   return state.debugSelfShadowEnabled;
 }
@@ -344,7 +344,7 @@ export function captureCanvas() {
   if (!state.renderer || !state.scene || !state.camera) {
     return;
   }
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   const dataUrl = state.renderer.domElement.toDataURL("image/png");
   const frame = Math.round(state.elapsedSeconds * (state.mmdFrameRate ?? 30));
   const modelName = state.currentModel?.mesh.name ?? "capture";
@@ -359,7 +359,7 @@ export function markBeforeCapture() {
   if (!state.renderer || !state.scene || !state.camera) {
     return;
   }
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   state.debugBeforeCapture = state.renderer.domElement.toDataURL("image/png");
   refreshDebugPanelState();
 }
@@ -368,7 +368,7 @@ export function captureAfterAndCompare() {
   if (!state.renderer || !state.scene || !state.camera || !state.debugBeforeCapture) {
     return;
   }
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   const afterDataUrl = state.renderer.domElement.toDataURL("image/png");
   showComparisonOverlay(state.debugBeforeCapture, afterDataUrl);
 }

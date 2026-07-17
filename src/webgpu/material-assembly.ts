@@ -28,6 +28,18 @@ interface MmdSphereMapUserData {
   texture?: THREE.Texture;
 }
 
+interface MmdTslTextureReferences {
+  readonly diffuseMap?: THREE.Texture;
+  readonly toonMap?: THREE.Texture;
+  readonly sphereMap?: THREE.Texture;
+}
+
+interface MmdSourceMaterialDisposalState {
+  disposed: boolean;
+}
+
+const sourceMaterialDisposalStates = new WeakMap<THREE.Material, MmdSourceMaterialDisposalState>();
+
 export interface MmdTslMaterialAssemblyOptions {
   readonly respectMaterialShadowFlags?: boolean;
   readonly appendOutlineGroups?: boolean;
@@ -44,19 +56,21 @@ export function createMmdTslMaterialFromSource(
   sourceMaterial: THREE.Material,
   options: MmdTslMaterialAssemblyOptions = {}
 ): THREE.MeshToonNodeMaterial {
-  const source = sourceMaterial as MmdSourceMaterial;
   const metadata = readMmdMaterialMetadata(sourceMaterial);
-  const sphereTexture = readMmdSphereTexture(sourceMaterial);
+  const textures = readMmdTslTextureReferences(sourceMaterial);
   const material = createMmdTslToonMaterial({
     diffuse: readVec3(metadata.diffuse, [1, 1, 1]),
     ambient: readVec3(metadata.ambient, [0, 0, 0]),
     specular: readVec3(metadata.specular, [0, 0, 0]),
     specularPower: readFiniteNumber(metadata.specularPower, 0),
-    diffuseMap: source.map ?? undefined,
-    toonMap: source.gradientMap ?? undefined,
-    sphereMap: sphereTexture,
+    diffuseMap: textures.diffuseMap,
+    toonMap: textures.toonMap,
+    sphereMap: textures.sphereMap,
     sphereMode: metadata.sphereMode ?? "none",
-    gammaSpaceComposite: source.map != null || source.gradientMap != null || sphereTexture !== undefined,
+    gammaSpaceComposite:
+      textures.diffuseMap !== undefined ||
+      textures.toonMap !== undefined ||
+      textures.sphereMap !== undefined,
     legacySrgbFramebuffer: options.legacySrgbFramebuffer === true
   });
   material.userData.mmdMaterial = {
@@ -67,12 +81,19 @@ export function createMmdTslMaterialFromSource(
     transparent: sourceMaterial.transparent,
     depthWrite: sourceMaterial.depthWrite
   };
+  // NodeMaterial texture nodes do not expose their source textures as material
+  // properties. Keep the references on userData so disposeMmdModel can apply
+  // its normal ownership policy after the legacy material is released.
+  material.userData.mmdTslTextureReferences = textures;
+  material.userData.mmdTslSourceDiffuseTexture = textures.diffuseMap;
+  material.userData.mmdTslSourceToonTexture = textures.toonMap;
+  material.userData.mmdTslSourceSphereTexture = textures.sphereMap;
   material.side = sourceMaterial.side;
   // MMD renders no-cull materials in one draw. Keep that contract if a material
   // morph later changes an initially opaque material into a transparent one.
   material.forceSinglePass = metadata.flags?.doubleSided === true && sourceMaterial.side === THREE.DoubleSide;
   material.alphaTest = sourceMaterial.alphaTest;
-  syncMmdTslMaterialState(material, createMaterialRuntimeStateForSource(sourceMaterial, metadata, sphereTexture));
+  syncMmdTslMaterialState(material, createMaterialRuntimeStateForSource(sourceMaterial, metadata, textures.sphereMap));
   if (options.respectMaterialShadowFlags !== false && !mmdMaterialCastsShadow(metadata.flags)) {
     material.castShadowNode = TSL.Fn(() => {
       TSL.Discard();
@@ -82,14 +103,38 @@ export function createMmdTslMaterialFromSource(
   return material;
 }
 
+function disposeSourceMaterialOnce(sourceMaterial: THREE.Material): () => void {
+  let state = sourceMaterialDisposalStates.get(sourceMaterial);
+  if (!state) {
+    state = { disposed: false };
+    sourceMaterialDisposalStates.set(sourceMaterial, state);
+    const disposalState = state;
+    sourceMaterial.addEventListener("dispose", () => {
+      disposalState.disposed = true;
+    });
+  }
+  const disposalState = state;
+  return () => {
+    if (disposalState.disposed) {
+      return;
+    }
+    disposalState.disposed = true;
+    sourceMaterial.dispose();
+  };
+}
+
 export function replaceMmdModelMaterialsWithTsl(
   mesh: THREE.Mesh,
   options: MmdTslMaterialAssemblyOptions = {}
 ): void {
   const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  const nodeMaterials = sourceMaterials.map((sourceMaterial) =>
-    createMmdTslMaterialFromSource(sourceMaterial, options)
-  );
+  const nodeMaterials = sourceMaterials.map((sourceMaterial) => {
+    const nodeMaterial = createMmdTslMaterialFromSource(sourceMaterial, options);
+    // Replacement transfers the source material's lifetime to the node
+    // material without disposing textures that remain in the TSL graph.
+    nodeMaterial.addEventListener("dispose", disposeSourceMaterialOnce(sourceMaterial));
+    return nodeMaterial;
+  });
   mesh.material = Array.isArray(mesh.material) ? nodeMaterials : nodeMaterials[0];
   if (options.appendOutlineGroups === true) {
     appendMmdTslOutlineGroups(mesh, options);
@@ -225,6 +270,17 @@ function readMmdSphereTexture(material: THREE.Material): THREE.Texture | undefin
     mmdSphereTexture?: THREE.Texture;
   };
   return userData.mmdSphereMap?.texture ?? userData.mmdSphereTexture;
+}
+
+function readMmdTslTextureReferences(material: THREE.Material): MmdTslTextureReferences {
+  const source = material as MmdSourceMaterial;
+  const userData = material.userData as { mmdTslTextureReferences?: MmdTslTextureReferences };
+  const retained = userData.mmdTslTextureReferences;
+  return {
+    diffuseMap: source.map ?? retained?.diffuseMap,
+    toonMap: source.gradientMap ?? retained?.toonMap,
+    sphereMap: readMmdSphereTexture(material) ?? retained?.sphereMap
+  };
 }
 
 function mmdMaterialCastsShadow(flags: Partial<MaterialFlags> | undefined): boolean {

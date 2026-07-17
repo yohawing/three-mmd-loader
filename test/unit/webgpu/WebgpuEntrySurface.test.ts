@@ -15,6 +15,7 @@ describe("experimental WebGPU TSL entry surface", () => {
       "createMmdTslMaterialFromSource",
       "createMmdTslReceivedShadowNode",
       "createMmdTslToonMaterial",
+      "disposeMmdTslSparsePositionMorphs",
       "enableMmdTslSparsePositionMorphs",
       "replaceMmdModelMaterialsWithTsl",
       "syncMmdTslMaterialState"

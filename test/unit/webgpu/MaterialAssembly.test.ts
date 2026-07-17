@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 import * as THREE from "three/webgpu";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createMmdTslMaterialFromSource,
@@ -57,6 +57,28 @@ describe("TSL material assembly", () => {
     const [nodeMaterial] = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     expect(nodeMaterial?.opacityNode).toBeDefined();
     expect(nodeMaterial?.alphaTest).toBeCloseTo(0.5 / 255);
+  });
+
+  it("releases replaced source materials while retaining texture references for disposal", () => {
+    const diffuseMap = new THREE.Texture();
+    const toonMap = new THREE.Texture();
+    const sphereMap = new THREE.Texture();
+    const sourceMaterial = createSourceMaterial({ edgeSize: 0 });
+    sourceMaterial.map = diffuseMap;
+    sourceMaterial.gradientMap = toonMap;
+    sourceMaterial.userData.mmdSphereMap = { texture: sphereMap };
+    const sourceDispose = vi.spyOn(sourceMaterial, "dispose");
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), sourceMaterial);
+
+    replaceMmdModelMaterialsWithTsl(mesh);
+
+    const nodeMaterial = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+    expect(sourceDispose).not.toHaveBeenCalled();
+    expect(nodeMaterial?.userData.mmdTslTextureReferences).toEqual({
+      diffuseMap,
+      toonMap,
+      sphereMap
+    });
   });
 
   it("preserves source render flags for non-MMD transparent materials", () => {
