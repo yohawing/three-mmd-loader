@@ -30,6 +30,8 @@ interface MmdTslShadowCasterState {
 
 export interface CreateMmdTslShadowCasterOptions {
   readonly shadowLayer?: number;
+  /** Set false to merge texture cutouts into opaque caster buckets for lower shadow cost. */
+  readonly alphaTest?: boolean;
 }
 
 const shadowCasterStates = new WeakMap<THREE.SkinnedMesh, MmdTslShadowCasterState>();
@@ -58,7 +60,7 @@ export function createMmdTslShadowCaster(
       continue;
     }
     const diffuseMap = readDiffuseMap(material);
-    if (!(material.alphaTest > 0) || !diffuseMap) {
+    if (options.alphaTest === false || !(material.alphaTest > 0) || !diffuseMap) {
       const key = shadowSideKey(material);
       let bucket = opaqueBuckets.get(key);
       if (!bucket) {

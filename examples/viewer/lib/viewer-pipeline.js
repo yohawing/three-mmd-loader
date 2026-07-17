@@ -42,7 +42,7 @@ export async function applyViewerPipelineToModel(model, label) {
       appendOutlineGroups: true,
       respectMaterialShadowFlags: true
     });
-    createMmdTslShadowCaster(model.mesh);
+    createMmdTslShadowCaster(model.mesh, { alphaTest: false });
     syncTslMaterialStates(model.mesh.material);
     syncTslMaterialLight(model.mesh.material);
   }

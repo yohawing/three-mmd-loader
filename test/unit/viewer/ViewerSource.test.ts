@@ -126,7 +126,9 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("dom.pipelineBackendSwitcher.value = state.rendererBackend");
     expect(pipelineSource).toContain('dom.pipelineBackendSwitcher.setAttribute("value", state.rendererBackend)');
     expect(pipelineSource).toContain('replaceMmdModelMaterialsWithTsl(model.mesh, {');
-    expect(pipelineSource).toContain("createMmdTslShadowCaster(model.mesh);");
+    expect(pipelineSource).toContain(
+      "createMmdTslShadowCaster(model.mesh, { alphaTest: false });"
+    );
     expect(pipelineSource).toContain("disposeMmdTslShadowCaster?.(model.mesh)");
     expect(pipelineSource).toContain("appendOutlineGroups: true");
     expect(pipelineSource).toContain("morphSplit: false");

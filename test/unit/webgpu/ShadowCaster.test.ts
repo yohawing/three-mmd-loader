@@ -41,7 +41,7 @@ describe("TSL shadow caster", () => {
     });
   });
 
-  it("keeps compatible alpha-test groups in a shared cutout bucket", () => {
+  it("allows the fast opaque path without changing the default alpha cutouts", () => {
     const geometry = createGeometry();
     const texture = new THREE.Texture();
     const alphaA = createMaterial("alphaTest", true, texture);
@@ -51,6 +51,15 @@ describe("TSL shadow caster", () => {
     const excluded = createMaterial("opaque", false);
     const mesh = createSkinnedMesh(geometry, [alphaA, opaque, alphaB, excluded]);
 
+    const opaqueProxy = createMmdTslShadowCaster(mesh, { alphaTest: false });
+
+    expect(opaqueProxy?.geometry.groups).toEqual([{ start: 0, count: 9, materialIndex: 0 }]);
+    expect(opaqueProxy?.userData.mmdTslShadowCaster).toMatchObject({
+      opaqueDraws: 1,
+      alphaTestDraws: 0
+    });
+
+    disposeMmdTslShadowCaster(mesh);
     const proxy = createMmdTslShadowCaster(mesh);
     const materials = Array.isArray(proxy?.material) ? proxy.material : [proxy?.material];
 
