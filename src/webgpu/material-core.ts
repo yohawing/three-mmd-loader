@@ -103,7 +103,6 @@ export function createMmdTslToonMaterial(options: MmdTslMaterialCoreOptions = {}
     }).mul(TSL.texture(options.diffuseMap).sample(TSL.uv()).a);
   }
   material.positionNode = TSL.positionLocal;
-  material.normalNode = TSL.normalLocal;
   material.receivedShadowNode = createMmdTslReceivedShadowNode({ ...options, uniforms });
   material.castShadowNode = TSL.vec4(1, 1, 1, 1);
   material.castShadowPositionNode = TSL.positionLocal;

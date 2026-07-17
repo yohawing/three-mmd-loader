@@ -622,6 +622,12 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain('from "../../../dist/three/index.js"');
     expect(playbackSource).toContain("applySelfShadowMotion()");
     expect(playbackSource).toContain("updateShadowCameraForFrame(state.currentModel.mesh)");
+    const shadowCameraUpdateIndex = playbackSource.indexOf("updateShadowCameraForFrame(state.currentModel.mesh)");
+    const minFarAssignment = "state.selfShadowLightOptionsScratch.minFar = state.keyLight.shadow.camera.far;";
+    const minFarAssignmentIndex = playbackSource.indexOf(minFarAssignment);
+    const selfShadowApplyIndex = playbackSource.indexOf("applyMmdSelfShadowStateToThreeDirectionalLight(");
+    expect(minFarAssignmentIndex).toBeGreaterThan(shadowCameraUpdateIndex);
+    expect(playbackSource.slice(minFarAssignmentIndex, selfShadowApplyIndex)).toBe(`${minFarAssignment}\n  `);
     expect(playbackSource).toContain("state.selfShadowBoundsRefreshCountdown = 0");
     expect(playbackSource).toContain("state.keyLight.castShadow = true");
     expect(playbackSource).toContain("!state.debugSelfShadowEnabled");

@@ -116,6 +116,7 @@ function applySelfShadowMotion() {
     state.selfShadowStateScratch,
     state.selfShadowFrameHint
   );
+  state.selfShadowLightOptionsScratch.minFar = state.keyLight.shadow.camera.far;
   applyMmdSelfShadowStateToThreeDirectionalLight(
     state.keyLight,
     selfShadowState,

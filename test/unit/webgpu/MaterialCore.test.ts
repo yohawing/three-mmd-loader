@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 
+import * as TSL from "three/tsl";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -25,6 +26,13 @@ describe("TSL material core", () => {
     expect(material.receivedShadowNode).toBeDefined();
     expect(material.castShadowNode).toBeDefined();
     expect(material.setupLightingModel().constructor.name).toBe("MmdTslLightingModel");
+  });
+
+  it("uses Three's standard view-space material normal path", () => {
+    const material = createMmdTslToonMaterial();
+
+    expect(material.normalNode).toBeNull();
+    expect(material.setupNormal()).toBe(TSL.materialNormal);
   });
 
   it("syncs runtime state without replacing preallocated uniform containers", () => {
