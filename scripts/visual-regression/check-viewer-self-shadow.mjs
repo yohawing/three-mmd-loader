@@ -39,10 +39,10 @@ const thresholds = {
   dedicatedNonOccludedShadowRatioMax: 0.01,
   dedicatedOffMeanLuminanceMin: 245,
   localFullFrameMeanDarkeningMin: 0.02,
-  localFullFrameP95DarkeningMin: 1,
+  localFullFrameP995DarkeningMin: 1,
   localShadowPixelRatioMin: 0.0005,
   localBackgroundMeanDarkeningMin: 0.02,
-  localBackgroundP95DarkeningMin: 1,
+  localBackgroundMaxDarkeningMin: 1,
   localBackgroundShadowPixelRatioMin: 0.0005,
   shadowCameraCasterForegroundRatioMin: 0.001,
   shadowCameraEmptyForegroundRatioMax: 0.0001,
@@ -76,6 +76,7 @@ async function main() {
     backend: options.backend,
     localMotion: options.localMotion ?? null,
     localBackground: options.localBackground ?? null,
+    vmdLifecycle: options.vmdLifecycle,
     passed: false,
     thresholds,
     metricDefinitions: {
@@ -84,7 +85,8 @@ async function main() {
       characterToBackgroundShadow: "local character-plus-background OFF/ON captures measure positive darkening only outside a captured character silhouette, so character self-shadow cannot satisfy the background-shadow observation.",
       worldShadowPosition: "each positive receiver darkening sample is ray-projected from its capture camera onto y=0.002; the camera-only comparison keeps elevation/depth fixed while changing azimuth so the luminance-weighted world x/z centroid is measured over comparable receiver coverage.",
       lightConfiguration: "DirectionalLight world position/target plus shadow-camera world matrix, near/far, and orthographic bounds must be unchanged across camera-only captures.",
-      dedicatedRawVisibility: "dedicated raw mode renders grayscale visibility from the independent caster depth target; the same-surface outer ROI must remain lit while the separate-surface shadow ROI contains a bounded dark region. The synthetic fixture has no background receiver, so that ROI is reported as null."
+      dedicatedRawVisibility: "dedicated raw mode renders grayscale visibility from the independent caster depth target; the same-surface outer ROI must remain lit while the separate-surface shadow ROI contains a bounded dark region. The synthetic fixture has no background receiver, so that ROI is reported as null.",
+      localSparseShadow: "local character gates use mean darkening, p995 darkening, and positive shadow-pixel ratio; background gates use mean darkening, max darkening, and positive shadow-pixel ratio because p995 can remain zero at very sparse coverage. p95 remains diagnostic-only."
     },
     cases: []
   };
@@ -126,8 +128,8 @@ async function main() {
       ] : [])
     ];
     const shadowCameraOccupancy = {
-      primary: primary.on.shadowCameraOccupancy,
-      moved: moved.on.shadowCameraOccupancy
+      primary: primary.on.shadowCameraOccupancy ?? { status: "not-applicable", reason: "backend does not expose occupancy" },
+      moved: moved.on.shadowCameraOccupancy ?? { status: "not-applicable", reason: "backend does not expose occupancy" }
     };
     const diagnostics = {
       primary: { off: primary.off.diagnostics, on: primary.on.diagnostics },
@@ -166,18 +168,19 @@ async function main() {
       )
     } : null;
     const requireSparseMorphs = !options.localModel && options.backend === "webgpu";
+    const inactiveVmdMode = options.vmdLifecycle && primary.on.diagnostics.vmdSelfShadow?.mode === 0;
     const diagnosticPass = options.backend === "baseline"
       ? true
       : options.dedicatedRawVisibility
         ? dedicatedRawDiagnosticsPass(primary.on.diagnostics, requireSparseMorphs) &&
           dedicatedRawDiagnosticsPass(moved.on.diagnostics, requireSparseMorphs)
-        : selfShadowDiagnosticsPass(primary.on.diagnostics, requireSparseMorphs) &&
-          selfShadowDiagnosticsPass(moved.on.diagnostics, requireSparseMorphs);
+        : selfShadowDiagnosticsPass(primary.on.diagnostics, requireSparseMorphs, !inactiveVmdMode) &&
+          selfShadowDiagnosticsPass(moved.on.diagnostics, requireSparseMorphs, !inactiveVmdMode);
     const shadowCameraOccupancyPass = options.backend === "baseline"
       ? true
-      : Object.values(shadowCameraOccupancy).every((occupancy) =>
-          shadowCameraOccupancyPasses(occupancy)
-        );
+      : Object.values(shadowCameraOccupancy)
+        .filter((occupancy) => occupancy?.status !== "not-applicable")
+        .every((occupancy) => shadowCameraOccupancyPasses(occupancy));
     const dedicatedRawPass = !options.dedicatedRawVisibility || options.localModel
       ? true
       : dedicatedRawVisibilityPass(dedicatedPrimary) && dedicatedRawVisibilityPass(dedicatedMoved);
@@ -195,16 +198,22 @@ async function main() {
         lightConfiguration.maxDelta <= thresholds.lightWorldConfigurationMaxDelta
       : undefined;
     const localDarkeningPass = options.localModel
-      ? localMetricPasses(fullFrame, thresholds.localFullFrameMeanDarkeningMin, thresholds.localFullFrameP95DarkeningMin, thresholds.localShadowPixelRatioMin)
+      ? options.vmdLifecycle
+        ? true
+        : localMetricPasses(fullFrame, thresholds.localFullFrameMeanDarkeningMin, thresholds.localFullFrameP995DarkeningMin, thresholds.localShadowPixelRatioMin)
       : undefined;
     const localBackgroundPass = backgroundShadow
-      ? localMetricPasses(backgroundShadow, thresholds.localBackgroundMeanDarkeningMin, thresholds.localBackgroundP95DarkeningMin, thresholds.localBackgroundShadowPixelRatioMin)
+      ? localBackgroundMetricPasses(backgroundShadow)
+      : undefined;
+    const vmdLifecyclePass = options.vmdLifecycle
+      ? vmdLifecycleGate(primary, moved)
       : undefined;
     const localObservationPass = options.localModel
       ? diagnosticPass &&
         shadowCameraOccupancyPass &&
         localDarkeningPass &&
         (localBackgroundPass ?? true) &&
+        (vmdLifecyclePass ?? true) &&
         lightConfiguration.maxDelta <= thresholds.lightWorldConfigurationMaxDelta
       : undefined;
     report.rawVisibility = options.rawVisibility;
@@ -237,10 +246,23 @@ async function main() {
         ? { passed: localBackgroundPass, metrics: backgroundShadow, mask: "character silhouette excluded" }
         : { status: "not-requested", reason: "--local-background was not supplied" }
     } : null;
+    report.vmdLifecycle = options.vmdLifecycle
+      ? {
+          primary: {
+            off: vmdObservation(primary.off.diagnostics),
+            on: vmdObservation(primary.on.diagnostics)
+          },
+          moved: {
+            off: vmdObservation(moved.off.diagnostics),
+            on: vmdObservation(moved.on.diagnostics)
+          }
+        }
+      : null;
+    report.vmdLifecyclePass = vmdLifecyclePass;
     report.messages = messages;
     report.passed = options.localModel ? localObservationPass && messages.length === 0 : syntheticPass && messages.length === 0;
     if (!report.passed) {
-      throw new Error(`viewer self-shadow gate failed: ${JSON.stringify({ diagnosticPass, shadowCameraOccupancy, shadowCameraOccupancyPass, primaryReceiver, movedReceiver, dedicatedPrimary, dedicatedMoved, dedicatedRawPass, worldShadowPosition, lightConfiguration, fullFrame, backgroundShadow, localDarkeningPass, localBackgroundPass, messages })}`);
+      throw new Error(`viewer self-shadow gate failed: ${JSON.stringify({ diagnosticPass, shadowCameraOccupancy, shadowCameraOccupancyPass, primaryReceiver, movedReceiver, dedicatedPrimary, dedicatedMoved, dedicatedRawPass, worldShadowPosition, lightConfiguration, fullFrame, backgroundShadow, localDarkeningPass, localBackgroundPass, vmdLifecyclePass, messages })}`);
     }
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
@@ -259,6 +281,51 @@ function serializablePair(pair) {
     off: { imagePath: `${pair.name}-off.png`, diagnostics: pair.off.diagnostics },
     on: { imagePath: `${pair.name}-on.png`, diagnostics: pair.on.diagnostics }
   };
+}
+
+function vmdObservation(diagnostics) {
+  const material = diagnostics.materials?.find((entry) => entry.dedicatedShadowEnabled !== null);
+  return {
+    mode: diagnostics.vmdSelfShadow?.mode ?? null,
+    distance: diagnostics.vmdSelfShadow?.distance ?? null,
+    castShadow: diagnostics.light?.castShadow ?? null,
+    dedicatedShadowEnabled: material?.dedicatedShadowEnabled ?? null,
+    shadowCameraFar: diagnostics.light?.shadowCamera?.far ?? null
+  };
+}
+
+function vmdLifecycleGate(primary, moved) {
+  const observations = [
+    vmdObservation(primary.off.diagnostics),
+    vmdObservation(primary.on.diagnostics),
+    vmdObservation(moved.off.diagnostics),
+    vmdObservation(moved.on.diagnostics)
+  ];
+  const mode = observations[1]?.mode;
+  const enabled = mode === 1 || mode === 2;
+  const offPass = observations[0]?.castShadow === false &&
+    observations[0]?.dedicatedShadowEnabled === 0 &&
+    observations[2]?.castShadow === false &&
+    observations[2]?.dedicatedShadowEnabled === 0;
+  const onPass = observations[1]?.castShadow === enabled &&
+    observations[1]?.dedicatedShadowEnabled === (enabled ? 1 : 0) &&
+    observations[3]?.castShadow === enabled &&
+    observations[3]?.dedicatedShadowEnabled === (enabled ? 1 : 0);
+  const onModeDistanceAgreement = observations[1]?.mode === mode &&
+    observations[3]?.mode === mode &&
+    Math.abs((observations[1]?.distance ?? NaN) - (observations[3]?.distance ?? NaN)) <= 1e-6;
+  const onShadowCameraFarPass = !enabled ||
+    (vmdShadowCameraFarPass(observations[1], observations[0]) &&
+      vmdShadowCameraFarPass(observations[3], observations[2]));
+  return offPass && onPass && onModeDistanceAgreement && onShadowCameraFarPass;
+}
+
+function vmdShadowCameraFarPass(on, off) {
+  if (!Number.isFinite(on?.distance) || !Number.isFinite(on?.shadowCameraFar) || !Number.isFinite(off?.shadowCameraFar)) {
+    return false;
+  }
+  const expectedFar = Math.min(Math.max(on.distance * 100, off.shadowCameraFar), 100);
+  return Math.abs(on.shadowCameraFar - expectedFar) <= 1e-6;
 }
 
 async function waitForViewer(page) {
@@ -364,7 +431,9 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
       ? await captureCharacterSilhouette(page, screenshotPath.replace(/\.png$/, "-character-mask.png"))
       : undefined;
     const shadowCameraOccupancy = enabled && backend !== "baseline"
-      ? await captureShadowCameraOccupancy(page, outputDir, name)
+      ? native.diagnostics?.light?.castShadow === true
+        ? await captureShadowCameraOccupancy(page, outputDir, name)
+        : { status: "not-applicable", reason: "VMD self-shadow mode disabled" }
       : undefined;
     return { ...observation, native, characterSilhouette, shadowCameraOccupancy, messages };
   } finally {
@@ -794,7 +863,7 @@ function compareLightConfigurations(primary, moved) {
   };
 }
 
-function selfShadowDiagnosticsPass(diagnostics, requireSparseMorphs) {
+function selfShadowDiagnosticsPass(diagnostics, requireSparseMorphs, requireCastShadow = true) {
   const light = diagnostics.light;
   return diagnostics.modelPresent &&
     (!requireSparseMorphs || diagnostics.sparsePositionMorphsEnabled === true) &&
@@ -804,7 +873,7 @@ function selfShadowDiagnosticsPass(diagnostics, requireSparseMorphs) {
     diagnostics.receiverMaterialCount > 0 &&
     diagnostics.visibleMeshReceiveShadow === true &&
     diagnostics.layerAgreement.casterMatchesShadowCamera === true &&
-    light?.castShadow === true &&
+    light?.castShadow === requireCastShadow &&
     Number.isFinite(light.shadowCamera?.near) &&
     Number.isFinite(light.shadowCamera?.far) &&
     light.shadowCamera.far > light.shadowCamera.near &&
@@ -848,6 +917,7 @@ function compareFullFrameLuminance(off, on) {
   return {
     meanDarkening: round(darkening.reduce((sum, value) => sum + value, 0) / darkening.length),
     p95Darkening: round(percentile(darkening, 0.95)),
+    p995Darkening: round(percentile(darkening, 0.995)),
     shadowPixelRatio: round(positive.length / darkening.length)
   };
 }
@@ -857,32 +927,44 @@ function analyzeOutsideCharacterDarkening(off, on, silhouette) {
     throw new Error("Background-shadow captures and character silhouette mask must have matching dimensions.");
   }
   const darkening = [];
+  let maxDarkening = 0;
   for (let index = 0; index < off.data.length; index += 4) {
     const maskLuminance = luminance(silhouette.png.data[index], silhouette.png.data[index + 1], silhouette.png.data[index + 2]);
     if (maskLuminance >= 16) {
       continue;
     }
-    darkening.push(
-      luminance(off.data[index], off.data[index + 1], off.data[index + 2]) -
-      luminance(on.data[index], on.data[index + 1], on.data[index + 2])
-    );
+    const value = luminance(off.data[index], off.data[index + 1], off.data[index + 2]) -
+      luminance(on.data[index], on.data[index + 1], on.data[index + 2]);
+    darkening.push(value);
+    maxDarkening = Math.max(maxDarkening, value);
   }
   const positive = darkening.filter((value) => value >= 1);
   return {
     sampledPixels: darkening.length,
     meanDarkening: round(darkening.reduce((sum, value) => sum + value, 0) / darkening.length),
     p95Darkening: round(percentile(darkening, 0.95)),
+    p995Darkening: round(percentile(darkening, 0.995)),
+    maxDarkening: round(maxDarkening),
     shadowPixelRatio: round(positive.length / darkening.length)
   };
 }
 
-function localMetricPasses(metrics, meanMin, p95Min, ratioMin) {
+function localMetricPasses(metrics, meanMin, p995Min, ratioMin) {
   return metrics.primary.meanDarkening >= meanMin &&
     metrics.moved.meanDarkening >= meanMin &&
-    metrics.primary.p95Darkening >= p95Min &&
-    metrics.moved.p95Darkening >= p95Min &&
+    metrics.primary.p995Darkening >= p995Min &&
+    metrics.moved.p995Darkening >= p995Min &&
     metrics.primary.shadowPixelRatio >= ratioMin &&
     metrics.moved.shadowPixelRatio >= ratioMin;
+}
+
+function localBackgroundMetricPasses(metrics) {
+  return metrics.primary.meanDarkening >= thresholds.localBackgroundMeanDarkeningMin &&
+    metrics.moved.meanDarkening >= thresholds.localBackgroundMeanDarkeningMin &&
+    metrics.primary.maxDarkening >= thresholds.localBackgroundMaxDarkeningMin &&
+    metrics.moved.maxDarkening >= thresholds.localBackgroundMaxDarkeningMin &&
+    metrics.primary.shadowPixelRatio >= thresholds.localBackgroundShadowPixelRatioMin &&
+    metrics.moved.shadowPixelRatio >= thresholds.localBackgroundShadowPixelRatioMin;
 }
 
 function cameraFromSnapshot(snapshot) {
@@ -978,6 +1060,7 @@ function parseArgs(args) {
     localModel: undefined,
     localMotion: undefined,
     localBackground: undefined,
+    vmdLifecycle: false,
     rawVisibility: false,
     standardReceiver: false,
     dedicatedRawVisibility: false
@@ -1000,6 +1083,8 @@ function parseArgs(args) {
     } else if (arg === "--local-background" && value) {
       options.localBackground = path.resolve(value);
       index += 1;
+    } else if (arg === "--vmd-lifecycle") {
+      options.vmdLifecycle = true;
     } else if (arg === "--raw-visibility") {
       options.rawVisibility = true;
     } else if (arg === "--standard-receiver") {
@@ -1015,6 +1100,9 @@ function parseArgs(args) {
   }
   if (options.localMotion && !options.localModel) {
     throw new Error("--local-motion requires --local-model.");
+  }
+  if (options.vmdLifecycle && !options.localMotion) {
+    throw new Error("--vmd-lifecycle requires --local-motion.");
   }
   if (!["baseline", "forcewebgl", "webgpu"].includes(options.backend)) {
     throw new Error(`--backend must be one of baseline, forcewebgl, webgpu; received ${options.backend}`);

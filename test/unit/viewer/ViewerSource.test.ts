@@ -129,6 +129,22 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("loadOptions.folderFiles");
     expect(modelSource).toContain("loadOptions.folderModelFiles");
     expect(modelSource).toContain("loadOptions.folderTextureMap");
+    expect(modelSource).toContain("let modelLoadGeneration = 0;");
+    expect(modelSource).toContain("function beginModelLoad() {\n  return ++modelLoadGeneration;\n}");
+    expect(modelSource).toContain("const generation = beginModelLoad();");
+    expect(modelSource).toContain("generation = beginModelLoad()");
+    expect(modelSource).toContain("loadOptions,\n      generation\n    );");
+    expect(modelSource).toContain(
+      "if (generation === modelLoadGeneration && (!loadOptions.shouldCommit || loadOptions.shouldCommit()))"
+    );
+    const urlLoadStart = modelSource.indexOf("export async function loadModelFromUrl");
+    const urlGenerationIndex = modelSource.indexOf("const generation = beginModelLoad();", urlLoadStart);
+    const urlFetchIndex = modelSource.indexOf("const bytes = await fetchBytes(url);", urlLoadStart);
+    expect(urlLoadStart).toBeGreaterThanOrEqual(0);
+    expect(urlGenerationIndex).toBeGreaterThan(urlLoadStart);
+    expect(urlGenerationIndex).toBeLessThan(urlFetchIndex);
+    expect(modelSource).toContain("preserveLoadGeneration: true");
+    expect(modelSource).toContain("generation === modelLoadGeneration");
     expect(modelSource).toContain("source instanceof window.File ? [source] : []");
     expect(modelSource).toContain("state.currentFolderFiles = files");
     expect(stateSource).toContain("currentFolderFiles: []");
@@ -178,6 +194,17 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("mmdTslSelfShadowPass.render(state.renderer, state.scene, state.keyLight);");
     expect(pipelineSource).toContain("dedicatedShadowVisibilityNode: mmdTslSelfShadowPass?.visibilityNode");
     expect(pipelineSource).toContain("export function syncMmdTslDedicatedShadowVisibility");
+    expect(pipelineSource).toContain("const mmdTslSelfShadowModelRoots = new Set();");
+    expect(pipelineSource).toContain("const mmdTslDedicatedShadowUniforms = new Set();");
+    expect(pipelineSource).toContain("registerTslDedicatedShadowUniforms(model.root, model.mesh, true);");
+    expect(pipelineSource).toContain("if (force) {");
+    expect(pipelineSource).toContain("model.root.userData.mmdTslSelfShadowRole = role;");
+    expect(pipelineSource).toContain("mmdTslSelfShadowModelRoots.delete(model.root);");
+    expect(pipelineSource).toContain(
+      "mmdTslSelfShadowModelRoots.delete(model.root);\n      unregisterTslDedicatedShadowUniforms(model.root);\n      disposeMmdTslSelfShadowPassIfUnused();"
+    );
+    expect(pipelineSource).toContain("state.keyLight?.castShadow === true");
+    expect(pipelineSource).toContain("disposeMmdTslSelfShadowPassIfUnused();");
     const submitViewerRenderStart = pipelineSource.indexOf("export function submitViewerRender()");
     const submitViewerRenderEnd = pipelineSource.indexOf("export function disposeViewerPipelineModel");
     expect(submitViewerRenderStart).toBeGreaterThanOrEqual(0);
@@ -198,6 +225,23 @@ describe("example viewer source", () => {
     expect(selfShadowGateSource).toContain("renderer?.isWebGPURenderer === true");
     expect(selfShadowGateSource).toContain("typeof renderer.renderAsync === \"function\"");
     expect(selfShadowGateSource).toContain("--raw-visibility requires a TSL backend");
+    expect(selfShadowGateSource).toContain("--vmd-lifecycle");
+    expect(selfShadowGateSource).toContain("vmdObservation(primary.on.diagnostics)");
+    expect(selfShadowGateSource).toContain('status: "not-applicable"');
+    expect(selfShadowGateSource).toContain("VMD self-shadow mode disabled");
+    expect(selfShadowGateSource).toContain("onModeDistanceAgreement");
+    expect(selfShadowGateSource).toContain("localFullFrameP995DarkeningMin");
+    expect(selfShadowGateSource).toContain("localBackgroundMaxDarkeningMin");
+    expect(selfShadowGateSource).toContain("maxDarkening");
+    expect(selfShadowGateSource).not.toContain("Math.max(...darkening");
+    expect(selfShadowGateSource).toContain("metrics.primary.p995Darkening >= p995Min");
+    expect(selfShadowGateSource).toContain("p95 remains diagnostic-only");
+    expect(selfShadowGateSource).toContain("const inactiveVmdMode = options.vmdLifecycle");
+    expect(selfShadowGateSource).toContain("requireCastShadow = true");
+    expect(selfShadowGateSource).toContain("shadowCameraFar");
+    expect(selfShadowGateSource).toContain("vmdShadowCameraFarPass");
+    expect(selfShadowGateSource).toContain("Math.min(Math.max(on.distance * 100, off.shadowCameraFar), 100)");
+    expect(selfShadowGateSource).toContain("const onShadowCameraFarPass = !enabled");
     expect(pipelineSource).toContain("state.debugSelfShadowEnabled === true");
     expect(pipelineSource).toContain("mmdTslDedicatedRawVisibilityDebugActive = false;");
     expect(pipelineSource).toContain("if (!root) {");
@@ -214,6 +258,7 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("setMmdTslDedicatedRawVisibilityDebug(enabled)");
     expect(playbackSource).toContain("syncViewerTslLight()");
     expect(playbackSource).toContain("syncCurrentModelTslMaterialStates()");
+    expect(playbackSource).toContain("syncMmdTslDedicatedShadowVisibility();");
     expect(styles).toContain(".debug-backend-control");
     expect(styles).not.toContain(".pipeline-status");
   });
@@ -243,6 +288,7 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("visibleMeshReceiveShadow");
     expect(debugSource).toContain("shadowCamera: shadowCamera");
     expect(debugSource).toContain("vmdSelfShadow:");
+    expect(debugSource).toContain("dedicatedShadowEnabled:");
   });
 
   it("preserves CPU bounds before native sparse morph output replaces geometry positions", async () => {
@@ -991,7 +1037,8 @@ describe("example viewer source", () => {
     expect(physicsSource).toContain("export async function ensurePhysicsBackendReady()");
     expect(physicsSource).toContain("loadPromise ??= createActivePhysicsBackend()");
     expect(modelSource).toContain("const physicsBackend = await createPhysicsBackend()");
-    expect(modelSource).toContain("await ensurePhysicsBackendReady();\n      state.currentModel.setAnimation(state.currentMotion)");
+    expect(modelSource).toContain("await ensurePhysicsBackendReady();");
+    expect(modelSource).toContain("state.currentModel.setAnimation(state.currentMotion)");
     expect(motionSource).toContain("await ensurePhysicsBackendReady();\n    state.currentModel.setAnimation(animation)");
     expect(motionSource).toContain("void loadKurokoModelForQueuedMotion()");
     expect(motionSource).not.toContain("await ensurePhysicsBackendReady();\n      state.pendingMotionSource = source");

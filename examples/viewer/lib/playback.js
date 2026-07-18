@@ -13,6 +13,7 @@ import { updateShadowCameraForFrame } from "./scene-setup.js";
 import {
   isTslViewerPipeline,
   submitViewerRender,
+  syncMmdTslDedicatedShadowVisibility,
   syncViewerTslLight,
   syncCurrentModelTslMaterialStates
 } from "./viewer-pipeline.js";
@@ -104,12 +105,14 @@ function applySelfShadowMotion() {
   }
   if (!state.debugSelfShadowEnabled) {
     state.keyLight.castShadow = false;
+    syncMmdTslDedicatedShadowVisibility();
     return;
   }
   const frames = state.currentMotion?.animation?.selfShadowFrames;
   if (!frames || frames.length === 0) {
     state.keyLight.castShadow = true;
     state.selfShadowFrameHint.index = 0;
+    syncMmdTslDedicatedShadowVisibility();
     return;
   }
   const selfShadowState = sampleMmdSelfShadowTrackInto(
@@ -124,6 +127,7 @@ function applySelfShadowMotion() {
     selfShadowState,
     state.selfShadowLightOptionsScratch
   );
+  syncMmdTslDedicatedShadowVisibility();
 }
 
 export async function setPlaybackPlaying(playing) {

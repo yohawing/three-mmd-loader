@@ -216,6 +216,7 @@ describe("self-shadow visual regression manifest", () => {
       "mmd-self-shadow-receiver-flag-off-mixed",
       "mmd-self-shadow-vmd-off",
       "mmd-self-shadow-vmd-on",
+      "mmd-self-shadow-vmd-mode2",
       "mmd-self-shadow-sdef-depth"
     ]));
   });
@@ -224,7 +225,20 @@ describe("self-shadow visual regression manifest", () => {
     const manifest = readSelfShadowManifest();
     const names = new Set(manifest.cases.map(visualCase => visualCase.name));
 
-    expect(manifest.comparisons.length).toBeGreaterThanOrEqual(3);
+    expect(manifest.comparisons.length).toBeGreaterThanOrEqual(4);
+    const mode1Comparison = manifest.comparisons.find(
+      comparison => comparison.name === "body-self-shadow-vmd-mode-toggles-torso-shadow"
+    );
+    const mode2Comparison = manifest.comparisons.find(
+      comparison => comparison.name === "mmd-self-shadow-vmd-mode2-toggles-torso-shadow"
+    );
+    expect(mode1Comparison).toBeDefined();
+    expect(mode2Comparison).toMatchObject({
+      shadowOn: "mmd-self-shadow-vmd-mode2",
+      shadowOff: "mmd-self-shadow-vmd-off",
+      receiverRoi: mode1Comparison?.receiverRoi,
+      thresholds: mode1Comparison?.thresholds
+    });
     for (const comparison of manifest.comparisons) {
       expect(comparison.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
       expect(names.has(comparison.shadowOn)).toBe(true);

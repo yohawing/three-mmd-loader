@@ -6,6 +6,7 @@ import { evaluateRuntime } from "./playback.js";
 import { debugEnabled, state } from "./state.js";
 import {
   setCurrentModelTslOutlineHidden,
+  getMmdTslDedicatedShadowState,
   setMmdTslDedicatedRawVisibilityDebug,
   syncMmdTslDedicatedShadowVisibility,
   syncMmdTslDedicatedRawVisibilityDebug,
@@ -791,6 +792,7 @@ function createSelfShadowDiagnostics() {
       },
       receiveShadow: flags.selfShadow === true,
       receivedShadowNode: material.receivedShadowNode != null,
+      dedicatedShadowEnabled: material.userData?.mmdTslMaterialUniforms?.dedicatedShadowEnabled?.value ?? null,
       materialClass: material.constructor?.name ?? null,
       receivedShadowPositionNode: Boolean(material.receivedShadowPositionNode),
       normalNode: Boolean(material.normalNode),
@@ -870,7 +872,8 @@ function createSelfShadowDiagnostics() {
       sampledFrameIndex: state.selfShadowFrameHint.index,
       mode: state.selfShadowStateScratch.mode,
       distance: state.selfShadowStateScratch.distance
-    }
+    },
+    dedicatedPass: getMmdTslDedicatedShadowState()
   };
 }
 
