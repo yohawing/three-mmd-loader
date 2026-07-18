@@ -13,8 +13,6 @@ export interface MmdTslSelfShadowPass {
   dispose(): void;
 }
 
-const SHADOW_TARGET_SIZE = 1024;
-
 /**
  * Owns the Phase 1 caster-only depth target. The receiver graph is intentionally
  * not connected here; this pass only proves that the existing caster layer can be
@@ -24,12 +22,14 @@ export function createMmdTslSelfShadowPass(
   renderer: THREE.WebGPURenderer,
   light: THREE.DirectionalLight
 ): MmdTslSelfShadowPass {
-  const depthTexture = new THREE.DepthTexture(SHADOW_TARGET_SIZE, SHADOW_TARGET_SIZE);
+  const targetWidth = Math.max(1, Math.floor(light.shadow.mapSize.x));
+  const targetHeight = Math.max(1, Math.floor(light.shadow.mapSize.y));
+  const depthTexture = new THREE.DepthTexture(targetWidth, targetHeight);
   depthTexture.name = "MMD TSL self-shadow depth";
-  depthTexture.compareFunction = THREE.LessEqualCompare;
+  depthTexture.compareFunction = null;
   depthTexture.generateMipmaps = false;
 
-  const renderTarget = new THREE.RenderTarget(SHADOW_TARGET_SIZE, SHADOW_TARGET_SIZE, {
+  const renderTarget = new THREE.RenderTarget(targetWidth, targetHeight, {
     depthBuffer: true,
     depthTexture
   });

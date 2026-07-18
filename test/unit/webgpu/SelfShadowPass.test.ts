@@ -7,9 +7,11 @@ describe("TSL dedicated self-shadow pass scaffold", () => {
     const source = await readFile("src/webgpu/self-shadow-pass.ts", "utf8");
 
     expect(source).toContain("export function createMmdTslSelfShadowPass");
-    expect(source).toContain("new THREE.DepthTexture(SHADOW_TARGET_SIZE, SHADOW_TARGET_SIZE)");
-    expect(source).toContain("const SHADOW_TARGET_SIZE = 1024;");
-    expect(source).toContain("new THREE.RenderTarget(SHADOW_TARGET_SIZE, SHADOW_TARGET_SIZE");
+    expect(source).toContain("Math.floor(light.shadow.mapSize.x)");
+    expect(source).toContain("Math.floor(light.shadow.mapSize.y)");
+    expect(source).toContain("new THREE.DepthTexture(targetWidth, targetHeight)");
+    expect(source).toContain("depthTexture.compareFunction = null");
+    expect(source).toContain("new THREE.RenderTarget(targetWidth, targetHeight");
     expect(source).toContain("createMmdTslShadowVisibilityNode(light, depthTexture)");
     expect(source).toContain("setReceiverVisibilityDebug");
     expect(source).toContain("metadata?.flags?.selfShadow !== true");

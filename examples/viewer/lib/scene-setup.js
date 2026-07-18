@@ -20,6 +20,10 @@ const viewerTslSelfShadowQuality = {
   mapSize: 2048
 };
 const viewerTslShadowBoundsRefreshFrames = 6;
+// Unity's 0.02 m default is roughly 1% of a two-meter character. The three.js
+// loader keeps PMX coordinates unscaled, so retain that ratio across model scales.
+const viewerTslSelfShadowWorldDepthBiasScale = 0.01;
+let viewerTslSelfShadowWorldDepthBias = 0;
 
 // Supersampling (SSAA): render at a higher internal resolution then downsample.
 // MSAA (antialias: true) alone leaves the hard inverted-hull edge aliased on fine
@@ -206,6 +210,17 @@ export function updateShadowCameraForFrame(object) {
   }
 }
 
+export function updateSelfShadowDepthBias() {
+  if (!state.keyLight || state.viewerPipeline !== "tsl-webgpu") {
+    return;
+  }
+  const shadowCamera = state.keyLight.shadow.camera;
+  const depthRange = shadowCamera.far - shadowCamera.near;
+  state.keyLight.shadow.bias = depthRange > 0
+    ? -viewerTslSelfShadowWorldDepthBias / depthRange
+    : 0;
+}
+
 function shadowBoundsRefreshFrames() {
   return state.viewerPipeline === "baseline-webgl"
     ? 1
@@ -222,5 +237,11 @@ function fitShadowCameraToBounds(bounds) {
     minFarSpan: 2,
     maxFar: 80
   });
+  viewerTslSelfShadowWorldDepthBias = Math.max(
+    bounds.max.x - bounds.min.x,
+    bounds.max.y - bounds.min.y,
+    bounds.max.z - bounds.min.z
+  ) * viewerTslSelfShadowWorldDepthBiasScale;
+  updateSelfShadowDepthBias();
   state.keyLight.target.updateMatrixWorld();
 }

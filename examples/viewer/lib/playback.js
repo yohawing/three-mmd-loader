@@ -9,7 +9,7 @@ import {
   applyMmdSelfShadowStateToThreeDirectionalLight,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
-import { updateShadowCameraForFrame } from "./scene-setup.js";
+import { updateSelfShadowDepthBias, updateShadowCameraForFrame } from "./scene-setup.js";
 import {
   isTslViewerPipeline,
   submitViewerRender,
@@ -105,6 +105,7 @@ function applySelfShadowMotion() {
   }
   if (!state.debugSelfShadowEnabled) {
     state.keyLight.castShadow = false;
+    updateSelfShadowDepthBias();
     syncMmdTslDedicatedShadowVisibility();
     return;
   }
@@ -112,6 +113,7 @@ function applySelfShadowMotion() {
   if (!frames || frames.length === 0) {
     state.keyLight.castShadow = true;
     state.selfShadowFrameHint.index = 0;
+    updateSelfShadowDepthBias();
     syncMmdTslDedicatedShadowVisibility();
     return;
   }
@@ -127,6 +129,7 @@ function applySelfShadowMotion() {
     selfShadowState,
     state.selfShadowLightOptionsScratch
   );
+  updateSelfShadowDepthBias();
   syncMmdTslDedicatedShadowVisibility();
 }
 

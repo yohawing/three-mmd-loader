@@ -1,4 +1,4 @@
-import { Fn, float, lightShadowMatrix, normalWorld, positionWorld, reference, renderGroup, texture, vec3, vec4 } from "three/tsl";
+import { Fn, float, lightShadowMatrix, normalWorld, positionWorld, reference, renderGroup, saturate, texture, vec3, vec4 } from "three/tsl";
 import type * as THREE from "three/webgpu";
 import type Node from "three/src/nodes/core/Node.js";
 
@@ -39,7 +39,9 @@ export function createMmdTslShadowVisibilityNode(
       .and(shadowCoord.y.greaterThanEqual(0))
       .and(shadowCoord.y.lessThanEqual(1))
       .and(shadowCoord.z.lessThanEqual(1));
-    const visibility = texture(depthTexture, shadowCoord.xy).compare(shadowCoord.z) as Node<"float">;
+    const sampledDepth = texture(depthTexture, shadowCoord.xy).r;
+    const occluderDepthDelta = shadowCoord.z.sub(sampledDepth);
+    const visibility = float(1).sub(saturate(occluderDepthDelta.mul(1500).sub(0.3)));
     return inFrustum.select(visibility, float(1)) as Node<"float">;
   })();
 }

@@ -11,10 +11,11 @@ describe("dedicated raw shadow visibility graph", () => {
     expect(source).toContain("positionWorld");
     expect(source).toContain("normalWorld.mul(normalBias)");
     expect(source).toContain("projected.y.oneMinus()");
-    expect(source).toContain("texture(depthTexture, shadowCoord.xy)");
+    expect(source).toContain("texture(depthTexture, shadowCoord.xy).r");
+    expect(source).toContain("shadowCoord.z.sub(sampledDepth)");
+    expect(source).toContain("occluderDepthDelta.mul(1500).sub(0.3)");
     expect(source).toContain("shadowCoord.x");
     expect(source).toContain(".greaterThanEqual(0)");
-    expect(source).toContain(".compare(shadowCoord.z)");
     expect(source).toContain('reference("bias", "float", light.shadow)');
     expect(source).toContain('reference("normalBias", "float", light.shadow)');
     expect(source).toContain("inFrustum.select(visibility, float(1))");

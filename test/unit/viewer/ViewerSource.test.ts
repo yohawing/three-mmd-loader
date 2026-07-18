@@ -798,6 +798,10 @@ describe("example viewer source", () => {
     expect(sceneSource).toContain("mapSize: 2048");
     expect(sceneSource).toContain("shadowIntensity: 1.0");
     expect(sceneSource).toContain("normalBias: 0.006");
+    expect(sceneSource).toContain("const viewerTslSelfShadowWorldDepthBiasScale = 0.01");
+    expect(sceneSource).toContain(") * viewerTslSelfShadowWorldDepthBiasScale;");
+    expect(sceneSource).toContain("-viewerTslSelfShadowWorldDepthBias / depthRange");
+    expect(playbackSource).toContain("updateSelfShadowDepthBias();");
     expect(sceneSource).toContain("export function fitShadowCameraToObject(object)");
     expect(sceneSource).toContain("state.selfShadowBoundsScratch.setFromObject(object)");
     expect(sceneSource).toContain("const viewerTslShadowBoundsRefreshFrames = 6");
