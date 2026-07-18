@@ -116,7 +116,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
       return false;
     }
     state.currentModel = loadedModel;
-    await applyViewerPipelineToModel(state.currentModel, label);
+    await applyViewerPipelineToModel(state.currentModel, label, { shouldCommit: isCurrentLoad });
     if (!isCurrentLoad()) {
       if (state.currentModel === loadedModel) {
         state.currentModel = undefined;
@@ -238,7 +238,7 @@ export async function loadModelFolder(files, loadOptions = {}) {
       return;
     }
     state.currentModel = loadedModel;
-    await applyViewerPipelineToModel(state.currentModel, modelFile.name);
+    await applyViewerPipelineToModel(state.currentModel, modelFile.name, { shouldCommit: isCurrentLoad });
     if (!isCurrentLoad()) {
       if (state.currentModel === loadedModel) {
         state.currentModel = undefined;
@@ -339,7 +339,7 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
       return;
     }
     state.currentModel = loadedModel;
-    await applyViewerPipelineToModel(state.currentModel, modelFile.name);
+    await applyViewerPipelineToModel(state.currentModel, modelFile.name, { shouldCommit: isCurrentLoad });
     if (!isCurrentLoad()) {
       if (state.currentModel === loadedModel) {
         state.currentModel = undefined;

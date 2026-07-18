@@ -52,12 +52,18 @@ export function createViewerBackgroundLoadOptions() {
     : { frustumCulled: false };
 }
 
-export async function applyViewerPipelineToModel(model, label, { role = "character" } = {}) {
+export async function applyViewerPipelineToModel(model, label, { role = "character", shouldCommit } = {}) {
+  const tslPipeline = isTslViewerPipeline();
+  if (tslPipeline) {
+    await loadWebgpuPipelineModule();
+  }
+  if (shouldCommit && !shouldCommit()) {
+    return false;
+  }
   if (role === "character") {
     state.pipelineModelName = label || model.mesh.name || "model";
   }
-  if (isTslViewerPipeline()) {
-    await loadWebgpuPipelineModule();
+  if (tslPipeline) {
     if (role === "character" && state.renderer?.backend?.isWebGPUBackend === true) {
       // Sparse morph output lives in GPU storage, so keep the CPU base-pose
       // bounds before replacing position attributes. Shadow fitting uses
@@ -90,6 +96,7 @@ export async function applyViewerPipelineToModel(model, label, { role = "charact
     }
   }
   updateViewerPipelineStatus();
+  return true;
 }
 
 export function clearViewerPipelineModel() {

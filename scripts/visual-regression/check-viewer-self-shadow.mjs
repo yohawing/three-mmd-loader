@@ -41,6 +41,9 @@ const thresholds = {
   localFullFrameMeanDarkeningMin: 0.02,
   localFullFrameP995DarkeningMin: 1,
   localShadowPixelRatioMin: 0.0005,
+  vmdInactiveMeanDarkeningMax: 0.01,
+  vmdInactiveP995DarkeningMax: 0.5,
+  vmdInactiveShadowPixelRatioMax: 0.005,
   localBackgroundMeanDarkeningMin: 0.02,
   localBackgroundMaxDarkeningMin: 1,
   localBackgroundShadowPixelRatioMin: 0.0005,
@@ -86,7 +89,8 @@ async function main() {
       worldShadowPosition: "each positive receiver darkening sample is ray-projected from its capture camera onto y=0.002; the camera-only comparison keeps elevation/depth fixed while changing azimuth so the luminance-weighted world x/z centroid is measured over comparable receiver coverage.",
       lightConfiguration: "DirectionalLight world position/target plus shadow-camera world matrix, near/far, and orthographic bounds must be unchanged across camera-only captures.",
       dedicatedRawVisibility: "dedicated raw mode renders grayscale visibility from the independent caster depth target; the same-surface outer ROI must remain lit while the separate-surface shadow ROI contains a bounded dark region. The synthetic fixture has no background receiver, so that ROI is reported as null.",
-      localSparseShadow: "local character gates use mean darkening, p995 darkening, and positive shadow-pixel ratio; background gates use mean darkening, max darkening, and positive shadow-pixel ratio because p995 can remain zero at very sparse coverage. p95 remains diagnostic-only."
+      localSparseShadow: "local character gates use mean darkening, p995 darkening, and positive shadow-pixel ratio; background gates use mean darkening, max darkening, and positive shadow-pixel ratio because p995 can remain zero at very sparse coverage. p95 remains diagnostic-only.",
+      vmdLifecyclePixels: "mode 0 requires near-zero OFF/ON image darkening; modes 1 and 2 require positive mean darkening and shadow-pixel coverage in both camera views."
     },
     cases: []
   };
@@ -199,7 +203,7 @@ async function main() {
       : undefined;
     const localDarkeningPass = options.localModel
       ? options.vmdLifecycle
-        ? true
+        ? vmdLifecyclePixelPass(fullFrame, primary.on.diagnostics.vmdSelfShadow?.mode)
         : localMetricPasses(fullFrame, thresholds.localFullFrameMeanDarkeningMin, thresholds.localFullFrameP995DarkeningMin, thresholds.localShadowPixelRatioMin)
       : undefined;
     const localBackgroundPass = backgroundShadow
@@ -318,6 +322,24 @@ function vmdLifecycleGate(primary, moved) {
     (vmdShadowCameraFarPass(observations[1], observations[0]) &&
       vmdShadowCameraFarPass(observations[3], observations[2]));
   return offPass && onPass && onModeDistanceAgreement && onShadowCameraFarPass;
+}
+
+function vmdLifecyclePixelPass(metrics, mode) {
+  if (mode === 0) {
+    return metrics.primary.meanDarkening <= thresholds.vmdInactiveMeanDarkeningMax &&
+      metrics.moved.meanDarkening <= thresholds.vmdInactiveMeanDarkeningMax &&
+      metrics.primary.p995Darkening <= thresholds.vmdInactiveP995DarkeningMax &&
+      metrics.moved.p995Darkening <= thresholds.vmdInactiveP995DarkeningMax &&
+      metrics.primary.shadowPixelRatio <= thresholds.vmdInactiveShadowPixelRatioMax &&
+      metrics.moved.shadowPixelRatio <= thresholds.vmdInactiveShadowPixelRatioMax;
+  }
+  if (mode === 1 || mode === 2) {
+    return metrics.primary.meanDarkening >= thresholds.localFullFrameMeanDarkeningMin &&
+      metrics.moved.meanDarkening >= thresholds.localFullFrameMeanDarkeningMin &&
+      metrics.primary.shadowPixelRatio >= thresholds.localShadowPixelRatioMin &&
+      metrics.moved.shadowPixelRatio >= thresholds.localShadowPixelRatioMin;
+  }
+  return false;
 }
 
 function vmdShadowCameraFarPass(on, off) {

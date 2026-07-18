@@ -151,7 +151,9 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("currentPoseSource: undefined");
     expect(stateSource).toContain("currentBackgroundFiles: []");
     expect(modelSource).toContain("createViewerModelLoadOptions()");
-    expect(modelSource).toContain("await applyViewerPipelineToModel(state.currentModel");
+    expect(modelSource).toContain("{ shouldCommit: isCurrentLoad }");
+    expect(pipelineSource).toContain('if (shouldCommit && !shouldCommit()) {');
+    expect(pipelineSource).toContain("return false;");
     expect(modelSource).toContain("syncMmdTslDedicatedShadowVisibility(model.root);");
     expect(rendererSwitchSource).toContain("const restoreParamName = \"restoreState\"");
     expect(rendererSwitchSource).toContain("window.indexedDB.open");
@@ -226,6 +228,10 @@ describe("example viewer source", () => {
     expect(selfShadowGateSource).toContain("typeof renderer.renderAsync === \"function\"");
     expect(selfShadowGateSource).toContain("--raw-visibility requires a TSL backend");
     expect(selfShadowGateSource).toContain("--vmd-lifecycle");
+    expect(selfShadowGateSource).toContain("vmdLifecyclePixelPass(fullFrame");
+    expect(selfShadowGateSource).toContain("vmdInactiveMeanDarkeningMax");
+    expect(selfShadowGateSource).toContain("mode === 0");
+    expect(selfShadowGateSource).toContain("mode === 1 || mode === 2");
     expect(selfShadowGateSource).toContain("vmdObservation(primary.on.diagnostics)");
     expect(selfShadowGateSource).toContain('status: "not-applicable"');
     expect(selfShadowGateSource).toContain("VMD self-shadow mode disabled");
@@ -319,7 +325,9 @@ describe("example viewer source", () => {
     expect(backgroundSource).toContain("disposeModelResources(state.currentBackground)");
     expect(pipelineSource).toContain("export function createViewerBackgroundLoadOptions()");
     expect(pipelineSource).toContain("morphAttributes: true");
-    expect(pipelineSource).toContain('export async function applyViewerPipelineToModel(model, label, { role = "character" } = {})');
+    expect(pipelineSource).toContain(
+      'export async function applyViewerPipelineToModel(model, label, { role = "character", shouldCommit } = {})'
+    );
     expect(pipelineSource).toContain('if (role === "character")');
     expect(pipelineSource).toContain('role === "character" && state.renderer?.backend?.isWebGPUBackend === true');
     expect(pipelineSource).toContain("export function syncViewerTslLight()");
