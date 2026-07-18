@@ -12,6 +12,13 @@ import { disposeModelResources } from "./dispose.js";
 import { renderStillFrame } from "./playback.js";
 import { state } from "./state.js";
 import { labelFromUrl } from "./url-label.js";
+import {
+  applyViewerPipelineToModel,
+  createViewerBackgroundLoadOptions,
+  isTslViewerPipeline
+} from "./viewer-pipeline.js";
+
+let backgroundLoadGeneration = 0;
 
 export async function loadBackgroundFromUrl(url) {
   return await loadBackground(url, labelFromUrl(url), () => createBackgroundLoader(url), {
@@ -59,13 +66,27 @@ export async function switchBackgroundEntry(entry) {
 }
 
 async function loadBackground(source, label, loaderFactory, entry) {
+  const generation = ++backgroundLoadGeneration;
+  let background;
+  let backgroundDisposed = false;
   try {
     setStatus(`Loading background: ${label}`, "loading");
-    clearBackground();
+    clearCommittedBackground();
     const loader = loaderFactory();
-    const background = await loader.loadModel(source, { frustumCulled: false });
+    background = await loader.loadModel(source, createViewerBackgroundLoadOptions());
+    if (generation !== backgroundLoadGeneration) {
+      disposeLoadedBackground();
+      return false;
+    }
+    await applyViewerPipelineToModel(background, label, { role: "background" });
+    if (generation !== backgroundLoadGeneration) {
+      disposeLoadedBackground();
+      return false;
+    }
     state.currentBackground = background;
-    syncMmdSpecularDirection(background.mesh.material, state.keyLight);
+    if (!isTslViewerPipeline()) {
+      syncMmdSpecularDirection(background.mesh.material, state.keyLight);
+    }
     state.scene.add(background.root);
     reportTextureDiagnostics(background);
     updateBackgroundSwitcher({
@@ -77,12 +98,30 @@ async function loadBackground(source, label, loaderFactory, entry) {
     renderStillFrame();
     return true;
   } catch (error) {
+    disposeLoadedBackground();
     setStatus(error instanceof Error ? error.message : String(error), "error");
     return false;
+  }
+
+  function disposeLoadedBackground() {
+    if (!background || backgroundDisposed) {
+      return;
+    }
+    backgroundDisposed = true;
+    if (state.currentBackground === background) {
+      clearBackground();
+      return;
+    }
+    disposeModelResources(background);
   }
 }
 
 export function clearBackground() {
+  backgroundLoadGeneration += 1;
+  clearCommittedBackground();
+}
+
+function clearCommittedBackground() {
   if (!state.currentBackground) {
     state.currentBackgroundFiles = [];
     state.currentBackgroundEntries = [];

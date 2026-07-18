@@ -25,17 +25,33 @@ export function createViewerModelLoadOptions() {
     ? {
         frustumCulled: false,
         morphSplit: false,
+        morphAttributes: state.renderer?.backend?.isWebGPUBackend === true ? false : true,
         outline: false,
         materialRenderOrder: false
       }
     : { frustumCulled: false };
 }
 
-export async function applyViewerPipelineToModel(model, label) {
-  state.pipelineModelName = label || model.mesh.name || "model";
+export function createViewerBackgroundLoadOptions() {
+  return isTslViewerPipeline()
+    ? {
+        frustumCulled: false,
+        morphSplit: false,
+        // Backgrounds never enter the viewer's sparse-morph compute pass.
+        morphAttributes: true,
+        outline: false,
+        materialRenderOrder: false
+      }
+    : { frustumCulled: false };
+}
+
+export async function applyViewerPipelineToModel(model, label, { role = "character" } = {}) {
+  if (role === "character") {
+    state.pipelineModelName = label || model.mesh.name || "model";
+  }
   if (isTslViewerPipeline()) {
     await loadWebgpuPipelineModule();
-    if (state.renderer?.backend?.isWebGPUBackend === true) {
+    if (role === "character" && state.renderer?.backend?.isWebGPUBackend === true) {
       enableMmdTslSparsePositionMorphs(model.mesh);
     }
     replaceMmdModelMaterialsWithTsl(model.mesh, {
@@ -61,11 +77,16 @@ export function updateViewerPipelineStatus() {
   }
 }
 
-export function syncCurrentModelTslLight() {
-  if (!isTslViewerPipeline() || !state.currentModel?.mesh?.material) {
+export function syncViewerTslLight() {
+  if (!isTslViewerPipeline()) {
     return;
   }
-  syncTslMaterialLight(state.currentModel.mesh.material);
+  if (state.currentModel?.mesh?.material) {
+    syncTslMaterialLight(state.currentModel.mesh.material);
+  }
+  if (state.currentBackground?.mesh?.material) {
+    syncTslMaterialLight(state.currentBackground.mesh.material);
+  }
 }
 
 export function syncCurrentModelTslMaterialStates() {

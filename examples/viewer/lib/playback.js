@@ -13,7 +13,7 @@ import { updateShadowCameraForFrame } from "./scene-setup.js";
 import {
   isTslViewerPipeline,
   submitViewerRender,
-  syncCurrentModelTslLight,
+  syncViewerTslLight,
   syncCurrentModelTslMaterialStates
 } from "./viewer-pipeline.js";
 
@@ -87,12 +87,14 @@ function applyLightMotion() {
     directionScratch: state.lightDirectionScratch
   });
   if (isTslViewerPipeline()) {
-    syncCurrentModelTslLight();
-  } else if (state.currentModel?.mesh?.material) {
-    syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
-  }
-  if (state.currentBackground?.mesh?.material) {
-    syncMmdSpecularDirection(state.currentBackground.mesh.material, state.keyLight);
+    syncViewerTslLight();
+  } else {
+    if (state.currentModel?.mesh?.material) {
+      syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
+    if (state.currentBackground?.mesh?.material) {
+      syncMmdSpecularDirection(state.currentBackground.mesh.material, state.keyLight);
+    }
   }
 }
 

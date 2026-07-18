@@ -234,6 +234,36 @@ const SKINNING_CASES = {
 };
 
 const VISUAL_CASES = {
+  "mmd-viewer-background-room": {
+    name: "generated viewer background room",
+    englishName: "GeneratedViewerBackgroundRoom",
+    comment: "redistribution-safe textured floor and wall fixture for the main viewer background lane",
+    englishComment: "A small textured room with a deliberately black prop catches WebGPU background texture resolution and black-crush regressions.",
+    geometry: mergeGeometries([
+      boxGeometry({ min: [-2.4, -0.12, -1.5], max: [2.4, 0, 1.5], bone: 0, normalMode: "face" }),
+      boxGeometry({ min: [-2.4, 0, 1.25], max: [2.4, 2.2, 1.38], bone: 0, normalMode: "face" }),
+      boxGeometry({ min: [-0.32, 0, 0.22], max: [0.32, 0.68, 0.7], bone: 0, normalMode: "corner" })
+    ]),
+    textures: ["background-room-checker.png"],
+    assets: [{ path: "background-room-checker.png", bytes: () => backgroundRoomCheckerPng() }],
+    materials: [
+      material("mat_background_floor", "BackgroundFloor", {
+        diffuse: [1, 1, 1, 1], specular: [0.02, 0.02, 0.02], ambient: [0.38, 0.38, 0.38],
+        edgeColor: [0, 0, 0, 0], edgeSize: 0, flags: 0x05, textureIndex: 0, faceVertexCount: 36,
+        comment: "textured floor; must retain saturated checker colours"
+      }),
+      material("mat_background_wall", "BackgroundWall", {
+        diffuse: [1, 1, 1, 1], specular: [0.02, 0.02, 0.02], ambient: [0.38, 0.38, 0.38],
+        edgeColor: [0, 0, 0, 0], edgeSize: 0, flags: 0x05, textureIndex: 0, faceVertexCount: 36,
+        comment: "textured wall; exercises URL-relative diffuse texture resolution"
+      }),
+      material("mat_background_black_prop", "BackgroundBlackProp", {
+        diffuse: [0, 0, 0, 1], specular: [0, 0, 0], ambient: [0, 0, 0],
+        edgeColor: [0, 0, 0, 0], edgeSize: 0, flags: 0x05, faceVertexCount: 36,
+        comment: "intentionally black prop; it must remain black without turning the full background black"
+      })
+    ]
+  },
   "mmd-diffuse-lit-box": {
     name: "generated visual diffuse lit box",
     englishName: "GeneratedVisualDiffuseLitBox",
@@ -1919,6 +1949,25 @@ function uvOrientationPng() {
       png.data[index] = color[0];
       png.data[index + 1] = color[1];
       png.data[index + 2] = color[2];
+      png.data[index + 3] = 255;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+function backgroundRoomCheckerPng() {
+  const size = 128;
+  const png = new PNG({ width: size, height: size });
+  const colors = [[36, 176, 222], [242, 166, 48], [70, 196, 112], [220, 74, 100]];
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const index = (y * size + x) * 4;
+      const cell = (Math.floor(x / 32) + Math.floor(y / 32)) % colors.length;
+      const color = colors[cell];
+      const border = x % 32 < 3 || y % 32 < 3;
+      png.data[index] = border ? 245 : color[0];
+      png.data[index + 1] = border ? 245 : color[1];
+      png.data[index + 2] = border ? 245 : color[2];
       png.data[index + 3] = 255;
     }
   }

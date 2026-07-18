@@ -104,6 +104,7 @@
     "visual:smoke:self-shadow": "npm run render:visual:self-shadow && npm run visual:report:self-shadow",
     "visual:smoke:webgpu-poc": "npm run build && node scripts/visual-regression/check-webgpu-poc.mjs",
     "visual:smoke:webgpu-poc:local": "npm run build && node scripts/visual-regression/check-webgpu-poc.mjs --include-webgpu --output-dir test-results/visual/webgpu-poc-optional",
+    "visual:smoke:viewer-background": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-background-room --output test/fixtures/generated/visual/mmd-viewer-background-room.pmx && node scripts/visual-regression/check-viewer-background.mjs",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
     "smoke:types": "node scripts/type-consumer-smoke.mjs",
     "test": "vitest run",

@@ -132,6 +132,7 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("disposeMmdTslShadowCaster?.(model.mesh)");
     expect(pipelineSource).toContain("appendOutlineGroups: true");
     expect(pipelineSource).toContain("morphSplit: false");
+    expect(pipelineSource).toContain("morphAttributes: state.renderer?.backend?.isWebGPUBackend === true ? false : true");
     expect(pipelineSource).toContain("outline: false");
     expect(pipelineSource).toContain("materialRenderOrder: false");
     expect(pipelineSource).toContain("syncMmdTslMaterialState(material, materialState)");
@@ -150,7 +151,7 @@ describe("example viewer source", () => {
     expect(playbackSource).not.toContain("state.renderer.render(state.scene, state.camera)");
     expect(pipelineSource).not.toContain("Array.isArray(material) ? material : [material]");
     expect(debugSource).toContain("setCurrentModelTslOutlineHidden(state.debugOutlineHidden)");
-    expect(playbackSource).toContain("syncCurrentModelTslLight()");
+    expect(playbackSource).toContain("syncViewerTslLight()");
     expect(playbackSource).toContain("syncCurrentModelTslMaterialStates()");
     expect(styles).toContain(".debug-backend-control");
     expect(styles).not.toContain(".pipeline-status");
@@ -168,6 +169,62 @@ describe("example viewer source", () => {
     expect(realModelVisualSource).toContain("scene.add(model.root)");
     expect(realModelVisualSource).toContain("createCamera(visualCase.camera, model.root");
     expect(realModelVisualSource).not.toContain("scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes)");
+  });
+
+  it("routes backgrounds through the role-aware TSL pipeline without replacing character state", async () => {
+    const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
+    const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+
+    expect(backgroundSource).toContain("createViewerBackgroundLoadOptions()");
+    expect(backgroundSource).toContain("let backgroundLoadGeneration = 0;");
+    expect(backgroundSource).toContain("const generation = ++backgroundLoadGeneration;");
+    expect(backgroundSource).toContain("clearCommittedBackground();");
+    expect(backgroundSource).toContain('applyViewerPipelineToModel(background, label, { role: "background" })');
+    expect(backgroundSource).toContain("if (generation !== backgroundLoadGeneration) {\n      disposeLoadedBackground();");
+    expect(backgroundSource).toContain("await applyViewerPipelineToModel(background, label, { role: \"background\" });\n    if (generation !== backgroundLoadGeneration)");
+    expect(backgroundSource).toContain("state.currentBackground = background;\n    if (!isTslViewerPipeline())");
+    expect(backgroundSource).toContain("backgroundLoadGeneration += 1;\n  clearCommittedBackground();");
+    expect(backgroundSource).toContain("disposeModelResources(background);");
+    expect(backgroundSource).toContain("if (!isTslViewerPipeline())");
+    expect(backgroundSource).toContain("disposeModelResources(state.currentBackground)");
+    expect(pipelineSource).toContain("export function createViewerBackgroundLoadOptions()");
+    expect(pipelineSource).toContain("morphAttributes: true");
+    expect(pipelineSource).toContain('export async function applyViewerPipelineToModel(model, label, { role = "character" } = {})');
+    expect(pipelineSource).toContain('if (role === "character")');
+    expect(pipelineSource).toContain('role === "character" && state.renderer?.backend?.isWebGPUBackend === true');
+    expect(pipelineSource).toContain("export function syncViewerTslLight()");
+    expect(pipelineSource).toContain("state.currentBackground?.mesh?.material");
+    expect(disposeSource).toContain("disposeViewerPipelineModel(model)");
+    expect(playbackSource).toContain("syncViewerTslLight()");
+    expect(playbackSource).toContain("} else {\n    if (state.currentModel?.mesh?.material)");
+    expect(playbackSource).toContain("if (state.currentBackground?.mesh?.material)");
+    expect(mainSource).toContain("await restoreRendererSwitchBackground(snapshot.background)");
+    expect(mainSource).toContain("await loadBackgroundFromUrl(background.url)");
+  });
+
+  it("keeps the independent main-viewer native WebGPU background visual gate wired to its synthetic fixture", async () => {
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+    const generatorSource = await readFile("scripts/fixtures/generate-minimal-pmx.mjs", "utf8");
+    const gateSource = await readFile("scripts/visual-regression/check-viewer-background.mjs", "utf8");
+
+    expect(packageJson.scripts["visual:smoke:viewer-background"]).toContain("check-viewer-background.mjs");
+    expect(packageJson.scripts["visual:smoke:viewer-background"]).toContain("mmd-viewer-background-room");
+    expect(generatorSource).toContain('"mmd-viewer-background-room"');
+    expect(generatorSource).toContain("background-room-checker.png");
+    expect(gateSource).toContain('"#pipeline-backend-switcher"');
+    expect(gateSource).toContain('CustomEvent("sl-change"');
+    expect(gateSource).toContain("nativeWebgpu");
+    expect(gateSource).toContain("diffuseTexturesResolved");
+    expect(gateSource).toContain("resolvedDiffuseTextureCount");
+    expect(gateSource).toContain("shadowCasters");
+    expect(gateSource).toContain("analyzeSyntheticRois");
+    expect(gateSource).toContain("maximumBlackPropMean");
+    expect(gateSource).toContain("clear-background");
+    expect(gateSource).toContain("--local-background");
+    expect(gateSource).toContain("/__mmd_data__/");
   });
 
   it("surfaces texture diagnostics from loaded models", async () => {
