@@ -16,6 +16,7 @@ describe("dedicated raw shadow visibility graph", () => {
     expect(source).toContain("occluderDepthDelta.mul(1500).sub(0.3)");
     expect(source).toContain("shadowCoord.x");
     expect(source).toContain(".greaterThanEqual(0)");
+    expect(source).toContain("shadowCoord.z.greaterThanEqual(0)");
     expect(source).toContain('reference("bias", "float", light.shadow)');
     expect(source).toContain('reference("normalBias", "float", light.shadow)');
     expect(source).toContain("inFrustum.select(visibility, float(1))");

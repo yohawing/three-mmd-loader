@@ -41,6 +41,7 @@ const thresholds = {
   localFullFrameMeanDarkeningMin: 0.02,
   localFullFrameP995DarkeningMin: 1,
   localShadowPixelRatioMin: 0.0005,
+  localBrightenedPixelCountMax: 0,
   vmdInactiveMeanDarkeningMax: 0.01,
   vmdInactiveP995DarkeningMax: 0.5,
   vmdInactiveShadowPixelRatioMax: 0.005,
@@ -90,6 +91,7 @@ async function main() {
       lightConfiguration: "DirectionalLight world position/target plus shadow-camera world matrix, near/far, and orthographic bounds must be unchanged across camera-only captures.",
       dedicatedRawVisibility: "dedicated raw mode renders grayscale visibility from the independent caster depth target; the same-surface outer ROI must remain lit while the separate-surface shadow ROI contains a bounded dark region. The synthetic fixture has no background receiver, so that ROI is reported as null.",
       localSparseShadow: "local character gates use mean darkening, p995 darkening, and positive shadow-pixel ratio; background gates use mean darkening, max darkening, and positive shadow-pixel ratio because p995 can remain zero at very sparse coverage. p95 remains diagnostic-only.",
+      noShadowBrightening: "Fixed local-model captures require SelfShadow ON to make zero pixels at least one luminance unit brighter than matching OFF; synthetic captures retain the ratio as diagnostic-only because isolated-context silhouette rasterization is not bit-identical.",
       vmdLifecyclePixels: "mode 0 requires near-zero OFF/ON image darkening; modes 1 and 2 require positive mean darkening and shadow-pixel coverage in both camera views."
     },
     cases: []
@@ -159,6 +161,10 @@ async function main() {
       primary: compareFullFrameLuminance(primary.off.png, primary.on.png),
       moved: compareFullFrameLuminance(moved.off.png, moved.on.png)
     };
+    const localNoShadowBrighteningPass = options.localModel
+      ? Object.values(fullFrame)
+        .every((metrics) => metrics.brightenedPixelCount <= thresholds.localBrightenedPixelCountMax)
+      : undefined;
     const backgroundShadow = backgroundScenario ? {
       primary: analyzeOutsideCharacterDarkening(
         backgroundScenario.primary.off.png,
@@ -215,6 +221,7 @@ async function main() {
     const localObservationPass = options.localModel
       ? diagnosticPass &&
         shadowCameraOccupancyPass &&
+        localNoShadowBrighteningPass &&
         localDarkeningPass &&
         (localBackgroundPass ?? true) &&
         (vmdLifecyclePass ?? true) &&
@@ -240,6 +247,9 @@ async function main() {
     report.worldShadowPosition = worldShadowPosition ?? null;
     report.lightConfiguration = lightConfiguration;
     report.shadowCameraOccupancy = { ...shadowCameraOccupancy, passed: shadowCameraOccupancyPass };
+    report.noShadowBrightening = options.localModel
+      ? { passed: localNoShadowBrighteningPass }
+      : { status: "diagnostic-only", reason: "strict zero is gated only for fixed local-model captures" };
     report.runtimeSamePageToggle = {
       trackedBy: "T070-19",
       note: "T070-16 compares initial selfShadow=0 and selfShadow=1 viewer contexts only; it does not use a same-page runtime toggle as shadow proof."
@@ -266,7 +276,7 @@ async function main() {
     report.messages = messages;
     report.passed = options.localModel ? localObservationPass && messages.length === 0 : syntheticPass && messages.length === 0;
     if (!report.passed) {
-      throw new Error(`viewer self-shadow gate failed: ${JSON.stringify({ diagnosticPass, shadowCameraOccupancy, shadowCameraOccupancyPass, primaryReceiver, movedReceiver, dedicatedPrimary, dedicatedMoved, dedicatedRawPass, worldShadowPosition, lightConfiguration, fullFrame, backgroundShadow, localDarkeningPass, localBackgroundPass, vmdLifecyclePass, messages })}`);
+      throw new Error(`viewer self-shadow gate failed: ${JSON.stringify({ diagnosticPass, shadowCameraOccupancy, shadowCameraOccupancyPass, localNoShadowBrighteningPass, primaryReceiver, movedReceiver, dedicatedPrimary, dedicatedMoved, dedicatedRawPass, worldShadowPosition, lightConfiguration, fullFrame, backgroundShadow, localDarkeningPass, localBackgroundPass, vmdLifecyclePass, messages })}`);
     }
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
@@ -936,11 +946,14 @@ function compareFullFrameLuminance(off, on) {
     );
   }
   const positive = darkening.filter((value) => value >= 1);
+  const brightened = darkening.filter((value) => value <= -1);
   return {
     meanDarkening: round(darkening.reduce((sum, value) => sum + value, 0) / darkening.length),
     p95Darkening: round(percentile(darkening, 0.95)),
     p995Darkening: round(percentile(darkening, 0.995)),
-    shadowPixelRatio: round(positive.length / darkening.length)
+    shadowPixelRatio: round(positive.length / darkening.length),
+    brightenedPixelCount: brightened.length,
+    brightenedPixelRatio: round(brightened.length / darkening.length)
   };
 }
 

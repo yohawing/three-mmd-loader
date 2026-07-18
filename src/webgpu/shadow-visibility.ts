@@ -38,6 +38,7 @@ export function createMmdTslShadowVisibilityNode(
       .and(shadowCoord.x.lessThanEqual(1))
       .and(shadowCoord.y.greaterThanEqual(0))
       .and(shadowCoord.y.lessThanEqual(1))
+      .and(shadowCoord.z.greaterThanEqual(0))
       .and(shadowCoord.z.lessThanEqual(1));
     const sampledDepth = texture(depthTexture, shadowCoord.xy).r;
     const occluderDepthDelta = shadowCoord.z.sub(sampledDepth);
