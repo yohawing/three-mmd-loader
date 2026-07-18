@@ -14,9 +14,16 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const syntheticFixturePath = "test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx";
 const defaultOutputDir = path.join(repoRoot, "test-results", "visual", "viewer-self-shadow");
 const receiverWorldBounds = { minX: -2.0, maxX: 2.0, minZ: -1.5, maxZ: 1.5, y: 0.002 };
+const dedicatedRawRois = {
+  unoccludedSameSurface: { minX: -1.8, maxX: -0.8, minZ: -1.2, maxZ: 1.2 },
+  separateSurface: { minX: 0.0, maxX: 2.0, minZ: 0.0, maxZ: 1.5 },
+  background: null
+};
 const cameraViews = {
   primary: { position: [3.6, 3.2, 7.4], target: [0, 0.25, 0] },
-  moved: { position: [-4.0, 2.65, 6.5], target: [0, 0.25, 0] }
+  // Keep elevation/depth fixed while changing azimuth so both captures retain
+  // comparable coverage of the same receiver shadow region.
+  moved: { position: [-3.0, 3.2, 7.4], target: [0, 0.25, 0] }
 };
 const localCameraViews = {
   // The main light arrives from front-up-right. Observe the opposite hemisphere
@@ -28,6 +35,9 @@ const thresholds = {
   receiverMeanDarkeningMin: 0.8,
   receiverP995DarkeningMin: 10,
   shadowPixelRatioMin: 0.005,
+  dedicatedShadowPixelRatioMax: 0.60,
+  dedicatedNonOccludedShadowRatioMax: 0.01,
+  dedicatedOffMeanLuminanceMin: 245,
   localFullFrameMeanDarkeningMin: 0.02,
   localFullFrameP95DarkeningMin: 1,
   localShadowPixelRatioMin: 0.0005,
@@ -71,8 +81,9 @@ async function main() {
       receiverDarkening: "fixed receiver-plane samples compare independent initial selfShadow=0 and selfShadow=1 viewer contexts; positive values are darker with SelfShadow enabled.",
       characterSelfShadow: "local character-only OFF/ON captures measure self-shadow without a background receiver.",
       characterToBackgroundShadow: "local character-plus-background OFF/ON captures measure positive darkening only outside a captured character silhouette, so character self-shadow cannot satisfy the background-shadow observation.",
-      worldShadowPosition: "each positive receiver darkening sample is ray-projected from its capture camera onto y=0.002; the luminance-weighted world x/z centroid must agree across camera-only captures.",
-      lightConfiguration: "DirectionalLight world position/target plus shadow-camera world matrix, near/far, and orthographic bounds must be unchanged across camera-only captures."
+      worldShadowPosition: "each positive receiver darkening sample is ray-projected from its capture camera onto y=0.002; the camera-only comparison keeps elevation/depth fixed while changing azimuth so the luminance-weighted world x/z centroid is measured over comparable receiver coverage.",
+      lightConfiguration: "DirectionalLight world position/target plus shadow-camera world matrix, near/far, and orthographic bounds must be unchanged across camera-only captures.",
+      dedicatedRawVisibility: "dedicated raw mode renders grayscale visibility from the independent caster depth target; the same-surface outer ROI must remain lit while the separate-surface shadow ROI contains a bounded dark region. The synthetic fixture has no background receiver, so that ROI is reported as null."
     },
     cases: []
   };
@@ -93,11 +104,11 @@ async function main() {
       ? dataUrl("motion", options.localMotion)
       : undefined;
     const characterScenario = await captureScenario(
-      browser, server.origin, modelUrl, undefined, motionUrl, "character", options.outputDir, Boolean(options.localModel), options.rawVisibility, options.standardReceiver
+      browser, server.origin, modelUrl, undefined, motionUrl, "character", options.outputDir, Boolean(options.localModel), options.rawVisibility, options.standardReceiver, options.dedicatedRawVisibility
     );
     const backgroundScenario = backgroundUrl
       ? await captureScenario(
-          browser, server.origin, modelUrl, backgroundUrl, motionUrl, "character-background", options.outputDir, true, options.rawVisibility, options.standardReceiver
+          browser, server.origin, modelUrl, backgroundUrl, motionUrl, "character-background", options.outputDir, true, options.rawVisibility, options.standardReceiver, options.dedicatedRawVisibility
         )
       : undefined;
     const { primary, moved } = characterScenario;
@@ -128,6 +139,12 @@ async function main() {
     const movedReceiver = options.localModel
       ? undefined
       : analyzeReceiverDarkening(moved.off.png, moved.on.png, moved.on.camera, receiverWorldBounds);
+    const dedicatedPrimary = options.localModel || !options.dedicatedRawVisibility
+      ? undefined
+      : analyzeDedicatedRawVisibility(primary.off.png, primary.on.png, primary.on.camera, receiverWorldBounds);
+    const dedicatedMoved = options.localModel || !options.dedicatedRawVisibility
+      ? undefined
+      : analyzeDedicatedRawVisibility(moved.off.png, moved.on.png, moved.on.camera, receiverWorldBounds);
     const worldShadowPosition = primaryReceiver && movedReceiver
       ? compareWorldShadowPosition(primaryReceiver, movedReceiver)
       : undefined;
@@ -147,11 +164,17 @@ async function main() {
         backgroundScenario.moved.on.characterSilhouette
       )
     } : null;
-    const diagnosticPass = selfShadowDiagnosticsPass(primary.on.diagnostics, !options.localModel) &&
-      selfShadowDiagnosticsPass(moved.on.diagnostics, !options.localModel);
+    const diagnosticPass = options.dedicatedRawVisibility
+      ? dedicatedRawDiagnosticsPass(primary.on.diagnostics, !options.localModel) &&
+        dedicatedRawDiagnosticsPass(moved.on.diagnostics, !options.localModel)
+      : selfShadowDiagnosticsPass(primary.on.diagnostics, !options.localModel) &&
+        selfShadowDiagnosticsPass(moved.on.diagnostics, !options.localModel);
     const shadowCameraOccupancyPass = Object.values(shadowCameraOccupancy).every((occupancy) =>
       shadowCameraOccupancyPasses(occupancy)
     );
+    const dedicatedRawPass = !options.dedicatedRawVisibility || options.localModel
+      ? true
+      : dedicatedRawVisibilityPass(dedicatedPrimary) && dedicatedRawVisibilityPass(dedicatedMoved);
     const syntheticPass = !options.localModel && primaryReceiver && movedReceiver && worldShadowPosition
       ? diagnosticPass &&
         shadowCameraOccupancyPass &&
@@ -161,6 +184,7 @@ async function main() {
         movedReceiver.p995Darkening >= thresholds.receiverP995DarkeningMin &&
         primaryReceiver.shadowPixelRatio >= thresholds.shadowPixelRatioMin &&
         movedReceiver.shadowPixelRatio >= thresholds.shadowPixelRatioMin &&
+        dedicatedRawPass &&
         worldShadowPosition.centroidDistance <= thresholds.worldCentroidMaxDistance &&
         lightConfiguration.maxDelta <= thresholds.lightWorldConfigurationMaxDelta
       : undefined;
@@ -179,6 +203,7 @@ async function main() {
       : undefined;
     report.rawVisibility = options.rawVisibility;
     report.standardReceiver = options.standardReceiver;
+    report.dedicatedRawVisibility = options.dedicatedRawVisibility;
     report.native = {
       primary: { off: primary.off.native, on: primary.on.native },
       moved: { off: moved.off.native, on: moved.on.native }
@@ -190,6 +215,9 @@ async function main() {
     report.diagnostics = diagnostics;
     report.fullFrame = fullFrame;
     report.receiver = primaryReceiver && movedReceiver ? { bounds: receiverWorldBounds, primary: primaryReceiver, moved: movedReceiver } : null;
+    report.dedicatedRaw = dedicatedPrimary && dedicatedMoved
+      ? { bounds: receiverWorldBounds, rois: dedicatedRawRois, primary: dedicatedPrimary, moved: dedicatedMoved, passed: dedicatedRawPass }
+      : null;
     report.worldShadowPosition = worldShadowPosition ?? null;
     report.lightConfiguration = lightConfiguration;
     report.shadowCameraOccupancy = { ...shadowCameraOccupancy, passed: shadowCameraOccupancyPass };
@@ -206,7 +234,7 @@ async function main() {
     report.messages = messages;
     report.passed = options.localModel ? localObservationPass && messages.length === 0 : syntheticPass && messages.length === 0;
     if (!report.passed) {
-      throw new Error(`viewer self-shadow gate failed: ${JSON.stringify({ diagnosticPass, shadowCameraOccupancy, shadowCameraOccupancyPass, primaryReceiver, movedReceiver, worldShadowPosition, lightConfiguration, fullFrame, backgroundShadow, localDarkeningPass, localBackgroundPass, messages })}`);
+      throw new Error(`viewer self-shadow gate failed: ${JSON.stringify({ diagnosticPass, shadowCameraOccupancy, shadowCameraOccupancyPass, primaryReceiver, movedReceiver, dedicatedPrimary, dedicatedMoved, dedicatedRawPass, worldShadowPosition, lightConfiguration, fullFrame, backgroundShadow, localDarkeningPass, localBackgroundPass, messages })}`);
     }
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
@@ -247,28 +275,28 @@ async function viewerObservation(page) {
   }));
 }
 
-async function captureScenario(browser, origin, modelUrl, backgroundUrl, motionUrl, label, outputDir, useAutoFit = false, rawVisibility = false, standardReceiver = false) {
+async function captureScenario(browser, origin, modelUrl, backgroundUrl, motionUrl, label, outputDir, useAutoFit = false, rawVisibility = false, standardReceiver = false, dedicatedRawVisibility = false) {
   const views = useAutoFit ? localCameraViews : cameraViews;
   const primary = await captureIsolatedPair(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-primary`, views.primary, outputDir, rawVisibility, standardReceiver
+    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-primary`, views.primary, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility
   );
   const moved = await captureIsolatedPair(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-moved`, views.moved, outputDir, rawVisibility, standardReceiver
+    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-moved`, views.moved, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility
   );
   return { primary, moved };
 }
 
-async function captureIsolatedPair(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, outputDir, rawVisibility, standardReceiver) {
+async function captureIsolatedPair(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility) {
   const off = await captureIsolatedShadowState(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, false, outputDir, rawVisibility, standardReceiver
+    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, false, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility
   );
   const on = await captureIsolatedShadowState(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, true, outputDir, rawVisibility, standardReceiver
+    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, true, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility
   );
   return { name, off, on };
 }
 
-async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, enabled, outputDir, rawVisibility, standardReceiver) {
+async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, enabled, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility) {
   const context = await browser.newContext({ viewport: { width: 960, height: 720 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   const messages = [];
@@ -297,7 +325,9 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
         throw new Error("Main viewer local motion URL load returned false.");
       }
     }
-    if (rawVisibility) {
+    if (dedicatedRawVisibility) {
+      await useDedicatedRawShadowVisibilityMaterial(page);
+    } else if (rawVisibility) {
       await useRawShadowVisibilityMaterial(page);
     }
     if (standardReceiver) {
@@ -339,6 +369,13 @@ async function useRawShadowVisibilityMaterial(page) {
       }
     });
   });
+}
+
+async function useDedicatedRawShadowVisibilityMaterial(page) {
+  const result = await page.evaluate(() => globalThis.mmdViewer?.debug?.dedicatedRawVisibility?.(true));
+  if (typeof result !== "string" || !result.endsWith("=true")) {
+    throw new Error(`Dedicated raw shadow visibility debug mode was not enabled: ${String(result)}`);
+  }
 }
 
 async function useStandardShadowReceiverMaterial(page) {
@@ -614,6 +651,77 @@ function analyzeReceiverDarkening(off, on, cameraSnapshot, bounds) {
   };
 }
 
+function analyzeDedicatedRawVisibility(off, on, cameraSnapshot, bounds) {
+  const base = analyzeReceiverDarkening(off, on, cameraSnapshot, bounds);
+  const camera = cameraFromSnapshot(cameraSnapshot);
+  const origin = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+  const nearPoint = new THREE.Vector3();
+  const direction = new THREE.Vector3();
+  const rois = {};
+  for (const [name, roi] of Object.entries(dedicatedRawRois)) {
+    if (!roi) {
+      rois[name] = null;
+      continue;
+    }
+    let samples = 0;
+    let darkPixels = 0;
+    let totalLuminance = 0;
+    for (let y = 0; y < on.height; y += 2) {
+      for (let x = 0; x < on.width; x += 2) {
+        const point = projectPixelToPlane(x, y, on.width, on.height, bounds.y, camera, origin, nearPoint, direction);
+        if (!point || point.x < roi.minX || point.x > roi.maxX || point.z < roi.minZ || point.z > roi.maxZ) {
+          continue;
+        }
+        const index = (y * on.width + x) * 4;
+        const value = luminance(on.data[index], on.data[index + 1], on.data[index + 2]);
+        samples += 1;
+        totalLuminance += value;
+        if (value < 245) {
+          darkPixels += 1;
+        }
+      }
+    }
+    rois[name] = {
+      samples,
+      meanLuminance: samples > 0 ? round(totalLuminance / samples) : 0,
+      shadowPixelRatio: samples > 0 ? round(darkPixels / samples) : 1
+    };
+  }
+  const offMeanLuminance = luminanceMeanInBounds(off, camera, bounds, origin, nearPoint, direction);
+  return { ...base, offMeanLuminance, rois };
+}
+
+function luminanceMeanInBounds(png, camera, bounds, origin, nearPoint, direction) {
+  let samples = 0;
+  let total = 0;
+  for (let y = 0; y < png.height; y += 2) {
+    for (let x = 0; x < png.width; x += 2) {
+      const point = projectPixelToPlane(x, y, png.width, png.height, bounds.y, camera, origin, nearPoint, direction);
+      if (!point || point.x < bounds.minX || point.x > bounds.maxX || point.z < bounds.minZ || point.z > bounds.maxZ) {
+        continue;
+      }
+      const index = (y * png.width + x) * 4;
+      total += luminance(png.data[index], png.data[index + 1], png.data[index + 2]);
+      samples += 1;
+    }
+  }
+  return samples > 0 ? round(total / samples) : 0;
+}
+
+function dedicatedRawVisibilityPass(metrics) {
+  if (!metrics) {
+    return false;
+  }
+  const safe = metrics.rois?.unoccludedSameSurface;
+  const occluded = metrics.rois?.separateSurface;
+  return metrics.offMeanLuminance >= thresholds.dedicatedOffMeanLuminanceMin &&
+    metrics.p995Darkening >= thresholds.receiverP995DarkeningMin &&
+    metrics.shadowPixelRatio >= thresholds.shadowPixelRatioMin &&
+    metrics.shadowPixelRatio < thresholds.dedicatedShadowPixelRatioMax &&
+    safe?.shadowPixelRatio <= thresholds.dedicatedNonOccludedShadowRatioMax &&
+    occluded?.shadowPixelRatio >= thresholds.shadowPixelRatioMin;
+}
+
 function compareWorldShadowPosition(primary, moved) {
   if (!primary.centroid || !moved.centroid) {
     return { centroidDistance: Infinity, primaryCentroid: primary.centroid, movedCentroid: moved.centroid };
@@ -677,6 +785,22 @@ function selfShadowDiagnosticsPass(diagnostics, requireSparseMorphs) {
       material.receiveShadow &&
       material.receivedShadowNode === true
     );
+}
+
+function dedicatedRawDiagnosticsPass(diagnostics, requireSparseMorphs) {
+  const light = diagnostics.light;
+  return diagnostics.modelPresent &&
+    (!requireSparseMorphs || diagnostics.sparsePositionMorphsEnabled === true) &&
+    (!requireSparseMorphs || diagnostics.storedBoundingBox !== null) &&
+    diagnostics.casterCount > 0 &&
+    diagnostics.casterIndexCount > 0 &&
+    diagnostics.receiverMaterialCount > 0 &&
+    diagnostics.visibleMeshReceiveShadow === true &&
+    diagnostics.layerAgreement.casterMatchesShadowCamera === true &&
+    light?.castShadow === true &&
+    Number.isFinite(light.shadowCamera?.near) &&
+    Number.isFinite(light.shadowCamera?.far) &&
+    light.shadowCamera.far > light.shadowCamera.near;
 }
 
 function shadowCameraOccupancyPasses(occupancy) {
@@ -827,7 +951,8 @@ function parseArgs(args) {
     localMotion: undefined,
     localBackground: undefined,
     rawVisibility: false,
-    standardReceiver: false
+    standardReceiver: false,
+    dedicatedRawVisibility: false
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -848,6 +973,8 @@ function parseArgs(args) {
       options.rawVisibility = true;
     } else if (arg === "--standard-receiver") {
       options.standardReceiver = true;
+    } else if (arg === "--dedicated-raw-visibility") {
+      options.dedicatedRawVisibility = true;
     } else {
       throw new Error(`Unknown or incomplete argument: ${arg}`);
     }

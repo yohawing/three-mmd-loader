@@ -437,5 +437,13 @@ describe("visual regression smoke scripts", () => {
     expect(gate).toContain("useRawShadowVisibilityMaterial");
     expect(gate).toContain("--standard-receiver");
     expect(gate).toContain("useStandardShadowReceiverMaterial");
+    expect(gate).toContain("--dedicated-raw-visibility");
+    expect(gate).toContain("useDedicatedRawShadowVisibilityMaterial");
+    expect(gate).toContain("dedicatedRawVisibilityPass");
+    expect(gate).toContain("dedicatedNonOccludedShadowRatioMax");
+    expect(gate).toContain("dedicatedShadowPixelRatioMax");
+    expect(gate).toContain("unoccludedSameSurface");
+    expect(gate).toContain("separateSurface");
+    expect(gate).toContain("background: null");
   });
 });

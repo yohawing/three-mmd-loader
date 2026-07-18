@@ -12,6 +12,8 @@ describe("TSL dedicated self-shadow pass scaffold", () => {
     expect(source).toContain("new THREE.RenderTarget(SHADOW_TARGET_SIZE, SHADOW_TARGET_SIZE");
     expect(source).toContain("createMmdTslShadowVisibilityNode(light, depthTexture)");
     expect(source).toContain("setReceiverVisibilityDebug");
+    expect(source).toContain("metadata?.flags?.selfShadow !== true");
+    expect(source).toContain("mmdMaterial as {");
     expect(source).toContain("material.colorNode = sampleTarget ? vec3(visibilityNode) : vec3(1, 1, 1)");
     expect(source).toContain("material.receivedShadowNode = null");
     expect(source).toContain("material.lights = false");

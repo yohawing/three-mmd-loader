@@ -112,7 +112,10 @@ export function createMmdTslSelfShadowPass(
             lights?: boolean;
             userData: Record<string, unknown>;
           }) | undefined;
-          if (!material?.userData?.mmdTslMaterialUniforms) {
+          const metadata = material?.userData?.mmdMaterial as {
+            flags?: { selfShadow?: boolean };
+          } | undefined;
+          if (!material?.userData?.mmdTslMaterialUniforms || metadata?.flags?.selfShadow !== true) {
             continue;
           }
           const key = "mmdTslDedicatedShadowVisibilityDebug";
