@@ -147,12 +147,15 @@ describe("example viewer source", () => {
     expect(rendererSwitchSource).toContain("relativePath: file.webkitRelativePath || \"\"");
     expect(pipelineSource).not.toContain('from "../../../dist/webgpu/index.js"');
     expect(pipelineSource).toContain('import("../../../dist/webgpu/index.js")');
+    expect(pipelineSource).toContain('import("../../../dist/webgpu/self-shadow-pass.js")');
     expect(pipelineSource).toContain("dom.pipelineBackendSwitcher.value = state.rendererBackend");
     expect(pipelineSource).toContain('dom.pipelineBackendSwitcher.setAttribute("value", state.rendererBackend)');
     expect(pipelineSource).toContain('replaceMmdModelMaterialsWithTsl(model.mesh, {');
     expect(pipelineSource).toContain(
       "createMmdTslShadowCaster(model.mesh, { alphaTest: false });"
     );
+    expect(pipelineSource).toContain("disposeMmdTslSelfShadowPass();");
+    expect(pipelineSource).toContain("mmdTslSelfShadowPass.dispose();");
     expect(pipelineSource).toContain("disposeMmdTslShadowCaster?.(model.mesh)");
     expect(pipelineSource).toContain("appendOutlineGroups: true");
     expect(pipelineSource).toContain("morphSplit: false");
@@ -169,6 +172,10 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("setTslOutlineMaterialHidden(material, hidden)");
     expect(pipelineSource).toContain("export function submitViewerRender()");
     expect(pipelineSource).toContain("computeCurrentModelTslSparsePositionMorphs();");
+    expect(pipelineSource).toContain("ensureMmdTslSelfShadowPass();");
+    expect(pipelineSource).toContain("mmdTslSelfShadowPass.render(state.renderer, state.scene, state.keyLight);");
+    expect(pipelineSource).toContain("state.renderer.shadowMap.enabled = false;");
+    expect(pipelineSource).toContain("state.renderer.render(state.scene, state.camera);");
     expect(debugSource).toContain("submitViewerRender();");
     expect(debugSource).not.toContain("state.renderer.render(state.scene, state.camera)");
     expect(playbackSource).toContain("submitViewerRender();");
