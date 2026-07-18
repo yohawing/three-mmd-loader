@@ -66,6 +66,7 @@
     "smoke:bullet:mmd": "node scripts/smoke-bullet-mmd.mjs",
     "bench:runtime:js": "node scripts/bench-runtime-js.mjs",
     "bench:wasm:perf": "node scripts/bench_wasm_perf.mjs",
+    "bench:webgpu:sparse-morph": "node scripts/bench_webgpu_sparse_morph.mjs",
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",
     "example:viewer": "npm run dev",
     "check:fixtures": "node scripts/check-fixtures.mjs",

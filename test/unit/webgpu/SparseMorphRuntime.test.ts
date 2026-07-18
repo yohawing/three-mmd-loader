@@ -111,6 +111,20 @@ describe("sparse position morph runtime", () => {
     ).toBe(false);
     expect(geometry.getAttribute("position")).not.toHaveProperty("isStorageBufferAttribute", true);
   });
+
+  it("enables and disposes sparse morph compute from geometry loaded without dense attributes", () => {
+    const geometry = createThreeBufferGeometry(createBuffers(), [], [
+      { vertexOffsets: [{ vertexIndex: 0, position: [0.5, 0, 0] }] }
+    ], { morphAttributes: false });
+    const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshBasicNodeMaterial());
+    mesh.morphTargetInfluences = [0];
+
+    expect(geometry.morphAttributes.position).toBeUndefined();
+    expect(enableMmdTslSparsePositionMorphs(mesh)).toBe(true);
+    expect(geometry.morphAttributes.position).toEqual([]);
+    expect(disposeMmdTslSparsePositionMorphs(mesh)).toBe(true);
+    expect(geometry.morphAttributes.position).toBeUndefined();
+  });
 });
 
 function createMesh(): THREE.SkinnedMesh {

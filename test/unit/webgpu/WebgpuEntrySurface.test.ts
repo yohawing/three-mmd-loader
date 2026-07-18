@@ -32,9 +32,21 @@ describe("experimental WebGPU TSL entry surface", () => {
 
     expect(packageJson.scripts).toHaveProperty("visual:smoke:webgpu-poc");
     expect(packageJson.scripts).toHaveProperty("visual:smoke:webgpu-poc:local");
+    expect(packageJson.scripts).toHaveProperty("bench:webgpu:sparse-morph");
     expect(readme).toContain("npm run visual:smoke:webgpu-poc");
     expect(readme).toContain("npm run visual:smoke:webgpu-poc:local");
+    expect(readme).toContain("npm run bench:webgpu:sparse-morph -- --data-root <asset-root>");
     expect(readme).toContain("exports `@yohawing/three-mmd-loader/webgpu` as experimental");
+  });
+
+  it("keeps sparse morph benchmarking opt-in and native-WebGPU-only in the PoC", async () => {
+    const poc = await readFile("examples/webgpu-poc/main.js", "utf8");
+
+    expect(poc).toContain('const benchmarkMode = normalizeBenchmarkMode(params.get("benchmark"));');
+    expect(poc).toContain('modelLoadOptions.morphAttributes = false;');
+    expect(poc).toContain('enableMmdTslSparsePositionMorphs(model.mesh)');
+    expect(poc).toContain('computeMmdTslSparsePositionMorphs(renderer, model.mesh);');
+    expect(poc).toContain("window.__threeMmdWebgpuPocBenchmark = benchmarkHook;");
   });
 
   it("keeps local real-model comparison metrics thresholdable without max-only gating", async () => {

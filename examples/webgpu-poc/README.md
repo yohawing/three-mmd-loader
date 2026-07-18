@@ -54,6 +54,21 @@ Optional local real-model observation:
 node scripts/visual-regression/check-webgpu-poc.mjs --data-root F:/MMD --local-model "pmx/Sour式初音ミクVer.1.02/Black.pmx" --output-dir test-results/visual/webgpu-poc-local
 ```
 
+## Native WebGPU sparse morph benchmark
+
+Use local asset-relative paths to compare dense TSL morph attributes against the
+sparse WebGPU compute path. The script runs each mode in an isolated browser
+context and writes JSON only when `--output` is supplied.
+
+```bash
+npm run bench:webgpu:sparse-morph -- --data-root <asset-root> --model <model.pmx> --motion <motion.vmd> --warmup-frames 60 --sample-frames 240 --output test-results/webgpu-sparse-morph.json
+```
+
+It reports CPU frame-work and requestAnimationFrame p50/p95 values. CPU frame-work
+ends after `renderer.render()` submits work; neither metric is a GPU-completion
+timestamp. The command fails if native WebGPU, either asset, or enough sampled
+frames are unavailable.
+
 The public package exports `@yohawing/three-mmd-loader/webgpu` as experimental.
 The PoC still imports `/dist/webgpu/index.js` directly so this harness can test
 the built local files without package resolution.

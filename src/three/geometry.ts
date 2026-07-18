@@ -72,6 +72,12 @@ export interface ThreeMmdGeometryMorph {
   readonly denseAdditionalUvOffsets?: readonly (Float32Array | undefined)[];
 }
 
+/** Controls optional Three.js morph attribute allocation during geometry creation. */
+export interface ThreeMmdGeometryOptions {
+  /** Creates dense Three.js morph attributes. Defaults to true. */
+  readonly morphAttributes?: boolean;
+}
+
 export interface ThreeMmdMorphSplitGeometry {
   readonly geometry: THREE.BufferGeometry;
   readonly materialIndex: number;
@@ -88,7 +94,8 @@ type DenseProviderMorph = ThreeMmdGeometryMorph & {
 export function createThreeBufferGeometry(
   buffers: ThreeMmdGeometryBuffers,
   materials: readonly ThreeMmdGeometryMaterial[] = [],
-  morphs: readonly ThreeMmdGeometryMorph[] = []
+  morphs: readonly ThreeMmdGeometryMorph[] = [],
+  options: ThreeMmdGeometryOptions = {}
 ): THREE.BufferGeometry {
   validateGeometryInput(buffers, materials, morphs);
 
@@ -170,34 +177,36 @@ export function createThreeBufferGeometry(
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   if (morphs.length > 0) {
     setMmdGeometryMorphSource(geometry, morphs);
-    const morphAttributes = geometry.morphAttributes as Record<string, THREE.BufferAttribute[]>;
     geometry.morphTargetsRelative = true;
-    if (morphs.some(hasPositionMorphOffsets)) {
-      geometry.morphAttributes.position = createMorphAttributes(
-        morphs,
-        buffers.positions.length,
-        3,
-        (morph, length) => createThreeMorphPositionOffsets(length, morph)
-      );
-    }
-    if (morphs.some(hasUvMorphOffsets)) {
-      morphAttributes.uv = createMorphAttributes(
-        morphs,
-        buffers.uvs.length,
-        2,
-        (morph, length) => createThreeMorphUvOffsets(length, morph)
-      );
-    }
-    additionalUvs.forEach((additionalUv, index) => {
-      if (morphs.some((morph) => hasAdditionalUvMorphOffsets(morph, index))) {
-        morphAttributes[`uv${index + 1}`] = createMorphAttributes(
+    if (options.morphAttributes ?? true) {
+      const morphAttributes = geometry.morphAttributes as Record<string, THREE.BufferAttribute[]>;
+      if (morphs.some(hasPositionMorphOffsets)) {
+        geometry.morphAttributes.position = createMorphAttributes(
           morphs,
-          additionalUv.length,
-          4,
-          (morph, length) => createThreeAdditionalMorphUvOffsets(length, index, morph)
+          buffers.positions.length,
+          3,
+          (morph, length) => createThreeMorphPositionOffsets(length, morph)
         );
       }
-    });
+      if (morphs.some(hasUvMorphOffsets)) {
+        morphAttributes.uv = createMorphAttributes(
+          morphs,
+          buffers.uvs.length,
+          2,
+          (morph, length) => createThreeMorphUvOffsets(length, morph)
+        );
+      }
+      additionalUvs.forEach((additionalUv, index) => {
+        if (morphs.some((morph) => hasAdditionalUvMorphOffsets(morph, index))) {
+          morphAttributes[`uv${index + 1}`] = createMorphAttributes(
+            morphs,
+            additionalUv.length,
+            4,
+            (morph, length) => createThreeAdditionalMorphUvOffsets(length, index, morph)
+          );
+        }
+      });
+    }
   }
 
   createMmdRenderOrderGroups(buffers, materials).forEach((group) => {

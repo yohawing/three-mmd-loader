@@ -25,6 +25,7 @@ const viewMode = params.get("view") ?? "auto";
 const requestedPixelRatio = normalizePixelRatio(params.get("pixelRatio"));
 const debugSkinning = params.get("debug") === "skinning";
 const flatMaterial = params.get("flat") === "1";
+const benchmarkMode = normalizeBenchmarkMode(params.get("benchmark"));
 const startedAt = window.performance.now();
 
 let renderer;
@@ -32,6 +33,7 @@ let scene;
 let camera;
 let model;
 let computeStatus = "none";
+let benchmarkHook;
 
 setStatus(createLoadingStatus());
 
@@ -160,11 +162,15 @@ async function init() {
     const loader = new ThreeMmdLoader({
       runtime: { physics: "none" }
     });
-    model = await loader.loadModel(modelUrl, {
+    const modelLoadOptions = {
       outline: enableWebglOutline,
       materialRenderOrder: false,
       frustumCulled: false
-    });
+    };
+    if (benchmarkMode === "sparse") {
+      modelLoadOptions.morphAttributes = false;
+    }
+    model = await loader.loadModel(modelUrl, modelLoadOptions);
     if (motionUrl !== null) {
       const animation = await loader.loadAnimation(motionUrl);
       model.setAnimation(animation);
@@ -214,21 +220,45 @@ async function init() {
     }
   }
 
+  if (benchmarkMode !== undefined) {
+    if (renderer.backend?.isWebGPUBackend !== true) {
+      throw new Error("benchmark requires the native WebGPU backend");
+    }
+    if (!model || motionUrl === null) {
+      throw new Error("benchmark requires both model and motion query parameters");
+    }
+    if (benchmarkMode === "sparse") {
+      if (!enableMmdTslSparsePositionMorphs(model.mesh)) {
+        throw new Error("benchmark sparse mode could not enable sparse morph compute");
+      }
+      computeStatus = "sparse-benchmark";
+    }
+    benchmarkHook = createBenchmarkHook(model, benchmarkMode);
+    window.__threeMmdWebgpuPocBenchmark = benchmarkHook;
+  }
+
   renderer.setAnimationLoop(render);
 }
 
-function render() {
+function render(frameTimestamp) {
   const elapsed = (window.performance.now() - startedAt) / 1000;
+  const benchmarkStartedAt = benchmarkHook?.isActive() ? window.performance.now() : 0;
   if (model !== undefined) {
     if (spinModel) {
       model.root.rotation.y = Math.sin(elapsed * 0.35) * 0.18;
     }
-    model.update(0, { physics: false });
+    model.update(benchmarkMode === undefined ? 0 : elapsed, { physics: false });
+    if (benchmarkMode === "sparse") {
+      computeMmdTslSparsePositionMorphs(renderer, model.mesh);
+    }
     if (model.mesh.userData.webgpuPocDisablesStandardSkinning) {
       model.mesh.skeleton.update();
     }
   }
   renderer.render(scene, camera);
+  if (benchmarkStartedAt !== 0) {
+    benchmarkHook.record(frameTimestamp, window.performance.now() - benchmarkStartedAt, elapsed);
+  }
 }
 
 function resize() {
@@ -327,6 +357,89 @@ function createReadyStatus() {
     `compute=${computeStatus}`,
     "ready"
   ].join("\n");
+}
+
+function normalizeBenchmarkMode(value) {
+  if (value === null) return undefined;
+  if (value === "dense" || value === "sparse") return value;
+  throw new Error(`benchmark must be dense or sparse: ${value}`);
+}
+
+function createBenchmarkHook(activeModel, mode) {
+  let activeMeasurement;
+  return {
+    isActive: () => activeMeasurement !== undefined,
+    start: ({ warmupFrames = 60, sampleFrames = 240 } = {}) => {
+      if (activeMeasurement !== undefined) {
+        throw new Error("benchmark measurement is already active");
+      }
+      if (!Number.isInteger(warmupFrames) || warmupFrames < 0) {
+        throw new Error("benchmark warmupFrames must be a non-negative integer");
+      }
+      if (!Number.isInteger(sampleFrames) || sampleFrames < 2) {
+        throw new Error("benchmark sampleFrames must be an integer of at least 2");
+      }
+      return new Promise((resolve) => {
+        activeMeasurement = {
+          warmupRemaining: warmupFrames,
+          sampleFrames,
+          sampleIndex: 0,
+          previousFrameTimestamp: Number.NaN,
+          cpuFrameWorkMs: new Float64Array(sampleFrames),
+          rafIntervalMs: new Float64Array(sampleFrames),
+          resolve
+        };
+      });
+    },
+    record: (frameTimestamp, cpuFrameWorkMs, animationSeconds) => {
+      const measurement = activeMeasurement;
+      if (measurement === undefined) return;
+      const rafIntervalMs = Number.isFinite(measurement.previousFrameTimestamp)
+        ? frameTimestamp - measurement.previousFrameTimestamp
+        : Number.NaN;
+      measurement.previousFrameTimestamp = frameTimestamp;
+      if (measurement.warmupRemaining > 0) {
+        measurement.warmupRemaining -= 1;
+        return;
+      }
+      const index = measurement.sampleIndex;
+      measurement.cpuFrameWorkMs[index] = cpuFrameWorkMs;
+      measurement.rafIntervalMs[index] = rafIntervalMs;
+      measurement.sampleIndex = index + 1;
+      if (measurement.sampleIndex !== measurement.sampleFrames) return;
+
+      activeMeasurement = undefined;
+      measurement.resolve({
+        mode,
+        animationSeconds,
+        metadata: {
+          modelName: activeModel.mesh.name,
+          vertexCount: activeModel.mesh.geometry.getAttribute("position")?.count ?? 0,
+          morphCount: activeModel.mesh.morphTargetInfluences?.length ?? 0,
+          densePositionMorphAttributes: activeModel.mesh.geometry.morphAttributes.position?.length ?? 0,
+          nativeWebGpu: renderer.backend?.isWebGPUBackend === true
+        },
+        cpuFrameWorkMs: summarizeBenchmarkSamples(measurement.cpuFrameWorkMs),
+        rafIntervalMs: summarizeBenchmarkSamples(measurement.rafIntervalMs)
+      });
+    }
+  };
+}
+
+function summarizeBenchmarkSamples(samples) {
+  const sorted = Array.from(samples).filter(Number.isFinite).sort((left, right) => left - right);
+  if (sorted.length < 2) {
+    throw new Error("benchmark collected insufficient frame samples");
+  }
+  return {
+    count: sorted.length,
+    p50: percentile(sorted, 0.5),
+    p95: percentile(sorted, 0.95)
+  };
+}
+
+function percentile(sorted, fraction) {
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)];
 }
 
 function findTslShadowCaster(object) {

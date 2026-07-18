@@ -1,5 +1,5 @@
 // Full ThreeMmdLoader pipeline benchmark with performance profiling.
-// Usage: node scripts/bench_load_pipeline.mjs [pmx-or-pmd-path] [repeat] [baseline|tsl]
+// Usage: node scripts/bench_load_pipeline.mjs [pmx-or-pmd-path] [repeat] [baseline|tsl|tsl-sparse]
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -30,11 +30,16 @@ if (!Number.isFinite(repeat) || repeat < 1) {
   throw new Error(`repeat must be a positive integer: ${process.argv[3]}`);
 }
 const mode = process.argv[4] ?? "baseline";
-if (mode !== "baseline" && mode !== "tsl") {
-  throw new Error(`mode must be baseline or tsl: ${mode}`);
+if (mode !== "baseline" && mode !== "tsl" && mode !== "tsl-sparse") {
+  throw new Error(`mode must be baseline, tsl, or tsl-sparse: ${mode}`);
 }
-const loadOptions = mode === "tsl"
-  ? { morphSplit: false, outline: false, materialRenderOrder: false }
+const loadOptions = mode === "tsl" || mode === "tsl-sparse"
+  ? {
+      morphSplit: false,
+      morphAttributes: mode !== "tsl-sparse",
+      outline: false,
+      materialRenderOrder: false
+    }
   : {};
 
 const bytes = new Uint8Array(readFileSync(filePath));
