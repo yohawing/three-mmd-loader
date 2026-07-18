@@ -1,4 +1,4 @@
-import { Fn, float, lightShadowMatrix, normalWorld, positionWorld, reference, renderGroup, saturate, texture, vec3, vec4 } from "three/tsl";
+import { Fn, float, lightShadowMatrix, normalWorld, positionWorld, reference, renderGroup, texture, vec3, vec4 } from "three/tsl";
 import type * as THREE from "three/webgpu";
 import type Node from "three/src/nodes/core/Node.js";
 
@@ -41,8 +41,10 @@ export function createMmdTslShadowVisibilityNode(
       .and(shadowCoord.z.greaterThanEqual(0))
       .and(shadowCoord.z.lessThanEqual(1));
     const sampledDepth = texture(depthTexture, shadowCoord.xy).r;
-    const occluderDepthDelta = shadowCoord.z.sub(sampledDepth);
-    const visibility = float(1).sub(saturate(occluderDepthDelta.mul(1500).sub(0.3)));
+    // The viewer uses BasicShadowMap, whose getShadow() path is a single binary
+    // depth comparison. A continuous depth-delta ramp creates fractional shadow
+    // factors that incorrectly blend the fixed self-shadow toon color with white.
+    const visibility = shadowCoord.z.lessThanEqual(sampledDepth).select(float(1), float(0));
     return inFrustum.select(visibility, float(1)) as Node<"float">;
   })();
 }
