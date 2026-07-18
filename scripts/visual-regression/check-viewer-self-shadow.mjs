@@ -93,11 +93,11 @@ async function main() {
       ? dataUrl("motion", options.localMotion)
       : undefined;
     const characterScenario = await captureScenario(
-      browser, server.origin, modelUrl, undefined, motionUrl, "character", options.outputDir, Boolean(options.localModel)
+      browser, server.origin, modelUrl, undefined, motionUrl, "character", options.outputDir, Boolean(options.localModel), options.rawVisibility, options.standardReceiver
     );
     const backgroundScenario = backgroundUrl
       ? await captureScenario(
-          browser, server.origin, modelUrl, backgroundUrl, motionUrl, "character-background", options.outputDir, true
+          browser, server.origin, modelUrl, backgroundUrl, motionUrl, "character-background", options.outputDir, true, options.rawVisibility, options.standardReceiver
         )
       : undefined;
     const { primary, moved } = characterScenario;
@@ -177,6 +177,8 @@ async function main() {
         (localBackgroundPass ?? true) &&
         lightConfiguration.maxDelta <= thresholds.lightWorldConfigurationMaxDelta
       : undefined;
+    report.rawVisibility = options.rawVisibility;
+    report.standardReceiver = options.standardReceiver;
     report.native = {
       primary: { off: primary.off.native, on: primary.on.native },
       moved: { off: moved.off.native, on: moved.on.native }
@@ -245,28 +247,28 @@ async function viewerObservation(page) {
   }));
 }
 
-async function captureScenario(browser, origin, modelUrl, backgroundUrl, motionUrl, label, outputDir, useAutoFit = false) {
+async function captureScenario(browser, origin, modelUrl, backgroundUrl, motionUrl, label, outputDir, useAutoFit = false, rawVisibility = false, standardReceiver = false) {
   const views = useAutoFit ? localCameraViews : cameraViews;
   const primary = await captureIsolatedPair(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-primary`, views.primary, outputDir
+    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-primary`, views.primary, outputDir, rawVisibility, standardReceiver
   );
   const moved = await captureIsolatedPair(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-moved`, views.moved, outputDir
+    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-moved`, views.moved, outputDir, rawVisibility, standardReceiver
   );
   return { primary, moved };
 }
 
-async function captureIsolatedPair(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, outputDir) {
+async function captureIsolatedPair(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, outputDir, rawVisibility, standardReceiver) {
   const off = await captureIsolatedShadowState(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, false, outputDir
+    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, false, outputDir, rawVisibility, standardReceiver
   );
   const on = await captureIsolatedShadowState(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, true, outputDir
+    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, true, outputDir, rawVisibility, standardReceiver
   );
   return { name, off, on };
 }
 
-async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, enabled, outputDir) {
+async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, enabled, outputDir, rawVisibility, standardReceiver) {
   const context = await browser.newContext({ viewport: { width: 960, height: 720 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   const messages = [];
@@ -295,6 +297,12 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
         throw new Error("Main viewer local motion URL load returned false.");
       }
     }
+    if (rawVisibility) {
+      await useRawShadowVisibilityMaterial(page);
+    }
+    if (standardReceiver) {
+      await useStandardShadowReceiverMaterial(page);
+    }
     await page.waitForTimeout(700);
     const native = await viewerObservation(page);
     if (!native.nativeWebgpu) {
@@ -312,6 +320,51 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
   } finally {
     await context.close();
   }
+}
+
+async function useRawShadowVisibilityMaterial(page) {
+  await page.evaluate(async () => {
+    const viewer = globalThis.mmdViewer;
+    const { Fn, vec3, vec4 } = await import("/node_modules/three/build/three.tsl.js");
+    const white = vec3(1, 1, 1);
+    viewer.currentModel?.root?.traverse?.((object) => {
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        if (!material?.receivedShadowNode || !material?.userData?.mmdTslMaterialUniforms) {
+          continue;
+        }
+        material.colorNode = white;
+        material.receivedShadowNode = Fn(([shadow]) => vec4(vec3(shadow.r), 1));
+        material.needsUpdate = true;
+      }
+    });
+  });
+}
+
+async function useStandardShadowReceiverMaterial(page) {
+  await page.evaluate(async () => {
+    const viewer = globalThis.mmdViewer;
+    const { MeshToonNodeMaterial } = await import("/node_modules/three/build/three.webgpu.js");
+    const { Fn, vec3, vec4 } = await import("/node_modules/three/build/three.tsl.js");
+    viewer.currentModel?.root?.traverse?.((object) => {
+      if (!object.isMesh || !object.material) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      const replacements = materials.map((source) => {
+        if (!source?.userData?.mmdTslMaterialUniforms) return source;
+        const material = new MeshToonNodeMaterial({
+          color: 0xffffff,
+          side: source.side,
+          transparent: source.transparent,
+          depthWrite: source.depthWrite
+        });
+        material.colorNode = vec3(1, 1, 1);
+        material.receivedShadowNode = Fn(([shadow]) => vec4(vec3(shadow.r), 1));
+        material.castShadowNode = vec4(1, 1, 1, 1);
+        return material;
+      });
+      object.material = Array.isArray(object.material) ? replacements : replacements[0];
+    });
+  });
 }
 
 async function captureCharacterSilhouette(page, outputPath) {
@@ -772,7 +825,9 @@ function parseArgs(args) {
     outputDir: defaultOutputDir,
     localModel: undefined,
     localMotion: undefined,
-    localBackground: undefined
+    localBackground: undefined,
+    rawVisibility: false,
+    standardReceiver: false
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -789,6 +844,10 @@ function parseArgs(args) {
     } else if (arg === "--local-background" && value) {
       options.localBackground = path.resolve(value);
       index += 1;
+    } else if (arg === "--raw-visibility") {
+      options.rawVisibility = true;
+    } else if (arg === "--standard-receiver") {
+      options.standardReceiver = true;
     } else {
       throw new Error(`Unknown or incomplete argument: ${arg}`);
     }

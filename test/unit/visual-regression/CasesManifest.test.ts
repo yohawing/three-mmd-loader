@@ -433,5 +433,9 @@ describe("visual regression smoke scripts", () => {
     expect(gate).toContain("characterToBackgroundShadow");
     expect(gate).toContain("analyzeOutsideCharacterDarkening");
     expect(gate).toContain("captureCharacterSilhouette");
+    expect(gate).toContain("--raw-visibility");
+    expect(gate).toContain("useRawShadowVisibilityMaterial");
+    expect(gate).toContain("--standard-receiver");
+    expect(gate).toContain("useStandardShadowReceiverMaterial");
   });
 });
