@@ -1,12 +1,15 @@
 import * as THREE from "three/webgpu";
-import { getShadowMaterial, getShadowRenderObjectFunction } from "three/tsl";
+import { getShadowMaterial, getShadowRenderObjectFunction, vec3 } from "three/tsl";
 
 import { MMD_SELF_SHADOW_LAYER } from "../three/shadow.js";
+import { createMmdTslShadowVisibilityNode } from "./shadow-visibility.js";
 
 export interface MmdTslSelfShadowPass {
   readonly renderTarget: THREE.RenderTarget;
   readonly depthTexture: THREE.DepthTexture;
+  readonly visibilityNode: ReturnType<typeof createMmdTslShadowVisibilityNode>;
   render(renderer: THREE.WebGPURenderer, scene: THREE.Scene, light: THREE.DirectionalLight): boolean;
+  setReceiverVisibilityDebug(root: THREE.Object3D, enabled: boolean, sampleTarget?: boolean): boolean;
   dispose(): void;
 }
 
@@ -32,6 +35,7 @@ export function createMmdTslSelfShadowPass(
   });
   renderTarget.texture.name = "MMD TSL self-shadow target";
   renderTarget.texture.generateMipmaps = false;
+  const visibilityNode = createMmdTslShadowVisibilityNode(light, depthTexture);
 
   const shadowMaterial = getShadowMaterial(light);
   const shadowRenderObjectFunction = getShadowRenderObjectFunction(
@@ -56,6 +60,7 @@ export function createMmdTslSelfShadowPass(
   return {
     renderTarget,
     depthTexture,
+    visibilityNode,
     render(currentRenderer, scene, currentLight) {
       if (
         disposed ||
@@ -92,6 +97,54 @@ export function createMmdTslSelfShadowPass(
         currentRenderer.shadowMap.enabled = originalShadowMapEnabled;
         restoreRendererAndSceneState(currentRenderer, scene, rendererState);
       }
+    },
+    setReceiverVisibilityDebug(root, enabled, sampleTarget = true) {
+      let changed = false;
+      root.traverse((object) => {
+        const materialValue = (object as THREE.Mesh).material;
+        const materials = materialValue
+          ? (Array.isArray(materialValue) ? materialValue : [materialValue])
+          : [];
+        for (let index = 0; index < materials.length; index += 1) {
+          const material = materials[index] as (THREE.Material & {
+            colorNode?: unknown;
+            receivedShadowNode?: unknown;
+            lights?: boolean;
+            userData: Record<string, unknown>;
+          }) | undefined;
+          if (!material?.userData?.mmdTslMaterialUniforms) {
+            continue;
+          }
+          const key = "mmdTslDedicatedShadowVisibilityDebug";
+          const saved = material.userData[key] as {
+            colorNode: unknown;
+            receivedShadowNode: unknown;
+            lights: boolean | undefined;
+          } | undefined;
+          if (enabled) {
+            if (!saved) {
+              material.userData[key] = {
+                colorNode: material.colorNode,
+                receivedShadowNode: material.receivedShadowNode,
+                lights: material.lights
+              };
+            }
+            material.colorNode = sampleTarget ? vec3(visibilityNode) : vec3(1, 1, 1);
+            material.receivedShadowNode = null;
+            material.lights = false;
+            material.needsUpdate = true;
+            changed = true;
+          } else if (saved) {
+            material.colorNode = saved.colorNode;
+            material.receivedShadowNode = saved.receivedShadowNode;
+            material.lights = saved.lights;
+            delete material.userData[key];
+            material.needsUpdate = true;
+            changed = true;
+          }
+        }
+      });
+      return changed;
     },
     dispose() {
       if (disposed) {

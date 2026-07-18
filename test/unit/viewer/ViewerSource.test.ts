@@ -174,6 +174,14 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("computeCurrentModelTslSparsePositionMorphs();");
     expect(pipelineSource).toContain("ensureMmdTslSelfShadowPass();");
     expect(pipelineSource).toContain("mmdTslSelfShadowPass.render(state.renderer, state.scene, state.keyLight);");
+    expect(pipelineSource).toContain("mmdTslDedicatedRawVisibilityDebugActive === true");
+    expect(pipelineSource).toContain("export function setMmdTslDedicatedRawVisibilityDebug(enabled = true)");
+    expect(pipelineSource).toContain("mmdTslSelfShadowPass.setReceiverVisibilityDebug(");
+    expect(pipelineSource).toContain("export function syncMmdTslDedicatedRawVisibilityDebug()");
+    expect(pipelineSource).toContain("state.debugSelfShadowEnabled === true");
+    expect(pipelineSource).toContain("mmdTslDedicatedRawVisibilityDebugActive = false;");
+    expect(pipelineSource).toContain("if (!root) {");
+    expect(pipelineSource).toContain("if (!mmdTslSelfShadowPass) {");
     expect(pipelineSource).toContain("state.renderer.shadowMap.enabled = false;");
     expect(pipelineSource).toContain("state.renderer.render(state.scene, state.camera);");
     expect(debugSource).toContain("submitViewerRender();");
@@ -182,6 +190,8 @@ describe("example viewer source", () => {
     expect(playbackSource).not.toContain("state.renderer.render(state.scene, state.camera)");
     expect(pipelineSource).not.toContain("Array.isArray(material) ? material : [material]");
     expect(debugSource).toContain("setCurrentModelTslOutlineHidden(state.debugOutlineHidden)");
+    expect(debugSource).toContain("dedicatedRawVisibility(enabled = true)");
+    expect(debugSource).toContain("setMmdTslDedicatedRawVisibilityDebug(enabled)");
     expect(playbackSource).toContain("syncViewerTslLight()");
     expect(playbackSource).toContain("syncCurrentModelTslMaterialStates()");
     expect(styles).toContain(".debug-backend-control");

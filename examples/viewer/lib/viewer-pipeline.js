@@ -18,6 +18,7 @@ let enableMmdTslSparsePositionMorphs;
 let createMmdTslSelfShadowPass;
 let mmdTslSelfShadowPass;
 let mmdTslSelfShadowPassRenderer;
+let mmdTslDedicatedRawVisibilityDebugActive = false;
 
 export function isTslViewerPipeline() {
   return state.viewerPipeline !== "baseline-webgl";
@@ -74,6 +75,7 @@ export async function applyViewerPipelineToModel(model, label, { role = "charact
 }
 
 export function clearViewerPipelineModel() {
+  mmdTslDedicatedRawVisibilityDebugActive = false;
   disposeMmdTslSelfShadowPass();
   state.pipelineModelName = "(none)";
   updateViewerPipelineStatus();
@@ -125,6 +127,7 @@ export function submitViewerRender() {
   const dedicatedShadowPassActive =
     isTslViewerPipeline() &&
     state.renderer.backend?.isWebGPUBackend === true &&
+    mmdTslDedicatedRawVisibilityDebugActive === true &&
     state.debugSelfShadowEnabled === true &&
     Boolean(state.keyLight && state.currentModel?.mesh && createMmdTslSelfShadowPass);
   if (dedicatedShadowPassActive) {
@@ -159,6 +162,53 @@ export function setCurrentModelTslOutlineHidden(hidden) {
     return;
   }
   setTslOutlineHidden(state.currentModel.mesh.material, hidden);
+}
+
+export function setMmdTslDedicatedRawVisibilityDebug(enabled = true) {
+  if (!isTslViewerPipeline() || state.renderer?.backend?.isWebGPUBackend !== true) {
+    return false;
+  }
+  const root = state.currentModel?.root;
+  if (enabled) {
+    mmdTslDedicatedRawVisibilityDebugActive = false;
+    if (!root) {
+      return false;
+    }
+    ensureMmdTslSelfShadowPass();
+    if (!mmdTslSelfShadowPass) {
+      return false;
+    }
+    mmdTslDedicatedRawVisibilityDebugActive = true;
+  } else {
+    mmdTslDedicatedRawVisibilityDebugActive = false;
+  }
+  if (!root || !mmdTslSelfShadowPass) {
+    return false;
+  }
+  const changed = mmdTslSelfShadowPass.setReceiverVisibilityDebug(
+    root,
+    enabled,
+    state.debugSelfShadowEnabled === true
+  );
+  if (changed) {
+    submitViewerRender();
+  }
+  return changed;
+}
+
+export function syncMmdTslDedicatedRawVisibilityDebug() {
+  if (!mmdTslDedicatedRawVisibilityDebugActive || !mmdTslSelfShadowPass) {
+    return false;
+  }
+  const root = state.currentModel?.root;
+  if (!root) {
+    return false;
+  }
+  return mmdTslSelfShadowPass.setReceiverVisibilityDebug(
+    root,
+    true,
+    state.debugSelfShadowEnabled === true
+  );
 }
 
 function syncTslMaterialStates(material) {

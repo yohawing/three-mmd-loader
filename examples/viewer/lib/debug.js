@@ -4,7 +4,12 @@ import { dom } from "./dom.js";
 import { normalizeMaterials } from "./dispose.js";
 import { evaluateRuntime } from "./playback.js";
 import { debugEnabled, state } from "./state.js";
-import { setCurrentModelTslOutlineHidden, submitViewerRender } from "./viewer-pipeline.js";
+import {
+  setCurrentModelTslOutlineHidden,
+  setMmdTslDedicatedRawVisibilityDebug,
+  syncMmdTslDedicatedRawVisibilityDebug,
+  submitViewerRender
+} from "./viewer-pipeline.js";
 
 export function createViewerDebugApi() {
   return {
@@ -28,6 +33,9 @@ export function createViewerDebugApi() {
     },
     selfShadow(enabled = true) {
       return `selfShadow=${setSelfShadowEnabled(enabled)}`;
+    },
+    dedicatedRawVisibility(enabled = true) {
+      return `dedicatedRawVisibility=${setMmdTslDedicatedRawVisibilityDebug(enabled)}`;
     },
     selfShadowDiagnostics: createSelfShadowDiagnostics,
     showColliders() {
@@ -280,6 +288,7 @@ export function setSelfShadowEnabled(enabled) {
     state.runtimePhysicsDisabledOptionsScratch.physics = false;
     evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
   }
+  syncMmdTslDedicatedRawVisibilityDebug();
   submitViewerRender();
   refreshDebugPanelState();
   return state.debugSelfShadowEnabled;
