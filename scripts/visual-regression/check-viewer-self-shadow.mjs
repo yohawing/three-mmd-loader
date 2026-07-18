@@ -687,7 +687,10 @@ function analyzeDedicatedRawVisibility(off, on, cameraSnapshot, bounds) {
       shadowPixelRatio: samples > 0 ? round(darkPixels / samples) : 1
     };
   }
-  const offMeanLuminance = luminanceMeanInBounds(off, camera, bounds, origin, nearPoint, direction);
+  // Measure the OFF-white baseline on the same-surface safety ROI so the
+  // unchanged caster silhouette cannot make the receiver baseline look dark.
+  const offBaselineBounds = { ...dedicatedRawRois.unoccludedSameSurface, y: bounds.y };
+  const offMeanLuminance = luminanceMeanInBounds(off, camera, offBaselineBounds, origin, nearPoint, direction);
   return { ...base, offMeanLuminance, rois };
 }
 
