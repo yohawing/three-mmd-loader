@@ -35,6 +35,30 @@ describe("example viewer source", () => {
     expect(sceneSetupSource).not.toContain("Math.max(radius * 40, 100)");
   });
 
+  it("auto-fits only an initially empty stage and preserves restored camera views", async () => {
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+
+    expect(modelSource).toContain("function shouldAutoFitCameraOnModelLoad(loadOptions)");
+    expect(modelSource).toContain("loadOptions.autoFitCamera !== false");
+    expect(modelSource).toContain("!state.currentModel");
+    expect(modelSource).toContain("!state.currentBackground");
+    expect(modelSource).toContain("!state.currentCameraMotion");
+    expect(modelSource.match(/if \(shouldAutoFitCamera\) \{\n {6}frameCurrentModel\(\);\n {4}\}/g)).toHaveLength(3);
+    expect(modelSource).toContain("export function frameCurrentModel()");
+    expect(modelSource).toContain("fitCameraToObject(state.currentModel.mesh)");
+    expect(mainSource).toContain("frameModel: frameCurrentModel");
+    expect(mainSource).toContain("const restoreModelLoadOptions = { autoFitCamera: false };");
+    expect(mainSource).toContain("loadModelFromUrl(model.url, restoreModelLoadOptions)");
+    expect(mainSource).toContain("loadModelFolder(files, restoreModelLoadOptions)");
+    expect(mainSource).toContain("switchFolderModel(selectedModel, restoreModelLoadOptions)");
+    expect(mainSource).toContain("loadModelFile(restoreFiles([model.file])[0], restoreModelLoadOptions)");
+    expect(mainSource).toContain("restoreRendererSwitchCameraView(snapshot.cameraView)");
+    expect(mainSource).toContain("camera.position.fromArray(view.position)");
+    expect(mainSource).toContain("state.controls.target.fromArray(view.target)");
+    expect(mainSource).toContain("camera.fov = view.fov");
+  });
+
   it("wires the main viewer as a TSL parity review viewer with a baseline fallback", async () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
     const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
@@ -346,7 +370,7 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("updateModelSwitcher(modelFile)");
     expect(modelSource).toContain("findMmdModelFiles");
     expect(modelSource).toContain("createMmdTextureMapFromFiles");
-    expect(modelSource).toContain("export async function switchFolderModel(modelFile)");
+    expect(modelSource).toContain("export async function switchFolderModel(modelFile, loadOptions = {})");
     expect(modelSource).toContain('setStatus(`Switching to ${modelFile.name}`, "loading")');
     expect(modelSource).toContain("createModelLoader({ textureMap: state.currentFolderTextureMap })");
     expect(modelSource).toContain("createViewerRuntimeOptions({");

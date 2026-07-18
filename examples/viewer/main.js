@@ -7,7 +7,7 @@ import { captureCanvas, captureAfterAndCompare, createViewerDebugApi, markBefore
 import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updatePlayToggle, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
-import { loadModel, loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
+import { loadModelFile, loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import {
@@ -34,6 +34,7 @@ const viewerApi = {
   loadMotionUrl: loadMotionFromUrl,
   loadBackgroundUrl: loadBackgroundFromUrl,
   loadCameraUrl: loadCameraFromUrl,
+  frameModel: frameCurrentModel,
   get currentModel() { return state.currentModel; },
   get currentMotion() { return state.currentMotion; },
   get currentBackground() { return state.currentBackground; },
@@ -564,21 +565,22 @@ async function restoreRendererSwitchState() {
 }
 
 async function restoreRendererSwitchModel(model) {
+  const restoreModelLoadOptions = { autoFitCamera: false };
   if (model.kind === "url") {
-    await loadModelFromUrl(model.url);
+    await loadModelFromUrl(model.url, restoreModelLoadOptions);
     return;
   }
   if (model.kind === "folder") {
     const files = restoreFiles(model.files);
-    await loadModelFolder(files);
+    await loadModelFolder(files, restoreModelLoadOptions);
     const selectedModel = state.currentFolderPmxFiles.find((file) => modelFileKey(file) === model.selectedKey);
     if (selectedModel) {
-      await switchFolderModel(selectedModel);
+      await switchFolderModel(selectedModel, restoreModelLoadOptions);
     }
     return;
   }
   if (model.kind === "file") {
-    await loadModel(restoreFiles([model.file])[0]);
+    await loadModelFile(restoreFiles([model.file])[0], restoreModelLoadOptions);
   }
 }
 

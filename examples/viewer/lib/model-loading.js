@@ -81,6 +81,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
       return false;
     }
     setStatus(`Loading model: ${label}`, "loading");
+    const shouldAutoFitCamera = shouldAutoFitCameraOnModelLoad(loadOptions);
     resetFolderModelState();
     const preservedMotion = state.currentMotion;
     clearModel({
@@ -116,7 +117,9 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
     dom.timeline.value = 0;
     updatePlaybackDisplay();
-    fitCameraToObject(state.currentModel.mesh);
+    if (shouldAutoFitCamera) {
+      frameCurrentModel();
+    }
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
@@ -157,7 +160,8 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
   }
 }
 
-export async function loadModelFolder(files) {
+export async function loadModelFolder(files, loadOptions = {}) {
+  const shouldAutoFitCamera = shouldAutoFitCameraOnModelLoad(loadOptions);
   resetFolderModelState();
   resetMotionSwitcherState();
   const modelFiles = findModelFiles(files);
@@ -201,7 +205,9 @@ export async function loadModelFolder(files) {
     dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
     dom.timeline.value = 0;
     updatePlaybackDisplay();
-    fitCameraToObject(state.currentModel.mesh);
+    if (shouldAutoFitCamera) {
+      frameCurrentModel();
+    }
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
     } else if (hasCurrentMotion()) {
@@ -240,10 +246,11 @@ export async function loadModelFolder(files) {
   }
 }
 
-export async function switchFolderModel(modelFile) {
+export async function switchFolderModel(modelFile, loadOptions = {}) {
   if (!state.currentFolderTextureMap) {
     return;
   }
+  const shouldAutoFitCamera = shouldAutoFitCameraOnModelLoad(loadOptions);
 
   const profile = createViewerLoadProfile(`switch:${modelFile.name}`);
   profile?.mark("start");
@@ -271,7 +278,9 @@ export async function switchFolderModel(modelFile) {
     dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
     dom.timeline.value = 0;
     updatePlaybackDisplay();
-    fitCameraToObject(state.currentModel.mesh);
+    if (shouldAutoFitCamera) {
+      frameCurrentModel();
+    }
     if (hasCurrentMotion()) {
       await ensurePhysicsBackendReady();
       state.currentModel.setAnimation(state.currentMotion);
@@ -339,6 +348,27 @@ export function clearModel(options = {}) {
   updatePlaybackDisplay();
   updateStageState();
   updateTransportState();
+}
+
+export function frameCurrentModel() {
+  if (!state.currentModel) {
+    return false;
+  }
+  fitCameraToObject(state.currentModel.mesh);
+  return true;
+}
+
+export function loadModelFile(file, loadOptions = {}) {
+  return loadModel(file, file.name, undefined, undefined, undefined, loadOptions);
+}
+
+function shouldAutoFitCameraOnModelLoad(loadOptions) {
+  return (
+    loadOptions.autoFitCamera !== false &&
+    !state.currentModel &&
+    !state.currentBackground &&
+    !state.currentCameraMotion
+  );
 }
 
 function addModelToScene(model) {
