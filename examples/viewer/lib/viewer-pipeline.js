@@ -62,12 +62,14 @@ export async function applyViewerPipelineToModel(model, label, { role = "charact
       model.mesh.computeBoundingBox();
       model.mesh.userData.mmdTslSparsePositionMorphs = enableMmdTslSparsePositionMorphs(model.mesh);
     }
+    ensureMmdTslSelfShadowPass();
     replaceMmdModelMaterialsWithTsl(model.mesh, {
       appendOutlineGroups: true,
-      respectMaterialShadowFlags: true
+      respectMaterialShadowFlags: true,
+      dedicatedShadowVisibilityNode: mmdTslSelfShadowPass?.visibilityNode
     });
     createMmdTslShadowCaster(model.mesh, { alphaTest: false });
-    ensureMmdTslSelfShadowPass();
+    syncTslDedicatedShadowVisibility(model.root);
     syncTslMaterialStates(model.mesh.material);
     syncTslMaterialLight(model.mesh.material);
   }
@@ -127,7 +129,6 @@ export function submitViewerRender() {
   const dedicatedShadowPassActive =
     isTslViewerPipeline() &&
     state.renderer.backend?.isWebGPUBackend === true &&
-    mmdTslDedicatedRawVisibilityDebugActive === true &&
     state.debugSelfShadowEnabled === true &&
     Boolean(state.keyLight && state.currentModel?.mesh && createMmdTslSelfShadowPass);
   if (dedicatedShadowPassActive) {
@@ -191,6 +192,7 @@ export function setMmdTslDedicatedRawVisibilityDebug(enabled = true) {
     state.debugSelfShadowEnabled === true
   );
   if (changed) {
+    syncTslDedicatedShadowVisibility(root, enabled);
     submitViewerRender();
   }
   return changed;
@@ -209,6 +211,43 @@ export function syncMmdTslDedicatedRawVisibilityDebug() {
     true,
     state.debugSelfShadowEnabled === true
   );
+}
+
+export function syncMmdTslDedicatedShadowVisibility(root = state.currentModel?.root) {
+  if (!root || !isTslViewerPipeline()) {
+    return false;
+  }
+  if (
+    state.renderer?.backend?.isWebGPUBackend === true &&
+    state.debugSelfShadowEnabled === true
+  ) {
+    ensureMmdTslSelfShadowPass();
+  }
+  const enabled = state.debugSelfShadowEnabled === true &&
+    mmdTslSelfShadowPass !== undefined;
+  return syncTslDedicatedShadowVisibility(root, enabled);
+}
+
+function syncTslDedicatedShadowVisibility(root, enabled) {
+  let changed = false;
+  root.traverse((object) => {
+    const materialValue = object.material;
+    const materials = materialValue
+      ? (Array.isArray(materialValue) ? materialValue : [materialValue])
+      : [];
+    for (let index = 0; index < materials.length; index += 1) {
+      const uniforms = materials[index]?.userData?.mmdTslMaterialUniforms;
+      if (!uniforms?.dedicatedShadowEnabled) {
+        continue;
+      }
+      const nextValue = enabled ? 1 : 0;
+      if (uniforms.dedicatedShadowEnabled.value !== nextValue) {
+        uniforms.dedicatedShadowEnabled.value = nextValue;
+        changed = true;
+      }
+    }
+  });
+  return changed;
 }
 
 function syncTslMaterialStates(material) {

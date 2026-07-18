@@ -70,6 +70,7 @@ describe("example viewer source", () => {
     const rendererSwitchSource = await readFile("examples/viewer/lib/renderer-switch-state.js", "utf8");
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const selfShadowGateSource = await readFile("scripts/visual-regression/check-viewer-self-shadow.mjs", "utf8");
     const styles = await readFile("examples/viewer/styles.css", "utf8");
 
     expect(html).toContain('const threeBuild = baseline');
@@ -135,6 +136,7 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("currentBackgroundFiles: []");
     expect(modelSource).toContain("createViewerModelLoadOptions()");
     expect(modelSource).toContain("await applyViewerPipelineToModel(state.currentModel");
+    expect(modelSource).toContain("syncMmdTslDedicatedShadowVisibility(model.root);");
     expect(rendererSwitchSource).toContain("const restoreParamName = \"restoreState\"");
     expect(rendererSwitchSource).toContain("window.indexedDB.open");
     expect(rendererSwitchSource).toContain("snapshotModel()");
@@ -174,10 +176,28 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("computeCurrentModelTslSparsePositionMorphs();");
     expect(pipelineSource).toContain("ensureMmdTslSelfShadowPass();");
     expect(pipelineSource).toContain("mmdTslSelfShadowPass.render(state.renderer, state.scene, state.keyLight);");
-    expect(pipelineSource).toContain("mmdTslDedicatedRawVisibilityDebugActive === true");
+    expect(pipelineSource).toContain("dedicatedShadowVisibilityNode: mmdTslSelfShadowPass?.visibilityNode");
+    expect(pipelineSource).toContain("export function syncMmdTslDedicatedShadowVisibility");
+    const submitViewerRenderStart = pipelineSource.indexOf("export function submitViewerRender()");
+    const submitViewerRenderEnd = pipelineSource.indexOf("export function disposeViewerPipelineModel");
+    expect(submitViewerRenderStart).toBeGreaterThanOrEqual(0);
+    expect(submitViewerRenderEnd).toBeGreaterThan(submitViewerRenderStart);
+    const submitViewerRenderSource = pipelineSource.slice(submitViewerRenderStart, submitViewerRenderEnd);
+    expect(submitViewerRenderSource).not.toContain("syncTslDedicatedShadowVisibility(");
+    expect(submitViewerRenderSource).not.toContain(
+      "mmdTslDedicatedRawVisibilityDebugActive === true"
+    );
     expect(pipelineSource).toContain("export function setMmdTslDedicatedRawVisibilityDebug(enabled = true)");
     expect(pipelineSource).toContain("mmdTslSelfShadowPass.setReceiverVisibilityDebug(");
     expect(pipelineSource).toContain("export function syncMmdTslDedicatedRawVisibilityDebug()");
+    expect(selfShadowGateSource).toContain('options.backend === "baseline"');
+    expect(selfShadowGateSource).toContain('backend === "webgpu"');
+    expect(selfShadowGateSource).toContain('options.backend = value.toLowerCase()');
+    expect(selfShadowGateSource).toContain("--dedicated-raw-visibility requires --backend webgpu.");
+    expect(selfShadowGateSource).toContain("renderer?.isWebGLRenderer === true");
+    expect(selfShadowGateSource).toContain("renderer?.isWebGPURenderer === true");
+    expect(selfShadowGateSource).toContain("typeof renderer.renderAsync === \"function\"");
+    expect(selfShadowGateSource).toContain("--raw-visibility requires a TSL backend");
     expect(pipelineSource).toContain("state.debugSelfShadowEnabled === true");
     expect(pipelineSource).toContain("mmdTslDedicatedRawVisibilityDebugActive = false;");
     expect(pipelineSource).toContain("if (!root) {");

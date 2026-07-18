@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 import * as THREE from "three/webgpu";
+import * as TSL from "three/tsl";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -19,6 +20,29 @@ describe("TSL material assembly", () => {
 
     expect(source).toContain("readonly legacySrgbFramebuffer?: boolean");
     expect(fromSourceBody).toContain("legacySrgbFramebuffer: options.legacySrgbFramebuffer === true");
+  });
+
+  it("forwards dedicated visibility only to PMX self-shadow receivers", async () => {
+    const source = await readFile("src/webgpu/material-assembly.ts", "utf8");
+    expect(source).toContain("metadata.flags?.selfShadow === true");
+    expect(source).toContain("options.dedicatedShadowVisibilityNode");
+
+    const receiverSource = createSourceMaterial({ edgeSize: 0 });
+    receiverSource.userData.mmdMaterial.flags.selfShadow = true;
+    const casterOnlySource = createSourceMaterial({ edgeSize: 0 });
+    casterOnlySource.userData.mmdMaterial.flags.selfShadow = false;
+    const visibilityNode = TSL.float(0);
+    const receiver = createMmdTslMaterialFromSource(receiverSource, {
+      dedicatedShadowVisibilityNode: visibilityNode
+    });
+    const casterOnly = createMmdTslMaterialFromSource(casterOnlySource, {
+      dedicatedShadowVisibilityNode: visibilityNode
+    });
+
+    expect(receiver.colorNode).toBeDefined();
+    expect(casterOnly.colorNode).toBeDefined();
+    expect(receiver.userData.mmdTslMaterialUniforms.dedicatedShadowEnabled.value).toBe(0);
+    expect(casterOnly.userData.mmdTslMaterialUniforms.dedicatedShadowEnabled.value).toBe(0);
   });
 
   it("copies specular metadata into TSL material uniforms", () => {

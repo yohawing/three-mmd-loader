@@ -7,6 +7,7 @@ import { debugEnabled, state } from "./state.js";
 import {
   setCurrentModelTslOutlineHidden,
   setMmdTslDedicatedRawVisibilityDebug,
+  syncMmdTslDedicatedShadowVisibility,
   syncMmdTslDedicatedRawVisibilityDebug,
   submitViewerRender
 } from "./viewer-pipeline.js";
@@ -288,6 +289,7 @@ export function setSelfShadowEnabled(enabled) {
     state.runtimePhysicsDisabledOptionsScratch.physics = false;
     evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
   }
+  syncMmdTslDedicatedShadowVisibility();
   syncMmdTslDedicatedRawVisibilityDebug();
   submitViewerRender();
   refreshDebugPanelState();

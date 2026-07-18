@@ -154,13 +154,28 @@ describe("TSL material core", () => {
     expect(baseColorSource).toContain("const gammaComposite = TSL.clamp(sphereComposite.add(specularComposite), 0, 1);");
     expect(baseColorSource).not.toContain("if (options.gammaSpaceComposite !== true) {");
     // Default experimental path stays linear for SRGBColorSpace output encode.
-    expect(baseColorSource).toContain("return TSL.sRGBTransferEOTF(gammaComposite)");
+    expect(baseColorSource).toContain("TSL.sRGBTransferEOTF(gammaComposite)");
     // Explicit legacy path skips EOTF so blending can match the gamma-space framebuffer.
     expect(baseColorSource).toContain("options.legacySrgbFramebuffer === true");
-    expect(baseColorSource).toMatch(
-      /if \(options\.legacySrgbFramebuffer === true\) \{\s*return gammaComposite/
-    );
+    expect(baseColorSource).toContain("? gammaComposite as ReturnType<typeof TSL.vec3>");
     expect(source).toContain("legacySrgbFramebuffer?: boolean");
+  });
+
+  it("keeps the dedicated self-shadow branch opt-in and uniform-gated", async () => {
+    const source = await readFile("src/webgpu/material-core.ts", "utf8");
+    expect(source).toContain("dedicatedShadowVisibilityNode?: THREE.Node<\"float\">");
+    expect(source).toContain("const dedicatedToonVisibility = TSL.min(");
+    expect(source).toContain("TSL.texture(options.toonMap).sample(TSL.vec2(0, 0))");
+    expect(source).toContain("const dedicatedSpecularGate = dedicatedShadowFactor.lessThan(0.999)");
+    expect(source).toContain("uniforms.dedicatedShadowEnabled");
+    expect(source).toMatch(
+      /const dedicatedSpecularComposite = [\s\S]*?\.mul\(dedicatedSpecularGate\)\n\s*\.mul\(specularGate\);/
+    );
+
+    const material = createMmdTslToonMaterial({ dedicatedShadowVisibilityNode: TSL.float(0) });
+    const uniforms = material.userData.mmdTslMaterialUniforms;
+    expect(uniforms.dedicatedShadowEnabled.value).toBe(0);
+    expect(material.colorNode).toBeDefined();
   });
 
   it("adds the additive sphere sample once for GoldenOracle parity", async () => {

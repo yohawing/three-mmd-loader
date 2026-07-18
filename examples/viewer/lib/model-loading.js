@@ -28,7 +28,8 @@ import {
   applyViewerPipelineToModel,
   clearViewerPipelineModel,
   createViewerModelLoadOptions,
-  isTslViewerPipeline
+  isTslViewerPipeline,
+  syncMmdTslDedicatedShadowVisibility
 } from "./viewer-pipeline.js";
 
 export async function loadModelFromUrl(url, loadOptions = {}) {
@@ -373,6 +374,7 @@ function shouldAutoFitCameraOnModelLoad(loadOptions) {
 
 function addModelToScene(model) {
   state.scene.add(model.root);
+  syncMmdTslDedicatedShadowVisibility(model.root);
 }
 
 export function bindDropTarget() {

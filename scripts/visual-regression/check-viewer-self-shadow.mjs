@@ -73,6 +73,7 @@ async function main() {
   });
   const report = {
     fixture: options.localModel ?? syntheticFixturePath,
+    backend: options.backend,
     localMotion: options.localMotion ?? null,
     localBackground: options.localBackground ?? null,
     passed: false,
@@ -104,11 +105,11 @@ async function main() {
       ? dataUrl("motion", options.localMotion)
       : undefined;
     const characterScenario = await captureScenario(
-      browser, server.origin, modelUrl, undefined, motionUrl, "character", options.outputDir, Boolean(options.localModel), options.rawVisibility, options.standardReceiver, options.dedicatedRawVisibility
+      browser, server.origin, modelUrl, undefined, motionUrl, "character", options.outputDir, Boolean(options.localModel), options.rawVisibility, options.standardReceiver, options.dedicatedRawVisibility, options.backend
     );
     const backgroundScenario = backgroundUrl
       ? await captureScenario(
-          browser, server.origin, modelUrl, backgroundUrl, motionUrl, "character-background", options.outputDir, true, options.rawVisibility, options.standardReceiver, options.dedicatedRawVisibility
+          browser, server.origin, modelUrl, backgroundUrl, motionUrl, "character-background", options.outputDir, true, options.rawVisibility, options.standardReceiver, options.dedicatedRawVisibility, options.backend
         )
       : undefined;
     const { primary, moved } = characterScenario;
@@ -164,14 +165,19 @@ async function main() {
         backgroundScenario.moved.on.characterSilhouette
       )
     } : null;
-    const diagnosticPass = options.dedicatedRawVisibility
-      ? dedicatedRawDiagnosticsPass(primary.on.diagnostics, !options.localModel) &&
-        dedicatedRawDiagnosticsPass(moved.on.diagnostics, !options.localModel)
-      : selfShadowDiagnosticsPass(primary.on.diagnostics, !options.localModel) &&
-        selfShadowDiagnosticsPass(moved.on.diagnostics, !options.localModel);
-    const shadowCameraOccupancyPass = Object.values(shadowCameraOccupancy).every((occupancy) =>
-      shadowCameraOccupancyPasses(occupancy)
-    );
+    const requireSparseMorphs = !options.localModel && options.backend === "webgpu";
+    const diagnosticPass = options.backend === "baseline"
+      ? true
+      : options.dedicatedRawVisibility
+        ? dedicatedRawDiagnosticsPass(primary.on.diagnostics, requireSparseMorphs) &&
+          dedicatedRawDiagnosticsPass(moved.on.diagnostics, requireSparseMorphs)
+        : selfShadowDiagnosticsPass(primary.on.diagnostics, requireSparseMorphs) &&
+          selfShadowDiagnosticsPass(moved.on.diagnostics, requireSparseMorphs);
+    const shadowCameraOccupancyPass = options.backend === "baseline"
+      ? true
+      : Object.values(shadowCameraOccupancy).every((occupancy) =>
+          shadowCameraOccupancyPasses(occupancy)
+        );
     const dedicatedRawPass = !options.dedicatedRawVisibility || options.localModel
       ? true
       : dedicatedRawVisibilityPass(dedicatedPrimary) && dedicatedRawVisibilityPass(dedicatedMoved);
@@ -266,37 +272,51 @@ async function waitForViewer(page) {
   });
 }
 
-async function viewerObservation(page) {
-  return await page.evaluate(() => ({
-    nativeWebgpu: globalThis.mmdViewer.renderer?.backend?.isWebGPUBackend === true,
-    modelPresent: Boolean(globalThis.mmdViewer.currentModel?.root),
-    backgroundPresent: Boolean(globalThis.mmdViewer.currentBackground?.root),
-    diagnostics: globalThis.mmdViewer.debug.selfShadowDiagnostics()
-  }));
+async function viewerObservation(page, backend) {
+  return await page.evaluate((requestedBackend) => {
+    const renderer = globalThis.mmdViewer.renderer;
+    const rendererKind = renderer?.isWebGLRenderer === true
+      ? "webgl"
+      : renderer?.isWebGPURenderer === true
+        ? "webgpu"
+        : "unknown";
+    const nativeWebgpu = renderer?.backend?.isWebGPUBackend === true;
+    const expectedRendererKind = requestedBackend === "baseline" ? "webgl" : "webgpu";
+    const expectedNativeWebgpu = requestedBackend === "webgpu";
+    return {
+      requestedBackend,
+      rendererKind,
+      nativeWebgpu,
+      backendMatch: rendererKind === expectedRendererKind && nativeWebgpu === expectedNativeWebgpu,
+      modelPresent: Boolean(globalThis.mmdViewer.currentModel?.root),
+      backgroundPresent: Boolean(globalThis.mmdViewer.currentBackground?.root),
+      diagnostics: globalThis.mmdViewer.debug.selfShadowDiagnostics()
+    };
+  }, backend);
 }
 
-async function captureScenario(browser, origin, modelUrl, backgroundUrl, motionUrl, label, outputDir, useAutoFit = false, rawVisibility = false, standardReceiver = false, dedicatedRawVisibility = false) {
+async function captureScenario(browser, origin, modelUrl, backgroundUrl, motionUrl, label, outputDir, useAutoFit = false, rawVisibility = false, standardReceiver = false, dedicatedRawVisibility = false, backend = "webgpu") {
   const views = useAutoFit ? localCameraViews : cameraViews;
   const primary = await captureIsolatedPair(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-primary`, views.primary, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility
+    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-primary`, views.primary, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility, backend
   );
   const moved = await captureIsolatedPair(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-moved`, views.moved, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility
+    browser, origin, modelUrl, backgroundUrl, motionUrl, `${label}-moved`, views.moved, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility, backend
   );
   return { primary, moved };
 }
 
-async function captureIsolatedPair(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility) {
+async function captureIsolatedPair(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility, backend) {
   const off = await captureIsolatedShadowState(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, false, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility
+    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, false, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility, backend
   );
   const on = await captureIsolatedShadowState(
-    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, true, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility
+    browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, true, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility, backend
   );
   return { name, off, on };
 }
 
-async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, enabled, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility) {
+async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundUrl, motionUrl, name, camera, enabled, outputDir, rawVisibility, standardReceiver, dedicatedRawVisibility, backend) {
   const context = await browser.newContext({ viewport: { width: 960, height: 720 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   const messages = [];
@@ -304,7 +324,7 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
   try {
     const shadowState = enabled ? "1" : "0";
     await page.goto(
-      `${origin}/examples/viewer/?backend=webgpu&debug&physics=0&runtime=js&selfShadow=${shadowState}`,
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0&runtime=js&selfShadow=${shadowState}`,
       { waitUntil: "domcontentloaded" }
     );
     await waitForViewer(page);
@@ -334,16 +354,16 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
       await useStandardShadowReceiverMaterial(page);
     }
     await page.waitForTimeout(700);
-    const native = await viewerObservation(page);
-    if (!native.nativeWebgpu) {
-      throw new Error(`Native WebGPU backend was not selected: ${JSON.stringify(native)}`);
+    const native = await viewerObservation(page, backend);
+    if (!native.backendMatch) {
+      throw new Error(`Unexpected renderer backend for ${backend}: ${JSON.stringify(native)}`);
     }
     const screenshotPath = path.join(outputDir, `${name}-${enabled ? "on" : "off"}.png`);
     const observation = await captureInitialShadowState(page, camera, screenshotPath, motionUrl ? 0.5 : 0);
     const characterSilhouette = backgroundUrl && enabled
       ? await captureCharacterSilhouette(page, screenshotPath.replace(/\.png$/, "-character-mask.png"))
       : undefined;
-    const shadowCameraOccupancy = enabled
+    const shadowCameraOccupancy = enabled && backend !== "baseline"
       ? await captureShadowCameraOccupancy(page, outputDir, name)
       : undefined;
     return { ...observation, native, characterSilhouette, shadowCameraOccupancy, messages };
@@ -423,7 +443,11 @@ async function captureCharacterSilhouette(page, outputPath) {
     renderer.shadowMap.enabled = false;
     renderer.setClearColor(0x000000, 1);
     viewer.scene.overrideMaterial = maskMaterial;
-    await renderer.renderAsync(viewer.scene, viewer.camera);
+    if (typeof renderer.renderAsync === "function") {
+      await renderer.renderAsync(viewer.scene, viewer.camera);
+    } else {
+      renderer.render(viewer.scene, viewer.camera);
+    }
   });
   try {
     const png = PNG.sync.read(await page.locator("canvas").screenshot());
@@ -950,6 +974,7 @@ function isPathInside(candidate, parent) {
 function parseArgs(args) {
   const options = {
     outputDir: defaultOutputDir,
+    backend: "webgpu",
     localModel: undefined,
     localMotion: undefined,
     localBackground: undefined,
@@ -962,6 +987,9 @@ function parseArgs(args) {
     const value = args[index + 1];
     if (arg === "--output-dir" && value) {
       options.outputDir = path.resolve(value);
+      index += 1;
+    } else if (arg === "--backend" && value) {
+      options.backend = value.toLowerCase();
       index += 1;
     } else if (arg === "--local-model" && value) {
       options.localModel = path.resolve(value);
@@ -987,6 +1015,18 @@ function parseArgs(args) {
   }
   if (options.localMotion && !options.localModel) {
     throw new Error("--local-motion requires --local-model.");
+  }
+  if (!["baseline", "forcewebgl", "webgpu"].includes(options.backend)) {
+    throw new Error(`--backend must be one of baseline, forcewebgl, webgpu; received ${options.backend}`);
+  }
+  if (options.dedicatedRawVisibility && options.backend !== "webgpu") {
+    throw new Error("--dedicated-raw-visibility requires --backend webgpu.");
+  }
+  if (options.backend === "baseline" && options.rawVisibility) {
+    throw new Error("--raw-visibility requires a TSL backend; use --backend forcewebgl or webgpu.");
+  }
+  if (options.backend === "baseline" && options.standardReceiver) {
+    throw new Error("--standard-receiver requires a TSL backend; use --backend forcewebgl or webgpu.");
   }
   for (const [flag, filePath] of [
     ["--local-model", options.localModel],

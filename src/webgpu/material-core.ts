@@ -68,6 +68,7 @@ export interface MmdTslMaterialCoreOptions {
   readonly toonMap?: THREE.Texture;
   readonly sphereMap?: THREE.Texture;
   readonly sphereMode?: "none" | "multiply" | "add" | "subTexture";
+  readonly dedicatedShadowVisibilityNode?: THREE.Node<"float">;
   readonly gammaSpaceComposite?: boolean;
   /**
    * When true, emit gamma-space composite RGB directly and pair the renderer with
@@ -90,6 +91,7 @@ export interface MmdTslMaterialUniforms {
   readonly textureFactor: THREE.Vector4;
   readonly sphereTextureFactor: THREE.Vector4;
   readonly toonTextureFactor: THREE.Vector4;
+  readonly dedicatedShadowEnabled: ReturnType<typeof TSL.float> & { value: number };
 }
 
 export function createMmdTslToonMaterial(options: MmdTslMaterialCoreOptions = {}): THREE.MeshToonNodeMaterial {
@@ -186,10 +188,68 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   const gammaComposite = TSL.clamp(sphereComposite.add(specularComposite), 0, 1);
   // legacySrgbFramebuffer: skip EOTF so alpha blending happens in gamma space, matching
   // the legacy WebGL MMD framebuffer path when paired with LinearSRGBColorSpace.
-  if (options.legacySrgbFramebuffer === true) {
-    return gammaComposite as ReturnType<typeof TSL.vec3>;
+  const legacyColor = options.legacySrgbFramebuffer === true
+    ? gammaComposite as ReturnType<typeof TSL.vec3>
+    : TSL.sRGBTransferEOTF(gammaComposite) as ReturnType<typeof TSL.vec3>;
+  if (!options.dedicatedShadowVisibilityNode) {
+    return legacyColor;
   }
-  return TSL.sRGBTransferEOTF(gammaComposite) as ReturnType<typeof TSL.vec3>;
+
+  // Native WebGPU's dedicated pass feeds the same MMD contract as the legacy
+  // shader: the shadow visibility is clamped by directional visibility, the
+  // bottom toon band is used only in the shadowed branch, and specular is gated
+  // by that combined visibility. Keep the pre-existing graph as the disabled
+  // branch so selfShadow OFF remains an image-identical path.
+  const dedicatedShadowFactor = options.dedicatedShadowVisibilityNode;
+  const dedicatedToonVisibility = TSL.min(
+    dedicatedShadowFactor,
+    TSL.clamp(signedDot.mul(3), 0, 1)
+  );
+  const dedicatedSelfShadowToon = options.toonMap
+    ? TSL.mix(
+        TSL.vec3(1, 1, 1),
+        TSL.texture(options.toonMap).sample(TSL.vec2(0, 0)).rgb.mul(toonTextureFactor.rgb),
+        toonTextureFactor.a
+      )
+    : TSL.uniform(uniforms.shadowTint);
+  const dedicatedToonLight = options.toonMap
+    ? dedicatedShadowFactor.lessThan(0.999).select(
+        TSL.mix(dedicatedSelfShadowToon, TSL.vec3(1, 1, 1), dedicatedToonVisibility),
+        toonMul
+      )
+    : TSL.vec3(1, 1, 1);
+  const dedicatedBaseComposite = litBase.mul(compositeDiffuseTexture).mul(textureMul);
+  const dedicatedSphereComposite =
+    options.sphereMode === "multiply"
+      ? dedicatedBaseComposite.mul(TSL.mix(
+          TSL.vec3(1, 1, 1),
+          compositeSphere.mul(sphereTextureFactor.rgb),
+          sphereTextureFactor.a
+        ))
+      : options.sphereMode === "add"
+        ? dedicatedBaseComposite.add(compositeSphere.mul(sphereTextureFactor.rgb).mul(sphereTextureFactor.a))
+        : options.sphereMode === "subTexture"
+          ? TSL.mix(dedicatedBaseComposite, compositeSphere, sphereTextureFactor.a)
+          : dedicatedBaseComposite;
+  const dedicatedSpecularGate = dedicatedShadowFactor.lessThan(0.999)
+    .select(dedicatedToonVisibility, 1);
+  const dedicatedSpecularComposite = TSL.pow(
+    TSL.max(0, TSL.dot(halfDirection, normalView)),
+    specularPower
+  )
+    .mul(specular)
+    .mul(lightColor)
+    .mul(dedicatedSpecularGate)
+    .mul(specularGate);
+  const dedicatedGammaComposite = TSL.clamp(
+    dedicatedSphereComposite.mul(dedicatedToonLight).add(dedicatedSpecularComposite),
+    0,
+    1
+  );
+  const dedicatedColor = options.legacySrgbFramebuffer === true
+    ? dedicatedGammaComposite as ReturnType<typeof TSL.vec3>
+    : TSL.sRGBTransferEOTF(dedicatedGammaComposite) as ReturnType<typeof TSL.vec3>;
+  return TSL.mix(legacyColor, dedicatedColor, uniforms.dedicatedShadowEnabled) as ReturnType<typeof TSL.vec3>;
 }
 
 export function createMmdTslReceivedShadowNode(options: MmdTslMaterialCoreOptions & {
@@ -287,7 +347,8 @@ function createMmdTslMaterialUniforms(options: MmdTslMaterialCoreOptions): MmdTs
     shadowTint: vectorFromTuple(options.shadowTint ?? [1, 1, 1]),
     textureFactor: vector4FromTuple(options.textureFactor ?? [1, 1, 1, 1]),
     sphereTextureFactor: vector4FromTuple(options.sphereTextureFactor ?? [0, 0, 0, 0]),
-    toonTextureFactor: vector4FromTuple(options.toonTextureFactor ?? [1, 1, 1, 1])
+    toonTextureFactor: vector4FromTuple(options.toonTextureFactor ?? [1, 1, 1, 1]),
+    dedicatedShadowEnabled: TSL.uniform(0, "float") as unknown as ReturnType<typeof TSL.float> & { value: number }
   };
 }
 

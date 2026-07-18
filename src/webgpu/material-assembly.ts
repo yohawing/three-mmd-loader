@@ -44,6 +44,7 @@ export interface MmdTslMaterialAssemblyOptions {
   readonly respectMaterialShadowFlags?: boolean;
   readonly appendOutlineGroups?: boolean;
   readonly forceOutlineGroups?: boolean;
+  readonly dedicatedShadowVisibilityNode?: THREE.Node<"float">;
   /**
    * When true, materials emit gamma-space composite RGB and must be paired with
    * `renderer.outputColorSpace = LinearSRGBColorSpace` for legacy WebGL framebuffer
@@ -67,6 +68,13 @@ export function createMmdTslMaterialFromSource(
     toonMap: textures.toonMap,
     sphereMap: textures.sphereMap,
     sphereMode: metadata.sphereMode ?? "none",
+    // Only receiver materials participate in the dedicated pass.  Caster-only
+    // and explicitly non-receiving PMX materials keep the legacy graph so the
+    // dedicated visibility cannot darken them as they render into the model.
+    dedicatedShadowVisibilityNode:
+      metadata.flags?.selfShadow === true
+        ? options.dedicatedShadowVisibilityNode
+        : undefined,
     gammaSpaceComposite:
       textures.diffuseMap !== undefined ||
       textures.toonMap !== undefined ||
