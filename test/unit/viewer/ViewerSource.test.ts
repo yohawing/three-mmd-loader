@@ -531,6 +531,7 @@ describe("example viewer source", () => {
     expect(cameraSource).toContain("state.animationLoader.createCameraTrack(loadedAnimation)");
     expect(cameraSource).toContain("lightFrames: animation.lightFrames");
     expect(cameraSource).toContain("state.animationLoader.createLightTrack(loadedAnimation)");
+    expect(cameraSource).not.toContain("state.renderer.render(");
 
     const dropHandler = modelSource.slice(
       modelSource.indexOf("function handleDroppedFiles"),
