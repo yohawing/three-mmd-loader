@@ -29,6 +29,7 @@ export function createViewerDebugApi() {
     selfShadow(enabled = true) {
       return `selfShadow=${setSelfShadowEnabled(enabled)}`;
     },
+    selfShadowDiagnostics: createSelfShadowDiagnostics,
     showColliders() {
       showColliderHelpers();
       submitViewerRender();
@@ -745,12 +746,125 @@ function createSmokeState() {
     selfShadowEnabled: state.debugSelfShadowEnabled,
     keyLightCastShadow: state.keyLight?.castShadow ?? null,
     rendererShadowMapEnabled: state.renderer?.shadowMap?.enabled ?? null,
+    selfShadow: createSelfShadowDiagnostics(),
     rigidBodyBounds: matrixTranslationBounds(rigidBodyTransforms),
     matricesFinite: finiteArray(physicsStage?.worldMatricesColumnMajor ?? []),
     morphWeightsFinite: finiteArray(physicsStage?.morphWeights ?? []),
     physicsMaxBonePositionDelta: maxStageTranslationDelta(ikStage, physicsStage),
     diagnostics: state.activePhysicsBackend?.diagnostics?.() ?? []
   };
+}
+
+function createSelfShadowDiagnostics() {
+  const mesh = state.currentModel?.mesh;
+  const light = state.keyLight;
+  const shadowCamera = light?.shadow?.camera;
+  if (light) {
+    light.updateMatrixWorld();
+    light.target.updateMatrixWorld();
+  }
+  shadowCamera?.updateMatrixWorld();
+  const shadowCameraLayerMask = shadowCamera?.layers?.mask ?? null;
+  const materials = mesh ? normalizeMaterials(mesh.material) : [];
+  const materialDiagnostics = materials.map((material, materialIndex) => {
+    const metadata = material.userData?.mmdMaterial;
+    const flags = metadata?.flags ?? {};
+    return {
+      materialIndex,
+      name: material.name || metadata?.name || null,
+      flags: {
+        groundShadow: flags.groundShadow === true,
+        selfShadowMap: flags.selfShadowMap === true,
+        selfShadow: flags.selfShadow === true,
+        edge: flags.edge === true
+      },
+      receiveShadow: flags.selfShadow === true,
+      receivedShadowNode: material.receivedShadowNode != null,
+      materialClass: material.constructor?.name ?? null,
+      receivedShadowPositionNode: Boolean(material.receivedShadowPositionNode),
+      normalNode: Boolean(material.normalNode),
+      positionNode: Boolean(material.positionNode),
+      // TSL exposes normalNode as the material normal input. The diagnostic
+      // deliberately reports presence instead of pretending to read a GPU-only value.
+      viewSpaceNormalPath: material.normalNode ? "material.normalNode" : null,
+      transparent: material.transparent === true,
+      depthWrite: material.depthWrite !== false,
+      visible: material.visible !== false,
+      side: material.side
+    };
+  });
+  const casters = [];
+  state.currentModel?.root?.traverse?.((object) => {
+    const caster = object.userData?.mmdTslShadowCaster;
+    if (!caster) {
+      return;
+    }
+    casters.push({
+      name: object.name || null,
+      layerMask: object.layers.mask,
+      layerMatchesShadowCamera: shadowCameraLayerMask === null
+        ? null
+        : (object.layers.mask & shadowCameraLayerMask) !== 0,
+      indexCount: object.geometry?.index?.count ?? 0,
+      groupCount: object.geometry?.groups?.length ?? 0,
+      opaqueDraws: caster.opaqueDraws ?? 0,
+      alphaTestDraws: caster.alphaTestDraws ?? 0,
+      sourceGroupCount: caster.sourceGroupCount ?? 0
+    });
+  });
+  const selfShadowFrames = state.currentMotion?.animation?.selfShadowFrames ?? [];
+  return {
+    modelPresent: Boolean(mesh),
+    sparsePositionMorphsEnabled: mesh?.userData?.mmdTslSparsePositionMorphs === true,
+    storedBoundingBox: mesh?.boundingBox
+      ? { min: vectorToArray(mesh.boundingBox.min), max: vectorToArray(mesh.boundingBox.max) }
+      : null,
+    visibleMeshLayerMask: mesh?.layers?.mask ?? null,
+    visibleMeshCastShadow: mesh?.castShadow === true,
+    visibleMeshReceiveShadow: mesh?.receiveShadow === true,
+    casterCount: casters.length,
+    casterIndexCount: casters.reduce((sum, caster) => sum + caster.indexCount, 0),
+    casterGroupCount: casters.reduce((sum, caster) => sum + caster.groupCount, 0),
+    casters,
+    receiverMaterialCount: materialDiagnostics.filter(material => material.receiveShadow).length,
+    materials: materialDiagnostics,
+    layerAgreement: {
+      shadowCameraLayerMask,
+      casterMatchesShadowCamera: casters.length > 0 && casters.every(caster => caster.layerMatchesShadowCamera === true)
+    },
+    light: light
+      ? {
+          castShadow: light.castShadow === true,
+          worldPosition: vectorToArray(light.getWorldPosition(new THREE.Vector3())),
+          targetWorldPosition: vectorToArray(light.target.getWorldPosition(new THREE.Vector3())),
+          shadowBias: light.shadow.bias,
+          shadowNormalBias: light.shadow.normalBias,
+          shadowMapSize: [light.shadow.mapSize.x, light.shadow.mapSize.y],
+          shadowCamera: shadowCamera
+            ? {
+                near: shadowCamera.near,
+                far: shadowCamera.far,
+                left: shadowCamera.left,
+                right: shadowCamera.right,
+                top: shadowCamera.top,
+                bottom: shadowCamera.bottom,
+                layerMask: shadowCamera.layers.mask,
+                worldMatrix: Array.from(shadowCamera.matrixWorld.elements)
+              }
+            : null
+        }
+      : null,
+    vmdSelfShadow: {
+      frameCount: selfShadowFrames.length,
+      sampledFrameIndex: state.selfShadowFrameHint.index,
+      mode: state.selfShadowStateScratch.mode,
+      distance: state.selfShadowStateScratch.distance
+    }
+  };
+}
+
+function vectorToArray(vector) {
+  return [vector.x, vector.y, vector.z];
 }
 
 function finiteArray(values) {

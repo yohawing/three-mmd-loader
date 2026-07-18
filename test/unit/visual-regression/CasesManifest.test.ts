@@ -13,6 +13,9 @@ const compareGeneratedPmxWebgpuScriptPath = path.resolve(
 const renderGeneratedPmxWebgpuScriptPath = path.resolve(
   "scripts/visual-regression/render-generated-pmx-webgpu.mjs"
 );
+const viewerSelfShadowGateScriptPath = path.resolve(
+  "scripts/visual-regression/check-viewer-self-shadow.mjs"
+);
 const packageJsonPath = path.resolve("package.json");
 
 interface RealModelVisualCase {
@@ -398,5 +401,37 @@ describe("visual regression smoke scripts", () => {
     expect(scripts["visual:smoke:self-shadow"]).toContain("visual:report:self-shadow");
     expect(scripts["visual:report:self-shadow"]).toContain("compute-shadow-metrics.mjs");
     expect(scripts["render:visual:self-shadow:local"]).toContain("render-local-self-shadow-pair.mjs");
+    expect(scripts["visual:smoke:viewer-self-shadow"]).toContain("check-viewer-self-shadow.mjs");
+  });
+
+  it("keeps the native main-viewer self-shadow gate measurable and local-asset ready", () => {
+    const gate = readFileSync(viewerSelfShadowGateScriptPath, "utf8");
+    const fixtureGenerator = readFileSync("scripts/fixtures/generate-minimal-pmx.mjs", "utf8");
+
+    expect(fixtureGenerator).toContain('"mmd-viewer-self-shadow-receiver"');
+    expect(fixtureGenerator).toContain('"viewer-self-shadow-toon.png"');
+    expect(fixtureGenerator).toContain("viewerSelfShadowToonPng");
+    expect(fixtureGenerator).toContain("shader v=0 reads the");
+    expect(fixtureGenerator).toContain("y === height - 1");
+    expect(gate).toContain("receiverMeanDarkeningMin");
+    expect(gate).toContain("worldCentroidMaxDistance");
+    expect(gate).toContain("analyzeReceiverDarkening");
+    expect(gate).toContain("compareWorldShadowPosition");
+    expect(gate).toContain("compareLightConfigurations");
+    expect(gate).toContain("--local-model");
+    expect(gate).toContain("--local-motion");
+    expect(gate).toContain("--local-background");
+    expect(gate).toContain("selfShadowDiagnosticsPass");
+    expect(gate).toContain("localFullFrameMeanDarkeningMin");
+    expect(gate).toContain("material.receivedShadowNode === true");
+    expect(gate).toContain("captureIsolatedPair");
+    expect(gate).toContain("selfShadow=${shadowState}");
+    expect(gate).toContain("runtimeSamePageToggle");
+    expect(gate).toContain("captureShadowCameraOccupancy");
+    expect(gate).toContain("shadow-camera-caster.png");
+    expect(gate).toContain("characterSelfShadow");
+    expect(gate).toContain("characterToBackgroundShadow");
+    expect(gate).toContain("analyzeOutsideCharacterDarkening");
+    expect(gate).toContain("captureCharacterSilhouette");
   });
 });

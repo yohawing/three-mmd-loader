@@ -171,6 +171,26 @@ describe("example viewer source", () => {
     expect(realModelVisualSource).not.toContain("scene.add(model.mesh, ...model.renderOrderMeshes, ...model.outlineMeshes)");
   });
 
+  it("exposes bounded self-shadow diagnostics for the native viewer gate", async () => {
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+
+    expect(debugSource).toContain("selfShadowDiagnostics: createSelfShadowDiagnostics");
+    expect(debugSource).toContain("selfShadow: createSelfShadowDiagnostics()");
+    expect(debugSource).toContain("receivedShadowNode: material.receivedShadowNode != null");
+    expect(debugSource).toContain("casterMatchesShadowCamera");
+    expect(debugSource).toContain("sparsePositionMorphsEnabled");
+    expect(debugSource).toContain("visibleMeshReceiveShadow");
+    expect(debugSource).toContain("shadowCamera: shadowCamera");
+    expect(debugSource).toContain("vmdSelfShadow:");
+  });
+
+  it("preserves CPU bounds before native sparse morph output replaces geometry positions", async () => {
+    const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
+
+    expect(pipelineSource).toContain("model.mesh.computeBoundingBox();");
+    expect(pipelineSource).toContain("model.mesh.userData.mmdTslSparsePositionMorphs = enableMmdTslSparsePositionMorphs(model.mesh);");
+  });
+
   it("routes backgrounds through the role-aware TSL pipeline without replacing character state", async () => {
     const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
     const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");

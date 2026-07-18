@@ -52,7 +52,11 @@ export async function applyViewerPipelineToModel(model, label, { role = "charact
   if (isTslViewerPipeline()) {
     await loadWebgpuPipelineModule();
     if (role === "character" && state.renderer?.backend?.isWebGPUBackend === true) {
-      enableMmdTslSparsePositionMorphs(model.mesh);
+      // Sparse morph output lives in GPU storage, so keep the CPU base-pose
+      // bounds before replacing position attributes. Shadow fitting uses
+      // Box3.setFromObject() and must not see the zero-initialized output buffer.
+      model.mesh.computeBoundingBox();
+      model.mesh.userData.mmdTslSparsePositionMorphs = enableMmdTslSparsePositionMorphs(model.mesh);
     }
     replaceMmdModelMaterialsWithTsl(model.mesh, {
       appendOutlineGroups: true,
