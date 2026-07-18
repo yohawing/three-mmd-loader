@@ -166,6 +166,9 @@ describe("TSL material core", () => {
     expect(source).toContain("dedicatedShadowVisibilityNode?: THREE.Node<\"float\">");
     expect(source).toContain("const dedicatedToonVisibility = TSL.min(");
     expect(source).toContain("TSL.texture(options.toonMap).sample(TSL.vec2(0, 0))");
+    expect(source).toMatch(
+      /const dedicatedToonLight = [\s\S]*?dedicatedShadowFactor\.lessThan\(0\.999\)\.select\(\s*TSL\.min\(\s*toonMul,\s*TSL\.mix\(\s*dedicatedSelfShadowToon/
+    );
     expect(source).toContain("const dedicatedSpecularGate = dedicatedShadowFactor.lessThan(0.999)");
     expect(source).toContain("uniforms.dedicatedShadowEnabled");
     expect(source).toMatch(

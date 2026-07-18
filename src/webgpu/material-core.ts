@@ -214,7 +214,14 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
     : TSL.uniform(uniforms.shadowTint);
   const dedicatedToonLight = options.toonMap
     ? dedicatedShadowFactor.lessThan(0.999).select(
-        TSL.mix(dedicatedSelfShadowToon, TSL.vec3(1, 1, 1), dedicatedToonVisibility),
+        TSL.min(
+          toonMul,
+          TSL.mix(
+            dedicatedSelfShadowToon,
+            TSL.vec3(1, 1, 1),
+            dedicatedToonVisibility
+          )
+        ),
         toonMul
       )
     : TSL.vec3(1, 1, 1);
