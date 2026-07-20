@@ -32,7 +32,18 @@ const localCameraViews = {
   moved: { useAutoFit: true, orbitRadians: Math.PI * 1.25 }
 };
 const thresholds = {
-  receiverMeanDarkeningMin: 0.8,
+  // 2026-07-20 (mmd-shading-notes.md §10.2 self-shadow composite fix): the receiver
+  // ROI mean darkening is no longer a reliable "shadow present" signal by itself.
+  // Real MMD drops the continuous toon ramp entirely while self-shadow is scene-ON,
+  // replacing it with a steep saturate(N.L*3) grade -- so most of an unoccluded,
+  // near-perpendicular flat receiver (like this synthetic floor) renders BRIGHTER
+  // than the OFF/ramp image, while the actual caster-occluded sub-region gets much
+  // darker. Net ROI mean can legitimately go negative (observed: primary -18.4,
+  // moved -10.5) even though shadowing is correctly localized. p995Darkening and
+  // shadowPixelRatio below are the load-bearing "shadow occurred" checks; this floor
+  // only guards against a total regression (e.g. mean collapsing far past what the
+  // brightening effect alone would produce).
+  receiverMeanDarkeningMin: -25,
   receiverP995DarkeningMin: 10,
   shadowPixelRatioMin: 0.005,
   dedicatedShadowPixelRatioMax: 0.60,
