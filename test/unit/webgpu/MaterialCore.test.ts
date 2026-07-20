@@ -164,16 +164,24 @@ describe("TSL material core", () => {
   it("keeps the dedicated self-shadow branch opt-in and uniform-gated", async () => {
     const source = await readFile("src/webgpu/material-core.ts", "utf8");
     expect(source).toContain("dedicatedShadowVisibilityNode?: THREE.Node<\"float\">");
-    expect(source).toContain("const dedicatedToonVisibility = TSL.min(");
     expect(source).toContain("TSL.texture(options.toonMap).sample(TSL.vec2(0, 0))");
-    expect(source).toContain(
-      "TSL.mix(dedicatedSelfShadowToon, TSL.vec3(1, 1, 1), dedicatedToonVisibility)"
-    );
-    expect(source).not.toMatch(/const dedicatedToonLight = [\s\S]*?TSL\.min\(\s*toonMul/);
-    expect(source).toContain("const dedicatedSpecularGate = dedicatedShadowFactor.lessThan(0.999)");
     expect(source).toContain("uniforms.dedicatedShadowEnabled");
+
+    // Real MMD 9.32 (mmd-shading-notes.md §10.2) always applies the dual-lerp when
+    // self-shadow is enabled -- no per-pixel `< 0.999` hybrid that mixes the toon
+    // ramp back in for lightly-shadowed pixels.
+    expect(source).not.toContain("dedicatedShadowFactor.lessThan(0.999)");
+    expect(source).toContain(
+      "options.toonMap ? TSL.min(dedicatedNLGrade, dedicatedShadowFactor) : dedicatedShadowFactor"
+    );
+    expect(source).toContain("const dedicatedShadowColor = dedicatedLitNoSpec.mul(dedicatedSelfShadowToon);");
+    expect(source).toContain("const dedicatedLitColor = dedicatedLitNoSpec.add(dedicatedSpecularComposite);");
+    expect(source).toContain(
+      "TSL.mix(dedicatedShadowColor, dedicatedLitColor, dedicatedVis)"
+    );
+    // Specular is gated unconditionally by the combined visibility (no ternary).
     expect(source).toMatch(
-      /const dedicatedSpecularComposite = [\s\S]*?\.mul\(dedicatedSpecularGate\)\n\s*\.mul\(specularGate\);/
+      /const dedicatedSpecularComposite = [\s\S]*?\.mul\(dedicatedVis\)\r?\n\s*\.mul\(specularGate\);/
     );
 
     const material = createMmdTslToonMaterial({ dedicatedShadowVisibilityNode: TSL.float(0) });

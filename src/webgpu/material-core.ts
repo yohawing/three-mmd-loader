@@ -15,20 +15,22 @@ interface MmdTslSourceRenderFlags {
   readonly depthWrite: boolean;
 }
 
-interface ShadowLightNode extends THREE.Node {
-  readonly shadowNode: THREE.Node<"vec4"> | null;
-}
-
+// NOTE (self-shadow composite location, mmd-shading-notes.md §10.4): this lighting
+// model used to multiply Three's own per-light `shadowNode` (built from the
+// renderer's standard shadow-map pipeline, driven by `light.castShadow` +
+// `renderer.shadowMap.enabled`) into the final color here. That path is live, not
+// dead: the viewer enables both the dedicated self-shadow pass AND
+// `renderer.shadowMap.enabled` together (see examples/viewer/lib/scene-setup.js,
+// `state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled`), and the same
+// `state.keyLight` is used for both. `colorNode` (createMmdTslBaseColorNode) already
+// bakes the complete MMD self-shadow dual-lerp composite (§10.2) when the dedicated
+// pass is enabled, so multiplying Three's standard shadow factor in here on top of
+// that would double-apply self-shadow darkening. Per the "composite happens in one
+// place" contract, this model now leaves `colorNode`'s output untouched and does not
+// consume `lightNode.shadowNode` at all. `createMmdTslReceivedShadowNode()` /
+// `material.receivedShadowNode` remain defined (kept for API stability / tests) but
+// their output is no longer read anywhere.
 class MmdTslLightingModel extends THREE.LightingModel {
-  private readonly shadowTint = TSL.vec3(1, 1, 1).toVar("mmdShadowTint");
-
-  override direct({ lightNode }: Parameters<THREE.LightingModel["direct"]>[0]): void {
-    const shadowNode = (lightNode as ShadowLightNode).shadowNode;
-    if (shadowNode !== null) {
-      this.shadowTint.mulAssign(shadowNode.rgb);
-    }
-  }
-
   override finish(builder: Parameters<THREE.LightingModel["finish"]>[0]): void {
     const { outgoingLight } = (builder as unknown as {
       readonly context: { readonly outgoingLight: unknown };
@@ -36,7 +38,7 @@ class MmdTslLightingModel extends THREE.LightingModel {
     const typedOutgoingLight = outgoingLight as {
       readonly rgb: { assign(value: THREE.Node): void };
     };
-    typedOutgoingLight.rgb.assign(TSL.diffuseColor.rgb.mul(this.shadowTint));
+    typedOutgoingLight.rgb.assign(TSL.diffuseColor.rgb);
   }
 }
 
@@ -195,16 +197,37 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
     return legacyColor;
   }
 
-  // Native WebGPU's dedicated pass feeds the same MMD contract as the legacy
-  // shader: the shadow visibility is clamped by directional visibility, the
-  // bottom toon band is used only in the shadowed branch, and specular is gated
-  // by that combined visibility. Keep the pre-existing graph as the disabled
-  // branch so selfShadow OFF remains an image-identical path.
+  // Native WebGPU's dedicated pass reproduces the real MMD 9.32 shader contract
+  // (mmd-shading-notes.md §10.2): self-shadow ON never uses the continuous toon
+  // ramp. Instead every receiver pixel is drawn with one dual-lerp between a
+  // "shadowTint" color chain and a fully-lit color chain, blended by a single
+  // visibility scalar. This replaces the old per-pixel `< 0.999` hybrid (which
+  // mixed the ramp back in for lightly-shadowed pixels and produced a visible
+  // seam at the shadow boundary -- see §10.4's explicit warning against that).
   const dedicatedShadowFactor = options.dedicatedShadowVisibilityNode;
-  const dedicatedToonVisibility = TSL.min(
-    dedicatedShadowFactor,
-    TSL.clamp(signedDot.mul(3), 0, 1)
+  // shadow-visibility.ts returns a negative sentinel outside the light frustum.
+  // §10.2: out-of-frustum pixels get no shadow AND no toon darkening at all, so
+  // `dedicatedVis` must be forced to 1 there instead of merely clamping the
+  // (unusable) sentinel into the N.L combination below.
+  const dedicatedInFrustum = dedicatedShadowFactor.greaterThanEqual(0);
+  const dedicatedNLGrade = TSL.clamp(signedDot.mul(3), 0, 1);
+  // Toon materials clamp visibility by a steep pseudo-N.L grade (the only "tone
+  // curve" self-shadow ON uses in place of the ramp); non-toon materials use the
+  // raw shadow visibility unmodified.
+  const dedicatedVis = dedicatedInFrustum.select(
+    options.toonMap ? TSL.min(dedicatedNLGrade, dedicatedShadowFactor) : dedicatedShadowFactor,
+    TSL.float(1)
   );
+  // shadowTint = toon texture bottom band (v=0). Toon textures are configured with
+  // flipY=true (src/three/textures.ts configureMmdToonTexture), which maps source
+  // image row 0 (bottom of the authored PNG/BMP, i.e. the darkest band) to shader
+  // v=0 -- verified against the identical (0, 0) sample already used by the
+  // baseline WebGL path (material-shader-hooks.ts MMD_SELF_SHADOW_TOON_V). No fix
+  // needed here; (0, 0) is already correct.
+  // TODO(§10.3): materials without a toon map fall back to the white `shadowTint`
+  // uniform default (baseline parity, docs/plans/t070-16-mmd-self-shadow-pass.md
+  // Phase 3). Real-device traces show black (0,0,0) for toon index -1 in at least
+  // one observed case; left as-is pending broader real-device verification.
   const dedicatedSelfShadowToon = options.toonMap
     ? TSL.mix(
         TSL.vec3(1, 1, 1),
@@ -212,14 +235,10 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
         toonTextureFactor.a
       )
     : TSL.uniform(uniforms.shadowTint);
-  const dedicatedToonLight = options.toonMap
-    ? dedicatedShadowFactor.lessThan(0.999).select(
-        TSL.mix(dedicatedSelfShadowToon, TSL.vec3(1, 1, 1), dedicatedToonVisibility),
-        toonMul
-      )
-    : TSL.vec3(1, 1, 1);
   const dedicatedBaseComposite = litBase.mul(compositeDiffuseTexture).mul(textureMul);
-  const dedicatedSphereComposite =
+  // litColor without specular (§10.2's "litColor(スペキュラ抜き)"), shared by both
+  // chains of the dual-lerp.
+  const dedicatedLitNoSpec =
     options.sphereMode === "multiply"
       ? dedicatedBaseComposite.mul(TSL.mix(
           TSL.vec3(1, 1, 1),
@@ -231,18 +250,20 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
         : options.sphereMode === "subTexture"
           ? TSL.mix(dedicatedBaseComposite, compositeSphere, sphereTextureFactor.a)
           : dedicatedBaseComposite;
-  const dedicatedSpecularGate = dedicatedShadowFactor.lessThan(0.999)
-    .select(dedicatedToonVisibility, 1);
+  // Specular is gated by the same combined visibility unconditionally (no
+  // `< 0.999` ternary): §10.2 "スペキュラは影とN.L勾配の両方で減衰する".
   const dedicatedSpecularComposite = TSL.pow(
     TSL.max(0, TSL.dot(halfDirection, normalView)),
     specularPower
   )
     .mul(specular)
     .mul(lightColor)
-    .mul(dedicatedSpecularGate)
+    .mul(dedicatedVis)
     .mul(specularGate);
+  const dedicatedShadowColor = dedicatedLitNoSpec.mul(dedicatedSelfShadowToon);
+  const dedicatedLitColor = dedicatedLitNoSpec.add(dedicatedSpecularComposite);
   const dedicatedGammaComposite = TSL.clamp(
-    dedicatedSphereComposite.mul(dedicatedToonLight).add(dedicatedSpecularComposite),
+    TSL.mix(dedicatedShadowColor, dedicatedLitColor, dedicatedVis),
     0,
     1
   );
