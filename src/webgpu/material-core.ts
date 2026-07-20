@@ -261,9 +261,13 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
     .mul(dedicatedVis)
     .mul(specularGate);
   const dedicatedShadowColor = dedicatedLitNoSpec.mul(dedicatedSelfShadowToon);
-  const dedicatedLitColor = dedicatedLitNoSpec.add(dedicatedSpecularComposite);
+  // Specular is added AFTER the lerp, not folded into the "fully lit" chain before it:
+  // apitrace's else-branch does `mul r1.xyz, r1, r3.x` (the base lerp by vis) then
+  // `mad r0.xyz, r4, r2, r1` (add specular*vis once). Multiplying specular into
+  // dedicatedLitNoSpec before mixing by dedicatedVis would attenuate it by vis twice
+  // (dedicatedSpecularComposite is already `* dedicatedVis`).
   const dedicatedGammaComposite = TSL.clamp(
-    TSL.mix(dedicatedShadowColor, dedicatedLitColor, dedicatedVis),
+    TSL.mix(dedicatedShadowColor, dedicatedLitNoSpec, dedicatedVis).add(dedicatedSpecularComposite),
     0,
     1
   );

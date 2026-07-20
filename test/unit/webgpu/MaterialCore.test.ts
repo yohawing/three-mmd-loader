@@ -175,9 +175,13 @@ describe("TSL material core", () => {
       "options.toonMap ? TSL.min(dedicatedNLGrade, dedicatedShadowFactor) : dedicatedShadowFactor"
     );
     expect(source).toContain("const dedicatedShadowColor = dedicatedLitNoSpec.mul(dedicatedSelfShadowToon);");
-    expect(source).toContain("const dedicatedLitColor = dedicatedLitNoSpec.add(dedicatedSpecularComposite);");
+    // Specular is added AFTER the vis lerp (apitrace: base lerp by vis, then a single
+    // `+ specular * vis` mad), not folded into the "fully lit" chain before the lerp --
+    // that would attenuate specular by vis twice, since dedicatedSpecularComposite is
+    // already `* dedicatedVis`.
+    expect(source).not.toContain("const dedicatedLitColor = dedicatedLitNoSpec.add(dedicatedSpecularComposite);");
     expect(source).toContain(
-      "TSL.mix(dedicatedShadowColor, dedicatedLitColor, dedicatedVis)"
+      "TSL.mix(dedicatedShadowColor, dedicatedLitNoSpec, dedicatedVis).add(dedicatedSpecularComposite)"
     );
     // Specular is gated unconditionally by the combined visibility (no ternary).
     expect(source).toMatch(
