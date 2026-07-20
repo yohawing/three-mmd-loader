@@ -288,7 +288,6 @@ describe("example viewer source", () => {
 
     expect(debugSource).toContain("selfShadowDiagnostics: createSelfShadowDiagnostics");
     expect(debugSource).toContain("selfShadow: createSelfShadowDiagnostics()");
-    expect(debugSource).toContain("receivedShadowNode: material.receivedShadowNode != null");
     expect(debugSource).toContain("casterMatchesShadowCamera");
     expect(debugSource).toContain("sparsePositionMorphsEnabled");
     expect(debugSource).toContain("visibleMeshReceiveShadow");

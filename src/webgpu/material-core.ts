@@ -27,9 +27,7 @@ interface MmdTslSourceRenderFlags {
 // pass is enabled, so multiplying Three's standard shadow factor in here on top of
 // that would double-apply self-shadow darkening. Per the "composite happens in one
 // place" contract, this model now leaves `colorNode`'s output untouched and does not
-// consume `lightNode.shadowNode` at all. `createMmdTslReceivedShadowNode()` /
-// `material.receivedShadowNode` remain defined (kept for API stability / tests) but
-// their output is no longer read anywhere.
+// consume `lightNode.shadowNode` at all.
 class MmdTslLightingModel extends THREE.LightingModel {
   override finish(builder: Parameters<THREE.LightingModel["finish"]>[0]): void {
     const { outgoingLight } = (builder as unknown as {
@@ -107,7 +105,6 @@ export function createMmdTslToonMaterial(options: MmdTslMaterialCoreOptions = {}
     }).mul(TSL.texture(options.diffuseMap).sample(TSL.uv()).a);
   }
   material.positionNode = TSL.positionLocal;
-  material.receivedShadowNode = createMmdTslReceivedShadowNode({ ...options, uniforms });
   material.castShadowNode = TSL.vec4(1, 1, 1, 1);
   material.castShadowPositionNode = TSL.positionLocal;
   return material;
@@ -275,22 +272,6 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
     ? dedicatedGammaComposite as ReturnType<typeof TSL.vec3>
     : TSL.sRGBTransferEOTF(dedicatedGammaComposite) as ReturnType<typeof TSL.vec3>;
   return TSL.mix(legacyColor, dedicatedColor, uniforms.dedicatedShadowEnabled) as ReturnType<typeof TSL.vec3>;
-}
-
-export function createMmdTslReceivedShadowNode(options: MmdTslMaterialCoreOptions & {
-  readonly uniforms?: MmdTslMaterialUniforms;
-} = {}) {
-  const uniforms = options.uniforms ?? createMmdTslMaterialUniforms(options);
-  const toonTextureFactor = TSL.uniform(uniforms.toonTextureFactor);
-  const sampledSelfShadowTint = options.toonMap
-    ? TSL.texture(options.toonMap).sample(TSL.vec2(0, 0)).rgb
-    : TSL.uniform(uniforms.shadowTint);
-  const selfShadowTint = options.toonMap
-    ? TSL.mix(TSL.vec3(1, 1, 1), sampledSelfShadowTint.mul(toonTextureFactor.rgb), toonTextureFactor.a)
-    : sampledSelfShadowTint;
-  return TSL.Fn<[ReturnType<typeof TSL.vec4>], unknown>(
-    ([shadow]) => TSL.mix(TSL.vec4(selfShadowTint, 1), TSL.vec4(1, 1, 1, 1), shadow.r)
-  ) as unknown as () => THREE.Node;
 }
 
 export function syncMmdTslMaterialState(

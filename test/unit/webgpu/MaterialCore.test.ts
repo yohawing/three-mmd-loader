@@ -23,7 +23,6 @@ describe("TSL material core", () => {
     expect(MMD_TSL_DEFAULT_TOON_COORD_OFFSET).toBe(0.45);
     expect(uniforms.toonCoordinateOffset.value).toBe(MMD_TSL_DEFAULT_TOON_COORD_OFFSET);
     expect(material.colorNode).toBeDefined();
-    expect(material.receivedShadowNode).toBeDefined();
     expect(material.castShadowNode).toBeDefined();
     expect(material.setupLightingModel().constructor.name).toBe("MmdTslLightingModel");
   });
@@ -128,7 +127,7 @@ describe("TSL material core", () => {
   it("matches the GLSL MMD gamma-space color contract for sRGB maps and final EOTF", async () => {
     const source = await readFile("src/webgpu/material-core.ts", "utf8");
     const baseColorStart = source.indexOf("export function createMmdTslBaseColorNode");
-    const baseColorEnd = source.indexOf("export function createMmdTslReceivedShadowNode");
+    const baseColorEnd = source.indexOf("export function syncMmdTslMaterialState");
     expect(baseColorStart).toBeGreaterThanOrEqual(0);
     expect(baseColorEnd).toBeGreaterThan(baseColorStart);
     const baseColorSource = source.slice(baseColorStart, baseColorEnd);

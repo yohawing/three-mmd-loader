@@ -482,7 +482,7 @@ async function useRawShadowVisibilityMaterial(page) {
     viewer.currentModel?.root?.traverse?.((object) => {
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       for (const material of materials) {
-        if (!material?.receivedShadowNode || !material?.userData?.mmdTslMaterialUniforms) {
+        if (!material?.userData?.mmdTslMaterialUniforms) {
           continue;
         }
         material.colorNode = white;
@@ -910,10 +910,7 @@ function selfShadowDiagnosticsPass(diagnostics, requireSparseMorphs, requireCast
     Number.isFinite(light.shadowCamera?.near) &&
     Number.isFinite(light.shadowCamera?.far) &&
     light.shadowCamera.far > light.shadowCamera.near &&
-    diagnostics.materials.some(material =>
-      material.receiveShadow &&
-      material.receivedShadowNode === true
-    );
+    diagnostics.materials.some(material => material.receiveShadow && material.dedicatedShadowEnabled !== null);
 }
 
 function dedicatedRawDiagnosticsPass(diagnostics, requireSparseMorphs) {

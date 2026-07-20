@@ -2,7 +2,6 @@ export {
   MMD_TSL_DEFAULT_LIGHT_COLOR,
   MMD_TSL_DEFAULT_TOON_COORD_OFFSET,
   createMmdTslBaseColorNode,
-  createMmdTslReceivedShadowNode,
   createMmdTslToonMaterial,
   syncMmdTslMaterialState
 } from "./material-core.js";

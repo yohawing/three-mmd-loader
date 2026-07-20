@@ -107,7 +107,6 @@ export function createMmdTslSelfShadowPass(
         for (let index = 0; index < materials.length; index += 1) {
           const material = materials[index] as (THREE.Material & {
             colorNode?: unknown;
-            receivedShadowNode?: unknown;
             lights?: boolean;
             userData: Record<string, unknown>;
           }) | undefined;
@@ -120,25 +119,21 @@ export function createMmdTslSelfShadowPass(
           const key = "mmdTslDedicatedShadowVisibilityDebug";
           const saved = material.userData[key] as {
             colorNode: unknown;
-            receivedShadowNode: unknown;
             lights: boolean | undefined;
           } | undefined;
           if (enabled) {
             if (!saved) {
               material.userData[key] = {
                 colorNode: material.colorNode,
-                receivedShadowNode: material.receivedShadowNode,
                 lights: material.lights
               };
             }
             material.colorNode = sampleTarget ? vec3(visibilityNode) : vec3(1, 1, 1);
-            material.receivedShadowNode = null;
             material.lights = false;
             material.needsUpdate = true;
             changed = true;
           } else if (saved) {
             material.colorNode = saved.colorNode;
-            material.receivedShadowNode = saved.receivedShadowNode;
             material.lights = saved.lights;
             delete material.userData[key];
             material.needsUpdate = true;

@@ -791,7 +791,6 @@ function createSelfShadowDiagnostics() {
         edge: flags.edge === true
       },
       receiveShadow: flags.selfShadow === true,
-      receivedShadowNode: material.receivedShadowNode != null,
       dedicatedShadowEnabled: material.userData?.mmdTslMaterialUniforms?.dedicatedShadowEnabled?.value ?? null,
       materialClass: material.constructor?.name ?? null,
       receivedShadowPositionNode: Boolean(material.receivedShadowPositionNode),
