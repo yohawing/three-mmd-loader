@@ -393,8 +393,6 @@ describe("example viewer source", () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('id="credit-close"');
     expect(html).toContain("close</span>");
-    expect(html).toContain('href="../webgpu-poc/?backend=forcewebgl"');
-    expect(html).toContain("WebGPU PoC");
     expect(domSource).toContain('creditPopup: document.querySelector("#credit-popup")');
     expect(domSource).toContain('creditCommentText: document.querySelector("#credit-comment")');
     expect(domSource).toContain('creditCloseButton: document.querySelector("#credit-close")');

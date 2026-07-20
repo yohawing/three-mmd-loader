@@ -122,8 +122,9 @@ void tslMaterial;
 
 主な制限: self-shadow は現行 WebGL 経路に近い近似で、GLSL 側の
 `min(shadow, lightVisibility)` と完全同一ではありません。WebGPU backend は CI 必須 gate
-ではなく、portable gate は `forceWebGL` を主経路にしています。PoC と検証手順は
-`examples/webgpu-poc/README.md` を参照してください。
+ではなく、portable gate は `forceWebGL` を主経路にしています。generated-PMX の
+baseline と native WebGPU の比較は `npm run render:visual:generated-pmx:webgpu` と
+`npm run visual:report:generated-pmx:webgpu` で行えます。
 
 ## レシピ
 

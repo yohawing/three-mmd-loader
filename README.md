@@ -124,8 +124,9 @@ void tslMaterial;
 Main limitations: self-shadow is an approximation close to the current WebGL
 path, not a byte-for-byte match for the GLSL-side `min(shadow, lightVisibility)`.
 The WebGPU backend is not a required CI gate; the portable gate primarily uses
-`forceWebGL`. See `examples/webgpu-poc/README.md` for the PoC and verification
-flow.
+`forceWebGL`. Compare generated-PMX baseline and native WebGPU captures with
+`npm run render:visual:generated-pmx:webgpu` followed by
+`npm run visual:report:generated-pmx:webgpu`.
 
 ## Recipes
 
