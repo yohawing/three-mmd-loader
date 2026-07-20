@@ -97,7 +97,13 @@ const MMD_OPAQUE_FRAGMENT = [
   // view space, so transform the light direction into view space before dotting.
   "  vec3 ywMmdLightDir = normalize( ( viewMatrix * vec4( mmdLightDirection, 0.0 ) ).xyz );",
   "  float ywMmdLightVisibility = clamp( dot( ywMmdNormal, ywMmdLightDir ) * 3.0, 0.0, 1.0 );",
-  "  float ywMmdToonVisibility = min( ywMmdToonShadowFactor, ywMmdLightVisibility );",
+  // §10.2: toon materials clamp visibility by the steep pseudo-N.L grade; non-toon
+  // materials use the raw shadow factor unmodified ("トゥーン無しは vis = shadowVis").
+  "  #ifdef USE_GRADIENTMAP",
+  "    float ywMmdVis = min( ywMmdToonShadowFactor, ywMmdLightVisibility );",
+  "  #else",
+  "    float ywMmdVis = ywMmdToonShadowFactor;",
+  "  #endif",
   "  float ywMmdLn = dot( ywMmdNormal, ywMmdLightDir );",
   "  ywMmdLn = clamp( ywMmdLn * 0.5 + mmdToonCoordinateOffset, 0.0, 1.0 );",
   "  #ifdef USE_GRADIENTMAP",
@@ -126,23 +132,35 @@ const MMD_OPAQUE_FRAGMENT = [
   "    #endif",
   "  #endif",
   "  #ifdef USE_GRADIENTMAP",
-  // Normal toon lighting uses the ramp. The self-shadowed branch switches to a
-  // representative ToonColor and changes only the scalar visibility grade.
+  // §10.2/§10.4: the switch between "ramp" and "dual-lerp, no ramp at all" is the
+  // SCENE self-shadow ON/OFF toggle (USE_SHADOWMAP, driven by
+  // renderer.shadowMap.enabled), not a per-pixel shadow-factor threshold. A
+  // per-pixel `< 0.999` hybrid mixes the ramp back in for lightly-shadowed pixels
+  // and creates a visible tone-curve seam at the shadow boundary that real MMD
+  // does not have.
+  "  #ifdef USE_SHADOWMAP",
+  "    vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( "
+    + `${MMD_TOON_SAMPLE_U.toFixed(1)}, ${MMD_SELF_SHADOW_TOON_V.toFixed(1)} ) ).rgb;`,
+  "    ywMmdSelfShadowToon = ywMmdApplyMul( ywMmdSelfShadowToon, mmdToonTextureFactor );",
+  "    vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );",
+  "  #else",
   `    vec3 ywMmdToon = texture2D( gradientMap, vec2( ${MMD_TOON_SAMPLE_U.toFixed(1)}, ywMmdLn ) ).rgb;`,
   "    ywMmdToon = ywMmdApplyMul( ywMmdToon, mmdToonTextureFactor );",
-  `    vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( ${MMD_TOON_SAMPLE_U.toFixed(1)}, ${MMD_SELF_SHADOW_TOON_V.toFixed(1)} ) ).rgb;`,
-  "    ywMmdSelfShadowToon = ywMmdApplyMul( ywMmdSelfShadowToon, mmdToonTextureFactor );",
   "    vec3 ywMmdToonLight = ywMmdToon;",
-  "    if ( ywMmdToonShadowFactor < 0.999 ) {",
-  "      ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );",
-  "    }",
+  "  #endif",
   "    vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;",
   "  #else",
   "    vec3 ywMmdColor = ywMmdBase;",
   "  #endif",
   "  if ( mmdSpecularPower > 0.0 ) {",
   "    vec3 ywMmdHalf = normalize( ywMmdEyeDir + ywMmdLightDir );",
-  "    float ywMmdSpecGate = ywMmdToonShadowFactor < 0.999 ? ywMmdToonVisibility : 1.0;",
+  // Specular is always gated by vis when self-shadow is scene-enabled (no
+  // per-pixel threshold ternary): §10.2 "スペキュラは影とN.L勾配の両方で減衰する".
+  "    #ifdef USE_SHADOWMAP",
+  "      float ywMmdSpecGate = ywMmdVis;",
+  "    #else",
+  "      float ywMmdSpecGate = 1.0;",
+  "    #endif",
   "    ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdSpecGate;",
   "  }",
   "  outgoingLight = ywMmdGammaToLinear( clamp( ywMmdColor, 0.0, 1.0 ) );",
