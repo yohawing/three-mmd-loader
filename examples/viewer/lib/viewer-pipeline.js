@@ -152,7 +152,7 @@ export function submitViewerRender() {
   syncMmdTslDedicatedShadowVisibility();
   const dedicatedShadowPassActive =
     isTslViewerPipeline() &&
-    state.renderer.backend?.isWebGPUBackend === true &&
+    state.renderer.isWebGPURenderer === true &&
     state.debugSelfShadowEnabled === true &&
     state.keyLight?.castShadow === true &&
     Boolean(state.keyLight && createMmdTslSelfShadowPass && mmdTslSelfShadowModelRoots.size > 0);
@@ -194,7 +194,7 @@ export function setCurrentModelTslOutlineHidden(hidden) {
 }
 
 export function setMmdTslDedicatedRawVisibilityDebug(enabled = true) {
-  if (!isTslViewerPipeline() || state.renderer?.backend?.isWebGPUBackend !== true) {
+  if (!isTslViewerPipeline() || state.renderer?.isWebGPURenderer !== true) {
     return false;
   }
   const root = state.currentModel?.root;
@@ -246,7 +246,7 @@ export function syncMmdTslDedicatedShadowVisibility(root = state.currentModel?.r
     return false;
   }
   if (
-    state.renderer?.backend?.isWebGPUBackend === true &&
+    state.renderer?.isWebGPURenderer === true &&
     state.debugSelfShadowEnabled === true &&
     state.keyLight?.castShadow === true
   ) {
@@ -485,7 +485,13 @@ async function loadWebgpuPipelineModule() {
 function ensureMmdTslSelfShadowPass() {
   if (
     !createMmdTslSelfShadowPass ||
-    state.renderer?.backend?.isWebGPUBackend !== true ||
+    // The dedicated self-shadow pass is a pure TSL node graph (RenderTarget +
+    // DepthTexture + TSL shadow-visibility node) with no WebGPU-only compute
+    // dependency, so it also renders correctly through WebGPURenderer's
+    // WebGLBackend (the "tsl-forcewebgl" viewer pipeline). Only gate on the
+    // renderer actually being a WebGPURenderer (native or forceWebGL), not on
+    // which internal backend it picked.
+    state.renderer?.isWebGPURenderer !== true ||
     !state.renderer ||
     !state.keyLight
   ) {

@@ -66,7 +66,6 @@ export function createMmdTslSelfShadowPass(
         disposed ||
         currentRenderer !== renderer ||
         currentLight !== light ||
-        (currentRenderer.backend as { isWebGPUBackend?: boolean } | undefined)?.isWebGPUBackend !== true ||
         currentRenderer.reversedDepthBuffer !== false ||
         currentLight.castShadow !== true
       ) {
