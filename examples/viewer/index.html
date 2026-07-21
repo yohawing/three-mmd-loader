@@ -12,12 +12,8 @@
     <script>
       {
         const query = new URLSearchParams(window.location.search);
-        const pipeline = query.get("pipeline")?.toLowerCase();
         const backend = query.get("backend")?.toLowerCase();
-        const baseline = query.get("baseline") === "1" ||
-          pipeline === "baseline-webgl" ||
-          backend === "baseline" ||
-          backend === "webgl";
+        const baseline = backend === "baseline" || backend === "webgl";
         const threeBuild = baseline
           ? "/node_modules/three/build/three.module.js"
           : "/node_modules/three/build/three.webgpu.js";

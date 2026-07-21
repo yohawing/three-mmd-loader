@@ -223,20 +223,14 @@ function parseDebugNumber(value, fallback) {
 }
 
 function resolveInitialViewerPipeline(params) {
-  const pipeline = params.get("pipeline")?.toLowerCase();
   const backend = params.get("backend")?.toLowerCase();
-  if (
-    params.get("baseline") === "1" ||
-    pipeline === "baseline-webgl" ||
-    backend === "baseline" ||
-    backend === "webgl"
-  ) {
+  if (backend === "baseline" || backend === "webgl") {
     return "baseline-webgl";
   }
-  if (pipeline === "tsl-webgpu" || backend === "webgpu") {
+  if (backend === "webgpu") {
     return "tsl-webgpu";
   }
-  if (pipeline === "tsl-forcewebgl" || backend === "forcewebgl") {
+  if (backend === "forcewebgl") {
     return "tsl-forcewebgl";
   }
   return "tsl-forcewebgl";

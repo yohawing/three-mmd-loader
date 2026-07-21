@@ -79,8 +79,9 @@ describe("example viewer source", () => {
     expect(html).toContain('"three": threeBuild');
     expect(html).toContain('"three/webgpu": "/node_modules/three/build/three.webgpu.js"');
     expect(html).toContain('"three/tsl": "/node_modules/three/build/three.tsl.js"');
-    expect(html).toContain('const pipeline = query.get("pipeline")?.toLowerCase()');
     expect(html).toContain('const backend = query.get("backend")?.toLowerCase()');
+    expect(html).not.toContain('query.get("pipeline")');
+    expect(html).not.toContain('query.get("baseline")');
     expect(html).toContain('backend === "baseline"');
     expect(html).toContain('backend === "webgl"');
     expect(html).toContain('id="pipeline-backend-switcher"');
@@ -96,7 +97,8 @@ describe("example viewer source", () => {
     expect(html).not.toContain('id="pipeline-renderer"');
     expect(domSource).toContain('pipelineBackendSwitcher: document.querySelector("#pipeline-backend-switcher")');
     expect(stateSource).toContain('return "tsl-forcewebgl";');
-    expect(stateSource).toContain('params.get("baseline") === "1"');
+    expect(stateSource).not.toContain('params.get("pipeline")');
+    expect(stateSource).not.toContain('params.get("baseline")');
     expect(stateSource).toContain('backend === "baseline"');
     expect(stateSource).toContain('backend === "webgl"');
     expect(stateSource).toContain('backend === "forcewebgl"');

@@ -38,6 +38,12 @@ function beginModelLoad() {
   return ++modelLoadGeneration;
 }
 
+function createLoadGuard(generation, loadOptions) {
+  return () =>
+    generation === modelLoadGeneration &&
+    (!loadOptions.shouldCommit || loadOptions.shouldCommit());
+}
+
 export async function loadModelFromUrl(url, loadOptions = {}) {
   const generation = beginModelLoad();
   const profile = createViewerLoadProfile(`url:${url}`);
@@ -81,9 +87,7 @@ async function fetchBytes(url) {
 }
 
 export async function loadModel(source, label = source.name ?? "model", modelLoader, profile, switcherEntry, loadOptions = {}, generation = beginModelLoad()) {
-  const isCurrentLoad = () =>
-    generation === modelLoadGeneration &&
-    (!loadOptions.shouldCommit || loadOptions.shouldCommit());
+  const isCurrentLoad = createLoadGuard(generation, loadOptions);
   const loadProfile = profile ?? createViewerLoadProfile(describeViewerSource(source, label));
   if (!profile) {
     loadProfile?.mark("start");
@@ -195,9 +199,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
 
 export async function loadModelFolder(files, loadOptions = {}) {
   const generation = beginModelLoad();
-  const isCurrentLoad = () =>
-    generation === modelLoadGeneration &&
-    (!loadOptions.shouldCommit || loadOptions.shouldCommit());
+  const isCurrentLoad = createLoadGuard(generation, loadOptions);
   const shouldAutoFitCamera = shouldAutoFitCameraOnModelLoad(loadOptions);
   resetFolderModelState();
   resetMotionSwitcherState();
@@ -313,9 +315,7 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     return;
   }
   const generation = beginModelLoad();
-  const isCurrentLoad = () =>
-    generation === modelLoadGeneration &&
-    (!loadOptions.shouldCommit || loadOptions.shouldCommit());
+  const isCurrentLoad = createLoadGuard(generation, loadOptions);
   const shouldAutoFitCamera = shouldAutoFitCameraOnModelLoad(loadOptions);
 
   const profile = createViewerLoadProfile(`switch:${modelFile.name}`);
