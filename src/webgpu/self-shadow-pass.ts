@@ -35,7 +35,12 @@ export function createMmdTslSelfShadowPass(
   });
   renderTarget.texture.name = "MMD TSL self-shadow target";
   renderTarget.texture.generateMipmaps = false;
-  const visibilityNode = createMmdTslShadowVisibilityNode(light, depthTexture);
+  // Reflect the renderer's actual reversed-depth mode into the visibility
+  // graph's occlusion math (see shadow-visibility.ts). Native WebGPU viewer
+  // renderers are created with reversedDepthBuffer: true; baseline WebGL and
+  // TSL forceWebGL stay non-reversed.
+  const reversedDepth = renderer.reversedDepthBuffer === true;
+  const visibilityNode = createMmdTslShadowVisibilityNode(light, depthTexture, { reversedDepth });
 
   const shadowMaterial = getShadowMaterial(light);
   const shadowRenderObjectFunction = getShadowRenderObjectFunction(
@@ -66,7 +71,6 @@ export function createMmdTslSelfShadowPass(
         disposed ||
         currentRenderer !== renderer ||
         currentLight !== light ||
-        currentRenderer.reversedDepthBuffer !== false ||
         currentLight.castShadow !== true
       ) {
         return false;
@@ -77,6 +81,27 @@ export function createMmdTslSelfShadowPass(
       const originalShadowMapEnabled = currentRenderer.shadowMap.enabled;
       if (shadowCamera.coordinateSystem !== currentRenderer.coordinateSystem) {
         shadowCamera.coordinateSystem = currentRenderer.coordinateSystem;
+        shadowCamera.updateProjectionMatrix();
+      }
+      // Three's common Renderer only flips a camera's projection matrix to
+      // the reversed-depth form lazily, the first time that camera is passed
+      // to renderer.render() (node_modules/three/src/renderers/common/
+      // Renderer.js ~line 1516: `if (this.reversedDepthBuffer === true &&
+      // camera.reversedDepth !== true) { camera._reversedDepth = true; ...
+      // camera.updateProjectionMatrix(); }`). DirectionalLightShadow.
+      // updateMatrices() below (node_modules/three/src/lights/LightShadow.js
+      // ~line 213) bakes `shadowCamera.projectionMatrix` into `shadow.matrix`
+      // immediately, using whatever matrix is on the camera *right now* --
+      // it does not defer. Left to the lazy path, the very first frame would
+      // bake a non-reversed shadow.matrix while the actual render call flips
+      // the camera to reversed afterward, producing one frame of mismatched
+      // depth comparisons. Sync the flag proactively (mirroring the
+      // renderer's own `_reversedDepth` field, which has no public setter)
+      // so updateMatrices always sees the projection that will actually be
+      // used to render the depth target.
+      const wantsReversedDepth = currentRenderer.reversedDepthBuffer === true;
+      if (shadowCamera.reversedDepth !== wantsReversedDepth) {
+        (shadowCamera as unknown as { _reversedDepth: boolean })._reversedDepth = wantsReversedDepth;
         shadowCamera.updateProjectionMatrix();
       }
       currentLight.shadow.updateMatrices(currentLight);

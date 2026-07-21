@@ -52,7 +52,11 @@ export async function setupScene() {
     state.renderer = new WebGPURenderer({
       antialias: true,
       canvas: dom.canvas,
-      forceWebGL: state.viewerPipeline === "tsl-forcewebgl"
+      forceWebGL: state.viewerPipeline === "tsl-forcewebgl",
+      // Reversed-Z only makes sense on the native WebGPU backend (T070-18).
+      // TSL forceWebGL still renders through WebGL's non-reversed [0,1]/[-1,1]
+      // depth convention, so leave it (and baseline WebGL above) unchanged.
+      reversedDepthBuffer: state.viewerPipeline === "tsl-webgpu"
     });
   }
   state.renderer.outputColorSpace = THREE.SRGBColorSpace;

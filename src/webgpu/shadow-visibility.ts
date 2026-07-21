@@ -10,8 +10,10 @@ import type Node from "three/src/nodes/core/Node.js";
  */
 export function createMmdTslShadowVisibilityNode(
   light: THREE.DirectionalLight,
-  depthTexture: THREE.DepthTexture
+  depthTexture: THREE.DepthTexture,
+  options: { reversedDepth?: boolean } = {}
 ): Node<"float"> {
+  const reversedDepth = options.reversedDepth === true;
   const shadowMatrix = lightShadowMatrix(light);
   const bias = (
     reference("bias", "float", light.shadow) as unknown as {
@@ -28,10 +30,20 @@ export function createMmdTslShadowVisibilityNode(
       vec4(positionWorld.add(normalWorld.mul(normalBias)), 1)
     );
     const projected = shadowPosition.xyz.div(shadowPosition.w);
+    // Three's reversedDepthBuffer flips the orthographic shadow camera's
+    // clip-space mapping to 1-x (near->1, far->0 instead of near->0, far->1;
+    // see node_modules/three/src/math/Matrix4.js makeOrthographic's
+    // reversedDepth branch). `bias` is a small negative constant tuned to
+    // pull the receiver's depth slightly *toward* the light in the
+    // non-reversed near->0 mapping (i.e. `z.add(bias)` decreases z). Under
+    // the flipped mapping "toward the light" means a larger z instead of a
+    // smaller one, so the same negative bias must be subtracted instead of
+    // added to keep pulling the receiver toward the light.
+    const biasedZ = reversedDepth ? projected.z.sub(bias) : projected.z.add(bias);
     const shadowCoord = vec3(
       projected.x,
       projected.y.oneMinus(),
-      projected.z.add(bias)
+      biasedZ
     );
     const inFrustum = shadowCoord.x
       .greaterThanEqual(0)
@@ -50,7 +62,20 @@ export function createMmdTslShadowVisibilityNode(
     // TODO(mode2): mode 2 multiplies depthDelta by `8000 * shadowUV.y` instead of the
     // flat 1500. VMD self-shadow mode is tracked in SelfShadowState.mode (src/three/shadow.ts)
     // but is not yet wired through to this node, so only mode 1 is implemented here.
-    const depthDelta = max(shadowCoord.z.sub(sampledDepth), 0);
+    //
+    // Under reversedDepth, WebGPUPipelineUtils (utils/WebGPUPipelineUtils.js
+    // `ReversedDepthFuncs`) flips the GPU depth-test function (e.g.
+    // LessDepth -> GreaterDepth) for the caster pass, so `sampledDepth` still
+    // stores "the caster nearest the light" -- just as the larger reversed-z
+    // value instead of the smaller non-reversed one. The occlusion condition
+    // therefore flips: a receiver is occluded when `sampledDepth` is larger
+    // than the receiver's own (reversed) z, so the subtraction operands swap
+    // instead of negating the whole delta (magnitude is identical because
+    // the 1-x mapping is a pure affine flip; only the sign of the ordering
+    // changes, matching the *1500 - 0.3 ramp constants unchanged).
+    const depthDelta = reversedDepth
+      ? max(sampledDepth.sub(shadowCoord.z), 0)
+      : max(shadowCoord.z.sub(sampledDepth), 0);
     const visibility = float(1).sub(saturate(depthDelta.mul(1500).sub(0.3)));
     // §10.2: outside the light frustum there is no shadow AND no toon darkening at all
     // (not even the N.L-based grade the in-frustum branch mixes in). A plain `select(1)`

@@ -51,6 +51,21 @@ export interface MmdTslMaterialAssemblyOptions {
    * blending parity. Default false keeps experimental linear output + SRGBColorSpace.
    */
   readonly legacySrgbFramebuffer?: boolean;
+  /**
+   * Set when the target renderer uses a reversed depth buffer (native WebGPU
+   * with `reversedDepthBuffer: true`). Three's WebGPU backend does not
+   * auto-negate `polygonOffsetFactor`/`polygonOffsetUnits` for reversed depth
+   * (node_modules/three/src/renderers/webgpu/utils/WebGPUPipelineUtils.js
+   * ~line 259-262 maps them straight to `depthBias`/`depthBiasSlopeScale`
+   * with no `reversedDepthBuffer` branch, unlike the depth-compare function
+   * a few lines below at ~line 797). A positive depth bias always increases
+   * the raw stored device depth; under the non-reversed near->0/far->1
+   * mapping that pushes the outline farther away as intended, but under the
+   * reversed near->1/far->0 mapping the same positive bias pushes it closer
+   * to the camera instead. Negate factor/units here so the outline still
+   * gets pushed away from the camera under reversed depth.
+   */
+  readonly reversedDepth?: boolean;
 }
 
 export function createMmdTslMaterialFromSource(
@@ -189,6 +204,7 @@ function createMmdTslOutlineMaterial(
   const force = options.forceOutlineGroups === true;
   const edgeColor = mmdTslOutlineColor(metadata, force);
   const outlineWidth = mmdTslOutlineWidth(metadata, force);
+  const polygonOffsetSign = options.reversedDepth === true ? -1 : 1;
   const outlineUniforms = {
     color: new THREE.Vector3(edgeColor[0], edgeColor[1], edgeColor[2]),
     opacity: TSL.uniform(edgeColor[3], "float") as unknown as ReturnType<typeof TSL.float> & { value: number },
@@ -202,8 +218,8 @@ function createMmdTslOutlineMaterial(
     depthWrite: true,
     depthTest: true,
     polygonOffset: true,
-    polygonOffsetFactor: 1 + 2 * outlineWidth,
-    polygonOffsetUnits: 1,
+    polygonOffsetFactor: polygonOffsetSign * (1 + 2 * outlineWidth),
+    polygonOffsetUnits: polygonOffsetSign * 1,
     toneMapped: false
   });
   material.colorNode = TSL.uniform(outlineUniforms.color);
@@ -221,7 +237,8 @@ function createMmdTslOutlineMaterial(
     edgeColor,
     flags: metadata.flags ? { ...metadata.flags } : undefined,
     shaderApplied: true,
-    uniforms: outlineUniforms
+    uniforms: outlineUniforms,
+    polygonOffsetSign
   };
   return material;
 }

@@ -93,6 +93,16 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("if (!hasSavedDepthRange) {");
   });
 
+  it("enables reversed-Z depth only on the native WebGPU viewer renderer (T070-18)", async () => {
+    const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
+
+    expect(sceneSetupSource).toContain('reversedDepthBuffer: state.viewerPipeline === "tsl-webgpu"');
+    expect(pipelineSource).toContain("reversedDepth: state.renderer?.reversedDepthBuffer === true");
+    expect(pipelineSource).toContain("const polygonOffsetSign = outlineMetadata.polygonOffsetSign ?? 1;");
+    expect(pipelineSource).toContain("material.polygonOffsetFactor = polygonOffsetSign * (1 + 2 * outlineWidth);");
+  });
+
   it("wires the main viewer as a TSL parity review viewer with a baseline fallback", async () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
     const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");

@@ -254,6 +254,38 @@ describe("TSL material assembly", () => {
     });
     expect(materials[1]?.opacity).toBe(1);
   });
+
+  it("negates outline polygon offset under a reversed depth buffer (T070-18)", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geometry.setIndex([0, 1, 2]);
+    geometry.addGroup(0, 3, 0);
+
+    const normalMesh = new THREE.Mesh(geometry.clone(), createSourceMaterial({ edgeSize: 0.4 }));
+    replaceMmdModelMaterialsWithTsl(normalMesh, { appendOutlineGroups: true });
+    const normalMaterials = Array.isArray(normalMesh.material) ? normalMesh.material : [normalMesh.material];
+    const normalOutline = normalMaterials[1] as THREE.Material & {
+      polygonOffsetFactor: number;
+      polygonOffsetUnits: number;
+      userData: { mmdTslOutlineMaterial: { polygonOffsetSign: number } };
+    };
+    expect(normalOutline.polygonOffsetFactor).toBeGreaterThan(0);
+    expect(normalOutline.polygonOffsetUnits).toBeGreaterThan(0);
+    expect(normalOutline.userData.mmdTslOutlineMaterial.polygonOffsetSign).toBe(1);
+
+    const reversedMesh = new THREE.Mesh(geometry.clone(), createSourceMaterial({ edgeSize: 0.4 }));
+    replaceMmdModelMaterialsWithTsl(reversedMesh, { appendOutlineGroups: true, reversedDepth: true });
+    const reversedMaterials = Array.isArray(reversedMesh.material) ? reversedMesh.material : [reversedMesh.material];
+    const reversedOutline = reversedMaterials[1] as THREE.Material & {
+      polygonOffsetFactor: number;
+      polygonOffsetUnits: number;
+      userData: { mmdTslOutlineMaterial: { polygonOffsetSign: number } };
+    };
+    expect(reversedOutline.polygonOffsetFactor).toBe(-normalOutline.polygonOffsetFactor);
+    expect(reversedOutline.polygonOffsetUnits).toBe(-normalOutline.polygonOffsetUnits);
+    expect(reversedOutline.userData.mmdTslOutlineMaterial.polygonOffsetSign).toBe(-1);
+  });
 });
 
 function createSourceMaterial(options: {

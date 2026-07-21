@@ -76,7 +76,8 @@ export async function applyViewerPipelineToModel(model, label, { role = "charact
       replaceMmdModelMaterialsWithTsl(model.mesh, {
         appendOutlineGroups: true,
         respectMaterialShadowFlags: true,
-        dedicatedShadowVisibilityNode: mmdTslSelfShadowPass?.visibilityNode
+        dedicatedShadowVisibilityNode: mmdTslSelfShadowPass?.visibilityNode,
+        reversedDepth: state.renderer?.reversedDepthBuffer === true
       });
       createMmdTslShadowCaster(model.mesh, { alphaTest: false });
       model.root.userData.mmdTslSelfShadowRole = role;
@@ -388,7 +389,8 @@ function syncTslOutlineMaterialState(material, materialState, outlineMetadata) {
   outlineMetadata.runtimeVisible = runtimeVisible;
   material.visible = !state.debugOutlineHidden && runtimeVisible;
   material.depthWrite = true;
-  material.polygonOffsetFactor = 1 + 2 * outlineWidth;
+  const polygonOffsetSign = outlineMetadata.polygonOffsetSign ?? 1;
+  material.polygonOffsetFactor = polygonOffsetSign * (1 + 2 * outlineWidth);
   if (Array.isArray(outlineMetadata.edgeColor)) {
     outlineMetadata.edgeColor[0] = materialState.edgeColor[0];
     outlineMetadata.edgeColor[1] = materialState.edgeColor[1];
