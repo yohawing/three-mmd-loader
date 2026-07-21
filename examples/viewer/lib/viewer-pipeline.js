@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { dom } from "./dom.js";
+import { dom, setStatus } from "./dom.js";
 import { state } from "./state.js";
 
 const lightPositionScratch = new THREE.Vector3();
@@ -173,6 +173,48 @@ export function submitViewerRender() {
     state.renderer.render(state.scene, state.camera);
   }
   return true;
+}
+
+let viewerRenderToken = 0;
+
+// Debug-panel view toggles (selfShadow, normals) flip a renderer/material
+// parameter that changes every currently-visible material's compiled shader
+// permutation. A plain submitViewerRender() then recompiles every distinct
+// program synchronously inside renderer.render(), which is the multi-second
+// main-thread freeze measured in T070-19 on heavy real models. Precompiling
+// with WebGLRenderer/WebGPURenderer's compileAsync() first keeps that cost
+// off the synchronous path; the final render (once compiled) is fast.
+export async function submitViewerRenderAsync() {
+  const token = ++viewerRenderToken;
+  const canCompileAsync =
+    typeof state.renderer?.compileAsync === "function" &&
+    Boolean(state.scene) &&
+    Boolean(state.camera);
+  if (!canCompileAsync) {
+    return submitViewerRender();
+  }
+  const showCompilingHint = !dom.statusText?.classList.contains("is-loading");
+  if (showCompilingHint) {
+    setStatus("Compiling shaders…", "loading");
+  }
+  try {
+    await state.renderer.compileAsync(state.scene, state.camera);
+  } catch (error) {
+    window.console?.warn?.(
+      "[mmd-viewer] async shader precompile failed, falling back to a synchronous render",
+      error
+    );
+  } finally {
+    if (showCompilingHint && token === viewerRenderToken) {
+      setStatus("", "ready");
+    }
+  }
+  if (token !== viewerRenderToken) {
+    // A newer toggle/render call superseded this one while we were compiling;
+    // only the latest state's render is allowed to reach the canvas.
+    return false;
+  }
+  return submitViewerRender();
 }
 
 export function disposeViewerPipelineModel(model) {

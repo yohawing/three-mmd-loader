@@ -13,7 +13,7 @@ import { createPhysicsBackend, disposeActivePhysicsBackend, ensurePhysicsBackend
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
 import { loadCameraFile } from "./camera-loading.js";
 import { hideCreditPopup, showModelCredits } from "./credits.js";
-import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, setOutlineHidden, showColliderHelpers } from "./debug.js";
+import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, scheduleViewerShaderPrewarm, setOutlineHidden, showColliderHelpers } from "./debug.js";
 import { clearBoneDetectionPanel, clearDiagnosticsPanel, reportTextureDiagnostics, updateBoneDetectionPanel, updateDiagnosticsPanel } from "./diagnostics.js";
 import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStageState, updateTransportState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
@@ -149,6 +149,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     } else {
       adaptCameraDepthRange();
     }
+    scheduleViewerShaderPrewarm();
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
       if (!isCurrentLoad()) {
@@ -266,6 +267,7 @@ export async function loadModelFolder(files, loadOptions = {}) {
     } else {
       adaptCameraDepthRange();
     }
+    scheduleViewerShaderPrewarm();
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
       if (!isCurrentLoad()) {
@@ -368,6 +370,7 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     } else {
       adaptCameraDepthRange();
     }
+    scheduleViewerShaderPrewarm();
     if (hasCurrentMotion()) {
       await ensurePhysicsBackendReady();
       if (!isCurrentLoad()) {

@@ -10,13 +10,14 @@ import {
   setMmdTslDedicatedRawVisibilityDebug,
   syncMmdTslDedicatedShadowVisibility,
   syncMmdTslDedicatedRawVisibilityDebug,
-  submitViewerRender
+  submitViewerRender,
+  submitViewerRenderAsync
 } from "./viewer-pipeline.js";
 
 export function createViewerDebugApi() {
   return {
-    showNormals() {
-      setDebugMaterialMode("normals");
+    async showNormals() {
+      await setDebugMaterialMode("normals");
       return "normal material enabled";
     },
     restoreMaterials: restoreDebugMaterials,
@@ -33,8 +34,8 @@ export function createViewerDebugApi() {
       setOutlineHidden(true);
       return "outline hidden";
     },
-    selfShadow(enabled = true) {
-      return `selfShadow=${setSelfShadowEnabled(enabled)}`;
+    async selfShadow(enabled = true) {
+      return `selfShadow=${await setSelfShadowEnabled(enabled)}`;
     },
     dedicatedRawVisibility(enabled = true) {
       return `dedicatedRawVisibility=${setMmdTslDedicatedRawVisibilityDebug(enabled)}`;
@@ -250,7 +251,8 @@ export function toggleColliderHelpers() {
   return state.debugCollidersVisible;
 }
 
-export function setDebugMaterialMode(mode) {
+export async function setDebugMaterialMode(mode) {
+  invalidatePendingShaderPrewarm();
   const nextMode = mode === "normals" ? mode : "default";
   restoreDebugMaterials();
   state.debugMaterialMode = nextMode;
@@ -261,8 +263,11 @@ export function setDebugMaterialMode(mode) {
       mesh.material = normalMaterial;
     }
   }
-  submitViewerRender();
   refreshDebugPanelState();
+  // The material swap above already reflects in state.debugMaterialMode; only
+  // the (possibly shader-compiling) render is deferred until it's ready, so
+  // the UI/checkbox stays responsive during the async compile (T070-19).
+  await submitViewerRenderAsync();
   return state.debugMaterialMode;
 }
 
@@ -277,7 +282,8 @@ export function setOutlineHidden(hidden) {
   return state.debugOutlineHidden;
 }
 
-export function setSelfShadowEnabled(enabled) {
+export async function setSelfShadowEnabled(enabled) {
+  invalidatePendingShaderPrewarm();
   state.debugSelfShadowEnabled = !!enabled;
   if (state.renderer?.shadowMap) {
     state.renderer.shadowMap.enabled = state.debugSelfShadowEnabled;
@@ -292,9 +298,121 @@ export function setSelfShadowEnabled(enabled) {
   }
   syncMmdTslDedicatedShadowVisibility();
   syncMmdTslDedicatedRawVisibilityDebug();
-  submitViewerRender();
   refreshDebugPanelState();
+  // Flipping shadowMap.enabled/castShadow changes every visible material's
+  // shadow macro permutation; defer the recompile off the synchronous path
+  // the same way setDebugMaterialMode does (T070-19).
+  await submitViewerRenderAsync();
   return state.debugSelfShadowEnabled;
+}
+
+let shaderPrewarmToken = 0;
+let shaderPrewarmInFlight = false;
+
+function invalidatePendingShaderPrewarm() {
+  shaderPrewarmToken += 1;
+}
+
+// Idle pre-warm: right after a model/background commit, quietly compile the
+// shader variant a view toggle is likely to need next (the opposite
+// selfShadow state, and the shared normals debug material) so that if the
+// user does toggle, the synchronous render sees an already-compiled program
+// instead of paying the T070-19 recompile cost. Runs at most once at a time
+// and bails out cleanly if a real toggle (or another prewarm) races it.
+export function scheduleViewerShaderPrewarm() {
+  const token = ++shaderPrewarmToken;
+  const runner = () => {
+    void runViewerShaderPrewarm(token);
+  };
+  if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(runner, { timeout: 2000 });
+  } else {
+    window.setTimeout(runner, 1000);
+  }
+}
+
+async function runViewerShaderPrewarm(token) {
+  if (shaderPrewarmInFlight || token !== shaderPrewarmToken) {
+    return;
+  }
+  const renderer = state.renderer;
+  if (!renderer || !state.scene || !state.camera || typeof renderer.compileAsync !== "function") {
+    return;
+  }
+  shaderPrewarmInFlight = true;
+  try {
+    await prewarmSelfShadowShaderVariant(renderer, token);
+    if (token !== shaderPrewarmToken) {
+      return;
+    }
+    await prewarmNormalsDebugMaterial(renderer, token);
+  } finally {
+    shaderPrewarmInFlight = false;
+  }
+}
+
+// NOTE (T070-19): renderer.compileAsync(scene, camera) only walks the given
+// camera's own opaque/transparent render lists (see
+// node_modules/three/src/renderers/common/Renderer.js compileAsync()). It
+// does not reach three.js's node-based shadow depth pass, which is driven by
+// ShadowNode.updateShadow() (node_modules/three/src/nodes/lighting/
+// ShadowNode.js) issuing its own plain synchronous
+// renderer.render(scene, shadow.camera) call from inside the *main*
+// render()'s per-frame node update. An offscreen-render-target prewarm
+// variant was tried here and measured to NOT eliminate that residual block
+// (still ~9s on forceWebGL for the selfShadow-off direction) -- reverted in
+// favor of this simpler, spec-following compileAsync-only prewarm, which
+// still measurably helps the (much more common) non-shadow-depth material
+// recompiles. The residual gap is reported, not papered over.
+async function prewarmSelfShadowShaderVariant(renderer, token) {
+  if (!renderer.shadowMap) {
+    return;
+  }
+  const original = renderer.shadowMap.enabled;
+  const opposite = !state.debugSelfShadowEnabled;
+  if (original === opposite) {
+    // Already compiled for the opposite state (e.g. a toggle raced us here).
+    return;
+  }
+  renderer.shadowMap.enabled = opposite;
+  try {
+    await renderer.compileAsync(state.scene, state.camera);
+  } catch (error) {
+    window.console?.warn?.("[mmd-viewer] self-shadow shader prewarm failed", error);
+  } finally {
+    // Only restore if nothing else (a real toggle) changed shadowMap.enabled
+    // or invalidated this prewarm while compileAsync() was pending.
+    if (token === shaderPrewarmToken && renderer.shadowMap.enabled === opposite) {
+      renderer.shadowMap.enabled = original;
+    }
+  }
+}
+
+async function prewarmNormalsDebugMaterial(renderer, token) {
+  if (state.debugMaterialMode !== "default") {
+    return;
+  }
+  const meshes = currentDebugMeshes();
+  if (meshes.length === 0) {
+    return;
+  }
+  const normalMaterial = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+  for (const mesh of meshes) {
+    rememberDebugMaterial(mesh);
+    mesh.material = normalMaterial;
+  }
+  try {
+    await renderer.compileAsync(state.scene, state.camera);
+  } catch (error) {
+    window.console?.warn?.("[mmd-viewer] normals shader prewarm failed", error);
+  } finally {
+    // If a real toggle raced us, it already called restoreDebugMaterials()
+    // (clearing state.debugMaterialState) before installing its own material,
+    // so only restore here when this prewarm is still the current one.
+    if (token === shaderPrewarmToken && state.debugMaterialMode === "default") {
+      restoreDebugMaterials();
+    }
+  }
 }
 
 export function setPhysicsMaxSubSteps(value) {
