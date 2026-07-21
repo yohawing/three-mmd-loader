@@ -59,6 +59,40 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("camera.fov = view.fov");
   });
 
+  it("adapts camera near/far to scene bounds on auto-fit-suppressed commit paths without moving the camera (T070-18)", async () => {
+    const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+
+    expect(sceneSetupSource).toContain("export function adaptCameraDepthRange()");
+    const adaptStart = sceneSetupSource.indexOf("export function adaptCameraDepthRange()");
+    const adaptEnd = sceneSetupSource.indexOf("export function setDefaultCameraView()");
+    expect(adaptStart).toBeGreaterThanOrEqual(0);
+    expect(adaptEnd).toBeGreaterThan(adaptStart);
+    const adaptSource = sceneSetupSource.slice(adaptStart, adaptEnd);
+    expect(adaptSource).not.toContain("position.set(");
+    expect(adaptSource).not.toContain("position.copy(");
+    expect(adaptSource).not.toContain("position.fromArray(");
+    expect(adaptSource).not.toContain("controls.target");
+    expect(adaptSource).not.toContain(".fov");
+    expect(adaptSource).toContain("state.currentCameraMotion");
+    expect(adaptSource).toContain("camera.near = near;");
+    expect(adaptSource).toContain("camera.far = far;");
+    expect(adaptSource).toContain("camera.updateProjectionMatrix();");
+
+    expect(modelSource).toContain("import { adaptCameraDepthRange, fitCameraToObject } from \"./scene-setup.js\";");
+    expect(modelSource.match(/if \(shouldAutoFitCamera\) \{\n {6}frameCurrentModel\(\);\n {4}\} else \{\n {6}adaptCameraDepthRange\(\);\n {4}\}/g)).toHaveLength(3);
+
+    expect(backgroundSource).toContain("import { adaptCameraDepthRange } from \"./scene-setup.js\";");
+    expect(backgroundSource).toContain("state.scene.add(background.root);\n    adaptCameraDepthRange();");
+    expect(backgroundSource).toContain("updateStageState();\n  adaptCameraDepthRange();\n}");
+
+    expect(mainSource).toContain("import { adaptCameraDepthRange, resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from \"./lib/scene-setup.js\";");
+    expect(mainSource).toContain("const hasSavedDepthRange = typeof view.near === \"number\" && typeof view.far === \"number\";");
+    expect(mainSource).toContain("if (!hasSavedDepthRange) {");
+  });
+
   it("wires the main viewer as a TSL parity review viewer with a baseline fallback", async () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
     const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");

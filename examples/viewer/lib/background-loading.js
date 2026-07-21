@@ -10,6 +10,7 @@ import { reportTextureDiagnostics } from "./diagnostics.js";
 import { dom, setLoadedFileSwitcherOptions, setStatus, updateStageState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
 import { renderStillFrame } from "./playback.js";
+import { adaptCameraDepthRange } from "./scene-setup.js";
 import { state } from "./state.js";
 import { labelFromUrl } from "./url-label.js";
 import {
@@ -88,6 +89,7 @@ async function loadBackground(source, label, loaderFactory, entry) {
       syncMmdSpecularDirection(background.mesh.material, state.keyLight);
     }
     state.scene.add(background.root);
+    adaptCameraDepthRange();
     reportTextureDiagnostics(background);
     updateBackgroundSwitcher({
       ...entry,
@@ -136,6 +138,7 @@ function clearCommittedBackground() {
   state.currentBackgroundEntries = [];
   updateBackgroundSwitcher();
   updateStageState();
+  adaptCameraDepthRange();
 }
 
 function updateBackgroundSwitcher(selectedEntry) {

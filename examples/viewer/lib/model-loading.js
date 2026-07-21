@@ -21,7 +21,7 @@ import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitc
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
 import { createViewerRuntimeOptions, currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
-import { fitCameraToObject } from "./scene-setup.js";
+import { adaptCameraDepthRange, fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
 import { viewerConfig } from "./viewer-config.js";
 import {
@@ -146,6 +146,8 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     updatePlaybackDisplay();
     if (shouldAutoFitCamera) {
       frameCurrentModel();
+    } else {
+      adaptCameraDepthRange();
     }
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
@@ -261,6 +263,8 @@ export async function loadModelFolder(files, loadOptions = {}) {
     updatePlaybackDisplay();
     if (shouldAutoFitCamera) {
       frameCurrentModel();
+    } else {
+      adaptCameraDepthRange();
     }
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
@@ -361,6 +365,8 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     updatePlaybackDisplay();
     if (shouldAutoFitCamera) {
       frameCurrentModel();
+    } else {
+      adaptCameraDepthRange();
     }
     if (hasCurrentMotion()) {
       await ensurePhysicsBackendReady();

@@ -18,7 +18,7 @@ import {
   saveRendererSwitchSnapshot,
   setRendererSwitchRestoreParam
 } from "./lib/renderer-switch-state.js";
-import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
+import { adaptCameraDepthRange, resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
 import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
 import { updateViewerPipelineStatus } from "./lib/viewer-pipeline.js";
 
@@ -642,8 +642,11 @@ function restoreRendererSwitchCameraView(view) {
   camera.position.fromArray(view.position);
   camera.quaternion.fromArray(view.quaternion);
   camera.up.fromArray(view.up);
-  camera.near = view.near;
-  camera.far = view.far;
+  const hasSavedDepthRange = typeof view.near === "number" && typeof view.far === "number";
+  if (hasSavedDepthRange) {
+    camera.near = view.near;
+    camera.far = view.far;
+  }
   if (camera === state.perspectiveCamera && typeof view.fov === "number") {
     camera.fov = view.fov;
   }
@@ -653,6 +656,11 @@ function restoreRendererSwitchCameraView(view) {
   state.controls.target.fromArray(view.target);
   camera.updateProjectionMatrix();
   state.controls.update();
+  if (!hasSavedDepthRange) {
+    // Restore data predates near/far capture (or omitted it) -- recompute
+    // from current scene bounds instead of leaving the wide viewer default.
+    adaptCameraDepthRange();
+  }
 }
 
 function restoreRendererSwitchAudio(audio) {

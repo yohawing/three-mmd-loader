@@ -156,6 +156,58 @@ export function fitCameraToObject(object) {
   state.controls.update();
 }
 
+// Recomputes only camera.near/far from current scene content bounds (model +
+// background bounding spheres + camera distance). Never touches
+// position/target/fov -- used on auto-fit-suppressed commit paths (model
+// swap, background add/clear, renderer-switch restore without saved
+// near/far) so the depth range still tracks what is actually on stage
+// instead of staying pinned at the wide 0.01/2000 default (T070-18).
+const adaptCameraDepthRangeMaxRatio = 20000;
+const adaptCameraDepthRangeBoundsScratch = new THREE.Box3();
+const adaptCameraDepthRangeSphereScratch = new THREE.Sphere();
+
+export function adaptCameraDepthRange() {
+  const camera = state.camera;
+  if (!camera || !state.controls) {
+    return;
+  }
+  if (camera !== state.perspectiveCamera && camera !== state.orthographicCamera) {
+    return;
+  }
+  if (state.currentCameraMotion) {
+    return;
+  }
+  const bounds = adaptCameraDepthRangeBoundsScratch.makeEmpty();
+  if (state.currentModel?.mesh) {
+    const modelBounds = new THREE.Box3().setFromObject(state.currentModel.mesh);
+    if (!modelBounds.isEmpty()) {
+      bounds.union(modelBounds);
+    }
+  }
+  if (state.currentBackground?.mesh) {
+    const backgroundBounds = new THREE.Box3().setFromObject(state.currentBackground.mesh);
+    if (!backgroundBounds.isEmpty()) {
+      bounds.union(backgroundBounds);
+    }
+  }
+  if (bounds.isEmpty()) {
+    return;
+  }
+  const sphere = bounds.getBoundingSphere(adaptCameraDepthRangeSphereScratch);
+  const radius = Math.max(sphere.radius, 0.75);
+  const distanceToCenter = camera.position.distanceTo(sphere.center);
+  const distanceToNearestBound = Math.max(distanceToCenter - radius, 0);
+  const distanceToFarthestBound = distanceToCenter + radius;
+  let near = Math.max(radius / 100, distanceToNearestBound / 100, 0.01);
+  let far = Math.max(radius * 80, distanceToFarthestBound * 2, 200);
+  if (far / near > adaptCameraDepthRangeMaxRatio) {
+    near = far / adaptCameraDepthRangeMaxRatio;
+  }
+  camera.near = near;
+  camera.far = far;
+  camera.updateProjectionMatrix();
+}
+
 export function setDefaultCameraView() {
   state.controls.target.set(0, 0.9, 0);
   state.camera = state.perspectiveCamera;
