@@ -1,13 +1,19 @@
 #!/usr/bin/env node
-import { createReadStream, existsSync } from "node:fs";
-import { mkdir, stat, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { PNG } from "pngjs";
 import * as THREE from "three";
-import { browserLaunchOptions } from "./render-shared.mjs";
+import {
+  browserLaunchOptions,
+  commonWebMimeTypes,
+  isPathInside,
+  peekArgValue,
+  startStaticServer
+} from "./render-shared.mjs";
+import { luminance, percentile, round } from "./pixel-metrics.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -64,11 +70,9 @@ const thresholds = {
   lightWorldConfigurationMaxDelta: 1e-6
 };
 const mimeTypes = new Map([
-  [".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"],
-  [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"],
-  [".png", "image/png"], [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".bmp", "image/bmp"],
-  [".pmx", "application/octet-stream"], [".tga", "image/x-tga"], [".dds", "image/vnd-ms.dds"],
-  [".wasm", "application/wasm"]
+  ...commonWebMimeTypes,
+  [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".bmp", "image/bmp"],
+  [".tga", "image/x-tga"], [".dds", "image/vnd-ms.dds"]
 ]);
 
 async function main() {
@@ -80,11 +84,12 @@ async function main() {
     throw new Error(`Synthetic self-shadow fixture is missing: ${syntheticFixturePath}`);
   }
   await mkdir(options.outputDir, { recursive: true });
-  const server = await startStaticServer({
+  const dataRoots = {
     model: options.localModel ? path.dirname(options.localModel) : undefined,
     motion: options.localMotion ? path.dirname(options.localMotion) : undefined,
     background: options.localBackground ? path.dirname(options.localBackground) : undefined
-  });
+  };
+  const server = await startStaticServer(pathname => resolveRequestPath(pathname, dataRoots), mimeTypes);
   const report = {
     fixture: options.localModel ?? syntheticFixturePath,
     backend: options.backend,
@@ -251,10 +256,6 @@ async function main() {
     report.worldShadowPosition = worldShadowPosition ?? null;
     report.lightConfiguration = lightConfiguration;
     report.shadowCameraOccupancy = { ...shadowCameraOccupancy, passed: shadowCameraOccupancyPass };
-    report.runtimeSamePageToggle = {
-      trackedBy: "T070-19",
-      note: "T070-16 compares initial selfShadow=0 and selfShadow=1 viewer contexts only; it does not use a same-page runtime toggle as shadow proof."
-    };
     report.localObservations = options.localModel ? {
       characterSelfShadow: { passed: localDarkeningPass, metrics: fullFrame },
       characterToBackgroundShadow: backgroundShadow
@@ -1015,51 +1016,8 @@ function projectPixelToPlane(x, y, width, height, planeY, camera, origin, nearPo
   return distance > 0 ? direction.multiplyScalar(distance).add(origin) : null;
 }
 
-function luminance(r, g, b) {
-  return r * 0.2126 + g * 0.7152 + b * 0.0722;
-}
-
-function percentile(values, fraction) {
-  const ordered = [...values].sort((a, b) => a - b);
-  return ordered[Math.min(ordered.length - 1, Math.floor((ordered.length - 1) * fraction))] ?? 0;
-}
-
-function round(value) {
-  return Math.round(value * 1000) / 1000;
-}
-
 function dataUrl(root, filePath) {
   return `/__mmd_data__/${root}/${encodeURIComponent(path.basename(filePath))}`;
-}
-
-async function startStaticServer(dataRoots) {
-  const server = createServer(async (request, response) => {
-    try {
-      const url = new URL(request.url ?? "/", "http://127.0.0.1");
-      const filePath = resolveRequestPath(url.pathname, dataRoots);
-      if (!filePath) return response.writeHead(403).end("Forbidden");
-      const info = await stat(filePath);
-      const resolved = info.isDirectory() ? path.join(filePath, "index.html") : filePath;
-      response.writeHead(200, {
-        "Cache-Control": "no-store",
-        "Content-Type": mimeTypes.get(path.extname(resolved).toLowerCase()) ?? "application/octet-stream"
-      });
-      createReadStream(resolved).pipe(response);
-    } catch (error) {
-      response.writeHead(error?.code === "ENOENT" ? 404 : 500).end("Not found");
-    }
-  });
-  return await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") return reject(new Error("Failed to allocate local port."));
-      resolve({
-        origin: `http://127.0.0.1:${address.port}`,
-        close: () => new Promise((done, fail) => server.close(error => error ? fail(error) : done()))
-      });
-    });
-  });
 }
 
 function resolveRequestPath(pathname, dataRoots) {
@@ -1078,11 +1036,6 @@ function resolveRequestPath(pathname, dataRoots) {
   return isPathInside(candidate, repoRoot) ? candidate : undefined;
 }
 
-function isPathInside(candidate, parent) {
-  const relative = path.relative(parent, candidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
 function parseArgs(args) {
   const options = {
     outputDir: defaultOutputDir,
@@ -1097,7 +1050,7 @@ function parseArgs(args) {
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    const value = args[index + 1];
+    const value = peekArgValue(args, index);
     if (arg === "--output-dir" && value) {
       options.outputDir = path.resolve(value);
       index += 1;

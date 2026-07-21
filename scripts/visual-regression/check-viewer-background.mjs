@@ -1,12 +1,18 @@
 #!/usr/bin/env node
-import { createReadStream, existsSync } from "node:fs";
-import { mkdir, stat, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { PNG } from "pngjs";
-import { browserLaunchOptions } from "./render-shared.mjs";
+import {
+  browserLaunchOptions,
+  commonWebMimeTypes,
+  isPathInside,
+  peekArgValue,
+  startStaticServer
+} from "./render-shared.mjs";
+import { round } from "./pixel-metrics.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -24,11 +30,7 @@ const syntheticRoiThresholds = {
   minimumBlackPropRatio: 0.95,
   maximumRoiMeanRgbDelta: 30
 };
-const mimeTypes = new Map([
-  [".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"],
-  [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"],
-  [".png", "image/png"], [".pmx", "application/octet-stream"], [".wasm", "application/wasm"]
-]);
+const mimeTypes = commonWebMimeTypes;
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -39,7 +41,8 @@ async function main() {
     throw new Error(`Synthetic background fixture is missing: ${fixturePath}`);
   }
   await mkdir(options.outputDir, { recursive: true });
-  const server = await startStaticServer(options.localBackground ? path.dirname(options.localBackground) : undefined);
+  const dataRoot = options.localBackground ? path.dirname(options.localBackground) : undefined;
+  const server = await startStaticServer(pathname => resolveRequestPath(pathname, dataRoot), mimeTypes);
   let browser;
   const report = { fixture: options.localBackground ?? fixturePath, passed: false, cases: [], thresholds: { minimumColorfulSamples: 24, maxMeanRgbDelta: 92 } };
   try {
@@ -211,35 +214,13 @@ function compareRoi(a, b, roi) {
   return { meanRgbDelta: roundRatio(sum / (roi.width * roi.height)) };
 }
 
-function roundRatio(value) { return Math.round(value * 1000) / 1000; }
+function roundRatio(value) { return round(value); }
 
 function comparePng(a, b) {
   if (a.width !== b.width || a.height !== b.height) throw new Error("Background captures have different dimensions.");
   let sum = 0;
   for (let index = 0; index < a.data.length; index += 4) sum += (Math.abs(a.data[index] - b.data[index]) + Math.abs(a.data[index + 1] - b.data[index + 1]) + Math.abs(a.data[index + 2] - b.data[index + 2])) / 3;
-  return { meanRgbDelta: Math.round((sum / (a.width * a.height)) * 1000) / 1000 };
-}
-
-async function startStaticServer(dataRoot) {
-  const server = createServer(async (request, response) => {
-    try {
-      const url = new URL(request.url ?? "/", "http://127.0.0.1");
-      const filePath = resolveRequestPath(url.pathname, dataRoot);
-      if (!filePath) return response.writeHead(403).end("Forbidden");
-      const info = await stat(filePath);
-      const resolved = info.isDirectory() ? path.join(filePath, "index.html") : filePath;
-      response.writeHead(200, { "Cache-Control": "no-store", "Content-Type": mimeTypes.get(path.extname(resolved)) ?? "application/octet-stream" });
-      createReadStream(resolved).pipe(response);
-    } catch (error) { response.writeHead(error?.code === "ENOENT" ? 404 : 500).end("Not found"); }
-  });
-  return await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") return reject(new Error("Failed to allocate local port."));
-      resolve({ origin: `http://127.0.0.1:${address.port}`, close: () => new Promise((done, fail) => server.close(error => error ? fail(error) : done())) });
-    });
-  });
+  return { meanRgbDelta: round(sum / (a.width * a.height)) };
 }
 
 function resolveRequestPath(pathname, dataRoot) {
@@ -251,12 +232,10 @@ function resolveRequestPath(pathname, dataRoot) {
   return isPathInside(candidate, repoRoot) ? candidate : undefined;
 }
 
-function isPathInside(candidate, parent) { const relative = path.relative(parent, candidate); return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative)); }
-
 function parseArgs(args) {
   const options = { outputDir: defaultOutputDir, localBackground: undefined };
   for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]; const value = args[index + 1];
+    const arg = args[index]; const value = peekArgValue(args, index);
     if (arg === "--output-dir" && value) { options.outputDir = path.resolve(value); index += 1; }
     else if (arg === "--local-background" && value) { options.localBackground = path.resolve(value); index += 1; }
     else throw new Error(`Unknown or incomplete argument: ${arg}`);

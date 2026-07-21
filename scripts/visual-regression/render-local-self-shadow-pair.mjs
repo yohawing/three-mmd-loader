@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
+import { luminance as rgbLuminance, round } from "./pixel-metrics.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -255,22 +256,14 @@ function darkeningMetric(off, on, roi) {
   return {
     pixelCount,
     positivePixelCount: darkenings.length,
-    meanDarkening: roundMetric(pixelCount > 0 ? darkeningSum / pixelCount : 0),
-    p95Darkening: roundMetric(darkenings[Math.floor(darkenings.length * 0.95)] ?? 0),
-    maxDarkening: roundMetric(darkenings[darkenings.length - 1] ?? 0)
+    meanDarkening: round(pixelCount > 0 ? darkeningSum / pixelCount : 0, 6),
+    p95Darkening: round(darkenings[Math.floor(darkenings.length * 0.95)] ?? 0, 6),
+    maxDarkening: round(darkenings[darkenings.length - 1] ?? 0, 6)
   };
 }
 
 function luminance(image, offset) {
-  return (
-    0.2126 * (image.data[offset] ?? 0) +
-    0.7152 * (image.data[offset + 1] ?? 0) +
-    0.0722 * (image.data[offset + 2] ?? 0)
-  ) / 255;
-}
-
-function roundMetric(value) {
-  return Math.round(value * 1000000) / 1000000;
+  return rgbLuminance(image.data[offset] ?? 0, image.data[offset + 1] ?? 0, image.data[offset + 2] ?? 0) / 255;
 }
 
 function cropPng(source, crop) {

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "@playwright/test";
 
-import { browserLaunchOptions, sha256File } from "./render-shared.mjs";
+import { browserLaunchOptions, commonWebMimeTypes, isPathInside, requireArgValue, sha256File } from "./render-shared.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -16,20 +16,14 @@ const defaultOutputDir = path.join(repoRoot, "test-results", "visual", "generate
 const supportedBackends = new Set(["forcewebgl", "webgpu"]);
 
 const mimeTypes = new Map([
+  ...commonWebMimeTypes,
   [".bmp", "image/bmp"],
-  [".css", "text/css; charset=utf-8"],
-  [".html", "text/html; charset=utf-8"],
-  [".js", "text/javascript; charset=utf-8"],
-  [".json", "application/json; charset=utf-8"],
   [".mjs", "text/javascript; charset=utf-8"],
   [".pmd", "application/octet-stream"],
-  [".pmx", "application/octet-stream"],
-  [".png", "image/png"],
   [".spa", "image/bmp"],
   [".sph", "image/bmp"],
   [".tga", "application/octet-stream"],
-  [".vmd", "application/octet-stream"],
-  [".wasm", "application/wasm"]
+  [".vmd", "application/octet-stream"]
 ]);
 
 async function main() {
@@ -119,7 +113,7 @@ function selectCases(cases, caseName) {
 
 function resolveCase(visualCase) {
   const modelPath = path.resolve(repoRoot, visualCase.model);
-  if (!isInsideRoot(modelPath, repoRoot) || !existsSync(modelPath)) {
+  if (!isPathInside(modelPath, repoRoot) || !existsSync(modelPath)) {
     throw new Error(`Missing generated PMX model for ${visualCase.name}: ${visualCase.model}`);
   }
   return {
@@ -178,12 +172,7 @@ async function startStaticServer() {
 function resolveRequestPath(requestPath) {
   const normalizedPath = path.normalize(decodeURIComponent(requestPath)).replace(/^[/\\]+/, "");
   const filePath = path.resolve(repoRoot, normalizedPath);
-  return isInsideRoot(filePath, repoRoot) ? filePath : undefined;
-}
-
-function isInsideRoot(filePath, root) {
-  const relative = path.relative(root, filePath);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  return isPathInside(filePath, repoRoot) ? filePath : undefined;
 }
 
 function rendererHtml() {
@@ -382,30 +371,22 @@ function parseArgs(args) {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--backend") {
-      const backend = requireValue(args, index += 1, arg);
+      const backend = requireArgValue(args, index += 1, arg);
       if (!supportedBackends.has(backend)) {
         throw new Error(`--backend must be one of: ${Array.from(supportedBackends).join(", ")}`);
       }
       options.backend = backend;
     } else if (arg === "--case") {
-      options.caseName = requireValue(args, index += 1, arg);
+      options.caseName = requireArgValue(args, index += 1, arg);
     } else if (arg === "--manifest") {
-      options.manifestPath = path.resolve(requireValue(args, index += 1, arg));
+      options.manifestPath = path.resolve(requireArgValue(args, index += 1, arg));
     } else if (arg === "--output-dir") {
-      options.outputDir = path.resolve(requireValue(args, index += 1, arg));
+      options.outputDir = path.resolve(requireArgValue(args, index += 1, arg));
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
   return options;
-}
-
-function requireValue(args, index, flag) {
-  const value = args[index];
-  if (value === undefined || value.startsWith("--")) {
-    throw new Error(`${flag} requires a value`);
-  }
-  return value;
 }
 
 await main();

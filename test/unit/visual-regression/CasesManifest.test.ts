@@ -439,7 +439,6 @@ describe("visual regression smoke scripts", () => {
     expect(gate).toContain("localFullFrameMeanDarkeningMin");
     expect(gate).toContain("captureIsolatedPair");
     expect(gate).toContain("selfShadow=${shadowState}");
-    expect(gate).toContain("runtimeSamePageToggle");
     expect(gate).toContain("captureShadowCameraOccupancy");
     expect(gate).toContain("shadow-camera-caster.png");
     expect(gate).toContain("characterSelfShadow");

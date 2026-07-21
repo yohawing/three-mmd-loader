@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
-import { browserLaunchOptions, sha256File } from "./render-shared.mjs";
+import { browserLaunchOptions, isPathInside, sha256File } from "./render-shared.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -290,7 +290,7 @@ function resolveAssetPath(dataRoot, relativePath) {
     return undefined;
   }
   const resolved = path.resolve(dataRoot, relativePath);
-  return isInsideRoot(resolved, dataRoot) ? resolved : undefined;
+  return isPathInside(resolved, dataRoot) ? resolved : undefined;
 }
 
 function dataUrlFor(dataRoot, filePath) {
@@ -346,21 +346,16 @@ function resolveRequestPath(requestPath, dataRoot) {
   if (requestPath.startsWith(dataPrefix)) {
     const relativePath = decodePath(requestPath.slice(dataPrefix.length));
     const filePath = path.resolve(dataRoot, relativePath);
-    return isInsideRoot(filePath, dataRoot) ? filePath : undefined;
+    return isPathInside(filePath, dataRoot) ? filePath : undefined;
   }
 
   const normalizedPath = decodePath(requestPath).replace(/^[/\\]+/, "");
   const filePath = path.resolve(repoRoot, normalizedPath);
-  return isInsideRoot(filePath, repoRoot) ? filePath : undefined;
+  return isPathInside(filePath, repoRoot) ? filePath : undefined;
 }
 
 function decodePath(requestPath) {
   return path.normalize(decodeURIComponent(requestPath));
-}
-
-function isInsideRoot(filePath, root) {
-  const relative = path.relative(root, filePath);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function rendererHtml() {

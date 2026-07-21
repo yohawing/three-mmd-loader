@@ -5,6 +5,8 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { requireArgValue } from "./render-shared.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
 
@@ -84,17 +86,17 @@ function parseArgs(args) {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--baseline-dir") {
-      options.baselineDir = path.resolve(requireValue(args, index += 1, arg));
+      options.baselineDir = path.resolve(requireArgValue(args, index += 1, arg));
     } else if (arg === "--current-dir") {
-      options.currentDir = path.resolve(requireValue(args, index += 1, arg));
+      options.currentDir = path.resolve(requireArgValue(args, index += 1, arg));
     } else if (arg === "--diff-dir") {
-      options.diffDir = path.resolve(requireValue(args, index += 1, arg));
+      options.diffDir = path.resolve(requireArgValue(args, index += 1, arg));
     } else if (arg === "--report") {
-      options.report = path.resolve(requireValue(args, index += 1, arg));
+      options.report = path.resolve(requireArgValue(args, index += 1, arg));
     } else if (arg === "--output") {
-      options.output = path.resolve(requireValue(args, index += 1, arg));
+      options.output = path.resolve(requireArgValue(args, index += 1, arg));
     } else if (arg === "--title") {
-      options.title = requireValue(args, index += 1, arg);
+      options.title = requireArgValue(args, index += 1, arg);
     } else if (arg === "--fail-on-mismatch") {
       options.failOnMismatch = true;
     } else {
@@ -102,14 +104,6 @@ function parseArgs(args) {
     }
   }
   return options;
-}
-
-function requireValue(args, index, flag) {
-  const value = args[index];
-  if (value === undefined || value.startsWith("--")) {
-    throw new Error(`${flag} requires a value`);
-  }
-  return value;
 }
 
 await main();
