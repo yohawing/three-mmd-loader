@@ -8,18 +8,21 @@ import {
 import type { MaterialInfo } from "../../../src/parser/model/modelTypes.js";
 import { visualCaseAssets } from "../../../scripts/fixtures/generate-minimal-pmx.mjs";
 
-// T070-20: a TGA soft-alpha overlay's whole-image alpha scan classifies it as
-// "alphaTest" (see src/three/material/material-texture-set.ts:
+// T070-20: a TGA soft-alpha overlay's whole-image alpha scan used to classify
+// it as "alphaTest" (see src/three/material/material-texture-set.ts:
 // evaluateMmdDefaultMaterialTransparency / evaluateCachedMmdTextureAlphaGeometry,
 // which short-circuits to the TGA decoder's whole-image
 // texture.userData.mmdTextureAlphaMode via evaluateMmdTextureAlphaGeometry in
-// src/three/textures.ts). It is only promoted to "alphaBlend" when the material
-// name matches the soft-overlay vocabulary in
-// isLikelyMmdSoftAlphaOverlayMaterial (src/three/material/material-texture-set.ts:237-242):
-// /(hair\s*shadow|hairshadow|shadow|shade|cheek|blush|髪影|髪の影|影|頬|ほほ|チーク)/u
+// src/three/textures.ts), unless the material name matched the soft-overlay
+// vocabulary in isLikelyMmdSoftAlphaOverlayMaterial
+// (src/three/material/material-texture-set.ts:237-242).
 //
-// The real-model material "照れデフォ" (頬小.tga cheek overlay) does not match that
-// vocabulary, so it stays "alphaTest" instead of being promoted to "alphaBlend".
+// evaluateAlphaStats (src/three/textures.ts) now also promotes to "alphaBlend"
+// on soft-alpha dominance: when the middle-alpha population dominates (>=75%)
+// among visible (non-zero-alpha) pixels and covers at least 0.5% of all
+// samples, independent of the material-name heuristic. This fixes the real
+// "照れデフォ" (頬小.tga cheek overlay) material, which does not match the name
+// vocabulary.
 // These tests exercise the fixture materials from
 // scripts/fixtures/generate-minimal-pmx.mjs's "mmd-tga-soft-cheek-overlay" visual
 // case through the real classification pipeline (real TGA bytes, real TGA
@@ -95,12 +98,10 @@ describe("T070-20 TGA soft alpha cheek overlay name heuristic", () => {
     expect(materials[0]?.userData.mmdMaterial.transparencyMode).toBe("alphaTest");
   });
 
-  // Desired contract (currently failing): a soft-alpha TGA overlay should be
-  // classified alphaBlend regardless of whether the material name happens to be
-  // in the soft-overlay vocabulary. Marked as an expected failure so it documents
-  // the T070-20 bug without breaking CI while the underlying classification logic
-  // is unchanged.
-  test.fails(
+  // A soft-alpha TGA overlay is classified alphaBlend regardless of whether the
+  // material name happens to be in the soft-overlay vocabulary, via the
+  // soft-alpha-dominance rule in evaluateAlphaStats (src/three/textures.ts).
+  test(
     "T070-20: classifies the 照れデフォ soft-alpha overlay as alphaBlend",
     async () => {
       const tgaBytes = cheekOverlayAsset("tga-cheek-soft-alpha.tga");
