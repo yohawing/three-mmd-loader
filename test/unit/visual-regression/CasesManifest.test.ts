@@ -170,7 +170,8 @@ describe("generated PMX visual regression manifest", () => {
       "mmd-texture-alpha-used-uv-cutout",
       "mmd-png-hair-shadow-alpha-morph-blend",
       "mmd-tga-regular-hair-alpha-opaque",
-      "mmd-tga-hair-shadow-overlay-alpha-blend"
+      "mmd-tga-hair-shadow-overlay-alpha-blend",
+      "mmd-tga-soft-cheek-overlay"
     ]));
   });
 
