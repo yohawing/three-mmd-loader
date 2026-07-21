@@ -179,6 +179,20 @@
       "thresholds": { "mean": 0.03, "p95": 0.12 }
     },
     {
+      "name": "mmd-self-shadow-vmd-mode2",
+      "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-on.pmx",
+      "motion": "test/fixtures/generated/self-shadow/mmd-self-shadow-vmd-mode2.vmd",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0.08, 0.72, 3.2],
+        "target": [0.02, 0.34, 0],
+        "fov": 28,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
       "name": "mmd-self-shadow-sdef-depth",
       "model": "test/fixtures/generated/self-shadow/mmd-self-shadow-sdef-depth.pmx",
       "motion": "test/fixtures/generated/self-shadow/mmd-self-shadow-sdef-depth.vmd",
@@ -213,6 +227,20 @@
       "name": "body-self-shadow-vmd-mode-toggles-torso-shadow",
       "shadowOn": "mmd-self-shadow-body-vmd-on",
       "shadowOff": "mmd-self-shadow-body-vmd-off",
+      "receiverRoi": { "x": 99, "y": 323, "width": 236, "height": 19 },
+      "thresholds": {
+        "receiverMeanDarkeningMin": 0.0002,
+        "receiverP95DarkeningMin": 0.0015,
+        "receiverMeanAbsDeltaMin": 0.0002,
+        "receiverP95AbsDeltaMin": 0.0015,
+        "shadowPixelRatioMin": 0,
+        "outsideRoiMeanDeltaMax": 0.08
+      }
+    },
+    {
+      "name": "mmd-self-shadow-vmd-mode2-toggles-torso-shadow",
+      "shadowOn": "mmd-self-shadow-vmd-mode2",
+      "shadowOff": "mmd-self-shadow-vmd-off",
       "receiverRoi": { "x": 99, "y": 323, "width": 236, "height": 19 },
       "thresholds": {
         "receiverMeanDarkeningMin": 0.0002,

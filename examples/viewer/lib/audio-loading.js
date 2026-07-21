@@ -11,7 +11,8 @@ export function loadAudioFile(file) {
   updateAudioSwitcher({
     id: `file:${file.name}:${file.lastModified}`,
     name: file.name,
-    src: objectUrl
+    src: objectUrl,
+    source: file
   });
   setStatus("", "ready");
 }

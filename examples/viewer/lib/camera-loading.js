@@ -120,7 +120,6 @@ export async function loadCameraAnimation(loadedAnimation, label, entry) {
   updateTransportState();
   applyCameraMotion();
   setStatus("", "ready");
-  state.renderer.render(state.scene, state.camera);
   return true;
 }
 

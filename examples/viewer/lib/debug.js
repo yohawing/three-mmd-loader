@@ -4,6 +4,14 @@ import { dom } from "./dom.js";
 import { normalizeMaterials } from "./dispose.js";
 import { evaluateRuntime } from "./playback.js";
 import { debugEnabled, state } from "./state.js";
+import {
+  setCurrentModelTslOutlineHidden,
+  getMmdTslDedicatedShadowState,
+  setMmdTslDedicatedRawVisibilityDebug,
+  syncMmdTslDedicatedShadowVisibility,
+  syncMmdTslDedicatedRawVisibilityDebug,
+  submitViewerRender
+} from "./viewer-pipeline.js";
 
 export function createViewerDebugApi() {
   return {
@@ -28,15 +36,19 @@ export function createViewerDebugApi() {
     selfShadow(enabled = true) {
       return `selfShadow=${setSelfShadowEnabled(enabled)}`;
     },
+    dedicatedRawVisibility(enabled = true) {
+      return `dedicatedRawVisibility=${setMmdTslDedicatedRawVisibilityDebug(enabled)}`;
+    },
+    selfShadowDiagnostics: createSelfShadowDiagnostics,
     showColliders() {
       showColliderHelpers();
-      state.renderer.render(state.scene, state.camera);
+      submitViewerRender();
       refreshDebugPanelState();
       return "collider helpers enabled";
     },
     hideColliders() {
       hideColliderHelpers();
-      state.renderer.render(state.scene, state.camera);
+      submitViewerRender();
       refreshDebugPanelState();
       return "collider helpers hidden";
     },
@@ -48,7 +60,7 @@ export function createViewerDebugApi() {
       evaluateRuntime(options);
       state.controls.update();
       updateColliderHelpers();
-      state.renderer.render(state.scene, state.camera);
+      submitViewerRender();
       return this.state();
     },
     state() {
@@ -234,7 +246,7 @@ export function toggleColliderHelpers() {
     showColliderHelpers();
   }
   state.showDebugColliders = state.debugCollidersVisible;
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   return state.debugCollidersVisible;
 }
 
@@ -249,7 +261,7 @@ export function setDebugMaterialMode(mode) {
       mesh.material = normalMaterial;
     }
   }
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   refreshDebugPanelState();
   return state.debugMaterialMode;
 }
@@ -259,7 +271,8 @@ export function setOutlineHidden(hidden) {
   state.currentModel?.outlineMeshes?.forEach((outline) => {
     outline.visible = !state.debugOutlineHidden;
   });
-  state.renderer.render(state.scene, state.camera);
+  setCurrentModelTslOutlineHidden(state.debugOutlineHidden);
+  submitViewerRender();
   refreshDebugPanelState();
   return state.debugOutlineHidden;
 }
@@ -277,7 +290,9 @@ export function setSelfShadowEnabled(enabled) {
     state.runtimePhysicsDisabledOptionsScratch.physics = false;
     evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
   }
-  state.renderer?.render(state.scene, state.camera);
+  syncMmdTslDedicatedShadowVisibility();
+  syncMmdTslDedicatedRawVisibilityDebug();
+  submitViewerRender();
   refreshDebugPanelState();
   return state.debugSelfShadowEnabled;
 }
@@ -342,7 +357,7 @@ export function captureCanvas() {
   if (!state.renderer || !state.scene || !state.camera) {
     return;
   }
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   const dataUrl = state.renderer.domElement.toDataURL("image/png");
   const frame = Math.round(state.elapsedSeconds * (state.mmdFrameRate ?? 30));
   const modelName = state.currentModel?.mesh.name ?? "capture";
@@ -357,7 +372,7 @@ export function markBeforeCapture() {
   if (!state.renderer || !state.scene || !state.camera) {
     return;
   }
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   state.debugBeforeCapture = state.renderer.domElement.toDataURL("image/png");
   refreshDebugPanelState();
 }
@@ -366,7 +381,7 @@ export function captureAfterAndCompare() {
   if (!state.renderer || !state.scene || !state.camera || !state.debugBeforeCapture) {
     return;
   }
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
   const afterDataUrl = state.renderer.domElement.toDataURL("image/png");
   showComparisonOverlay(state.debugBeforeCapture, afterDataUrl);
 }
@@ -743,12 +758,126 @@ function createSmokeState() {
     selfShadowEnabled: state.debugSelfShadowEnabled,
     keyLightCastShadow: state.keyLight?.castShadow ?? null,
     rendererShadowMapEnabled: state.renderer?.shadowMap?.enabled ?? null,
+    selfShadow: createSelfShadowDiagnostics(),
     rigidBodyBounds: matrixTranslationBounds(rigidBodyTransforms),
     matricesFinite: finiteArray(physicsStage?.worldMatricesColumnMajor ?? []),
     morphWeightsFinite: finiteArray(physicsStage?.morphWeights ?? []),
     physicsMaxBonePositionDelta: maxStageTranslationDelta(ikStage, physicsStage),
     diagnostics: state.activePhysicsBackend?.diagnostics?.() ?? []
   };
+}
+
+function createSelfShadowDiagnostics() {
+  const mesh = state.currentModel?.mesh;
+  const light = state.keyLight;
+  const shadowCamera = light?.shadow?.camera;
+  if (light) {
+    light.updateMatrixWorld();
+    light.target.updateMatrixWorld();
+  }
+  shadowCamera?.updateMatrixWorld();
+  const shadowCameraLayerMask = shadowCamera?.layers?.mask ?? null;
+  const materials = mesh ? normalizeMaterials(mesh.material) : [];
+  const materialDiagnostics = materials.map((material, materialIndex) => {
+    const metadata = material.userData?.mmdMaterial;
+    const flags = metadata?.flags ?? {};
+    return {
+      materialIndex,
+      name: material.name || metadata?.name || null,
+      flags: {
+        groundShadow: flags.groundShadow === true,
+        selfShadowMap: flags.selfShadowMap === true,
+        selfShadow: flags.selfShadow === true,
+        edge: flags.edge === true
+      },
+      receiveShadow: flags.selfShadow === true,
+      dedicatedShadowEnabled: material.userData?.mmdTslMaterialUniforms?.dedicatedShadowEnabled?.value ?? null,
+      materialClass: material.constructor?.name ?? null,
+      receivedShadowPositionNode: Boolean(material.receivedShadowPositionNode),
+      normalNode: Boolean(material.normalNode),
+      positionNode: Boolean(material.positionNode),
+      // TSL exposes normalNode as the material normal input. The diagnostic
+      // deliberately reports presence instead of pretending to read a GPU-only value.
+      viewSpaceNormalPath: material.normalNode ? "material.normalNode" : null,
+      transparent: material.transparent === true,
+      depthWrite: material.depthWrite !== false,
+      visible: material.visible !== false,
+      side: material.side
+    };
+  });
+  const casters = [];
+  state.currentModel?.root?.traverse?.((object) => {
+    const caster = object.userData?.mmdTslShadowCaster;
+    if (!caster) {
+      return;
+    }
+    casters.push({
+      name: object.name || null,
+      layerMask: object.layers.mask,
+      layerMatchesShadowCamera: shadowCameraLayerMask === null
+        ? null
+        : (object.layers.mask & shadowCameraLayerMask) !== 0,
+      indexCount: object.geometry?.index?.count ?? 0,
+      groupCount: object.geometry?.groups?.length ?? 0,
+      opaqueDraws: caster.opaqueDraws ?? 0,
+      alphaTestDraws: caster.alphaTestDraws ?? 0,
+      sourceGroupCount: caster.sourceGroupCount ?? 0
+    });
+  });
+  const selfShadowFrames = state.currentMotion?.animation?.selfShadowFrames ?? [];
+  return {
+    modelPresent: Boolean(mesh),
+    sparsePositionMorphsEnabled: mesh?.userData?.mmdTslSparsePositionMorphs === true,
+    storedBoundingBox: mesh?.boundingBox
+      ? { min: vectorToArray(mesh.boundingBox.min), max: vectorToArray(mesh.boundingBox.max) }
+      : null,
+    visibleMeshLayerMask: mesh?.layers?.mask ?? null,
+    visibleMeshCastShadow: mesh?.castShadow === true,
+    visibleMeshReceiveShadow: mesh?.receiveShadow === true,
+    casterCount: casters.length,
+    casterIndexCount: casters.reduce((sum, caster) => sum + caster.indexCount, 0),
+    casterGroupCount: casters.reduce((sum, caster) => sum + caster.groupCount, 0),
+    casters,
+    receiverMaterialCount: materialDiagnostics.filter(material => material.receiveShadow).length,
+    materials: materialDiagnostics,
+    layerAgreement: {
+      shadowCameraLayerMask,
+      casterMatchesShadowCamera: casters.length > 0 && casters.every(caster => caster.layerMatchesShadowCamera === true)
+    },
+    light: light
+      ? {
+          castShadow: light.castShadow === true,
+          worldPosition: vectorToArray(light.getWorldPosition(new THREE.Vector3())),
+          targetWorldPosition: vectorToArray(light.target.getWorldPosition(new THREE.Vector3())),
+          shadowBias: light.shadow.bias,
+          shadowNormalBias: light.shadow.normalBias,
+          shadowMapSize: [light.shadow.mapSize.x, light.shadow.mapSize.y],
+          shadowCamera: shadowCamera
+            ? {
+                near: shadowCamera.near,
+                far: shadowCamera.far,
+                left: shadowCamera.left,
+                right: shadowCamera.right,
+                top: shadowCamera.top,
+                bottom: shadowCamera.bottom,
+                layerMask: shadowCamera.layers.mask,
+                worldMatrix: Array.from(shadowCamera.matrixWorld.elements)
+              }
+            : null
+        }
+      : null,
+    vmdSelfShadow: {
+      frameCount: selfShadowFrames.length,
+      sampledFrameIndex: state.selfShadowFrameHint.index,
+      mode: state.selfShadowStateScratch.mode,
+      distance: state.selfShadowStateScratch.distance
+    },
+    dedicatedPass: getMmdTslDedicatedShadowState()
+  };
+}
+
+function vectorToArray(vector) {
+  return [vector.x, vector.y, vector.z];
 }
 
 function finiteArray(values) {

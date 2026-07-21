@@ -2,6 +2,10 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 
 import { disposeMmdModel, type ThreeMmdModel } from "../../../src/three/index.js";
+import {
+  createMmdTslMaterialFromSource,
+  replaceMmdModelMaterialsWithTsl
+} from "../../../src/webgpu/material-assembly.js";
 
 describe("disposeMmdModel", () => {
   it("disposes mesh, outline, render-order, skeleton, and texture resources once", () => {
@@ -118,6 +122,77 @@ describe("disposeMmdModel", () => {
 
     expect(sharedTextureDispose).not.toHaveBeenCalled();
     expect(ownedTextureDispose).toHaveBeenCalledOnce();
+  });
+
+  it("applies texture ownership to TSL retained texture references", () => {
+    const geometry = new THREE.BufferGeometry();
+    const sharedTexture = new THREE.Texture();
+    const ownedTexture = new THREE.Texture();
+    ownedTexture.userData.mmdTextureOwnership = "loader";
+    const sourceMaterial = new THREE.MeshToonMaterial({ map: sharedTexture });
+    sourceMaterial.gradientMap = ownedTexture;
+    const material = createMmdTslMaterialFromSource(sourceMaterial);
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const root = new THREE.Group();
+    root.add(mesh);
+    const sharedTextureDispose = vi.spyOn(sharedTexture, "dispose");
+    const ownedTextureDispose = vi.spyOn(ownedTexture, "dispose");
+
+    disposeMmdModel(createDisposableModel(root, mesh), { textures: "owned" });
+
+    expect(sharedTextureDispose).not.toHaveBeenCalled();
+    expect(ownedTextureDispose).toHaveBeenCalledOnce();
+  });
+
+  it("does not dispose TSL source textures in none mode", () => {
+    const geometry = new THREE.BufferGeometry();
+    const diffuseTexture = new THREE.Texture();
+    const toonTexture = new THREE.Texture();
+    const sphereTexture = new THREE.Texture();
+    const sourceMaterial = new THREE.MeshToonMaterial({ map: diffuseTexture });
+    sourceMaterial.gradientMap = toonTexture;
+    sourceMaterial.userData.mmdSphereTexture = sphereTexture;
+    const material = createMmdTslMaterialFromSource(sourceMaterial);
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const root = new THREE.Group();
+    root.add(mesh);
+    const diffuseDispose = vi.spyOn(diffuseTexture, "dispose");
+    const toonDispose = vi.spyOn(toonTexture, "dispose");
+    const sphereDispose = vi.spyOn(sphereTexture, "dispose");
+
+    disposeMmdModel(createDisposableModel(root, mesh), { textures: "none" });
+
+    expect(diffuseDispose).not.toHaveBeenCalled();
+    expect(toonDispose).not.toHaveBeenCalled();
+    expect(sphereDispose).not.toHaveBeenCalled();
+  });
+
+  it("disposes TSL replacement and its retained source material exactly once", () => {
+    const geometry = new THREE.BufferGeometry();
+    const diffuseTexture = new THREE.Texture();
+    const toonTexture = new THREE.Texture();
+    const sphereTexture = new THREE.Texture();
+    const sourceMaterial = new THREE.MeshToonMaterial({ map: diffuseTexture });
+    sourceMaterial.gradientMap = toonTexture;
+    sourceMaterial.userData.mmdSphereTexture = sphereTexture;
+    const sourceDispose = vi.spyOn(sourceMaterial, "dispose");
+    const mesh = new THREE.SkinnedMesh(geometry, sourceMaterial);
+    replaceMmdModelMaterialsWithTsl(mesh);
+    const nodeMaterial = mesh.material as THREE.Material;
+    const nodeDispose = vi.spyOn(nodeMaterial, "dispose");
+    const root = new THREE.Group();
+    root.add(mesh);
+    const diffuseDispose = vi.spyOn(diffuseTexture, "dispose");
+    const toonDispose = vi.spyOn(toonTexture, "dispose");
+    const sphereDispose = vi.spyOn(sphereTexture, "dispose");
+
+    disposeMmdModel(createDisposableModel(root, mesh));
+
+    expect(sourceDispose).toHaveBeenCalledOnce();
+    expect(nodeDispose).toHaveBeenCalledOnce();
+    expect(diffuseDispose).toHaveBeenCalledOnce();
+    expect(toonDispose).toHaveBeenCalledOnce();
+    expect(sphereDispose).toHaveBeenCalledOnce();
   });
 
   it("preserves the shared fallback toon gradient even in all-textures disposal mode", () => {
@@ -242,4 +317,28 @@ describe("disposeMmdModel", () => {
     expect(materialDispose).toHaveBeenCalledOnce();
     expect(skeletonDispose).toHaveBeenCalledOnce();
   });
+
+  function createDisposableModel(root: THREE.Group, mesh: THREE.SkinnedMesh): ThreeMmdModel {
+    return {
+      root,
+      object: root,
+      mesh,
+      outlineMeshes: [],
+      renderOrderMeshes: [],
+      runtime: undefined as never,
+      source: { kind: "bytes", byteLength: 0 },
+      diagnostics: {
+        core: { kind: "provided" },
+        source: { kind: "bytes", byteLength: 0 },
+        textures: [],
+        materials: [],
+        performance: []
+      },
+      textureDiagnostics: [],
+      setAnimation() {},
+      update() {
+        return { seconds: 0, frame: 0, frameRate: 30 };
+      }
+    };
+  }
 });

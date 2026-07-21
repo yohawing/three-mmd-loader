@@ -61,6 +61,8 @@ export async function loadMotion(source, label = source.name ?? "motion") {
     }
     state.pendingMotionSource = source;
     state.pendingMotionLabel = label;
+    state.currentPoseSource = undefined;
+    state.currentPoseLabel = undefined;
     state.currentMotion = {
       source,
       name: animation.metadata.modelName,
@@ -98,6 +100,8 @@ export async function loadPose(source, label = source.name ?? "pose") {
       ...poseAnimation,
       durationSeconds: 1
     };
+    state.currentPoseSource = source;
+    state.currentPoseLabel = label;
     state.currentModel.setAnimation(poseAnimation);
     state.elapsedSeconds = 0;
     dom.timeline.max = 1;
@@ -144,6 +148,8 @@ export async function switchMotion(file) {
 
 export function clearMotion() {
   state.currentMotion = undefined;
+  state.currentPoseSource = undefined;
+  state.currentPoseLabel = undefined;
   state.pendingMotionSource = undefined;
   state.pendingMotionLabel = undefined;
   if (state.currentModel) {

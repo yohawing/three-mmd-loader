@@ -9,7 +9,14 @@ import {
   applyMmdSelfShadowStateToThreeDirectionalLight,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
-import { fitShadowCameraToObject } from "./scene-setup.js";
+import { updateSelfShadowDepthBias, updateShadowCameraForFrame } from "./scene-setup.js";
+import {
+  isTslViewerPipeline,
+  submitViewerRender,
+  syncMmdTslDedicatedShadowVisibility,
+  syncViewerTslLight,
+  syncCurrentModelTslMaterialStates
+} from "./viewer-pipeline.js";
 
 export function render() {
   state.frameTimer.update();
@@ -24,15 +31,16 @@ export function render() {
   updateColliderHelpers();
   state.controls.update();
   applyCameraMotion();
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
 }
 
 export function renderStillFrame() {
+  state.selfShadowBoundsRefreshCountdown = 0;
   evaluateRuntime();
   updateColliderHelpers();
   state.controls.update();
   applyCameraMotion();
-  state.renderer.render(state.scene, state.camera);
+  submitViewerRender();
 }
 
 export function evaluateRuntime(options) {
@@ -47,10 +55,11 @@ export function evaluateRuntime(options) {
     updateOptions.physics =
       state.physicsEnabled && (options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0));
     state.currentModel.update(currentMmdSeconds(), updateOptions);
+    syncCurrentModelTslMaterialStates();
   }
   applyLightMotion();
   if (state.currentModel?.mesh) {
-    fitShadowCameraToObject(state.currentModel.mesh);
+    updateShadowCameraForFrame(state.currentModel.mesh);
   }
   applySelfShadowMotion();
   if (dom.timeline) {
@@ -78,11 +87,15 @@ function applyLightMotion() {
     target: state.controls.target,
     directionScratch: state.lightDirectionScratch
   });
-  if (state.currentModel?.mesh?.material) {
-    syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
-  }
-  if (state.currentBackground?.mesh?.material) {
-    syncMmdSpecularDirection(state.currentBackground.mesh.material, state.keyLight);
+  if (isTslViewerPipeline()) {
+    syncViewerTslLight();
+  } else {
+    if (state.currentModel?.mesh?.material) {
+      syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
+    if (state.currentBackground?.mesh?.material) {
+      syncMmdSpecularDirection(state.currentBackground.mesh.material, state.keyLight);
+    }
   }
 }
 
@@ -92,12 +105,16 @@ function applySelfShadowMotion() {
   }
   if (!state.debugSelfShadowEnabled) {
     state.keyLight.castShadow = false;
+    updateSelfShadowDepthBias();
+    syncMmdTslDedicatedShadowVisibility();
     return;
   }
   const frames = state.currentMotion?.animation?.selfShadowFrames;
   if (!frames || frames.length === 0) {
     state.keyLight.castShadow = true;
     state.selfShadowFrameHint.index = 0;
+    updateSelfShadowDepthBias();
+    syncMmdTslDedicatedShadowVisibility();
     return;
   }
   const selfShadowState = sampleMmdSelfShadowTrackInto(
@@ -106,11 +123,14 @@ function applySelfShadowMotion() {
     state.selfShadowStateScratch,
     state.selfShadowFrameHint
   );
+  state.selfShadowLightOptionsScratch.minFar = state.keyLight.shadow.camera.far;
   applyMmdSelfShadowStateToThreeDirectionalLight(
     state.keyLight,
     selfShadowState,
     state.selfShadowLightOptionsScratch
   );
+  updateSelfShadowDepthBias();
+  syncMmdTslDedicatedShadowVisibility();
 }
 
 export async function setPlaybackPlaying(playing) {

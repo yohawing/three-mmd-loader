@@ -46,6 +46,7 @@ import type { ModelSource } from "./modelSource.js";
 import type { ModelSourceDiagnostic, ModelSourceFetch } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
 export { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "./geometry.js";
+export type { ThreeMmdGeometryOptions } from "./geometry.js";
 export { applyMmdCameraStateToThreeCamera } from "./camera.js";
 export { applyMmdLightStateToThreeDirectionalLight } from "./light.js";
 export { disposeMmdModel } from "./dispose.js";
@@ -239,6 +240,8 @@ export interface ThreeMmdLoadModelOptions {
   readonly renderOrderProxies?: boolean;
   /** Splits large sparse morph geometry into per-material body meshes. Defaults to true. */
   readonly morphSplit?: boolean;
+  /** Creates dense Three.js morph attributes. Defaults to true. */
+  readonly morphAttributes?: boolean;
   /** Applies frustum culling to the base mesh and generated proxy meshes. */
   readonly frustumCulled?: boolean;
   /** Overrides fetch for this string ModelSource load. */
@@ -371,7 +374,8 @@ export class ThreeMmdLoader {
       try {
         profile?.mark("parsed");
         const mesh = createThreeMmdMesh(modelData, {
-          morphSplit: options.morphSplit ?? true
+          morphSplit: options.morphSplit ?? true,
+          morphAttributes: options.morphAttributes ?? true
         });
         parsedModel.dispose?.();
         parsedModelDisposed = true;
@@ -777,6 +781,9 @@ function validateLoadModelOptions(options: ThreeMmdLoadModelOptions): void {
   if (options.morphSplit !== undefined && typeof options.morphSplit !== "boolean") {
     throw new TypeError("ThreeMmdLoader.loadModel morphSplit must be a boolean");
   }
+  if (options.morphAttributes !== undefined && typeof options.morphAttributes !== "boolean") {
+    throw new TypeError("ThreeMmdLoader.loadModel morphAttributes must be a boolean");
+  }
 }
 
 function warnDeprecatedApi(name: string, replacement: string): void {
@@ -904,15 +911,16 @@ function formatDiagnosticReason(error: unknown): string {
 
 function createThreeMmdMesh(
   modelData: LoaderMmdModelData,
-  options: { readonly morphSplit: boolean }
+  options: { readonly morphSplit: boolean; readonly morphAttributes: boolean }
 ): THREE.SkinnedMesh {
-  const splitGeometries = options.morphSplit && shouldCreateMorphSplitMeshes(modelData)
+  const splitGeometries = options.morphAttributes && options.morphSplit && shouldCreateMorphSplitMeshes(modelData)
     ? createThreeMorphSplitGeometries(modelData.geometry, modelData.materials, modelData.morphs)
     : [];
   const geometry = createThreeBufferGeometry(
     modelData.geometry,
     modelData.materials,
-    splitGeometries.length > 0 ? [] : modelData.morphs
+    splitGeometries.length > 0 ? [] : modelData.morphs,
+    { morphAttributes: options.morphAttributes }
   );
   const materials = createThreeMmdMaterials(modelData.materials);
   if (geometry.userData.mmdSdef || geometry.userData.mmdQdef) {

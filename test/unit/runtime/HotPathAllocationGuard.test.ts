@@ -177,6 +177,26 @@ describe("runtime hot path allocation guards", () => {
 
     expectNoForbiddenPatterns(hotPathBodies, forbiddenPatterns, "runtime debug capture paths");
   });
+
+  it("keeps TSL material state sync allocation-free", async () => {
+    const source = await readFile("src/webgpu/material-core.ts", "utf8");
+    const hotPathBodies = [
+      extractFunctionBody(source, "syncMmdTslMaterialState")
+    ];
+    const forbiddenPatterns: Array<readonly [string, RegExp]> = [
+      ["new THREE.Vector3", /new\s+THREE\.Vector3\s*\(/],
+      ["new THREE.Vector4", /new\s+THREE\.Vector4\s*\(/],
+      ["new Float32Array", /new\s+Float32Array\s*\(/],
+      ["new Array", /new\s+Array\s*\(/],
+      ["empty array literal", /\[\s*\]/],
+      ["spread copy", /\.\.\./],
+      [".map(", /\.map\s*\(/],
+      [".filter(", /\.filter\s*\(/],
+      [".slice(", /\.slice\s*\(/]
+    ];
+
+    expectNoForbiddenPatterns(hotPathBodies, forbiddenPatterns, "TSL material state sync");
+  });
 });
 
 function extractFunctionBody(source: string, name: string): string {

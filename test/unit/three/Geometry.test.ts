@@ -204,6 +204,29 @@ describe("createThreeBufferGeometry", () => {
     );
   });
 
+  it("can retain the internal morph source without allocating dense morph attributes", () => {
+    const geometry = createThreeBufferGeometry(
+      {
+        ...createQuadBuffers(),
+        additionalUvs: [new Float32Array(16)]
+      },
+      [],
+      [
+        {
+          vertexOffsets: [{ vertexIndex: 2, position: [0.25, -0.5, -1.5] }],
+          uvOffsets: [{ vertexIndex: 1, uv: [0.125, -0.25] }],
+          additionalUvOffsets: [{ vertexIndex: 0, uvIndex: 0, uv: [0.1, 0.2, 0.3, 0.4] }]
+        }
+      ],
+      { morphAttributes: false }
+    );
+
+    expect(geometry.morphTargetsRelative).toBe(true);
+    expect(geometry.morphAttributes.position).toBeUndefined();
+    expect(geometry.morphAttributes.uv).toBeUndefined();
+    expect(geometry.morphAttributes.uv1).toBeUndefined();
+  });
+
   it("uses internal dense morph providers when geometry is created", () => {
     const provider: DenseMorphProvider = {
       createPositionOffsets: (vertexCount) =>

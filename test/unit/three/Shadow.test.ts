@@ -32,6 +32,19 @@ describe("applyMmdSelfShadowStateToThreeDirectionalLight", () => {
     expect(light.shadow.intensity).toBeCloseTo(1);
   });
 
+  it("treats VMD mode 2 as an enabled self-shadow state", () => {
+    const light = new THREE.DirectionalLight();
+
+    applyMmdSelfShadowStateToThreeDirectionalLight(light, { mode: 2, distance: 0.2 }, {
+      distanceScale: 100,
+      minFar: 1,
+      maxFar: 20
+    });
+
+    expect(light.castShadow).toBe(true);
+    expect(light.shadow.camera.far).toBe(20);
+  });
+
   it("allows callers to tune shadow intensity for toon self-shadow blending", () => {
     const light = new THREE.DirectionalLight();
 

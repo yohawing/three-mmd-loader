@@ -7,6 +7,15 @@ const generatedPmxManifestPath = path.resolve("scripts/visual-regression/generat
 const cameraLightVmdManifestPath = path.resolve("scripts/visual-regression/camera-light-vmd.manifest.json");
 const skinningManifestPath = path.resolve("scripts/visual-regression/skinning.manifest.json");
 const selfShadowManifestPath = path.resolve("scripts/visual-regression/self-shadow.manifest.json");
+const compareGeneratedPmxWebgpuScriptPath = path.resolve(
+  "scripts/visual-regression/compare-generated-pmx-webgpu.mjs"
+);
+const renderGeneratedPmxWebgpuScriptPath = path.resolve(
+  "scripts/visual-regression/render-generated-pmx-webgpu.mjs"
+);
+const viewerSelfShadowGateScriptPath = path.resolve(
+  "scripts/visual-regression/check-viewer-self-shadow.mjs"
+);
 const packageJsonPath = path.resolve("package.json");
 
 interface RealModelVisualCase {
@@ -207,6 +216,7 @@ describe("self-shadow visual regression manifest", () => {
       "mmd-self-shadow-receiver-flag-off-mixed",
       "mmd-self-shadow-vmd-off",
       "mmd-self-shadow-vmd-on",
+      "mmd-self-shadow-vmd-mode2",
       "mmd-self-shadow-sdef-depth"
     ]));
   });
@@ -215,7 +225,20 @@ describe("self-shadow visual regression manifest", () => {
     const manifest = readSelfShadowManifest();
     const names = new Set(manifest.cases.map(visualCase => visualCase.name));
 
-    expect(manifest.comparisons.length).toBeGreaterThanOrEqual(3);
+    expect(manifest.comparisons.length).toBeGreaterThanOrEqual(4);
+    const mode1Comparison = manifest.comparisons.find(
+      comparison => comparison.name === "body-self-shadow-vmd-mode-toggles-torso-shadow"
+    );
+    const mode2Comparison = manifest.comparisons.find(
+      comparison => comparison.name === "mmd-self-shadow-vmd-mode2-toggles-torso-shadow"
+    );
+    expect(mode1Comparison).toBeDefined();
+    expect(mode2Comparison).toMatchObject({
+      shadowOn: "mmd-self-shadow-vmd-mode2",
+      shadowOff: "mmd-self-shadow-vmd-off",
+      receiverRoi: mode1Comparison?.receiverRoi,
+      thresholds: mode1Comparison?.thresholds
+    });
     for (const comparison of manifest.comparisons) {
       expect(comparison.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
       expect(names.has(comparison.shadowOn)).toBe(true);
@@ -302,10 +325,13 @@ describe("visual regression threshold audit", () => {
     for (const profile of auditProfiles) {
       const manifest = readThresholdAuditManifest(profile.path);
       for (const visualCase of manifest.cases) {
+        expect(visualCase.thresholds, `${profile.name}/${visualCase.name} missing thresholds`).toBeDefined();
         const thresholds = visualCase.thresholds;
-        expect(thresholds, `${profile.name}/${visualCase.name} missing thresholds`).toBeDefined();
-        expect(thresholds?.mean, `${profile.name}/${visualCase.name} missing mean`).toBeGreaterThan(0);
-        expect(thresholds?.p95, `${profile.name}/${visualCase.name} missing p95`).toBeGreaterThan(0);
+        if (thresholds === undefined) {
+          continue;
+        }
+        expect(thresholds.mean, `${profile.name}/${visualCase.name} missing mean`).toBeGreaterThan(0);
+        expect(thresholds.p95, `${profile.name}/${visualCase.name} missing p95`).toBeGreaterThan(0);
       }
     }
   });
@@ -361,6 +387,27 @@ describe("visual regression smoke scripts", () => {
     expect(scripts["visual:report"]).toBeUndefined();
     expect(scripts["visual:report:flip"]).toBeUndefined();
     expect(scripts["visual:smoke:generated-pmx"]).toContain("visual:report:generated-pmx");
+    expect(scripts["render:visual:generated-pmx:webgpu"]).toContain("render-generated-pmx-webgpu.mjs");
+    expect(scripts["visual:smoke:generated-pmx:webgpu"]).toBeUndefined();
+    expect(scripts["visual:check:generated-pmx:webgpu"]).toBeUndefined();
+    expect(scripts["visual:report:generated-pmx:webgpu"]).toContain("compare-generated-pmx-webgpu.mjs");
+    const compareGeneratedPmxWebgpuScript = readFileSync(compareGeneratedPmxWebgpuScriptPath, "utf8");
+    expect(compareGeneratedPmxWebgpuScript).toContain("visual-baselines");
+    expect(compareGeneratedPmxWebgpuScript).toContain("generated-pmx");
+    expect(compareGeneratedPmxWebgpuScript).toContain("write-visual-comparison-html.mjs");
+    const renderGeneratedPmxWebgpuScript = readFileSync(renderGeneratedPmxWebgpuScriptPath, "utf8");
+    expect(renderGeneratedPmxWebgpuScript).toContain(
+      "for light-VMD cases. This profile has static scene lights"
+    );
+    expect(renderGeneratedPmxWebgpuScript).not.toContain("syncTslMaterialLight(model.mesh.material");
+    expect(renderGeneratedPmxWebgpuScript).toContain("geometryAwareAlpha: true");
+    expect(renderGeneratedPmxWebgpuScript).toContain(
+      "classification while loading. TSL appends its own outline groups"
+    );
+    expect(renderGeneratedPmxWebgpuScript).toContain("legacySrgbFramebuffer: true");
+    expect(renderGeneratedPmxWebgpuScript).toContain(
+      "createdRenderer.outputColorSpace = THREE.LinearSRGBColorSpace"
+    );
     expect(scripts["visual:smoke:camera-light-vmd"]).toContain("visual:report:camera-light-vmd");
     expect(scripts["render:visual:camera-light-vmd"]).toContain("camera-light-vmd.manifest.json");
     expect(scripts["visual:smoke:generated-pmx:flip"]).toContain("visual:report:generated-pmx:flip");
@@ -368,5 +415,48 @@ describe("visual regression smoke scripts", () => {
     expect(scripts["visual:smoke:self-shadow"]).toContain("visual:report:self-shadow");
     expect(scripts["visual:report:self-shadow"]).toContain("compute-shadow-metrics.mjs");
     expect(scripts["render:visual:self-shadow:local"]).toContain("render-local-self-shadow-pair.mjs");
+    expect(scripts["visual:smoke:viewer-self-shadow"]).toContain("check-viewer-self-shadow.mjs");
+  });
+
+  it("keeps the native main-viewer self-shadow gate measurable and local-asset ready", () => {
+    const gate = readFileSync(viewerSelfShadowGateScriptPath, "utf8");
+    const fixtureGenerator = readFileSync("scripts/fixtures/generate-minimal-pmx.mjs", "utf8");
+
+    expect(fixtureGenerator).toContain('"mmd-viewer-self-shadow-receiver"');
+    expect(fixtureGenerator).toContain('"viewer-self-shadow-toon.png"');
+    expect(fixtureGenerator).toContain("viewerSelfShadowToonPng");
+    expect(fixtureGenerator).toContain("shader v=0 reads the");
+    expect(fixtureGenerator).toContain("y === height - 1");
+    expect(gate).toContain("receiverMeanDarkeningMin");
+    expect(gate).toContain("worldCentroidMaxDistance");
+    expect(gate).toContain("analyzeReceiverDarkening");
+    expect(gate).toContain("compareWorldShadowPosition");
+    expect(gate).toContain("compareLightConfigurations");
+    expect(gate).toContain("--local-model");
+    expect(gate).toContain("--local-motion");
+    expect(gate).toContain("--local-background");
+    expect(gate).toContain("selfShadowDiagnosticsPass");
+    expect(gate).toContain("localFullFrameMeanDarkeningMin");
+    expect(gate).toContain("captureIsolatedPair");
+    expect(gate).toContain("selfShadow=${shadowState}");
+    expect(gate).toContain("runtimeSamePageToggle");
+    expect(gate).toContain("captureShadowCameraOccupancy");
+    expect(gate).toContain("shadow-camera-caster.png");
+    expect(gate).toContain("characterSelfShadow");
+    expect(gate).toContain("characterToBackgroundShadow");
+    expect(gate).toContain("analyzeOutsideCharacterDarkening");
+    expect(gate).toContain("captureCharacterSilhouette");
+    expect(gate).toContain("--raw-visibility");
+    expect(gate).toContain("useRawShadowVisibilityMaterial");
+    expect(gate).toContain("--standard-receiver");
+    expect(gate).toContain("useStandardShadowReceiverMaterial");
+    expect(gate).toContain("--dedicated-raw-visibility");
+    expect(gate).toContain("useDedicatedRawShadowVisibilityMaterial");
+    expect(gate).toContain("dedicatedRawVisibilityPass");
+    expect(gate).toContain("dedicatedNonOccludedShadowRatioMax");
+    expect(gate).toContain("dedicatedShadowPixelRatioMax");
+    expect(gate).toContain("unoccludedSameSurface");
+    expect(gate).toContain("separateSurface");
+    expect(gate).toContain("background: null");
   });
 });

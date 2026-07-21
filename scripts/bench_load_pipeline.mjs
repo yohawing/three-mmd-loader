@@ -1,5 +1,5 @@
 // Full ThreeMmdLoader pipeline benchmark with performance profiling.
-// Usage: node scripts/bench_load_pipeline.mjs [pmx-or-pmd-path] [repeat]
+// Usage: node scripts/bench_load_pipeline.mjs [pmx-or-pmd-path] [repeat] [baseline|tsl|tsl-sparse]
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -29,13 +29,26 @@ const repeat = Number.parseInt(process.argv[3] ?? "5", 10);
 if (!Number.isFinite(repeat) || repeat < 1) {
   throw new Error(`repeat must be a positive integer: ${process.argv[3]}`);
 }
+const mode = process.argv[4] ?? "baseline";
+if (mode !== "baseline" && mode !== "tsl" && mode !== "tsl-sparse") {
+  throw new Error(`mode must be baseline, tsl, or tsl-sparse: ${mode}`);
+}
+const loadOptions = mode === "tsl" || mode === "tsl-sparse"
+  ? {
+      morphSplit: false,
+      morphAttributes: mode !== "tsl-sparse",
+      outline: false,
+      materialRenderOrder: false
+    }
+  : {};
 
 const bytes = new Uint8Array(readFileSync(filePath));
 console.log(`\nFile: ${filePath}  (${(bytes.byteLength / 1024).toFixed(1)} KB)`);
+console.log(`Mode: ${mode}`);
 console.log(`Repeat: ${repeat} runs (1 cold + ${Math.max(repeat - 1, 0)} warm)\n`);
 
 const runResults = [];
-let firstModelSummary = null;
+let modelSummary = null;
 
 for (let runIndex = 0; runIndex < repeat; runIndex++) {
   const callbackMeasures = [];
@@ -47,24 +60,25 @@ for (let runIndex = 0; runIndex < repeat; runIndex++) {
     }
   });
 
-  const model = await loader.loadModel(bytes);
+  const model = await loader.loadModel(bytes, loadOptions);
   const perfMeasures =
     model.diagnostics.performance.length > 0
       ? [...model.diagnostics.performance]
       : callbackMeasures;
 
-  if (runIndex === 0) {
-    firstModelSummary = summarizeModel(model);
+  if (runIndex === repeat - 1) {
+    modelSummary = summarizeModel(model);
   }
 
   runResults.push(indexMeasuresByName(perfMeasures));
   disposeMmdModel(model);
 }
 
-if (firstModelSummary) {
+if (modelSummary) {
   console.log(
-    `Geometry: vertices=${firstModelSummary.vertices}  indices=${firstModelSummary.indices}  groups=${firstModelSummary.groups}  morphTargets=${firstModelSummary.morphTargets}  materials=${firstModelSummary.materials}  outlines=${firstModelSummary.outlines}  renderOrderProxies=${firstModelSummary.renderOrderProxies}\n`
+    `Geometry: vertices=${modelSummary.vertices}  indices=${modelSummary.indices}  groups=${modelSummary.groups}  morphTargets=${modelSummary.morphTargets}  materials=${modelSummary.materials}  outlines=${modelSummary.outlines}  renderOrderProxies=${modelSummary.renderOrderProxies}\n`
   );
+  printMorphStorageSummary(modelSummary.morphStorage);
 }
 
 printTimingTable(runResults);
@@ -76,11 +90,117 @@ function summarizeModel(model) {
     vertices: geometry.getAttribute("position")?.count ?? 0,
     indices: geometry.index?.count ?? 0,
     groups: geometry.groups.length,
-    morphTargets: geometry.morphAttributes.position?.length ?? 0,
+    morphTargets: model.mesh.morphTargetInfluences?.length ?? geometry.morphAttributes.position?.length ?? 0,
     materials,
     outlines: model.outlineMeshes?.length ?? 0,
-    renderOrderProxies: model.renderOrderMeshes?.length ?? 0
+    renderOrderProxies: model.renderOrderMeshes?.length ?? 0,
+    morphStorage: summarizeMorphStorage(model)
   };
+}
+
+function summarizeMorphStorage(model) {
+  const semanticsByName = new Map();
+  let denseBytes = 0;
+  let projectedSparseBytes = 0;
+  let affectedSlots = 0;
+  let totalSlots = 0;
+
+  const bodyMeshes = Array.isArray(model.mesh.userData.mmdMorphSplitBodyMeshes)
+    ? model.mesh.userData.mmdMorphSplitBodyMeshes
+    : [];
+  const geometries = [model.mesh.geometry, ...bodyMeshes.map((body) => body.geometry)];
+  for (const geometry of geometries) {
+    for (const [name, attributes] of Object.entries(geometry.morphAttributes)) {
+      if (!attributes?.length) {
+        continue;
+      }
+      const vertexCount = attributes[0]?.count ?? 0;
+      const itemSize = attributes[0]?.itemSize ?? 0;
+      let semanticDenseBytes = 0;
+      let semanticAffectedSlots = 0;
+      for (const attribute of attributes) {
+        semanticDenseBytes += attribute.array.byteLength;
+        for (let vertexIndex = 0; vertexIndex < attribute.count; vertexIndex += 1) {
+          const base = vertexIndex * attribute.itemSize;
+          let affected = false;
+          for (let component = 0; component < attribute.itemSize; component += 1) {
+            if (attribute.array[base + component] !== 0) {
+              affected = true;
+              break;
+            }
+          }
+          if (affected) {
+            semanticAffectedSlots += 1;
+          }
+        }
+      }
+      const semanticTotalSlots = vertexCount * attributes.length;
+      const semanticProjectedSparseBytes =
+        (vertexCount + 1) * Uint32Array.BYTES_PER_ELEMENT +
+        semanticAffectedSlots * (Uint32Array.BYTES_PER_ELEMENT + itemSize * Float32Array.BYTES_PER_ELEMENT);
+      const semantic = semanticsByName.get(name) ?? {
+        name,
+        targets: 0,
+        itemSize,
+        denseBytes: 0,
+        projectedSparseBytes: 0,
+        affectedSlots: 0,
+        totalSlots: 0
+      };
+      semantic.targets += attributes.length;
+      semantic.denseBytes += semanticDenseBytes;
+      semantic.projectedSparseBytes += semanticProjectedSparseBytes;
+      semantic.affectedSlots += semanticAffectedSlots;
+      semantic.totalSlots += semanticTotalSlots;
+      semanticsByName.set(name, semantic);
+      denseBytes += semanticDenseBytes;
+      projectedSparseBytes += semanticProjectedSparseBytes;
+      affectedSlots += semanticAffectedSlots;
+      totalSlots += semanticTotalSlots;
+    }
+  }
+
+  return {
+    semantics: [...semanticsByName.values()],
+    denseBytes,
+    projectedSparseBytes,
+    affectedSlots,
+    totalSlots
+  };
+}
+
+function printMorphStorageSummary(summary) {
+  console.log("Morph storage (logical dense buffers vs projected vertex-major CSR):");
+  if (summary.semantics.length === 0) {
+    console.log("  none\n");
+    return;
+  }
+  for (const semantic of summary.semantics) {
+    console.log(
+      `  ${semantic.name.padEnd(10)} targets=${String(semantic.targets).padStart(4)}  ` +
+      `occupancy=${formatPercent(semantic.affectedSlots, semantic.totalSlots).padStart(8)}  ` +
+      `dense=${formatMiB(semantic.denseBytes).padStart(9)}  ` +
+      `projected-csr=${formatMiB(semantic.projectedSparseBytes).padStart(9)}`
+    );
+  }
+  console.log(
+    `  ${"total".padEnd(10)} occupancy=${formatPercent(summary.affectedSlots, summary.totalSlots).padStart(8)}  ` +
+    `dense=${formatMiB(summary.denseBytes).padStart(9)}  ` +
+    `projected-csr=${formatMiB(summary.projectedSparseBytes).padStart(9)}  ` +
+    `reduction=${formatReduction(summary.denseBytes, summary.projectedSparseBytes)}\n`
+  );
+}
+
+function formatMiB(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+}
+
+function formatPercent(value, total) {
+  return total > 0 ? `${((value / total) * 100).toFixed(3)}%` : "n/a";
+}
+
+function formatReduction(denseBytes, sparseBytes) {
+  return denseBytes > 0 ? `${((1 - sparseBytes / denseBytes) * 100).toFixed(1)}%` : "n/a";
 }
 
 function indexMeasuresByName(measures) {

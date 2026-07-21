@@ -446,6 +446,21 @@ describe("ThreeMmdLoader", () => {
     expect(model.root.children).toEqual([model.mesh]);
   });
 
+  it("can omit dense morph attributes without dropping runtime morph weights", async () => {
+    const loader = new ThreeMmdLoader({ core: createSparseMorphStressCore() });
+
+    const model = await loader.loadModel(new Uint8Array([1]), {
+      outline: false,
+      materialRenderOrder: false,
+      morphAttributes: false
+    });
+
+    expect(model.mesh.userData.mmdMorphSplitBodyMeshes).toBeUndefined();
+    expect(model.mesh.geometry.morphAttributes.position).toBeUndefined();
+    expect(model.mesh.morphTargetDictionary).toHaveProperty("morph0", 0);
+    expect(model.mesh.morphTargetInfluences).toHaveLength(1000);
+  });
+
   it("uses split body meshes directly instead of duplicate render-order proxies", async () => {
     const loader = new ThreeMmdLoader({ core: createSparseMorphStressCore() });
 

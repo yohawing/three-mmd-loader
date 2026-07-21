@@ -994,7 +994,7 @@ describe("Three.js MMD materials", () => {
       "vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );"
     );
     expect(shader.fragmentShader).toContain(
-      "ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );"
+      "vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
     );
     expect(shader.fragmentShader).toContain("vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;");
     // The composite must be gamma-decoded back to linear so Three's sRGB output encode
@@ -1016,23 +1016,24 @@ describe("Three.js MMD materials", () => {
     expect(shader.fragmentShader).toContain(
       "float ywMmdLightVisibility = clamp( dot( ywMmdNormal, ywMmdLightDir ) * 3.0, 0.0, 1.0 );"
     );
+    // §10.2: the ON/OFF switch between the toon ramp and the self-shadow dual-lerp is
+    // the scene-level self-shadow toggle (USE_SHADOWMAP), not a per-pixel shadow-factor
+    // threshold. Real MMD never mixes the ramp back in for lightly-shadowed pixels.
     expect(shader.fragmentShader).toContain(
-      "float ywMmdToonVisibility = min( ywMmdToonShadowFactor, ywMmdLightVisibility );"
+      "float ywMmdVis = min( ywMmdToonShadowFactor, ywMmdLightVisibility );"
     );
+    expect(shader.fragmentShader).toContain("#ifdef USE_SHADOWMAP");
     expect(shader.fragmentShader).toContain(
       "vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( 0.0, 0.0 ) ).rgb;"
     );
+    expect(shader.fragmentShader).toContain(
+      "vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
+    );
     expect(shader.fragmentShader).toContain("vec3 ywMmdToon = texture2D( gradientMap, vec2( 0.0, ywMmdLn ) ).rgb;");
     expect(shader.fragmentShader).toContain("vec3 ywMmdToonLight = ywMmdToon;");
-    expect(shader.fragmentShader).toContain(
-      "ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );"
-    );
-    expect(shader.fragmentShader).toContain("if ( ywMmdToonShadowFactor < 0.999 ) {");
     expect(shader.fragmentShader).toContain("vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;");
+    expect(shader.fragmentShader).not.toContain("if ( ywMmdToonShadowFactor < 0.999 ) {");
     expect(shader.fragmentShader).not.toContain("ywMmdColor = mix( ywMmdSelfShadowColor, ywMmdColor");
-    expect(shader.fragmentShader).not.toContain(
-      "ywMmdColor = ywMmdBase * mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdToonVisibility );"
-    );
     expect(shader.fragmentShader).not.toContain("ywMmdToonLight = min( ywMmdToonLight, ywMmdSelfShadowToonLight );");
     expect(shader.fragmentShader).toContain(
       "ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdSpecGate;"
@@ -1047,7 +1048,11 @@ describe("Three.js MMD materials", () => {
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
     expect(shader.fragmentShader).toContain("if ( mmdSpecularPower > 0.0 ) {");
-    expect(shader.fragmentShader).toContain(
+    // Specular is always gated by vis when self-shadow is scene-enabled (no per-pixel
+    // threshold ternary): §10.2 "スペキュラは影とN.L勾配の両方で減衰する".
+    expect(shader.fragmentShader).toContain("#ifdef USE_SHADOWMAP");
+    expect(shader.fragmentShader).toContain("float ywMmdSpecGate = ywMmdVis;");
+    expect(shader.fragmentShader).not.toContain(
       "float ywMmdSpecGate = ywMmdToonShadowFactor < 0.999 ? ywMmdToonVisibility : 1.0;"
     );
     expect(shader.fragmentShader).toContain(
@@ -1064,7 +1069,7 @@ describe("Three.js MMD materials", () => {
 
     expect(shader.fragmentShader).toContain("float ywMmdToonShadowFactor = 1.0;");
     expect(shader.fragmentShader).toContain(
-      "float ywMmdToonVisibility = min( ywMmdToonShadowFactor, ywMmdLightVisibility );"
+      "float ywMmdVis = min( ywMmdToonShadowFactor, ywMmdLightVisibility );"
     );
     expect(shader.fragmentShader).toContain(
       "ywMmdToonShadowFactor = min( ywMmdToonShadowFactor, ( mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]"
