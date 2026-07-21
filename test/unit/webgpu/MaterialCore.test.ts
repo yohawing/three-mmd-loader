@@ -195,15 +195,26 @@ describe("TSL material core", () => {
 
   it("adds the additive sphere sample once for GoldenOracle parity", async () => {
     const source = await readFile("src/webgpu/material-core.ts", "utf8");
-    const addStart = source.indexOf('options.sphereMode === "add"');
-    const addEnd = source.indexOf('options.sphereMode === "subTexture"');
+    const helperStart = source.indexOf("function applySphereComposite(");
+    expect(helperStart).toBeGreaterThanOrEqual(0);
+    const helperEnd = source.indexOf("\n}", helperStart);
+    const helperBody = source.slice(helperStart, helperEnd);
+
+    const addStart = helperBody.indexOf('sphereMode === "add"');
+    const addEnd = helperBody.indexOf('sphereMode === "subTexture"');
     expect(addStart).toBeGreaterThanOrEqual(0);
     expect(addEnd).toBeGreaterThan(addStart);
-    const addBranch = source.slice(addStart, addEnd);
+    const addBranch = helperBody.slice(addStart, addEnd);
 
     expect(addBranch).toContain(
-      "baseComposite.add(compositeSphere.mul(sphereTextureFactor.rgb).mul(sphereTextureFactor.a))"
+      "base.add(compositeSphere.mul(sphereTextureFactor.rgb).mul(sphereTextureFactor.a))"
     );
     expect(addBranch).not.toContain(".mul(2)");
+
+    // Both call sites (legacy sphereComposite and dedicated dedicatedLitNoSpec)
+    // must route through the single shared helper -- no re-duplicated sphere-mode
+    // selector logic elsewhere in the file.
+    expect(source).toContain("applySphereComposite(baseComposite, options.sphereMode, compositeSphere, sphereTextureFactor)");
+    expect(source).toContain("applySphereComposite(dedicatedBaseComposite, options.sphereMode, compositeSphere, sphereTextureFactor)");
   });
 });

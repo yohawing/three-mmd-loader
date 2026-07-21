@@ -190,6 +190,23 @@ function captureSparseMorphAttribute(
   };
 }
 
+/** Zero-vector constructors keyed by TSL node type, used to seed the per-vertex accumulator. */
+const zeroVectorByNodeType = {
+  vec2: () => TSL.vec2(0),
+  vec3: () => TSL.vec3(0),
+  vec4: () => TSL.vec4(0)
+} as const;
+
+// TSL.attributeArray is overloaded per literal node-type string; a union-typed
+// nodeType parameter can't select an overload directly, so this lookup table
+// pins each branch to its own literal call (same runtime behavior as the
+// former per-arity functions, just keyed instead of triplicated).
+const vecAttributeArrayByNodeType = {
+  vec2: (count: number | Float32Array) => TSL.attributeArray(count, "vec2"),
+  vec3: (count: number | Float32Array) => TSL.attributeArray(count, "vec3"),
+  vec4: (count: number | Float32Array) => TSL.attributeArray(count, "vec4")
+} as const;
+
 function createSparseMorphCompute(
   base: THREE.BufferAttribute,
   packed: MmdPositionMorphCsr,
@@ -201,113 +218,21 @@ function createSparseMorphCompute(
   readonly weightsAttribute: THREE.BufferAttribute;
   readonly storageAttributes: THREE.BufferAttribute[];
 } {
-  if (nodeType === "vec2") return createVec2MorphCompute(base, packed, weights);
-  if (nodeType === "vec3") return createVec3MorphCompute(base, packed, weights);
-  return createVec4MorphCompute(base, packed, weights);
-}
-
-function createVec2MorphCompute(
-  base: THREE.BufferAttribute,
-  packed: MmdPositionMorphCsr,
-  weights: Float32Array
-) {
+  const makeVecAttributeArray = vecAttributeArrayByNodeType[nodeType];
   const weightStorage = TSL.attributeArray(weights, "float");
-  const baseStorage = TSL.attributeArray(base.array as Float32Array, "vec2");
+  const baseStorage = makeVecAttributeArray(base.array as Float32Array);
   const rowOffsetStorage = TSL.attributeArray(packed.rowOffsets, "uint");
   const morphIndexStorage = TSL.attributeArray(packed.morphIndices, "uint");
-  const valueStorage = TSL.attributeArray(packed.values, "vec2");
+  const valueStorage = makeVecAttributeArray(packed.values);
   const baseValues = baseStorage.toReadOnly();
   const rowOffsets = rowOffsetStorage.toReadOnly();
   const morphIndices = morphIndexStorage.toReadOnly();
   const values = valueStorage.toReadOnly();
-  const outputValues = TSL.attributeArray(base.count, "vec2");
+  const outputValues = makeVecAttributeArray(base.count);
+  const makeZeroVector = zeroVectorByNodeType[nodeType];
   const computeNode = TSL.Fn(() => {
     const vertexIndex = TSL.instanceIndex;
-    const delta = TSL.vec2(0).toVar();
-    TSL.Loop(
-      { start: rowOffsets.element(vertexIndex), end: rowOffsets.element(vertexIndex.add(1)), type: "uint", condition: "<" },
-      ({ i }) => {
-        const entryMorphIndex = morphIndices.element(i);
-        delta.addAssign(values.element(i).mul(weightStorage.element(entryMorphIndex)));
-      }
-    );
-    outputValues.element(vertexIndex).assign(baseValues.element(vertexIndex).add(delta));
-  })().compute(base.count);
-  return {
-    attribute: outputValues.value as THREE.BufferAttribute,
-    computeNode,
-    weightsAttribute: weightStorage.value as THREE.BufferAttribute,
-    storageAttributes: [
-      weightStorage.value,
-      baseStorage.value,
-      rowOffsetStorage.value,
-      morphIndexStorage.value,
-      valueStorage.value,
-      outputValues.value
-    ] as THREE.BufferAttribute[]
-  };
-}
-
-function createVec3MorphCompute(
-  base: THREE.BufferAttribute,
-  packed: MmdPositionMorphCsr,
-  weights: Float32Array
-) {
-  const weightStorage = TSL.attributeArray(weights, "float");
-  const baseStorage = TSL.attributeArray(base.array as Float32Array, "vec3");
-  const rowOffsetStorage = TSL.attributeArray(packed.rowOffsets, "uint");
-  const morphIndexStorage = TSL.attributeArray(packed.morphIndices, "uint");
-  const valueStorage = TSL.attributeArray(packed.values, "vec3");
-  const baseValues = baseStorage.toReadOnly();
-  const rowOffsets = rowOffsetStorage.toReadOnly();
-  const morphIndices = morphIndexStorage.toReadOnly();
-  const values = valueStorage.toReadOnly();
-  const outputValues = TSL.attributeArray(base.count, "vec3");
-  const computeNode = TSL.Fn(() => {
-    const vertexIndex = TSL.instanceIndex;
-    const delta = TSL.vec3(0).toVar();
-    TSL.Loop(
-      { start: rowOffsets.element(vertexIndex), end: rowOffsets.element(vertexIndex.add(1)), type: "uint", condition: "<" },
-      ({ i }) => {
-        const entryMorphIndex = morphIndices.element(i);
-        delta.addAssign(values.element(i).mul(weightStorage.element(entryMorphIndex)));
-      }
-    );
-    outputValues.element(vertexIndex).assign(baseValues.element(vertexIndex).add(delta));
-  })().compute(base.count);
-  return {
-    attribute: outputValues.value as THREE.BufferAttribute,
-    computeNode,
-    weightsAttribute: weightStorage.value as THREE.BufferAttribute,
-    storageAttributes: [
-      weightStorage.value,
-      baseStorage.value,
-      rowOffsetStorage.value,
-      morphIndexStorage.value,
-      valueStorage.value,
-      outputValues.value
-    ] as THREE.BufferAttribute[]
-  };
-}
-
-function createVec4MorphCompute(
-  base: THREE.BufferAttribute,
-  packed: MmdPositionMorphCsr,
-  weights: Float32Array
-) {
-  const weightStorage = TSL.attributeArray(weights, "float");
-  const baseStorage = TSL.attributeArray(base.array as Float32Array, "vec4");
-  const rowOffsetStorage = TSL.attributeArray(packed.rowOffsets, "uint");
-  const morphIndexStorage = TSL.attributeArray(packed.morphIndices, "uint");
-  const valueStorage = TSL.attributeArray(packed.values, "vec4");
-  const baseValues = baseStorage.toReadOnly();
-  const rowOffsets = rowOffsetStorage.toReadOnly();
-  const morphIndices = morphIndexStorage.toReadOnly();
-  const values = valueStorage.toReadOnly();
-  const outputValues = TSL.attributeArray(base.count, "vec4");
-  const computeNode = TSL.Fn(() => {
-    const vertexIndex = TSL.instanceIndex;
-    const delta = TSL.vec4(0).toVar();
+    const delta = makeZeroVector().toVar();
     TSL.Loop(
       { start: rowOffsets.element(vertexIndex), end: rowOffsets.element(vertexIndex.add(1)), type: "uint", condition: "<" },
       ({ i }) => {

@@ -110,6 +110,31 @@ export function createMmdTslToonMaterial(options: MmdTslMaterialCoreOptions = {}
   return material;
 }
 
+/**
+ * Applies the sphere-mode composite selector shared by the legacy (`sphereComposite`)
+ * and dedicated-self-shadow (`dedicatedLitNoSpec`) chains over their respective
+ * `base` lit-color node. Contract per mode (mmd-shading-notes.md):
+ * - "multiply": base scaled by a texture-factor-weighted mix toward the sampled sphere.
+ * - "add": GoldenOracle full.fx and the MMD-generated baseline add the sampled sphere
+ *   once. The WebGL injection keeps its separate apitrace SphC weight contract.
+ * - "subTexture": sphere replaces base, weighted by the sphere texture factor alpha.
+ * - anything else (including "none"): base is returned unchanged.
+ */
+function applySphereComposite(
+  base: THREE.Node<"vec3">,
+  sphereMode: MmdTslMaterialCoreOptions["sphereMode"],
+  compositeSphere: THREE.Node<"vec3">,
+  sphereTextureFactor: THREE.Node<"vec4">
+): THREE.Node<"vec3"> {
+  return sphereMode === "multiply"
+    ? base.mul(TSL.mix(TSL.vec3(1, 1, 1), compositeSphere.mul(sphereTextureFactor.rgb), sphereTextureFactor.a))
+    : sphereMode === "add"
+      ? base.add(compositeSphere.mul(sphereTextureFactor.rgb).mul(sphereTextureFactor.a))
+      : sphereMode === "subTexture"
+        ? TSL.mix(base, compositeSphere, sphereTextureFactor.a)
+        : base;
+}
+
 export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   readonly uniforms?: MmdTslMaterialUniforms;
 } = {}) {
@@ -167,16 +192,7 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
     ? TSL.clamp(diffuse.mul(lightColor).add(ambient), 0, 1)
     : TSL.clamp(ambient.add(lambert.mul(diffuse).mul(lightColor)), 0, 1);
   const baseComposite = litBase.mul(compositeDiffuseTexture).mul(textureMul).mul(toonMul);
-  const sphereComposite =
-    options.sphereMode === "multiply"
-      ? baseComposite.mul(TSL.mix(TSL.vec3(1, 1, 1), compositeSphere.mul(sphereTextureFactor.rgb), sphereTextureFactor.a))
-      : options.sphereMode === "add"
-        // GoldenOracle full.fx and the MMD-generated baseline add the sampled sphere once.
-        // The WebGL injection keeps its separate apitrace SphC weight contract.
-        ? baseComposite.add(compositeSphere.mul(sphereTextureFactor.rgb).mul(sphereTextureFactor.a))
-        : options.sphereMode === "subTexture"
-          ? TSL.mix(baseComposite, compositeSphere, sphereTextureFactor.a)
-          : baseComposite;
+  const sphereComposite = applySphereComposite(baseComposite, options.sphereMode, compositeSphere, sphereTextureFactor);
   const specularGate = specularPower.greaterThan(0).select(1, 0);
   const specularComposite = TSL.pow(TSL.max(0, TSL.dot(halfDirection, normalView)), specularPower)
     .mul(specular)
@@ -235,18 +251,7 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   const dedicatedBaseComposite = litBase.mul(compositeDiffuseTexture).mul(textureMul);
   // litColor without specular (§10.2's "litColor(スペキュラ抜き)"), shared by both
   // chains of the dual-lerp.
-  const dedicatedLitNoSpec =
-    options.sphereMode === "multiply"
-      ? dedicatedBaseComposite.mul(TSL.mix(
-          TSL.vec3(1, 1, 1),
-          compositeSphere.mul(sphereTextureFactor.rgb),
-          sphereTextureFactor.a
-        ))
-      : options.sphereMode === "add"
-        ? dedicatedBaseComposite.add(compositeSphere.mul(sphereTextureFactor.rgb).mul(sphereTextureFactor.a))
-        : options.sphereMode === "subTexture"
-          ? TSL.mix(dedicatedBaseComposite, compositeSphere, sphereTextureFactor.a)
-          : dedicatedBaseComposite;
+  const dedicatedLitNoSpec = applySphereComposite(dedicatedBaseComposite, options.sphereMode, compositeSphere, sphereTextureFactor);
   // Specular is gated by the same combined visibility unconditionally (no
   // `< 0.999` ternary): §10.2 "スペキュラは影とN.L勾配の両方で減衰する".
   const dedicatedSpecularComposite = TSL.pow(
