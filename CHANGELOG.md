@@ -4,6 +4,51 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.7.0] - 2026-07-23
+
+### Added
+
+- Add the experimental `@yohawing/three-mmd-loader/webgpu` entry point with a
+  TSL material pipeline, native WebGPU support, and a force-WebGL fallback for
+  portable comparison and integration.
+- Add dedicated MMD self-shadow handling across the baseline WebGL, TSL
+  force-WebGL, and native WebGPU paths, including VMD shadow mode and intensity
+  synchronization.
+- Add sparse position and UV morph evaluation for the WebGPU pipeline and a
+  high-level pipeline facade for model attachment, rendering, and disposal.
+- Add generated-PMX, self-shadow, viewer background, and backend-parity visual
+  coverage for the new rendering paths.
+
+### Changed
+
+- Align toon and self-shadow composition with MMD 9.32 behavior. Existing WebGL
+  applications with `shadowMap.enabled = true` may render differently because
+  MMD toon selection now responds to the scene self-shadow state.
+- Update the bundled mmd-anim WASM runtime and parser artifacts to v0.3.1.
+- Expose the structured PMM document and project-summary types from the parser
+  entry point, and represent nullable fields from the WASM JSON contract
+  explicitly in the public TypeScript types.
+- Preserve the active camera when loading a model or switching renderer
+  backends, and adapt viewer near/far planes to scene bounds without moving the
+  camera.
+- Consolidate duplicated viewer backend parameters, model-load guards, sparse
+  morph builders, and visual-regression helpers.
+
+### Fixed
+
+- Fix generated-PMX lighting, gamma blending, additive sphere contribution,
+  texture alpha, and double-sided alpha rendering in the TSL pipeline.
+- Fix self-shadow lifecycle, receiver filtering, visibility composition,
+  camera-load re-entry, and shadow-mode synchronization across viewer backends.
+- Classify soft-alpha-dominant textures as alpha-blended without relying on a
+  texture-name heuristic.
+- Wait for material textures before invoking a custom runtime factory so the
+  runtime receives the fully initialized mesh materials.
+- Reject malformed non-object WASM JSON responses and normalize missing parser
+  arrays and records at the adapter boundary.
+- Remove a racy idle shader prewarm path while retaining asynchronous shader
+  compilation for viewer mode switches.
+
 ## [0.6.0] - 2026-07-11
 
 ### Added
