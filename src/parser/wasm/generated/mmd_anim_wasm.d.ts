@@ -40,6 +40,7 @@ export class WasmMmdRuntimeBatchEvaluation {
     morphWeightF32Len(): number;
     morphWeights(): Float32Array;
     morphWeightsView(): Float32Array;
+    reducePose(target: number, local_position_tolerance: number, local_rotation_tolerance: number, world_position_tolerance: number, world_rotation_tolerance: number, morph_weight_tolerance: number): WasmReducedPoseResult;
     worldMatrices(): Float32Array;
     worldMatricesView(): Float32Array;
     worldMatrixF32Len(): number;
@@ -216,6 +217,24 @@ export class WasmPmxParsedModel {
     static parse(data: Uint8Array): WasmPmxParsedModel;
 }
 
+export class WasmReducedPoseResult {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    boneCount(): number;
+    maxLocalPositionError(): number;
+    maxLocalRotationErrorRadians(): number;
+    maxMorphWeightError(): number;
+    maxWorldPositionError(): number;
+    maxWorldRotationErrorRadians(): number;
+    morphCount(): number;
+    reducedBoneKeyCount(): number;
+    reducedMorphKeyCount(): number;
+    sample(frame: number, out_world_matrices_f32: Float32Array, out_morph_weights: Float32Array): boolean;
+    sourceBoneKeyCount(): number;
+    sourceMorphKeyCount(): number;
+}
+
 export class WasmVmdCameraTrack {
     private constructor();
     free(): void;
@@ -301,6 +320,11 @@ export function parsePmxModelNonGeometryJson(data: Uint8Array): string;
 export function parseVmdAnimationJson(data: Uint8Array): string;
 
 /**
+ * Reduces host-provided dense pose buffers without assuming a native physics API.
+ */
+export function reduceDensePose(model: WasmMmdModel, world_matrices_f32: Float32Array, morph_weights: Float32Array, frame_count: number, start_frame: number, frame_step: number, target: number, local_position_tolerance: number, local_rotation_tolerance: number, world_position_tolerance: number, world_rotation_tolerance: number, morph_weight_tolerance: number): WasmReducedPoseResult;
+
+/**
  * Sample VMD camera bytes into a caller-owned `Float32Array`.
  *
  * Writes `[distance, position.x, position.y, position.z, rotation.x,
@@ -338,6 +362,7 @@ export interface InitOutput {
     readonly __wbg_wasmmmdruntimeinstance_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxgeometry_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxparsedmodel_free: (a: number, b: number) => void;
+    readonly __wbg_wasmreducedposeresult_free: (a: number, b: number) => void;
     readonly __wbg_wasmvmdcameratrack_free: (a: number, b: number) => void;
     readonly __wbg_wasmvmdlighttrack_free: (a: number, b: number) => void;
     readonly __wbg_wasmvmdselfshadowtrack_free: (a: number, b: number) => void;
@@ -356,6 +381,7 @@ export interface InitOutput {
     readonly parsePmxModelJson: (a: number, b: number) => [number, number, number, number];
     readonly parsePmxModelNonGeometryJson: (a: number, b: number) => [number, number, number, number];
     readonly parseVmdAnimationJson: (a: number, b: number) => [number, number, number, number];
+    readonly reduceDensePose: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number, number];
     readonly sampleVmdCamera: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly sampleVmdLight: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly sampleVmdSelfShadow: (a: number, b: number, c: number, d: any) => [number, number, number];
@@ -385,6 +411,7 @@ export interface InitOutput {
     readonly wasmmmdruntimebatchevaluation_morphWeightF32Len: (a: number) => number;
     readonly wasmmmdruntimebatchevaluation_morphWeights: (a: number) => [number, number];
     readonly wasmmmdruntimebatchevaluation_morphWeightsView: (a: number) => any;
+    readonly wasmmmdruntimebatchevaluation_reducePose: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly wasmmmdruntimebatchevaluation_worldMatrices: (a: number) => [number, number];
     readonly wasmmmdruntimebatchevaluation_worldMatricesView: (a: number) => any;
     readonly wasmmmdruntimebatchevaluation_worldMatrixF32Len: (a: number) => number;
@@ -438,6 +465,18 @@ export interface InitOutput {
     readonly wasmpmxparsedmodel_geometry: (a: number) => number;
     readonly wasmpmxparsedmodel_nonGeometryJson: (a: number) => [number, number, number, number];
     readonly wasmpmxparsedmodel_parse: (a: number, b: number) => [number, number, number];
+    readonly wasmreducedposeresult_boneCount: (a: number) => number;
+    readonly wasmreducedposeresult_maxLocalPositionError: (a: number) => number;
+    readonly wasmreducedposeresult_maxLocalRotationErrorRadians: (a: number) => number;
+    readonly wasmreducedposeresult_maxMorphWeightError: (a: number) => number;
+    readonly wasmreducedposeresult_maxWorldPositionError: (a: number) => number;
+    readonly wasmreducedposeresult_maxWorldRotationErrorRadians: (a: number) => number;
+    readonly wasmreducedposeresult_morphCount: (a: number) => number;
+    readonly wasmreducedposeresult_reducedBoneKeyCount: (a: number) => number;
+    readonly wasmreducedposeresult_reducedMorphKeyCount: (a: number) => number;
+    readonly wasmreducedposeresult_sample: (a: number, b: number, c: number, d: number, e: any, f: number, g: number, h: any) => [number, number, number];
+    readonly wasmreducedposeresult_sourceBoneKeyCount: (a: number) => number;
+    readonly wasmreducedposeresult_sourceMorphKeyCount: (a: number) => number;
     readonly wasmvmdcameratrack_frameCount: (a: number) => number;
     readonly wasmvmdcameratrack_fromVmdBytes: (a: number, b: number) => [number, number, number];
     readonly wasmvmdcameratrack_sample: (a: number, b: number, c: any) => [number, number, number];

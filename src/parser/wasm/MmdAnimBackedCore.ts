@@ -79,28 +79,28 @@ class MmdAnimPmxModel implements MmdModel {
     private readonly j: Record<string, unknown>,
     geometry: GeometryBuffers
   ) {
-    const rawMeta = (j["metadata"] ?? {}) as Record<string, unknown>;
-    const topDiagnostics = (j["diagnostics"] as Diagnostic[] | undefined) ?? [];
-    const metaDiagnostics = (rawMeta["diagnostics"] as Diagnostic[] | undefined) ?? [];
+    const rawMeta = asRecord(j["metadata"]);
+    const topDiagnostics = asDiagnostics(j["diagnostics"]);
+    const metaDiagnostics = asDiagnostics(rawMeta["diagnostics"]);
     const adapterDiagnostics = buildAdapterDiagnostics(j);
     this._metadata = {
       ...(rawMeta as unknown as ModelMetadata),
       diagnostics: [...metaDiagnostics, ...topDiagnostics, ...adapterDiagnostics]
     };
     this._geometry = geometry;
-    this._skeleton = normalizeSkeleton((j["skeleton"] ?? { bones: [] }) as SkeletonData);
-    this._materials = normalizeMaterials((this.j["materials"] ?? []) as MaterialInfo[]);
+    this._skeleton = normalizeSkeleton(j["skeleton"]);
+    this._materials = normalizeMaterials(j["materials"]);
   }
 
   metadata(): ModelMetadata      { return this._metadata; }
   geometry(): GeometryBuffers    { return this._geometry; }
   materials(): MaterialInfo[]    { return this._materials; }
   skeleton(): SkeletonData       { return this._skeleton; }
-  morphs(): MorphData[]          { return (this.j["morphs"] ?? []) as MorphData[]; }
-  displayFrames(): DisplayFrameData[] { return (this.j["displayFrames"] ?? []) as DisplayFrameData[]; }
-  rigidBodies(): RigidBodyData[] { return (this.j["rigidBodies"] ?? []) as RigidBodyData[]; }
-  joints(): JointData[]          { return (this.j["joints"] ?? []) as JointData[]; }
-  softBodies(): SoftBodyData[]   { return (this.j["softBodies"] ?? []) as SoftBodyData[]; }
+  morphs(): MorphData[]          { return asArray<MorphData>(this.j["morphs"]); }
+  displayFrames(): DisplayFrameData[] { return asArray<DisplayFrameData>(this.j["displayFrames"]); }
+  rigidBodies(): RigidBodyData[] { return asArray<RigidBodyData>(this.j["rigidBodies"]); }
+  joints(): JointData[]          { return asArray<JointData>(this.j["joints"]); }
+  softBodies(): SoftBodyData[]   { return asArray<SoftBodyData>(this.j["softBodies"]); }
   embeddedTextures()             { return []; }
 }
 
@@ -163,9 +163,11 @@ function toSkinIndices16(values: ArrayLike<number>): Uint16Array {
   return converted;
 }
 
-function normalizeSkeleton(skeleton: SkeletonData): SkeletonData {
+function normalizeSkeleton(skeleton: unknown): SkeletonData {
+  const skeletonRecord = asRecord(skeleton);
+  const bones = asArray<SkeletonData["bones"][number]>(skeletonRecord["bones"]);
   return {
-    bones: skeleton.bones.map((bone) => ({
+    bones: bones.map((bone) => ({
       ...bone,
       tailPosition: bone.tailPosition ?? undefined,
       appendTransform: bone.appendTransform ?? undefined,
@@ -178,7 +180,9 @@ function normalizeSkeleton(skeleton: SkeletonData): SkeletonData {
           ? undefined
           : {
               ...bone.ik,
-              links: bone.ik.links.map((link) => ({
+              links: asArray<NonNullable<SkeletonData["bones"][number]["ik"]>["links"][number]>(
+                bone.ik.links
+              ).map((link) => ({
                 ...link,
                 limits: link.limits ?? undefined
               }))
@@ -187,8 +191,8 @@ function normalizeSkeleton(skeleton: SkeletonData): SkeletonData {
   };
 }
 
-function normalizeMaterials(materials: readonly MaterialInfo[]): MaterialInfo[] {
-  return materials.map((material) => ({
+function normalizeMaterials(materials: unknown): MaterialInfo[] {
+  return asArray<MaterialInfo>(materials).map((material) => ({
     ...material,
     sharedToonIndex: material.sharedToonIndex ?? undefined,
     toonTexturePath: material.toonTexturePath || ""
@@ -236,13 +240,13 @@ function hasEnabledDeformVertex(enabled: Float32Array): boolean {
 }
 
 function buildAdapterDiagnostics(j: Record<string, unknown>): Diagnostic[] {
-  const skeleton = (j["skeleton"] ?? {}) as Record<string, unknown>;
-  const bones = (skeleton["bones"] ?? []) as readonly {
-    flags?: Record<string, unknown>;
-    ik?: { links?: readonly { limits?: unknown }[] } | null;
-  }[];
+  const skeleton = asRecord(j["skeleton"]);
+  const bones = asArray<Record<string, unknown>>(skeleton["bones"]);
   const diagnostics: Diagnostic[] = [];
-  if (bones.some((bone) => bone.ik?.links?.some((link) => link.limits != null))) {
+  if (bones.some((bone) => {
+    const ik = asRecord(bone["ik"]);
+    return asArray<Record<string, unknown>>(ik["links"]).some((link) => link["limits"] != null);
+  })) {
     diagnostics.push({
       level: "warning",
       code: "IK_PMX_LINK_LIMITS_APPROXIMATE",
@@ -250,23 +254,49 @@ function buildAdapterDiagnostics(j: Record<string, unknown>): Diagnostic[] {
       message: "PMX IK link limits are parsed but are approximated by the runtime solver."
     });
   }
-  if (bones.some((bone) => bone.flags?.["fixedAxis"] === true)) {
+  if (bones.some((bone) => asRecord(bone["flags"])["fixedAxis"] === true)) {
     diagnostics.push({
       level: "warning",
       code: "BONE_FIXED_AXIS_CONSTRAINTS_UNSUPPORTED",
+      category: "skeleton",
       message:
         "Fixed-axis metadata is applied to IK links, but non-IK fixed-axis bone behavior is not yet enforced by the runtime."
     });
   }
-  if (bones.some((bone) => bone.flags?.["localAxis"] === true)) {
+  if (bones.some((bone) => asRecord(bone["flags"])["localAxis"] === true)) {
     diagnostics.push({
       level: "warning",
       code: "BONE_LOCAL_AXIS_CONSTRAINTS_UNSUPPORTED",
+      category: "skeleton",
       message:
         "Local-axis metadata is applied to IK link limits, but non-IK local-axis bone behavior is not yet enforced by the runtime."
     });
   }
   return diagnostics;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function asDiagnostics(value: unknown): Diagnostic[] {
+  return asArray<Diagnostic>(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseWasmJsonResponse<T>(raw: string, fileName: string): T {
+  const parsed: unknown = JSON.parse(raw);
+  if (!isRecord(parsed)) {
+    throw new TypeError(`${fileName} WASM JSON response must be an object`);
+  }
+  return parsed as T;
 }
 
 function missingSplitPmxAbi(): never {
@@ -301,7 +331,10 @@ export class MmdAnimBackedCore implements MmdCore {
       if (this.wasm.WasmPmxParsedModel != null) {
         const parsedHandle = this.wasm.WasmPmxParsedModel.parse(input);
         try {
-          const json = JSON.parse(parsedHandle.nonGeometryJson()) as Record<string, unknown>;
+          const json = parseWasmJsonResponse<Record<string, unknown>>(
+            parsedHandle.nonGeometryJson(),
+            "PMX model"
+          );
           const geometryHandle = parsedHandle.geometry();
           try {
             return new MmdAnimPmxModel(json, buildGeometryFromWasm(geometryHandle));
@@ -313,7 +346,10 @@ export class MmdAnimBackedCore implements MmdCore {
         }
       }
       if (this.wasm.parsePmxModelNonGeometryJson != null && this.wasm.WasmPmxGeometry != null) {
-        const json = JSON.parse(this.wasm.parsePmxModelNonGeometryJson(input)) as Record<string, unknown>;
+        const json = parseWasmJsonResponse<Record<string, unknown>>(
+          this.wasm.parsePmxModelNonGeometryJson(input),
+          "PMX model"
+        );
         const geometryHandle = this.wasm.WasmPmxGeometry.fromPmxBytes(input);
         try {
           return new MmdAnimPmxModel(json, buildGeometryFromWasm(geometryHandle));
@@ -329,10 +365,22 @@ export class MmdAnimBackedCore implements MmdCore {
   loadVmd(bytes: ArrayBuffer | Uint8Array): MmdAnimation {
     const input = toUint8Array(bytes);
     if (this.wasm.parseVmdAnimationJson != null) {
-      return mmdAnimWasmVmdDtoToAnimation(JSON.parse(this.wasm.parseVmdAnimationJson(input)), input.slice());
+      return mmdAnimWasmVmdDtoToAnimation(
+        parseWasmJsonResponse<Parameters<typeof mmdAnimWasmVmdDtoToAnimation>[0]>(
+          this.wasm.parseVmdAnimationJson(input),
+          "motion.vmd"
+        ),
+        input.slice()
+      );
     }
     if (this.wasm.parseMmdFormatJson != null) {
-      return mmdAnimWasmVmdDtoToAnimation(JSON.parse(this.wasm.parseMmdFormatJson(input, "motion.vmd")), input.slice());
+      return mmdAnimWasmVmdDtoToAnimation(
+        parseWasmJsonResponse<Parameters<typeof mmdAnimWasmVmdDtoToAnimation>[0]>(
+          this.wasm.parseMmdFormatJson(input, "motion.vmd"),
+          "motion.vmd"
+        ),
+        input.slice()
+      );
     }
     return { ...parseVmd(input), bytes: input.slice() };
   }
@@ -362,6 +410,6 @@ export class MmdAnimBackedCore implements MmdCore {
     if (this.wasm.parseMmdFormatJson == null) {
       throw new Error(`${fileName} parsing requires parseMmdFormatJson WASM export`);
     }
-    return JSON.parse(this.wasm.parseMmdFormatJson(input, fileName)) as T;
+    return parseWasmJsonResponse<T>(this.wasm.parseMmdFormatJson(input, fileName), fileName);
   }
 }

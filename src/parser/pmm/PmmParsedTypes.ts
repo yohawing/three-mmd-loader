@@ -1,16 +1,16 @@
 export interface PmmParsedManifest {
   readonly signature: string;
   readonly version: string;
-  readonly parsedVersion?: number;
+  readonly parsedVersion?: number | null;
   readonly byteLength: number;
   readonly projectSettings: PmmProjectSettings;
   readonly timeline: PmmTimeline;
   readonly displayState: PmmDisplayState;
   readonly headerTextEntries: readonly PmmHeaderTextEntry[];
   readonly modelSlots: readonly PmmModelSlot[];
-  readonly documentSummary?: PmmDocumentSummary;
-  readonly documentGlobalSummary?: PmmDocumentGlobalSummary;
-  readonly projectGraph?: PmmProjectGraph;
+  readonly documentSummary?: PmmDocumentSummary | null;
+  readonly documentGlobalSummary?: PmmDocumentGlobalSummary | null;
+  readonly projectGraph?: PmmProjectGraph | null;
   readonly assetSummary: PmmAssetSummary;
   readonly assetReferences: readonly PmmParsedAssetReference[];
   readonly modelAssets: readonly PmmSceneAsset[];
@@ -29,31 +29,31 @@ export interface PmmParsedManifest {
 }
 
 export interface PmmProjectSettings {
-  readonly screenWidth?: number;
-  readonly screenHeight?: number;
-  readonly timelineFrameCount?: number;
-  readonly frameRate?: number;
+  readonly screenWidth?: number | null;
+  readonly screenHeight?: number | null;
+  readonly timelineFrameCount?: number | null;
+  readonly frameRate?: number | null;
 }
 
 export interface PmmTimeline {
-  readonly startFrame?: number;
-  readonly endFrameExclusive?: number;
-  readonly frameCount?: number;
-  readonly frameRate?: number;
-  readonly durationSeconds?: number;
+  readonly startFrame?: number | null;
+  readonly endFrameExclusive?: number | null;
+  readonly frameCount?: number | null;
+  readonly frameRate?: number | null;
+  readonly durationSeconds?: number | null;
 }
 
 export interface PmmDisplayState {
   readonly layout: string;
   readonly modelSlotFlags: readonly number[];
   readonly modelSlotFlagEntries: readonly PmmModelSlotFlagEntry[];
-  readonly documentExpandFlags?: PmmDocumentExpandFlags;
-  readonly selectedModelIndex?: number;
-  readonly documentModelCount?: number;
-  readonly declaredModelSlotCount?: number;
+  readonly documentExpandFlags?: PmmDocumentExpandFlags | null;
+  readonly selectedModelIndex?: number | null;
+  readonly documentModelCount?: number | null;
+  readonly declaredModelSlotCount?: number | null;
   readonly modelSlotCount: number;
   readonly nonZeroModelSlotCount: number;
-  readonly accessorySlotCount?: number;
+  readonly accessorySlotCount?: number | null;
   readonly activeModelSlotIndices: readonly number[];
   readonly emptyModelSlotIndices: readonly number[];
   readonly modelSlotFlagCounts: Record<string, number>;
@@ -85,19 +85,19 @@ export interface PmmHeaderTextEntry {
 
 export interface PmmModelSlot {
   readonly slotIndex: number;
-  readonly displaySlotIndex?: number;
+  readonly displaySlotIndex?: number | null;
   readonly offset: number;
   readonly offsetEnd: number;
   readonly modelPathOffset: number;
   readonly trailingZeroPaddingBytes: number;
-  readonly nextNonZeroOffset?: number;
+  readonly nextNonZeroOffset?: number | null;
   readonly name: string;
   readonly nameBytes: readonly number[];
   readonly englishName: string;
   readonly englishNameBytes: readonly number[];
   readonly modelPath: string;
   readonly normalizedPath: string;
-  readonly assetReferenceIndex?: number;
+  readonly assetReferenceIndex?: number | null;
   readonly confidence: string;
 }
 
@@ -171,7 +171,7 @@ export interface PmmDocumentModelSummary {
   readonly name: string;
   readonly englishName: string;
   readonly path: string;
-  readonly assetReferenceIndex?: number;
+  readonly assetReferenceIndex?: number | null;
   readonly boneCount: number;
   readonly morphCount: number;
   readonly constraintBoneCount: number;
@@ -225,7 +225,7 @@ export interface PmmDocumentModelSections {
 }
 
 export interface PmmDocumentBoneKeyframeSummary {
-  readonly index?: number;
+  readonly index?: number | null;
   readonly frameIndex: number;
   readonly previousKeyframeIndex: number;
   readonly nextKeyframeIndex: number;
@@ -242,7 +242,7 @@ export interface PmmDocumentBoneKeyframeSummary {
 }
 
 export interface PmmDocumentMorphKeyframeSummary {
-  readonly index?: number;
+  readonly index?: number | null;
   readonly frameIndex: number;
   readonly previousKeyframeIndex: number;
   readonly nextKeyframeIndex: number;
@@ -256,7 +256,7 @@ export interface PmmDocumentMorphKeyframeSummary {
 }
 
 export interface PmmDocumentModelKeyframeSummary {
-  readonly index?: number;
+  readonly index?: number | null;
   readonly frameIndex: number;
   readonly previousKeyframeIndex: number;
   readonly nextKeyframeIndex: number;
@@ -326,13 +326,13 @@ export interface PmmDocumentTrackSummary {
   readonly offsetEnd: number;
   readonly initialKeyframes: number;
   readonly keyframes: number;
-  readonly initialKeyframe?: PmmDocumentKeyframeSummary;
+  readonly initialKeyframe?: PmmDocumentKeyframeSummary | null;
   readonly keyframeSummaries: readonly PmmDocumentKeyframeSummary[];
   readonly keyframeCountOffset: number;
   readonly keyframesOffset: number;
   readonly keyframesEndOffset: number;
-  readonly stateOffset?: number;
-  readonly stateEndOffset?: number;
+  readonly stateOffset?: number | null;
+  readonly stateEndOffset?: number | null;
 }
 
 export type PmmDocumentKeyframeSummary =
@@ -343,7 +343,7 @@ export type PmmDocumentKeyframeSummary =
 
 export interface PmmCameraKeyframeSummary {
   readonly kind: "Camera";
-  readonly index?: number;
+  readonly index?: number | null;
   readonly frameIndex: number;
   readonly previousKeyframeIndex: number;
   readonly nextKeyframeIndex: number;
@@ -377,7 +377,7 @@ export interface PmmCameraKeyframeSummary {
 
 export interface PmmLightKeyframeSummary {
   readonly kind: "Light";
-  readonly index?: number;
+  readonly index?: number | null;
   readonly frameIndex: number;
   readonly previousKeyframeIndex: number;
   readonly nextKeyframeIndex: number;
@@ -398,7 +398,7 @@ export interface PmmLightKeyframeSummary {
 
 export interface PmmGravityKeyframeSummary {
   readonly kind: "Gravity";
-  readonly index?: number;
+  readonly index?: number | null;
   readonly frameIndex: number;
   readonly previousKeyframeIndex: number;
   readonly nextKeyframeIndex: number;
@@ -422,7 +422,7 @@ export interface PmmGravityKeyframeSummary {
 
 export interface PmmSelfShadowKeyframeSummary {
   readonly kind: "SelfShadow";
-  readonly index?: number;
+  readonly index?: number | null;
   readonly frameIndex: number;
   readonly previousKeyframeIndex: number;
   readonly nextKeyframeIndex: number;
@@ -459,7 +459,7 @@ export interface PmmDocumentAccessorySummary {
   readonly pathOffset: number;
   readonly name: string;
   readonly path: string;
-  readonly assetReferenceIndex?: number;
+  readonly assetReferenceIndex?: number | null;
   readonly drawOrderIndex: number;
   readonly keyframes: number;
   readonly initialKeyframe: PmmDocumentAccessoryKeyframeSummary;
@@ -479,7 +479,7 @@ export interface PmmDocumentAccessorySummary {
 }
 
 export interface PmmDocumentAccessoryKeyframeSummary {
-  readonly index?: number;
+  readonly index?: number | null;
   readonly frameIndex: number;
   readonly previousKeyframeIndex: number;
   readonly nextKeyframeIndex: number;
@@ -562,8 +562,8 @@ export interface PmmDocumentSettingsSummary {
   readonly currentFrameIndexInTextField: number;
   readonly currentFrameIndexInTextFieldOffset: number;
   readonly modelSelectionFooterPresent: boolean;
-  readonly modelSelectionFooterOffset?: number;
-  readonly modelSelectionFooterEndOffset?: number;
+  readonly modelSelectionFooterOffset?: number | null;
+  readonly modelSelectionFooterEndOffset?: number | null;
 }
 
 // --- Project Graph ---
@@ -571,7 +571,7 @@ export interface PmmDocumentSettingsSummary {
 export interface PmmProjectGraph {
   readonly source: string;
   readonly version: string;
-  readonly parsedVersion?: number;
+  readonly parsedVersion?: number | null;
   readonly timeline: PmmTimeline;
   readonly displayState: PmmDisplayState;
   readonly assetSummary: PmmAssetSummary;
@@ -602,15 +602,15 @@ export interface PmmProjectSceneSettings {
   readonly loopEnabled: boolean;
   readonly audioEnabled: boolean;
   readonly audioPath: string;
-  readonly audioAssetReferenceIndex?: number;
+  readonly audioAssetReferenceIndex?: number | null;
   readonly backgroundVideoEnabled: boolean;
   readonly backgroundVideoPath: string;
-  readonly backgroundVideoAssetReferenceIndex?: number;
+  readonly backgroundVideoAssetReferenceIndex?: number | null;
   readonly backgroundVideoOffset: readonly [number, number];
   readonly backgroundVideoScaleFactor: number;
   readonly backgroundImageEnabled: boolean;
   readonly backgroundImagePath: string;
-  readonly backgroundImageAssetReferenceIndex?: number;
+  readonly backgroundImageAssetReferenceIndex?: number | null;
   readonly backgroundImageOffset: readonly [number, number];
   readonly backgroundImageScaleFactor: number;
 }
@@ -618,15 +618,15 @@ export interface PmmProjectSceneSettings {
 export interface PmmProjectAssetBinding {
   readonly scope: string;
   readonly assetKind: string;
-  readonly ownerIndex?: number;
-  readonly documentIndex?: number;
-  readonly ownerName?: string;
+  readonly ownerIndex?: number | null;
+  readonly documentIndex?: number | null;
+  readonly ownerName?: string | null;
   readonly path: string;
-  readonly pathOffset?: number;
-  readonly assetReferenceIndex?: number;
-  readonly assetReferenceOffset?: number;
-  readonly assetReferenceEndOffset?: number;
-  readonly assetReferenceConfidence?: string;
+  readonly pathOffset?: number | null;
+  readonly assetReferenceIndex?: number | null;
+  readonly assetReferenceOffset?: number | null;
+  readonly assetReferenceEndOffset?: number | null;
+  readonly assetReferenceConfidence?: string | null;
 }
 
 export interface PmmProjectExportReadiness {
@@ -641,36 +641,36 @@ export interface PmmProjectExportBlocker {
   readonly code: string;
   readonly severity: string;
   readonly message: string;
-  readonly scope?: string;
-  readonly kind?: string;
-  readonly count?: number;
-  readonly coverageRatio?: number;
+  readonly scope?: string | null;
+  readonly kind?: string | null;
+  readonly count?: number | null;
+  readonly coverageRatio?: number | null;
 }
 
 export interface PmmProjectTrackReference {
   readonly scope: string;
   readonly trackKind: string;
-  readonly ownerIndex?: number;
-  readonly documentIndex?: number;
-  readonly ownerName?: string;
+  readonly ownerIndex?: number | null;
+  readonly documentIndex?: number | null;
+  readonly ownerName?: string | null;
   readonly initialKeyframes: number;
   readonly keyframes: number;
-  readonly initialKeyframesOffset?: number;
-  readonly keyframeCountOffset?: number;
+  readonly initialKeyframesOffset?: number | null;
+  readonly keyframeCountOffset?: number | null;
   readonly keyframesOffset: number;
   readonly keyframesEndOffset: number;
-  readonly stateOffset?: number;
-  readonly stateEndOffset?: number;
+  readonly stateOffset?: number | null;
+  readonly stateEndOffset?: number | null;
 }
 
 export interface PmmProjectKeyframeReference {
   readonly scope: string;
   readonly trackKind: string;
-  readonly ownerIndex?: number;
-  readonly documentIndex?: number;
-  readonly ownerName?: string;
+  readonly ownerIndex?: number | null;
+  readonly documentIndex?: number | null;
+  readonly ownerName?: string | null;
   readonly initial: boolean;
-  readonly keyframeIndex?: number;
+  readonly keyframeIndex?: number | null;
   readonly frameIndex: number;
   readonly previousKeyframeIndex: number;
   readonly nextKeyframeIndex: number;
@@ -695,9 +695,9 @@ export interface PmmProjectByteCoverage {
 export interface PmmProjectByteRange {
   readonly scope: string;
   readonly kind: string;
-  readonly ownerIndex?: number;
-  readonly documentIndex?: number;
-  readonly name?: string;
+  readonly ownerIndex?: number | null;
+  readonly documentIndex?: number | null;
+  readonly name?: string | null;
   readonly offset: number;
   readonly offsetEnd: number;
   readonly byteLength: number;
