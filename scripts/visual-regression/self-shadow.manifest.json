@@ -238,10 +238,11 @@
       }
     },
     {
-      "name": "mmd-self-shadow-vmd-mode2-toggles-torso-shadow",
+      "name": "mmd-self-shadow-vmd-mode2-caster-control-shows-shadow",
       "shadowOn": "mmd-self-shadow-vmd-mode2",
-      "shadowOff": "mmd-self-shadow-vmd-off",
+      "shadowOff": "mmd-self-shadow-caster-flag-off-mixed",
       "receiverRoi": { "x": 99, "y": 323, "width": 236, "height": 19 },
+      "controlNote": "The caster-off control keeps scene self-shadow enabled. Comparing mode 2 with mode 0 is invalid because MMD 9.32 changes the whole toon curve when scene self-shadow is disabled.",
       "thresholds": {
         "receiverMeanDarkeningMin": 0.0002,
         "receiverP95DarkeningMin": 0.0015,
@@ -259,13 +260,14 @@
       "thresholds": {
         "receiverMeanDarkeningMin": 0,
         "receiverP95DarkeningMin": 0,
-        "receiverMeanAbsDeltaMin": 0.05,
-        "receiverP95AbsDeltaMin": 0.15,
+        "receiverMeanAbsDeltaMin": 0.01,
+        "receiverP95AbsDeltaMin": 0.03,
         "shadowPixelRatioMin": 0,
         "shadowOnMeanLuminanceMin": 0.05,
         "shadowOnP05LuminanceMin": 0.05,
         "outsideRoiMeanDeltaMax": 0.08
-      }
+      },
+      "toleranceNote": "The MMD 9.32 dual-lerp path produces a lower-contrast shadow than the legacy toon-ramp path. Delta minima still reject a no-op while luminance minima independently reject black collapse."
     }
   ]
 }
