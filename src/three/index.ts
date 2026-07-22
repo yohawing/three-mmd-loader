@@ -397,14 +397,14 @@ export class ThreeMmdLoader {
           materialDiagnostics,
           textureCache: this.textureCache
         });
+        const textureDiagnostics = await texturePromise;
+        profile?.mark("textures");
         const runtime = this.createRuntime({
           modelBytes: bytes,
           mesh,
           source: sourceDescriptor
         });
         profile?.mark("runtime-ready");
-        const textureDiagnostics = await texturePromise;
-        profile?.mark("textures");
         const renderOrder = computeMmdMaterialRenderOrder(
           materials.map((material, materialIndex) => ({
             materialIndex,
@@ -441,7 +441,7 @@ export class ThreeMmdLoader {
         profile?.measure("total", "start", "assembled");
         profile?.measure("init-core", "bytes", "core-ready");
         profile?.measure("parse-only", "core-ready", "parsed");
-        profile?.measure("init-runtime", "mesh", "runtime-ready");
+        profile?.measure("init-runtime", "textures", "runtime-ready");
         profile?.measure("create-proxies", "materials", "assembled");
         return model;
       } finally {

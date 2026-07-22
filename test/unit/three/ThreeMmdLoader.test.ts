@@ -154,6 +154,50 @@ describe("ThreeMmdLoader", () => {
     expect(model.runtime).toBe(runtime);
   });
 
+  it("waits for material textures before invoking runtimeFactory", async () => {
+    const runtime = createStubRuntime();
+    let releaseTexture!: () => void;
+    let markTextureStarted!: () => void;
+    const textureStarted = new Promise<void>((resolveTexture) => {
+      markTextureStarted = resolveTexture;
+    });
+    const textureRelease = new Promise<void>((resolveTexture) => {
+      releaseTexture = resolveTexture;
+    });
+    const textureLoader: ThreeMmdTextureLoader = {
+      load(url, onLoad) {
+        markTextureStarted();
+        void textureRelease.then(() => {
+          const texture = new THREE.Texture();
+          texture.name = url;
+          onLoad?.(texture);
+        });
+        return new THREE.Texture();
+      }
+    };
+    const runtimeFactory = vi.fn(({ mesh }: Parameters<NonNullable<ThreeMmdLoaderOptions["runtimeFactory"]>>[0]) => {
+      const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      expect(material?.map).toBeInstanceOf(THREE.Texture);
+      return runtime;
+    });
+    const loader = new ThreeMmdLoader({
+      runtimeFactory,
+      textureMap: { "tex.png": "resolved/tex.png" },
+      textureLoader
+    });
+    const loadPromise = loader.loadModel(
+      createMinimalPmxModelBytes({ materialCount: 1, texturePath: "tex.png" })
+    );
+
+    await textureStarted;
+    expect(runtimeFactory).not.toHaveBeenCalled();
+    releaseTexture();
+    const model = await loadPromise;
+
+    expect(runtimeFactory).toHaveBeenCalledOnce();
+    expect(model.runtime).toBe(runtime);
+  });
+
   it("uses the configured core for model loading", async () => {
     const core = new FallbackCore();
     const loadModel = vi.spyOn(core, "loadModel");
