@@ -34,8 +34,23 @@ let viewerTslSelfShadowWorldDepthBias = 0;
 const viewerBaselineSupersample = 2;
 const viewerTslSupersample = 1;
 const viewerMaxPixelRatio = 3;
-const viewerDefaultCameraNear = 0.01;
+// Keep the near plane fixed and very close.  Stage PMX files frequently extend
+// underneath a camera VMD, so deriving near from their world bounds clips the
+// floor at close camera cuts.
+const viewerDefaultCameraNear = 0.001;
 const viewerDefaultCameraFar = 2000;
+// TSL's WebGL backend has a few depth-only helper passes that do not share the
+// color material's logarithmic-depth write. Preserve log depth for the color
+// pass, but also cap this backend's perspective depth ratio so those passes
+// cannot Z-fight when a background expands camera.far.
+const viewerForceWebglCameraDepthRangeMaxRatio = 20000;
+
+function viewerPerspectiveCameraNearForFar(far) {
+  if (state.viewerPipeline !== "tsl-forcewebgl") {
+    return viewerDefaultCameraNear;
+  }
+  return Math.max(viewerDefaultCameraNear, far / viewerForceWebglCameraDepthRangeMaxRatio);
+}
 
 export async function setupScene() {
   if (!(dom.canvas instanceof HTMLCanvasElement)) throw new Error("Viewer canvas is missing");
@@ -53,6 +68,11 @@ export async function setupScene() {
       antialias: true,
       canvas: dom.canvas,
       forceWebGL: state.viewerPipeline === "tsl-forcewebgl",
+      // The TSL WebGL fallback has regular forward depth, unlike native
+      // WebGPU's reversed-Z path. Keep logarithmic depth enabled here just as
+      // in the baseline WebGL renderer so a close near plane and large stage
+      // bounds do not exhaust the depth buffer.
+      logarithmicDepthBuffer: state.viewerPipeline === "tsl-forcewebgl",
       // Reversed-Z only makes sense on the native WebGPU backend (T070-18).
       // TSL forceWebGL still renders through WebGL's non-reversed [0,1]/[-1,1]
       // depth convention, so leave it (and baseline WebGL above) unchanged.
@@ -84,7 +104,7 @@ export async function setupScene() {
   state.perspectiveCamera = new THREE.PerspectiveCamera(
     22,
     1,
-    viewerDefaultCameraNear,
+    viewerPerspectiveCameraNearForFar(viewerDefaultCameraFar),
     viewerDefaultCameraFar
   );
   state.orthographicCamera = new THREE.OrthographicCamera(
@@ -153,22 +173,22 @@ export function fitCameraToObject(object) {
   state.camera = state.perspectiveCamera;
   state.controls.object = state.camera;
   state.perspectiveCamera.position.copy(sphere.center).add(new THREE.Vector3(0, radius * 0.15, radius * 5.2));
-  state.perspectiveCamera.near = Math.max(radius / 100, 0.01);
-  state.perspectiveCamera.far = Math.max(radius * 80, 200);
+  const far = Math.max(radius * 80, 200);
+  state.perspectiveCamera.near = viewerPerspectiveCameraNearForFar(far);
+  state.perspectiveCamera.far = far;
   state.perspectiveCamera.updateProjectionMatrix();
   fitShadowCameraToObject(object);
   state.controls.update();
 }
 
-// Recomputes only camera.near/far from current scene content bounds (model +
+// Recomputes only camera.far from current scene content bounds (model +
 // background bounding spheres + camera distance). Never touches
-// position/target/fov -- used on auto-fit-suppressed commit paths (model
-// swap, background add/clear, renderer-switch restore without saved
-// near/far) so the depth range still tracks what is actually on stage
-// instead of staying pinned at the wide 0.01/2000 default (T070-18).
-const adaptCameraDepthRangeMaxRatio = 20000;
+// position/target/fov. Near remains fixed on baseline/native WebGPU; the TSL
+// WebGL fallback uses a bounded perspective ratio for its non-log depth-only
+// passes.
 const adaptCameraDepthRangeBoundsScratch = new THREE.Box3();
 const adaptCameraDepthRangeSphereScratch = new THREE.Sphere();
+const shadowBackgroundCornerScratch = new THREE.Vector3();
 
 export function adaptCameraDepthRange() {
   const camera = state.camera;
@@ -176,9 +196,6 @@ export function adaptCameraDepthRange() {
     return;
   }
   if (camera !== state.perspectiveCamera && camera !== state.orthographicCamera) {
-    return;
-  }
-  if (state.currentCameraMotion) {
     return;
   }
   const bounds = adaptCameraDepthRangeBoundsScratch.makeEmpty();
@@ -200,14 +217,11 @@ export function adaptCameraDepthRange() {
   const sphere = bounds.getBoundingSphere(adaptCameraDepthRangeSphereScratch);
   const radius = Math.max(sphere.radius, 0.75);
   const distanceToCenter = camera.position.distanceTo(sphere.center);
-  const distanceToNearestBound = Math.max(distanceToCenter - radius, 0);
   const distanceToFarthestBound = distanceToCenter + radius;
-  let near = Math.max(radius / 100, distanceToNearestBound / 100, 0.01);
-  let far = Math.max(radius * 80, distanceToFarthestBound * 2, 200);
-  if (far / near > adaptCameraDepthRangeMaxRatio) {
-    near = far / adaptCameraDepthRangeMaxRatio;
-  }
-  camera.near = near;
+  const far = Math.max(radius * 80, distanceToFarthestBound * 2, 200);
+  camera.near = camera.isPerspectiveCamera
+    ? viewerPerspectiveCameraNearForFar(far)
+    : viewerDefaultCameraNear;
   camera.far = far;
   camera.updateProjectionMatrix();
 }
@@ -217,7 +231,7 @@ export function setDefaultCameraView() {
   state.camera = state.perspectiveCamera;
   state.controls.object = state.camera;
   state.perspectiveCamera.position.set(0, 1.1, 9);
-  state.perspectiveCamera.near = viewerDefaultCameraNear;
+  state.perspectiveCamera.near = viewerPerspectiveCameraNearForFar(viewerDefaultCameraFar);
   state.perspectiveCamera.far = viewerDefaultCameraFar;
   state.perspectiveCamera.updateProjectionMatrix();
   state.selfShadowBoundsScratch.set(
@@ -243,7 +257,7 @@ export function fitShadowCameraToObject(object) {
   if (!state.keyLight) {
     return;
   }
-  state.selfShadowBoundsScratch.setFromObject(object);
+  updateSelfShadowBounds(object);
   if (state.selfShadowBoundsScratch.isEmpty()) {
     return;
   }
@@ -256,7 +270,7 @@ export function updateShadowCameraForFrame(object) {
     return;
   }
   if (state.selfShadowBoundsRefreshCountdown <= 0) {
-    state.selfShadowBoundsScratch.setFromObject(object);
+    updateSelfShadowBounds(object);
     state.selfShadowBoundsRefreshCountdown = shadowBoundsRefreshFrames() - 1;
   } else {
     state.selfShadowBoundsRefreshCountdown -= 1;
@@ -290,9 +304,9 @@ function fitShadowCameraToBounds(bounds) {
   fitMmdSelfShadowDirectionalLightToBox(state.keyLight, bounds, {
     marginScale: 0.06,
     minNear: 0.02,
-    minFarSpan: 2,
-    maxFar: 80
+    minFarSpan: 2
   });
+  extendShadowCameraFarToBackground();
   viewerTslSelfShadowWorldDepthBias = Math.max(
     bounds.max.x - bounds.min.x,
     bounds.max.y - bounds.min.y,
@@ -300,4 +314,39 @@ function fitShadowCameraToBounds(bounds) {
   ) * viewerTslSelfShadowWorldDepthBiasScale;
   updateSelfShadowDepthBias();
   state.keyLight.target.updateMatrixWorld();
+}
+
+function updateSelfShadowBounds(object) {
+  state.selfShadowBoundsScratch.setFromObject(object);
+}
+
+function extendShadowCameraFarToBackground() {
+  const bounds = state.selfShadowBackgroundBoundsScratch;
+  const shadowCamera = state.keyLight?.shadow?.camera;
+  if (bounds.isEmpty() || !shadowCamera) {
+    return;
+  }
+  shadowCamera.updateMatrixWorld(true);
+  shadowCamera.matrixWorldInverse.copy(shadowCamera.matrixWorld).invert();
+  let far = shadowCamera.far;
+  far = Math.max(
+    far,
+    shadowDepthAt(bounds.min.x, bounds.min.y, bounds.min.z, shadowCamera),
+    shadowDepthAt(bounds.min.x, bounds.min.y, bounds.max.z, shadowCamera),
+    shadowDepthAt(bounds.min.x, bounds.max.y, bounds.min.z, shadowCamera),
+    shadowDepthAt(bounds.min.x, bounds.max.y, bounds.max.z, shadowCamera),
+    shadowDepthAt(bounds.max.x, bounds.min.y, bounds.min.z, shadowCamera),
+    shadowDepthAt(bounds.max.x, bounds.min.y, bounds.max.z, shadowCamera),
+    shadowDepthAt(bounds.max.x, bounds.max.y, bounds.min.z, shadowCamera),
+    shadowDepthAt(bounds.max.x, bounds.max.y, bounds.max.z, shadowCamera)
+  );
+  if (far > shadowCamera.far) {
+    shadowCamera.far = far;
+    shadowCamera.updateProjectionMatrix();
+  }
+}
+
+function shadowDepthAt(x, y, z, shadowCamera) {
+  shadowBackgroundCornerScratch.set(x, y, z).applyMatrix4(shadowCamera.matrixWorldInverse);
+  return -shadowBackgroundCornerScratch.z;
 }

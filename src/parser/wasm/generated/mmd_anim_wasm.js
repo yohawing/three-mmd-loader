@@ -469,6 +469,22 @@ export class WasmMmdRuntimeBatchEvaluation {
         return ret;
     }
     /**
+     * @param {number} target
+     * @param {number} local_position_tolerance
+     * @param {number} local_rotation_tolerance
+     * @param {number} world_position_tolerance
+     * @param {number} world_rotation_tolerance
+     * @param {number} morph_weight_tolerance
+     * @returns {WasmReducedPoseResult}
+     */
+    reducePose(target, local_position_tolerance, local_rotation_tolerance, world_position_tolerance, world_rotation_tolerance, morph_weight_tolerance) {
+        const ret = wasm.wasmmmdruntimebatchevaluation_reducePose(this.__wbg_ptr, target, local_position_tolerance, local_rotation_tolerance, world_position_tolerance, world_rotation_tolerance, morph_weight_tolerance);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmReducedPoseResult.__wrap(ret[0]);
+    }
+    /**
      * @returns {Float32Array}
      */
     worldMatrices() {
@@ -1062,6 +1078,120 @@ export class WasmPmxParsedModel {
 }
 if (Symbol.dispose) WasmPmxParsedModel.prototype[Symbol.dispose] = WasmPmxParsedModel.prototype.free;
 
+export class WasmReducedPoseResult {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmReducedPoseResult.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmReducedPoseResultFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmReducedPoseResultFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmreducedposeresult_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    boneCount() {
+        const ret = wasm.wasmreducedposeresult_boneCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    maxLocalPositionError() {
+        const ret = wasm.wasmreducedposeresult_maxLocalPositionError(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    maxLocalRotationErrorRadians() {
+        const ret = wasm.wasmreducedposeresult_maxLocalRotationErrorRadians(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    maxMorphWeightError() {
+        const ret = wasm.wasmreducedposeresult_maxMorphWeightError(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    maxWorldPositionError() {
+        const ret = wasm.wasmreducedposeresult_maxWorldPositionError(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    maxWorldRotationErrorRadians() {
+        const ret = wasm.wasmreducedposeresult_maxWorldRotationErrorRadians(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    morphCount() {
+        const ret = wasm.wasmreducedposeresult_morphCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    reducedBoneKeyCount() {
+        const ret = wasm.wasmreducedposeresult_reducedBoneKeyCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    reducedMorphKeyCount() {
+        const ret = wasm.wasmreducedposeresult_reducedMorphKeyCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} frame
+     * @param {Float32Array} out_world_matrices_f32
+     * @param {Float32Array} out_morph_weights
+     * @returns {boolean}
+     */
+    sample(frame, out_world_matrices_f32, out_morph_weights) {
+        var ptr0 = passArrayF32ToWasm0(out_world_matrices_f32, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        var ptr1 = passArrayF32ToWasm0(out_morph_weights, wasm.__wbindgen_malloc);
+        var len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmreducedposeresult_sample(this.__wbg_ptr, frame, ptr0, len0, out_world_matrices_f32, ptr1, len1, out_morph_weights);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+    /**
+     * @returns {number}
+     */
+    sourceBoneKeyCount() {
+        const ret = wasm.wasmreducedposeresult_sourceBoneKeyCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    sourceMorphKeyCount() {
+        const ret = wasm.wasmreducedposeresult_sourceMorphKeyCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+}
+if (Symbol.dispose) WasmReducedPoseResult.prototype[Symbol.dispose] = WasmReducedPoseResult.prototype.free;
+
 export class WasmVmdCameraTrack {
     static __wrap(ptr) {
         const obj = Object.create(WasmVmdCameraTrack.prototype);
@@ -1544,6 +1674,35 @@ export function parseVmdAnimationJson(data) {
 }
 
 /**
+ * Reduces host-provided dense pose buffers without assuming a native physics API.
+ * @param {WasmMmdModel} model
+ * @param {Float32Array} world_matrices_f32
+ * @param {Float32Array} morph_weights
+ * @param {number} frame_count
+ * @param {number} start_frame
+ * @param {number} frame_step
+ * @param {number} target
+ * @param {number} local_position_tolerance
+ * @param {number} local_rotation_tolerance
+ * @param {number} world_position_tolerance
+ * @param {number} world_rotation_tolerance
+ * @param {number} morph_weight_tolerance
+ * @returns {WasmReducedPoseResult}
+ */
+export function reduceDensePose(model, world_matrices_f32, morph_weights, frame_count, start_frame, frame_step, target, local_position_tolerance, local_rotation_tolerance, world_position_tolerance, world_rotation_tolerance, morph_weight_tolerance) {
+    _assertClass(model, WasmMmdModel);
+    const ptr0 = passArrayF32ToWasm0(world_matrices_f32, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArrayF32ToWasm0(morph_weights, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.reduceDensePose(model.__wbg_ptr, ptr0, len0, ptr1, len1, frame_count, start_frame, frame_step, target, local_position_tolerance, local_rotation_tolerance, world_position_tolerance, world_rotation_tolerance, morph_weight_tolerance);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return WasmReducedPoseResult.__wrap(ret[0]);
+}
+
+/**
  * Sample VMD camera bytes into a caller-owned `Float32Array`.
  *
  * Writes `[distance, position.x, position.y, position.z, rotation.x,
@@ -1677,6 +1836,9 @@ const WasmPmxGeometryFinalization = (typeof FinalizationRegistry === 'undefined'
 const WasmPmxParsedModelFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmpmxparsedmodel_free(ptr, 1));
+const WasmReducedPoseResultFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmreducedposeresult_free(ptr, 1));
 const WasmVmdCameraTrackFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmvmdcameratrack_free(ptr, 1));

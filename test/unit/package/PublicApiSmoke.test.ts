@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   detectModelFormat,
   parsePmdSectionInventory,
+  parseMmdModelBones,
   parsePmmManifest,
   parsePmxMetadata,
   parsePmxSectionInventory,
@@ -55,6 +56,10 @@ import {
 import * as publicApi from "../../../src/index.js";
 
 describe("public API smoke", () => {
+  it("exports lightweight model-bone parsing for role classification", () => {
+    expect(parseMmdModelBones).toBeTypeOf("function");
+  });
+
   it("runs the README parser sample against the one-bone PMX fixture", async () => {
     const bytes = await readFile(resolve("test/fixtures/test_1bone_cube.pmx"));
     const format = detectModelFormat(bytes);

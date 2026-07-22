@@ -13,9 +13,13 @@ describe("dedicated raw shadow visibility graph", () => {
     expect(source).toContain("projected.y.oneMinus()");
     expect(source).toContain("texture(depthTexture, shadowCoord.xy).r");
     // Real MMD 9.32 (mmd-shading-notes.md §10.2) uses a continuous depth-delta ramp,
-    // not a binary depth compare: shadowVis = 1 - saturate(depthDelta * 1500 - 0.3).
+    // not a binary depth compare. Mode 1 uses *1500; mode 2 uses *8000*shadowUV.y.
     expect(source).not.toContain("shadowCoord.z.lessThanEqual(sampledDepth).select(float(1), float(0))");
-    expect(source).toContain("float(1).sub(saturate(depthDelta.mul(1500).sub(0.3)))");
+    expect(source).toContain('options: { reversedDepth?: boolean; mode?: Node<"float"> } = {}');
+    expect(source).toContain("const selfShadowMode = options.mode ?? float(1);");
+    expect(source).toContain("selfShadowMode.greaterThan(1.5)");
+    expect(source).toContain("shadowCoord.y.mul(8000)");
+    expect(source).toContain("depthDelta.mul(selfShadowScale)");
     expect(source).not.toContain("occluderDepthDelta");
     expect(source).toContain("shadowCoord.x");
     expect(source).toContain(".greaterThanEqual(0)");
@@ -33,7 +37,6 @@ describe("dedicated raw shadow visibility graph", () => {
     // the GPU depth-test used to write the caster depth target is flipped
     // (WebGPUPipelineUtils.js ReversedDepthFuncs) -- so both the bias
     // direction and the occlusion-delta operand order must flip too.
-    expect(source).toContain("options: { reversedDepth?: boolean } = {}");
     expect(source).toContain("const reversedDepth = options.reversedDepth === true;");
     expect(source).toContain("const biasedZ = reversedDepth ? projected.z.sub(bias) : projected.z.add(bias);");
     expect(source).toContain("const depthDelta = reversedDepth");

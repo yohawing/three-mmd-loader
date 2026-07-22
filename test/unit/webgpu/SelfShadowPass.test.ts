@@ -13,7 +13,10 @@ describe("TSL dedicated self-shadow pass scaffold", () => {
     expect(source).toContain("depthTexture.compareFunction = null");
     expect(source).toContain("new THREE.RenderTarget(targetWidth, targetHeight");
     expect(source).toContain("const reversedDepth = renderer.reversedDepthBuffer === true;");
-    expect(source).toContain("createMmdTslShadowVisibilityNode(light, depthTexture, { reversedDepth });");
+    expect(source).toContain("const modeUniform = uniform(1, \"float\")");
+    expect(source).toContain("createMmdTslShadowVisibilityNode(light, depthTexture, {");
+    expect(source).toContain("mode: modeUniform");
+    expect(source).toContain("setMode(mode)");
     // T070-18: the pass used to bail out entirely under a reversed depth
     // buffer; now it syncs the shadow camera's reversedDepth flag proactively
     // (three only flips it lazily inside renderer.render(), which would

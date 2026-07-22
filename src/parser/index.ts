@@ -23,6 +23,7 @@ export type {
   VmdMorphTrack
 } from "./model/modelTypes.js";
 export { FallbackCore, initCore, initCoreWithFallback } from "./wasm/index.js";
+export { parseMmdModelBones } from "./model/ModelSkeletonParser.js";
 export { parsePmdMetadata, parsePmdSectionInventory } from "./pmd/index.js";
 export type {
   PmdHeader,

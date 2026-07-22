@@ -5,15 +5,16 @@ import {
   normalizeMmdRelativePath,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
-import { detectStandardBones } from "../../../dist/parser/index.js";
+import { detectStandardBones, parseMmdModelBones } from "../../../dist/parser/index.js";
 import { MmdAnimRuntime, DefaultMmdRuntime } from "../../../dist/runtime/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
 import { createPhysicsBackend, disposeActivePhysicsBackend, ensurePhysicsBackendReady } from "./physics-backend.js";
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
+import { loadBackgroundFile, loadBackgroundFolder } from "./background-loading.js";
 import { loadCameraFile } from "./camera-loading.js";
 import { hideCreditPopup, showModelCredits } from "./credits.js";
-import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, scheduleViewerShaderPrewarm, setOutlineHidden, showColliderHelpers } from "./debug.js";
+import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, setOutlineHidden, showColliderHelpers } from "./debug.js";
 import { clearBoneDetectionPanel, clearDiagnosticsPanel, reportTextureDiagnostics, updateBoneDetectionPanel, updateDiagnosticsPanel } from "./diagnostics.js";
 import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, updateChromeHeights, updatePlaybackDisplay, updateStageState, updateTransportState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
@@ -33,6 +34,7 @@ import {
 } from "./viewer-pipeline.js";
 
 let modelLoadGeneration = 0;
+const backgroundModelNamePattern = /(?:background|stage|背景|ステージ)/iu;
 
 function beginModelLoad() {
   return ++modelLoadGeneration;
@@ -149,7 +151,6 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     } else {
       adaptCameraDepthRange();
     }
-    scheduleViewerShaderPrewarm();
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
       if (!isCurrentLoad()) {
@@ -267,7 +268,6 @@ export async function loadModelFolder(files, loadOptions = {}) {
     } else {
       adaptCameraDepthRange();
     }
-    scheduleViewerShaderPrewarm();
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
       if (!isCurrentLoad()) {
@@ -370,7 +370,6 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     } else {
       adaptCameraDepthRange();
     }
-    scheduleViewerShaderPrewarm();
     if (hasCurrentMotion()) {
       await ensurePhysicsBackendReady();
       if (!isCurrentLoad()) {
@@ -493,6 +492,7 @@ export function bindDropTarget() {
 export async function handleDroppedFiles(dataTransfer) {
   const files = await collectDroppedFiles(dataTransfer);
   const modelFile = findModelFile(files);
+  const backgroundModel = modelFile && await isLikelyBackgroundModelFile(modelFile);
   const vmdFiles = findVmdFiles(files);
   const { motionFiles, cameraFiles } = await classifyVmdFiles(vmdFiles);
   const shouldLoadModelFolder =
@@ -505,7 +505,11 @@ export async function handleDroppedFiles(dataTransfer) {
   } else if (vmdFiles.length === 0) {
     resetMotionSwitcherState();
   }
-  if (shouldLoadModelFolder) {
+  if (backgroundModel && shouldLoadModelFolder) {
+    await loadBackgroundFolder(files);
+  } else if (backgroundModel) {
+    await loadBackgroundFile(modelFile);
+  } else if (shouldLoadModelFolder) {
     await loadModelFolder(files);
   } else if (modelFile) {
     await loadModel(modelFile);
@@ -594,6 +598,15 @@ export function findModelFile(files) {
 }
 
 export const findModelFiles = findMmdModelFiles;
+
+export async function isLikelyBackgroundModelFile(file) {
+  try {
+    const bones = parseMmdModelBones(await file.arrayBuffer());
+    return !detectStandardBones(bones).hasStandardSkeleton;
+  } catch {
+    return backgroundModelNamePattern.test(file.webkitRelativePath || file.name);
+  }
+}
 
 export function modelFileKey(file) {
   if (typeof file.id === "string") {

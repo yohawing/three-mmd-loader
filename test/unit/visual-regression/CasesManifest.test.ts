@@ -231,14 +231,19 @@ describe("self-shadow visual regression manifest", () => {
       comparison => comparison.name === "body-self-shadow-vmd-mode-toggles-torso-shadow"
     );
     const mode2Comparison = manifest.comparisons.find(
-      comparison => comparison.name === "mmd-self-shadow-vmd-mode2-toggles-torso-shadow"
+      comparison => comparison.name === "mmd-self-shadow-vmd-mode2-changes-self-shadow-composite"
     );
     expect(mode1Comparison).toBeDefined();
     expect(mode2Comparison).toMatchObject({
       shadowOn: "mmd-self-shadow-vmd-mode2",
       shadowOff: "mmd-self-shadow-vmd-off",
       receiverRoi: mode1Comparison?.receiverRoi,
-      thresholds: mode1Comparison?.thresholds
+      thresholds: {
+        receiverMeanDarkeningMin: 0,
+        receiverP95DarkeningMin: 0,
+        receiverMeanAbsDeltaMin: 0.01,
+        receiverP95AbsDeltaMin: 0.05
+      }
     });
     for (const comparison of manifest.comparisons) {
       expect(comparison.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);

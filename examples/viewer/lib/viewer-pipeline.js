@@ -298,6 +298,7 @@ export function syncMmdTslDedicatedShadowVisibility(root = state.currentModel?.r
   const enabled = state.debugSelfShadowEnabled === true &&
     state.keyLight?.castShadow === true &&
     mmdTslSelfShadowPass !== undefined;
+  mmdTslSelfShadowPass?.setMode(state.selfShadowStateScratch.mode);
   return syncTslDedicatedShadowVisibility(root, enabled);
 }
 

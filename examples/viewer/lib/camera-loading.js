@@ -3,6 +3,7 @@ import { applyMmdCameraStateToThreeCamera } from "../../../dist/three/index.js";
 
 import { dom, setLoadedFileSwitcherOptions, setStatus, updatePlaybackDisplay, updateTransportState } from "./dom.js";
 import { currentMmdFrame, currentMotionDurationSeconds, hasCurrentMotion } from "./state.js";
+import { adaptCameraDepthRange } from "./scene-setup.js";
 import { state } from "./state.js";
 import { labelFromUrl } from "./url-label.js";
 
@@ -47,6 +48,7 @@ export function clearCameraMotion() {
   state.currentCameraEntries = [];
   state.camera = state.perspectiveCamera;
   state.controls.object = state.camera;
+  adaptCameraDepthRange();
   updateCameraSwitcher();
   syncTimelineRangeToCurrentMotion();
   updateTransportState();
@@ -119,6 +121,7 @@ export async function loadCameraAnimation(loadedAnimation, label, entry) {
   }
   updateTransportState();
   applyCameraMotion();
+  adaptCameraDepthRange();
   setStatus("", "ready");
   return true;
 }

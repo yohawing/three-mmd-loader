@@ -8,6 +8,7 @@ import {
   createThreeMmdMaterials,
   getDefaultToonGradientMap,
   syncMmdMaterialStates,
+  syncMmdSelfShadowState,
   syncMmdSpecularDirection
 } from "../../../src/three/index.js";
 import type { MaterialInfo, MorphData } from "../../../src/parser/model/modelTypes.js";
@@ -994,7 +995,7 @@ describe("Three.js MMD materials", () => {
       "vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );"
     );
     expect(shader.fragmentShader).toContain(
-      "vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
+      "vec3 ywMmdSelfShadowLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
     );
     expect(shader.fragmentShader).toContain("vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;");
     // The composite must be gamma-decoded back to linear so Three's sRGB output encode
@@ -1016,9 +1017,8 @@ describe("Three.js MMD materials", () => {
     expect(shader.fragmentShader).toContain(
       "float ywMmdLightVisibility = clamp( dot( ywMmdNormal, ywMmdLightDir ) * 3.0, 0.0, 1.0 );"
     );
-    // §10.2: the ON/OFF switch between the toon ramp and the self-shadow dual-lerp is
-    // the scene-level self-shadow toggle (USE_SHADOWMAP), not a per-pixel shadow-factor
-    // threshold. Real MMD never mixes the ramp back in for lightly-shadowed pixels.
+    // The VMD mode is a runtime uniform: mode 0 uses the regular ramp without changing
+    // the renderer's USE_SHADOWMAP compile capability.
     expect(shader.fragmentShader).toContain(
       "float ywMmdVis = min( ywMmdToonShadowFactor, ywMmdLightVisibility );"
     );
@@ -1027,7 +1027,10 @@ describe("Three.js MMD materials", () => {
       "vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( 0.0, 0.0 ) ).rgb;"
     );
     expect(shader.fragmentShader).toContain(
-      "vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
+      "vec3 ywMmdSelfShadowLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
+    );
+    expect(shader.fragmentShader).toContain(
+      "vec3 ywMmdToonLight = mix( ywMmdToon, ywMmdSelfShadowLight, mmdSelfShadowEnabled * mmdSelfShadowReceive );"
     );
     expect(shader.fragmentShader).toContain("vec3 ywMmdToon = texture2D( gradientMap, vec2( 0.0, ywMmdLn ) ).rgb;");
     expect(shader.fragmentShader).toContain("vec3 ywMmdToonLight = ywMmdToon;");
@@ -1051,7 +1054,9 @@ describe("Three.js MMD materials", () => {
     // Specular is always gated by vis when self-shadow is scene-enabled (no per-pixel
     // threshold ternary): §10.2 "スペキュラは影とN.L勾配の両方で減衰する".
     expect(shader.fragmentShader).toContain("#ifdef USE_SHADOWMAP");
-    expect(shader.fragmentShader).toContain("float ywMmdSpecGate = ywMmdVis;");
+    expect(shader.fragmentShader).toContain(
+      "float ywMmdSpecGate = mix( 1.0, ywMmdVis, mmdSelfShadowEnabled * mmdSelfShadowReceive );"
+    );
     expect(shader.fragmentShader).not.toContain(
       "float ywMmdSpecGate = ywMmdToonShadowFactor < 0.999 ? ywMmdToonVisibility : 1.0;"
     );
@@ -1072,7 +1077,7 @@ describe("Three.js MMD materials", () => {
       "float ywMmdVis = min( ywMmdToonShadowFactor, ywMmdLightVisibility );"
     );
     expect(shader.fragmentShader).toContain(
-      "ywMmdToonShadowFactor = min( ywMmdToonShadowFactor, ( mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]"
+      "ywMmdToonShadowFactor = min( ywMmdToonShadowFactor, ( mmdSelfShadowEnabled > 0.5 && mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]"
     );
     expect(shader.fragmentShader).not.toContain("#include <lights_fragment_begin>");
   });
@@ -1105,7 +1110,20 @@ describe("Three.js MMD materials", () => {
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 
     expect(shader.uniforms.mmdSelfShadowReceive).toEqual({ value: 0 });
+    expect(shader.uniforms.mmdSelfShadowEnabled).toEqual({ value: 1 });
     expect(shader.fragmentShader).toContain("uniform float mmdSelfShadowReceive;");
+  });
+
+  it("switches the legacy toon composite with VMD self-shadow mode without recompiling", () => {
+    const material = new THREE.MeshToonMaterial();
+    attachMmdMaterialFactors(material);
+    const shader = createMmdShaderScaffold();
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    syncMmdSelfShadowState(material, { mode: 0, distance: 0 });
+    expect(shader.uniforms.mmdSelfShadowEnabled).toEqual({ value: 0 });
+    syncMmdSelfShadowState(material, { mode: 2, distance: 0.2 });
+    expect(shader.uniforms.mmdSelfShadowEnabled).toEqual({ value: 1 });
   });
 
   it("syncs MMD light direction from directional light target instead of raw position", () => {

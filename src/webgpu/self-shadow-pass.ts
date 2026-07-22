@@ -1,5 +1,5 @@
 import * as THREE from "three/webgpu";
-import { getShadowMaterial, getShadowRenderObjectFunction, vec3 } from "three/tsl";
+import { getShadowMaterial, getShadowRenderObjectFunction, uniform, vec3 } from "three/tsl";
 
 import { MMD_SELF_SHADOW_LAYER } from "../three/shadow.js";
 import { createMmdTslShadowVisibilityNode } from "./shadow-visibility.js";
@@ -8,6 +8,7 @@ export interface MmdTslSelfShadowPass {
   readonly renderTarget: THREE.RenderTarget;
   readonly depthTexture: THREE.DepthTexture;
   readonly visibilityNode: ReturnType<typeof createMmdTslShadowVisibilityNode>;
+  setMode(mode: number): boolean;
   render(renderer: THREE.WebGPURenderer, scene: THREE.Scene, light: THREE.DirectionalLight): boolean;
   setReceiverVisibilityDebug(root: THREE.Object3D, enabled: boolean, sampleTarget?: boolean): boolean;
   dispose(): void;
@@ -40,7 +41,11 @@ export function createMmdTslSelfShadowPass(
   // renderers are created with reversedDepthBuffer: true; baseline WebGL and
   // TSL forceWebGL stay non-reversed.
   const reversedDepth = renderer.reversedDepthBuffer === true;
-  const visibilityNode = createMmdTslShadowVisibilityNode(light, depthTexture, { reversedDepth });
+  const modeUniform = uniform(1, "float") as unknown as { value: number };
+  const visibilityNode = createMmdTslShadowVisibilityNode(light, depthTexture, {
+    reversedDepth,
+    mode: modeUniform as unknown as THREE.Node<"float">
+  });
 
   const shadowMaterial = getShadowMaterial(light);
   const shadowRenderObjectFunction = getShadowRenderObjectFunction(
@@ -66,6 +71,14 @@ export function createMmdTslSelfShadowPass(
     renderTarget,
     depthTexture,
     visibilityNode,
+    setMode(mode) {
+      const nextMode = mode === 2 ? 2 : 1;
+      if (modeUniform.value === nextMode) {
+        return false;
+      }
+      modeUniform.value = nextMode;
+      return true;
+    },
     render(currentRenderer, scene, currentLight) {
       if (
         disposed ||

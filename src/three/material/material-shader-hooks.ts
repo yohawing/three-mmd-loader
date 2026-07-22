@@ -27,7 +27,7 @@ const DIRECTIONAL_LIGHT_INFO_CALL = "getDirectionalLightInfo( directionalLight, 
 const DIRECTIONAL_SHADOW_COLOR_MULTIPLY =
   "directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;";
 const MMD_DIRECTIONAL_SELF_SHADOW_FACTOR =
-  "ywMmdToonShadowFactor = min( ywMmdToonShadowFactor, ( mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0 );";
+  "ywMmdToonShadowFactor = min( ywMmdToonShadowFactor, ( mmdSelfShadowEnabled > 0.5 && mmdSelfShadowReceive > 0.5 && directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0 );";
 
 /**
  * Apply the MMD texture-factor helpers (material morph tint, §9). With identity
@@ -72,6 +72,7 @@ const MMD_FRAGMENT_PARS = [
   "uniform vec3 mmdLightDirection;",
   "uniform vec3 mmdLightColor;",
   "uniform float mmdToonCoordinateOffset;",
+  "uniform float mmdSelfShadowEnabled;",
   "uniform float mmdSelfShadowReceive;",
   MMD_TOON_SHADOW_FACTOR_DECLARATION,
   MMD_TEXTURE_FACTOR_HELPERS
@@ -132,17 +133,17 @@ const MMD_OPAQUE_FRAGMENT = [
   "    #endif",
   "  #endif",
   "  #ifdef USE_GRADIENTMAP",
-  // §10.2/§10.4: the switch between "ramp" and "dual-lerp, no ramp at all" is the
-  // SCENE self-shadow ON/OFF toggle (USE_SHADOWMAP, driven by
-  // renderer.shadowMap.enabled), not a per-pixel shadow-factor threshold. A
-  // per-pixel `< 0.999` hybrid mixes the ramp back in for lightly-shadowed pixels
-  // and creates a visible tone-curve seam at the shadow boundary that real MMD
-  // does not have.
+  // USE_SHADOWMAP is a compile-time renderer capability, while VMD self-shadow mode
+  // changes at runtime. Keep both composites in the shader and select with the VMD
+  // uniform so mode 0 restores the normal ramp without forcing a recompile.
   "  #ifdef USE_SHADOWMAP",
+  `    vec3 ywMmdToon = texture2D( gradientMap, vec2( ${MMD_TOON_SAMPLE_U.toFixed(1)}, ywMmdLn ) ).rgb;`,
+  "    ywMmdToon = ywMmdApplyMul( ywMmdToon, mmdToonTextureFactor );",
   "    vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( "
     + `${MMD_TOON_SAMPLE_U.toFixed(1)}, ${MMD_SELF_SHADOW_TOON_V.toFixed(1)} ) ).rgb;`,
   "    ywMmdSelfShadowToon = ywMmdApplyMul( ywMmdSelfShadowToon, mmdToonTextureFactor );",
-  "    vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );",
+  "    vec3 ywMmdSelfShadowLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );",
+  "    vec3 ywMmdToonLight = mix( ywMmdToon, ywMmdSelfShadowLight, mmdSelfShadowEnabled * mmdSelfShadowReceive );",
   "  #else",
   `    vec3 ywMmdToon = texture2D( gradientMap, vec2( ${MMD_TOON_SAMPLE_U.toFixed(1)}, ywMmdLn ) ).rgb;`,
   "    ywMmdToon = ywMmdApplyMul( ywMmdToon, mmdToonTextureFactor );",
@@ -157,7 +158,7 @@ const MMD_OPAQUE_FRAGMENT = [
   // Specular is always gated by vis when self-shadow is scene-enabled (no
   // per-pixel threshold ternary): §10.2 "スペキュラは影とN.L勾配の両方で減衰する".
   "    #ifdef USE_SHADOWMAP",
-  "      float ywMmdSpecGate = ywMmdVis;",
+  "      float ywMmdSpecGate = mix( 1.0, ywMmdVis, mmdSelfShadowEnabled * mmdSelfShadowReceive );",
   "    #else",
   "      float ywMmdSpecGate = 1.0;",
   "    #endif",
@@ -222,6 +223,9 @@ export function attachMmdMaterialFactors(material: THREE.Material): void {
     };
     shader.uniforms.mmdToonCoordinateOffset = {
       value: lightUniformState ? MMD_SYNCED_LIGHT_TOON_COORD_OFFSET : MMD_DEFAULT_TOON_COORD_OFFSET
+    };
+    shader.uniforms.mmdSelfShadowEnabled = {
+      value: material.userData.mmdSelfShadowEnabled === 0 ? 0 : 1
     };
     shader.uniforms.mmdSelfShadowReceive = {
       value: materialReceivesMmdSelfShadow(material) ? 1 : 0

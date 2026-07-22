@@ -98,7 +98,11 @@ export {
   materialHasTextureMap,
   mmdSphereModeToUniform
 } from "./material/material-shader-hooks.js";
-export { syncMmdMaterialStates, syncMmdSpecularDirection } from "./material/material-sync.js";
+export {
+  syncMmdMaterialStates,
+  syncMmdSelfShadowState,
+  syncMmdSpecularDirection
+} from "./material/material-sync.js";
 export {
   attachMmdOutlineExpansion,
   createMmdMaterialRenderOrderMeshes,

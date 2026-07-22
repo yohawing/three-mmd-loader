@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Load and play MikuMikuDance (MMD) models (PMX/PMD) and motions (VMD) with physics, right in your browser. Files stay on your device — nothing is uploaded." />
-    <meta name="mmd-viewer-version" content="0.6.0" />
+    <meta name="mmd-viewer-version" content="0.7.0" />
     <title>MMD Loader for Three.js · three-mmd-loader</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" />
@@ -102,8 +102,8 @@
                 <summary data-i18n="menu.audio">Audio</summary>
                 <button id="choose-audio" type="button" role="menuitem" data-i18n="action.loadFromFile">Load From File...</button>
                 <label class="asset-load-row audio-offset-control" id="audio-offset-control">
-                  <span data-i18n="audio.offsetFrame">Audio Offset</span>
-                  <input id="audio-offset-frame" type="text" inputmode="numeric" pattern="-?[0-9]*" value="0" aria-label="Audio offset frame" data-i18n-aria="aria.audioOffsetFrame" />
+                  <span data-i18n="audio.offsetFrame">Audio Start Frame</span>
+                  <input id="audio-offset-frame" type="text" inputmode="numeric" pattern="-?[0-9]*" value="0" aria-label="Audio start frame" data-i18n-aria="aria.audioOffsetFrame" />
                 </label>
                 <div class="asset-load-row" hidden>
                   <label for="asset-audio-select" data-i18n="menu.fixture">Fixture</label>

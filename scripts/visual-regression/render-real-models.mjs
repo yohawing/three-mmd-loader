@@ -382,6 +382,7 @@ function rendererHtml() {
         applyMmdSelfShadowStateToThreeDirectionalLight,
         configureMmdSelfShadowDirectionalLight,
         fitMmdSelfShadowDirectionalLightToBox,
+        syncMmdSelfShadowState,
         syncMmdSpecularDirection
       } from "/dist/three/index.js";
       import { sampleMmdCameraTrack, sampleMmdLightTrack, sampleMmdSelfShadowTrack } from "/dist/runtime/index.js";
@@ -460,6 +461,9 @@ function rendererHtml() {
               maxFar: 20,
               shadowIntensity: config.render.shadow.directional?.intensity ?? 0.55
             });
+            if (model.mesh?.material) {
+              syncMmdSelfShadowState(model.mesh.material, selfShadowState);
+            }
           }
           if (visualCase.cameraVmdUrl !== undefined) {
             const { animation } = await loader.loadAnimation(await fetchBytes(visualCase.cameraVmdUrl));

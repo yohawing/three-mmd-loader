@@ -9,7 +9,7 @@ import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
 import { loadModelFile, loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
-import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
+import { evaluateRuntime, render, renderStillFrame, setPlaybackPlaying, syncAudioToMotionTime } from "./lib/playback.js";
 import {
   consumeRendererSwitchSnapshot,
   createRendererSwitchSnapshot,
@@ -19,7 +19,7 @@ import {
   setRendererSwitchRestoreParam
 } from "./lib/renderer-switch-state.js";
 import { adaptCameraDepthRange, resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
-import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
+import { currentMotionDurationSeconds, debugEnabled, kurokoModelUrl, state } from "./lib/state.js";
 import { updateViewerPipelineStatus } from "./lib/viewer-pipeline.js";
 
 const volumeStorageKey = "three-mmd-loader.viewer.volume.v1";
@@ -200,28 +200,6 @@ function bindControls() {
     updateVolumeIcon();
   });
   if (isAudioElement(dom.bgmAudio)) {
-    dom.bgmAudio.addEventListener("play", () => {
-      if (!state.isSyncingAudioState && hasTimelineSource()) setPlaybackState(true);
-    });
-    dom.bgmAudio.addEventListener("pause", () => {
-      if (!state.isSyncingAudioState && hasTimelineSource()) setPlaybackState(false);
-    });
-    dom.bgmAudio.addEventListener("seeking", () => {
-      if (state.isSeeking) return;
-      syncMotionToAudioTime();
-    });
-    dom.bgmAudio.addEventListener("seeked", () => {
-      if (state.isSeeking) return;
-      if (finishAudioTimeSync()) return;
-      syncMotionToAudioTime();
-    });
-    dom.bgmAudio.addEventListener("timeupdate", () => {
-      if (!state.isPlaying || state.isSeeking || !hasTimelineSource()) return;
-      syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
-    });
-    dom.bgmAudio.addEventListener("ended", () => {
-      if (!dom.bgmAudio.loop) setPlaybackState(false);
-    });
     dom.bgmAudio.addEventListener("loadedmetadata", () => {
       applyStoredVolume();
       setStatus("", "ready");
@@ -471,10 +449,6 @@ function clampVolume(volume) {
   return Number.isFinite(volume) ? Math.min(Math.max(volume, 0), 1) : 1;
 }
 
-function hasTimelineSource() {
-  return hasCurrentMotion() || state.currentCameraMotion !== undefined;
-}
-
 function disposeViewerResources() {
   if (state.viewerDisposed) return;
   state.viewerDisposed = true;
@@ -656,9 +630,11 @@ function restoreRendererSwitchCameraView(view) {
   state.controls.target.fromArray(view.target);
   camera.updateProjectionMatrix();
   state.controls.update();
-  if (!hasSavedDepthRange) {
+  if (!hasSavedDepthRange || state.viewerPipeline === "tsl-forcewebgl") {
     // Restore data predates near/far capture (or omitted it) -- recompute
     // from current scene bounds instead of leaving the wide viewer default.
+    // ForceWebGL also needs this after restoring a baseline/native snapshot:
+    // its depth-only passes require a bounded perspective depth ratio.
     adaptCameraDepthRange();
   }
 }

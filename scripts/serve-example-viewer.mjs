@@ -13,7 +13,7 @@ const dataRoute = "/__mmd_data/";
 const mmdAnimWasmRoot = prepareMmdAnimWasmRoot();
 const mmdAnimWasmRoute = "/__mmd_anim_wasm/";
 const localAssetsRoute = "/__mmd_assets__/fixtures-local.json";
-const port = Number.parseInt(process.env.PORT ?? "3939", 10);
+const port = Number.parseInt(process.env.PORT ?? "3940", 10);
 const host = process.env.HOST ?? "127.0.0.1";
 
 const mimeTypes = new Map([

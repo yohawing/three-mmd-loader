@@ -1,4 +1,4 @@
-import type { MaterialRuntimeState } from "../../parser/model/modelTypes.js";
+import type { MaterialRuntimeState, SelfShadowState } from "../../parser/model/modelTypes.js";
 import * as THREE from "three";
 
 import { clampColor } from "../utils.js";
@@ -168,6 +168,29 @@ export function syncMmdSpecularDirection(
     const toonCoordinateOffsetUniform = shader?.uniforms?.mmdToonCoordinateOffset;
     if (toonCoordinateOffsetUniform && typeof toonCoordinateOffsetUniform.value === "number") {
       toonCoordinateOffsetUniform.value = 0.5;
+    }
+  });
+}
+
+/**
+ * Synchronize the VMD self-shadow mode with the legacy GLSL composite. The renderer
+ * can keep shadow maps enabled while a VMD frame selects mode 0, so `light.castShadow`
+ * alone cannot select the ordinary toon ramp reliably.
+ */
+export function syncMmdSelfShadowState(
+  material: THREE.Material | THREE.Material[],
+  state: SelfShadowState | undefined
+): void {
+  const enabled = state?.mode === 0 ? 0 : 1;
+  const materialList = Array.isArray(material) ? material : [material];
+  materialList.forEach((mat) => {
+    mat.userData.mmdSelfShadowEnabled = enabled;
+    const shader = mat.userData.mmdMaterialFactorShader as
+      | { uniforms?: ShaderUniformMap }
+      | undefined;
+    const uniform = shader?.uniforms?.mmdSelfShadowEnabled;
+    if (uniform && typeof uniform.value === "number") {
+      uniform.value = enabled;
     }
   });
 }

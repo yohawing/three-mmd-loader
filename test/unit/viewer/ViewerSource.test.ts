@@ -59,7 +59,7 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("camera.fov = view.fov");
   });
 
-  it("adapts camera near/far to scene bounds on auto-fit-suppressed commit paths without moving the camera (T070-18)", async () => {
+  it("keeps camera near fixed while adapting far to scene bounds without moving the camera", async () => {
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
@@ -76,8 +76,12 @@ describe("example viewer source", () => {
     expect(adaptSource).not.toContain("position.fromArray(");
     expect(adaptSource).not.toContain("controls.target");
     expect(adaptSource).not.toContain(".fov");
-    expect(adaptSource).toContain("state.currentCameraMotion");
-    expect(adaptSource).toContain("camera.near = near;");
+    expect(adaptSource).not.toContain("state.currentCameraMotion");
+    expect(sceneSetupSource).toContain("const viewerForceWebglCameraDepthRangeMaxRatio = 20000;");
+    expect(sceneSetupSource).toContain("function viewerPerspectiveCameraNearForFar(far)");
+    expect(adaptSource).toContain("const far = Math.max(radius * 80, distanceToFarthestBound * 2, 200);");
+    expect(adaptSource).toContain("camera.near = camera.isPerspectiveCamera");
+    expect(adaptSource).toContain("? viewerPerspectiveCameraNearForFar(far)");
     expect(adaptSource).toContain("camera.far = far;");
     expect(adaptSource).toContain("camera.updateProjectionMatrix();");
 
@@ -85,20 +89,20 @@ describe("example viewer source", () => {
     expect(modelSource.match(/if \(shouldAutoFitCamera\) \{\n {6}frameCurrentModel\(\);\n {4}\} else \{\n {6}adaptCameraDepthRange\(\);\n {4}\}/g)).toHaveLength(3);
 
     expect(backgroundSource).toContain("import { adaptCameraDepthRange } from \"./scene-setup.js\";");
-    expect(backgroundSource).toContain("state.scene.add(background.root);\n    adaptCameraDepthRange();");
-    expect(backgroundSource).toContain(
-      "updateStageState();\n  adaptCameraDepthRange();\n  scheduleViewerShaderPrewarm();\n}"
-    );
+    expect(backgroundSource).toContain("state.scene.add(background.root);");
+    expect(backgroundSource).toContain("state.selfShadowBackgroundBoundsScratch.setFromObject(background.mesh);");
+    expect(backgroundSource).toContain("adaptCameraDepthRange();");
 
     expect(mainSource).toContain("import { adaptCameraDepthRange, resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from \"./lib/scene-setup.js\";");
     expect(mainSource).toContain("const hasSavedDepthRange = typeof view.near === \"number\" && typeof view.far === \"number\";");
-    expect(mainSource).toContain("if (!hasSavedDepthRange) {");
+    expect(mainSource).toContain('if (!hasSavedDepthRange || state.viewerPipeline === "tsl-forcewebgl") {');
   });
 
   it("enables reversed-Z depth only on the native WebGPU viewer renderer (T070-18)", async () => {
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
     const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
 
+    expect(sceneSetupSource).toContain('logarithmicDepthBuffer: state.viewerPipeline === "tsl-forcewebgl"');
     expect(sceneSetupSource).toContain('reversedDepthBuffer: state.viewerPipeline === "tsl-webgpu"');
     expect(pipelineSource).toContain("reversedDepth: state.renderer?.reversedDepthBuffer === true");
     expect(pipelineSource).toContain("const polygonOffsetSign = outlineMetadata.polygonOffsetSign ?? 1;");
@@ -125,19 +129,11 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("submitViewerRenderAsync\n} from \"./viewer-pipeline.js\";");
     expect(debugSource).toContain("export async function setDebugMaterialMode(mode)");
     expect(debugSource).toContain("export async function setSelfShadowEnabled(enabled)");
-    expect(debugSource).toContain("invalidatePendingShaderPrewarm();");
     expect(debugSource).toContain("await submitViewerRenderAsync();");
     expect(debugSource).toContain("async showNormals() {");
     expect(debugSource).toContain("await setDebugMaterialMode(\"normals\");");
     expect(debugSource).toContain("async selfShadow(enabled = true) {");
     expect(debugSource).toContain("return `selfShadow=${await setSelfShadowEnabled(enabled)}`;");
-    expect(debugSource).toContain("export function scheduleViewerShaderPrewarm()");
-    expect(debugSource).toContain("let shaderPrewarmToken = 0;");
-    expect(debugSource).toContain("let shaderPrewarmInFlight = false;");
-    expect(debugSource).toContain("async function prewarmSelfShadowShaderVariant(renderer, token)");
-    expect(debugSource).toContain("async function prewarmNormalsDebugMaterial(renderer, token)");
-    expect(debugSource).toContain("const opposite = !state.debugSelfShadowEnabled;");
-    expect(debugSource).toContain("if (state.debugMaterialMode !== \"default\") {");
     // Outline stays a synchronous toggle (no shader recompile involved), so it
     // must keep calling submitViewerRender() directly rather than the async path.
     const outlineStart = debugSource.indexOf("export function setOutlineHidden(hidden)");
@@ -146,20 +142,11 @@ describe("example viewer source", () => {
     expect(outlineEnd).toBeGreaterThan(outlineStart);
     expect(debugSource.slice(outlineStart, outlineEnd)).toContain("submitViewerRender();");
 
-    expect(modelSource).toContain(
-      "import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, scheduleViewerShaderPrewarm, setOutlineHidden, showColliderHelpers } from \"./debug.js\";"
-    );
-    expect(
-      modelSource.match(/adaptCameraDepthRange\(\);\n {4}\}\n {4}scheduleViewerShaderPrewarm\(\);/g)
-    ).toHaveLength(3);
-
-    expect(backgroundSource).toContain('import { scheduleViewerShaderPrewarm } from "./debug.js";');
-    expect(backgroundSource).toContain(
-      "state.scene.add(background.root);\n    adaptCameraDepthRange();\n    scheduleViewerShaderPrewarm();"
-    );
-    expect(backgroundSource).toContain(
-      "updateStageState();\n  adaptCameraDepthRange();\n  scheduleViewerShaderPrewarm();\n}"
-    );
+    expect(debugSource).not.toContain("scheduleViewerShaderPrewarm");
+    expect(debugSource).not.toContain("prewarmNormalsDebugMaterial");
+    expect(debugSource).not.toContain("prewarmSelfShadowShaderVariant");
+    expect(modelSource).not.toContain("scheduleViewerShaderPrewarm");
+    expect(backgroundSource).not.toContain("scheduleViewerShaderPrewarm");
   });
 
   it("wires the main viewer as a TSL parity review viewer with a baseline fallback", async () => {
@@ -301,6 +288,7 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("mmdTslSelfShadowPass.render(state.renderer, state.scene, state.keyLight);");
     expect(pipelineSource).toContain("dedicatedShadowVisibilityNode: mmdTslSelfShadowPass?.visibilityNode");
     expect(pipelineSource).toContain("export function syncMmdTslDedicatedShadowVisibility");
+    expect(pipelineSource).toContain("mmdTslSelfShadowPass?.setMode(state.selfShadowStateScratch.mode);");
     expect(pipelineSource).toContain("const mmdTslSelfShadowModelRoots = new Set();");
     expect(pipelineSource).toContain("const mmdTslDedicatedShadowUniforms = new Set();");
     expect(pipelineSource).toContain("registerTslDedicatedShadowUniforms(model.root, model.mesh, true);");
@@ -643,9 +631,16 @@ describe("example viewer source", () => {
     expect(dropHandler).toContain("else if (vmdFiles.length === 0)");
     expect(dropHandler).toContain("await loadMotion(motionFiles[0])");
     expect(dropHandler).toContain("await loadCameraFile(cameraFiles[0])");
+    expect(dropHandler).toContain("const backgroundModel = modelFile && await isLikelyBackgroundModelFile(modelFile);");
+    expect(dropHandler).toContain("await loadBackgroundFolder(files);");
+    expect(dropHandler).toContain("await loadBackgroundFile(modelFile);");
     expect(dropHandler).toContain("vmdFiles.includes(file)");
     expect(dropHandler).not.toContain('lowerName.endsWith(".vmd")');
     expect(dropHandler).not.toContain("await loadMotion(file)");
+    expect(modelSource).toContain("const backgroundModelNamePattern = /(?:background|stage|背景|ステージ)/iu;");
+    expect(modelSource).toContain("export async function isLikelyBackgroundModelFile(file)");
+    expect(modelSource).toContain("parseMmdModelBones(await file.arrayBuffer())");
+    expect(modelSource).toContain("!detectStandardBones(bones).hasStandardSkeleton");
   });
 
   it("loads local viewer assets from the gitignored fixture inventory through the MMD data route", async () => {
@@ -906,12 +901,16 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("updateSelfShadowDepthBias();");
     expect(sceneSource).toContain("export function fitShadowCameraToObject(object)");
     expect(sceneSource).toContain("state.selfShadowBoundsScratch.setFromObject(object)");
+    expect(sceneSource).toContain("extendShadowCameraFarToBackground();");
+    expect(sceneSource).toContain("function extendShadowCameraFarToBackground()");
+    expect(sceneSource).toContain("shadowCamera.far = far;");
     expect(sceneSource).toContain("const viewerTslShadowBoundsRefreshFrames = 6");
     expect(sceneSource).toContain("export function updateShadowCameraForFrame(object)");
     expect(sceneSource).toContain("state.selfShadowBoundsRefreshCountdown -= 1");
     expect(sceneSource).toContain("marginScale: 0.06");
     expect(stateSource).toContain("selfShadowStateScratch");
     expect(stateSource).toContain("selfShadowBoundsScratch: new THREE.Box3()");
+    expect(stateSource).toContain("selfShadowBackgroundBoundsScratch: new THREE.Box3()");
     expect(stateSource).toContain("selfShadowBoundsRefreshCountdown: 0");
     expect(stateSource).toContain("selfShadowFrameHint");
     expect(stateSource).toContain("debugSelfShadowEnabled: initialSelfShadowEnabled");
@@ -924,9 +923,12 @@ describe("example viewer source", () => {
     const shadowCameraUpdateIndex = playbackSource.indexOf("updateShadowCameraForFrame(state.currentModel.mesh)");
     const minFarAssignment = "state.selfShadowLightOptionsScratch.minFar = state.keyLight.shadow.camera.far;";
     const minFarAssignmentIndex = playbackSource.indexOf(minFarAssignment);
+    const maxFarAssignment = "state.selfShadowLightOptionsScratch.maxFar = Math.max(";
+    const maxFarAssignmentIndex = playbackSource.indexOf(maxFarAssignment);
     const selfShadowApplyIndex = playbackSource.indexOf("applyMmdSelfShadowStateToThreeDirectionalLight(");
     expect(minFarAssignmentIndex).toBeGreaterThan(shadowCameraUpdateIndex);
-    expect(playbackSource.slice(minFarAssignmentIndex, selfShadowApplyIndex)).toBe(`${minFarAssignment}\n  `);
+    expect(maxFarAssignmentIndex).toBeGreaterThan(minFarAssignmentIndex);
+    expect(maxFarAssignmentIndex).toBeLessThan(selfShadowApplyIndex);
     expect(playbackSource).toContain("state.selfShadowBoundsRefreshCountdown = 0");
     expect(playbackSource).toContain("state.keyLight.castShadow = true");
     expect(playbackSource).toContain("!state.debugSelfShadowEnabled");
@@ -940,24 +942,26 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("selfShadowEnabled: state.debugSelfShadowEnabled");
   });
 
-  it("keeps audio playback resume from seeking back to the start", async () => {
+  it("keeps the playback timeline independent from the audio start frame", async () => {
     const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
 
-    expect(playbackSource).toContain("syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);");
-    expect(playbackSource).toContain("syncAudioToMotionTime(state.audioDriftSyncOptionsScratch)");
-    expect(playbackSource).toContain("Math.abs(dom.bgmAudio.currentTime - targetTime) < 0.05");
-    expect(playbackSource).toContain("state.elapsedSeconds = Math.max(audioTime + state.audioOffsetSeconds, 0)");
+    expect(playbackSource).toContain("state.elapsedSeconds += delta;");
+    expect(playbackSource).toContain("void syncAudioPlaybackToTimeline();");
+    expect(playbackSource).toContain("if (state.elapsedSeconds < state.audioOffsetSeconds) {");
+    expect(playbackSource).toContain("await dom.bgmAudio.play();");
+    expect(playbackSource).not.toContain("syncAudioToMotionTime(state.audioDriftSyncOptionsScratch)");
+    expect(playbackSource).toContain("await dom.bgmAudio.play();");
+    expect(playbackSource).not.toContain("syncMotionToAudioTime");
+    expect(playbackSource).not.toContain("finishAudioTimeSync");
     expect(playbackSource).toContain("const offsetTargetTime = state.elapsedSeconds - state.audioOffsetSeconds");
-    expect(playbackSource).toContain("state.isSyncingAudioTime = true;");
-    expect(playbackSource).toContain("export function finishAudioTimeSync()");
-    expect(mainSource).toContain("if (finishAudioTimeSync()) return;");
+    expect(mainSource).not.toContain("syncMotionToAudioTime");
+    expect(mainSource).not.toContain("finishAudioTimeSync");
     expect(playbackSource).toContain("function hasTimelineSource()");
-    expect(mainSource).toContain("function hasTimelineSource()");
     expect(mainSource).not.toContain("!state.isPlaying || !hasCurrentMotion()");
   });
 
-  it("supports audio offset frames from the transport UI and fixture presets", async () => {
+  it("supports audio start frames from the transport UI and fixture presets", async () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
@@ -976,6 +980,7 @@ describe("example viewer source", () => {
     expect(html.indexOf('id="audio-load-category"')).toBeLessThan(html.indexOf('id="audio-offset-control"'));
     expect(html.indexOf('id="audio-offset-control"')).toBeLessThan(html.indexOf('id="asset-audio-select"'));
     expect(html.indexOf('id="audio-offset-control"')).toBeLessThan(html.indexOf('id="background-load-category"'));
+    expect(html).toContain("Audio Start Frame");
     expect(domSource).toContain('audioOffsetControl: document.querySelector("#audio-offset-control")');
     expect(domSource).toContain('audioOffsetFrameInput: document.querySelector("#audio-offset-frame")');
     expect(stateSource).toContain("audioOffsetFrame: 0");
@@ -1109,7 +1114,6 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("state.selfShadowLightOptionsScratch");
     expect(stateSource).toContain("runtimeUpdateOptionsScratch");
     expect(stateSource).toContain("runtimePhysicsDisabledOptionsScratch");
-    expect(stateSource).toContain("audioNoEvaluateOptionsScratch");
     expect(stateSource).toContain("selfShadowLightOptionsScratch");
     expect(stateSource).toContain("cameraSampleScratch: new Float32Array(9)");
     expect(stateSource).toContain("lightSampleScratch: new Float32Array(6)");
@@ -1449,7 +1453,7 @@ describe("example viewer source", () => {
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const html = await readFile("examples/viewer/index.html", "utf8");
 
-    expect(modelSource).toContain('import { detectStandardBones } from "../../../dist/parser/index.js"');
+    expect(modelSource).toContain('import { detectStandardBones, parseMmdModelBones } from "../../../dist/parser/index.js"');
     expect(modelSource).toContain("detectStandardBones(");
     expect(modelSource).toContain("updateBoneDetectionPanel(");
     expect(modelSource).toContain("clearBoneDetectionPanel()");

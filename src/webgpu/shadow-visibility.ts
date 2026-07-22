@@ -11,9 +11,10 @@ import type Node from "three/src/nodes/core/Node.js";
 export function createMmdTslShadowVisibilityNode(
   light: THREE.DirectionalLight,
   depthTexture: THREE.DepthTexture,
-  options: { reversedDepth?: boolean } = {}
+  options: { reversedDepth?: boolean; mode?: Node<"float"> } = {}
 ): Node<"float"> {
   const reversedDepth = options.reversedDepth === true;
+  const selfShadowMode = options.mode ?? float(1);
   const shadowMatrix = lightShadowMatrix(light);
   const bias = (
     reference("bias", "float", light.shadow) as unknown as {
@@ -59,10 +60,6 @@ export function createMmdTslShadowVisibilityNode(
     // depthDelta is clamped to >= 0 so a receiver in front of the caster (no occlusion)
     // never goes negative and stays fully lit. The -0.3 offset is a real bias baked into
     // the reference shader's immediate constants, not an authoring choice.
-    // TODO(mode2): mode 2 multiplies depthDelta by `8000 * shadowUV.y` instead of the
-    // flat 1500. VMD self-shadow mode is tracked in SelfShadowState.mode (src/three/shadow.ts)
-    // but is not yet wired through to this node, so only mode 1 is implemented here.
-    //
     // Under reversedDepth, WebGPUPipelineUtils (utils/WebGPUPipelineUtils.js
     // `ReversedDepthFuncs`) flips the GPU depth-test function (e.g.
     // LessDepth -> GreaterDepth) for the caster pass, so `sampledDepth` still
@@ -76,7 +73,9 @@ export function createMmdTslShadowVisibilityNode(
     const depthDelta = reversedDepth
       ? max(sampledDepth.sub(shadowCoord.z), 0)
       : max(shadowCoord.z.sub(sampledDepth), 0);
-    const visibility = float(1).sub(saturate(depthDelta.mul(1500).sub(0.3)));
+    const selfShadowScale = selfShadowMode.greaterThan(1.5)
+      .select(shadowCoord.y.mul(8000), float(1500));
+    const visibility = float(1).sub(saturate(depthDelta.mul(selfShadowScale).sub(0.3)));
     // §10.2: outside the light frustum there is no shadow AND no toon darkening at all
     // (not even the N.L-based grade the in-frustum branch mixes in). A plain `select(1)`
     // here would let the caller's `min(saturate(N.L*3), shadowVis)` combination still

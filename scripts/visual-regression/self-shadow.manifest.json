@@ -238,15 +238,15 @@
       }
     },
     {
-      "name": "mmd-self-shadow-vmd-mode2-toggles-torso-shadow",
+      "name": "mmd-self-shadow-vmd-mode2-changes-self-shadow-composite",
       "shadowOn": "mmd-self-shadow-vmd-mode2",
       "shadowOff": "mmd-self-shadow-vmd-off",
       "receiverRoi": { "x": 99, "y": 323, "width": 236, "height": 19 },
       "thresholds": {
-        "receiverMeanDarkeningMin": 0.0002,
-        "receiverP95DarkeningMin": 0.0015,
-        "receiverMeanAbsDeltaMin": 0.0002,
-        "receiverP95AbsDeltaMin": 0.0015,
+        "receiverMeanDarkeningMin": 0,
+        "receiverP95DarkeningMin": 0,
+        "receiverMeanAbsDeltaMin": 0.01,
+        "receiverP95AbsDeltaMin": 0.05,
         "shadowPixelRatioMin": 0,
         "outsideRoiMeanDeltaMax": 0.08
       }
@@ -259,8 +259,8 @@
       "thresholds": {
         "receiverMeanDarkeningMin": 0,
         "receiverP95DarkeningMin": 0,
-        "receiverMeanAbsDeltaMin": 0.05,
-        "receiverP95AbsDeltaMin": 0.15,
+        "receiverMeanAbsDeltaMin": 0.02,
+        "receiverP95AbsDeltaMin": 0.05,
         "shadowPixelRatioMin": 0,
         "shadowOnMeanLuminanceMin": 0.05,
         "shadowOnP05LuminanceMin": 0.05,

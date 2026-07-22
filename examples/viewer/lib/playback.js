@@ -7,6 +7,7 @@ import { sampleMmdAnimWasmLightTrackInto, sampleMmdLightTrackInto, sampleMmdSelf
 import {
   applyMmdLightStateToThreeDirectionalLight,
   applyMmdSelfShadowStateToThreeDirectionalLight,
+  syncMmdSelfShadowState,
   syncMmdSpecularDirection
 } from "../../../dist/three/index.js";
 import { updateSelfShadowDepthBias, updateShadowCameraForFrame } from "./scene-setup.js";
@@ -22,10 +23,9 @@ export function render() {
   state.frameTimer.update();
   const delta = state.frameTimer.getDelta();
   updateDebugFps(delta);
-  if (state.isPlaying && !state.isSeeking && hasActiveAudioSource()) {
-    syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
-  } else if (state.isPlaying && !state.isSeeking) {
+  if (state.isPlaying && !state.isSeeking) {
     state.elapsedSeconds += delta;
+    void syncAudioPlaybackToTimeline();
   }
   evaluateRuntime();
   updateColliderHelpers();
@@ -48,6 +48,7 @@ export function evaluateRuntime(options) {
   if (state.elapsedSeconds > maxTime && maxTime > 0) {
     state.elapsedSeconds %= maxTime;
     syncAudioToMotionTime();
+    void syncAudioPlaybackToTimeline();
   }
   if (state.currentModel?.runtime) {
     const updateOptions = state.runtimeUpdateOptionsScratch;
@@ -105,14 +106,18 @@ function applySelfShadowMotion() {
   }
   if (!state.debugSelfShadowEnabled) {
     state.keyLight.castShadow = false;
+    syncLegacyMmdSelfShadowState({ mode: 0, distance: 0 });
     updateSelfShadowDepthBias();
     syncMmdTslDedicatedShadowVisibility();
     return;
   }
   const frames = state.currentMotion?.animation?.selfShadowFrames;
   if (!frames || frames.length === 0) {
+    state.selfShadowStateScratch.mode = 1;
+    state.selfShadowStateScratch.distance = 0.4;
     state.keyLight.castShadow = true;
     state.selfShadowFrameHint.index = 0;
+    syncLegacyMmdSelfShadowState(state.selfShadowStateScratch);
     updateSelfShadowDepthBias();
     syncMmdTslDedicatedShadowVisibility();
     return;
@@ -124,13 +129,27 @@ function applySelfShadowMotion() {
     state.selfShadowFrameHint
   );
   state.selfShadowLightOptionsScratch.minFar = state.keyLight.shadow.camera.far;
+  state.selfShadowLightOptionsScratch.maxFar = Math.max(100, state.selfShadowLightOptionsScratch.minFar);
   applyMmdSelfShadowStateToThreeDirectionalLight(
     state.keyLight,
     selfShadowState,
     state.selfShadowLightOptionsScratch
   );
+  syncLegacyMmdSelfShadowState(selfShadowState);
   updateSelfShadowDepthBias();
   syncMmdTslDedicatedShadowVisibility();
+}
+
+function syncLegacyMmdSelfShadowState(selfShadowState) {
+  if (isTslViewerPipeline()) {
+    return;
+  }
+  if (state.currentModel?.mesh?.material) {
+    syncMmdSelfShadowState(state.currentModel.mesh.material, selfShadowState);
+  }
+  if (state.currentBackground?.mesh?.material) {
+    syncMmdSelfShadowState(state.currentBackground.mesh.material, selfShadowState);
+  }
 }
 
 export async function setPlaybackPlaying(playing) {
@@ -138,13 +157,10 @@ export async function setPlaybackPlaying(playing) {
   if (!isAudioElement(dom.bgmAudio) || !hasActiveAudioSource()) {
     return;
   }
-  state.isSyncingAudioState = true;
   try {
     if (playing) {
-      syncAudioToMotionTime(state.audioDriftSyncOptionsScratch);
-      await dom.bgmAudio.play();
+      await syncAudioPlaybackToTimeline();
     } else {
-      syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
       dom.bgmAudio.pause();
     }
   } catch (error) {
@@ -167,33 +183,47 @@ export function syncPlaybackToCurrentAudioState() {
     return;
   }
   setPlaybackState(true);
-  syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
-}
-
-export function syncMotionToAudioTime(options) {
-  if (!isAudioElement(dom.bgmAudio) || !hasTimelineSource()) {
-    return;
-  }
-  if (state.isSyncingAudioTime) {
-    return;
-  }
-  const audioTime = Number.isFinite(dom.bgmAudio.currentTime) ? dom.bgmAudio.currentTime : 0;
-  state.elapsedSeconds = Math.max(audioTime + state.audioOffsetSeconds, 0);
-  if (options?.evaluate !== false) {
-    const evaluateOptions = state.runtimePhysicsDisabledOptionsScratch;
-    evaluateOptions.physics = options?.physics ?? false;
-    evaluateRuntime(evaluateOptions);
-  }
 }
 
 function hasTimelineSource() {
   return hasCurrentMotion() || state.currentCameraMotion !== undefined;
 }
 
+async function syncAudioPlaybackToTimeline() {
+  if (!isAudioElement(dom.bgmAudio) || !hasActiveAudioSource()) {
+    return;
+  }
+  if (state.elapsedSeconds < state.audioOffsetSeconds) {
+    syncAudioToMotionTime();
+    return;
+  }
+  if (!state.isPlaying || !dom.bgmAudio.paused || state.isSyncingAudioState) {
+    return;
+  }
+  state.isSyncingAudioState = true;
+  try {
+    syncAudioToMotionTime();
+    await dom.bgmAudio.play();
+  } catch (error) {
+    setPlaybackState(false);
+    const message = error instanceof Error ? error.message : String(error);
+    window.console?.warn("[viewer] Failed to start audio at the configured frame:", error);
+    setStatus(message, "error");
+  }
+}
+
 export function syncAudioToMotionTime(options) {
   const active = hasActiveAudioSource();
   if (!isAudioElement(dom.bgmAudio) || !active) {
     return;
+  }
+  if (state.elapsedSeconds < state.audioOffsetSeconds && !dom.bgmAudio.paused) {
+    state.isSyncingAudioState = true;
+    try {
+      dom.bgmAudio.pause();
+    } finally {
+      state.isSyncingAudioState = false;
+    }
   }
   const duration = Number.isFinite(dom.bgmAudio.duration) ? dom.bgmAudio.duration : undefined;
   const offsetTargetTime = state.elapsedSeconds - state.audioOffsetSeconds;
@@ -215,16 +245,4 @@ export function syncAudioToMotionTime(options) {
     state.isSyncingAudioTime = false;
     window.console?.warn("[viewer] Failed to seek audio:", error);
   }
-}
-
-export function finishAudioTimeSync() {
-  if (!state.isSyncingAudioTime) {
-    return false;
-  }
-  state.isSyncingAudioTime = false;
-  if (state.audioSeekSyncTimer !== undefined) {
-    window.clearTimeout(state.audioSeekSyncTimer);
-    state.audioSeekSyncTimer = undefined;
-  }
-  return true;
 }

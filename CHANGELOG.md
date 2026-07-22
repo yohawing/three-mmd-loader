@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.7.0] - 2026-07-22
+
+### Added
+
+- Add an experimental `./webgpu` TSL rendering entrypoint and Viewer backend
+  selector. Native WebGPU and TSL force-WebGL remain opt-in; the legacy WebGL
+  renderer remains the default.
+- Add TSL sparse morph evaluation, dedicated MMD self-shadow visibility, and
+  background-model integration for the experimental Viewer path.
+- Add `parseMmdModelBones()` for lightweight standard/semi-standard bone-role
+  inspection without loading model geometry.
+
+### Changed
+
+- Update the bundled mmd-anim WASM runtime to v0.3.1.
+- Extend Viewer fixtures with local model, background, camera-motion, and audio
+  metadata; audio start frames are now distinct from audio trim offsets.
+- Use scene-aware camera and directional-shadow ranges, including background
+  bounds, while keeping the near plane close enough for MMD stages.
+
+### Fixed
+
+- Avoid TSL force-WebGL depth precision loss and z-fighting by coupling its
+  near plane to the active far range.
+- Preserve material overrides across Viewer scene changes and avoid expensive
+  shader-variant prewarming.
+- Honor VMD self-shadow mode changes in both legacy and TSL material paths,
+  and strengthen self-shadow visual regression coverage.
+
 ## [0.6.0] - 2026-07-11
 
 ### Added
