@@ -25,3 +25,13 @@ export {
   disposeMmdTslSparsePositionMorphs,
   enableMmdTslSparsePositionMorphs
 } from "./sparse-morph-runtime.js";
+
+export { createMmdTslPipeline, createModelLoadOptions } from "./pipeline.js";
+export type {
+  MmdTslModelLoadOptions,
+  MmdTslPipeline,
+  MmdTslPipelineAttachOptions,
+  MmdTslPipelineModel,
+  MmdTslPipelineOptions,
+  MmdTslSelfShadowDebugState
+} from "./pipeline.js";

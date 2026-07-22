@@ -8,6 +8,9 @@ const lightTargetScratch = new THREE.Vector3();
 const lightDirectionScratch = new THREE.Vector3();
 const syncedLightToonCoordinateOffset = 0.5;
 let webgpuPipelineModulePromise;
+let createMmdTslPipeline;
+let mmdTslPipeline;
+let mmdTslPipelineRenderer;
 let replaceMmdModelMaterialsWithTsl;
 let createMmdTslShadowCaster;
 let disposeMmdTslShadowCaster;
@@ -25,6 +28,12 @@ const mmdTslDedicatedShadowUniformsByRoot = new WeakMap();
 
 export function isTslViewerPipeline() {
   return state.viewerPipeline !== "baseline-webgl";
+}
+
+function isNativeTslWebGpuPipeline() {
+  return isTslViewerPipeline() &&
+    state.renderer?.isWebGPURenderer === true &&
+    state.renderer?.backend?.isWebGPUBackend === true;
 }
 
 export function createViewerModelLoadOptions() {
@@ -62,6 +71,20 @@ export async function applyViewerPipelineToModel(model, label, { role = "charact
   }
   if (role === "character") {
     state.pipelineModelName = label || model.mesh.name || "model";
+  }
+  if (isNativeTslWebGpuPipeline()) {
+    const pipeline = await ensureMmdTslPipeline();
+    if (shouldCommit && !shouldCommit()) {
+      return false;
+    }
+    pipeline.attach(model, {
+      light: state.keyLight,
+      sparseMorphs: role === "character",
+      selfShadowEnabled: state.debugSelfShadowEnabled === true
+    });
+    model.root.userData.mmdTslSelfShadowRole = role;
+    updateViewerPipelineStatus();
+    return true;
   }
   if (tslPipeline) {
     if (role === "character" && state.renderer?.backend?.isWebGPUBackend === true) {
@@ -115,7 +138,7 @@ export function updateViewerPipelineStatus() {
 }
 
 export function syncViewerTslLight() {
-  if (!isTslViewerPipeline()) {
+  if (!isTslViewerPipeline() || isNativeTslWebGpuPipeline()) {
     return;
   }
   if (state.currentModel?.mesh?.material) {
@@ -127,13 +150,16 @@ export function syncViewerTslLight() {
 }
 
 export function syncCurrentModelTslMaterialStates() {
-  if (!isTslViewerPipeline() || !state.currentModel?.mesh?.material) {
+  if (!isTslViewerPipeline() || isNativeTslWebGpuPipeline() || !state.currentModel?.mesh?.material) {
     return;
   }
   syncTslMaterialStates(state.currentModel.mesh.material);
 }
 
 export function computeCurrentModelTslSparsePositionMorphs() {
+  if (isNativeTslWebGpuPipeline()) {
+    return false;
+  }
   if (
     !isTslViewerPipeline() ||
     state.renderer?.backend?.isWebGPUBackend !== true ||
@@ -146,10 +172,16 @@ export function computeCurrentModelTslSparsePositionMorphs() {
 }
 
 export function submitViewerRender() {
-  computeCurrentModelTslSparsePositionMorphs();
   if (!state.renderer || !state.scene || !state.camera) {
     return false;
   }
+  if (isNativeTslWebGpuPipeline() && mmdTslPipeline) {
+    mmdTslPipeline.setSelfShadowEnabled(
+      state.debugSelfShadowEnabled === true && state.keyLight?.castShadow === true
+    );
+    return mmdTslPipeline.render(state.scene, state.camera);
+  }
+  computeCurrentModelTslSparsePositionMorphs();
   syncMmdTslDedicatedShadowVisibility();
   const dedicatedShadowPassActive =
     isTslViewerPipeline() &&
@@ -221,6 +253,9 @@ export function disposeViewerPipelineModel(model) {
   if (!model?.mesh) {
     return false;
   }
+  if (isNativeTslWebGpuPipeline() && mmdTslPipeline) {
+    return mmdTslPipeline.detach(model);
+  }
   mmdTslSelfShadowModelRoots.delete(model.root);
   unregisterTslDedicatedShadowUniforms(model.root);
   const disposedCaster = disposeMmdTslShadowCaster?.(model.mesh) ?? false;
@@ -239,6 +274,18 @@ export function setCurrentModelTslOutlineHidden(hidden) {
 export function setMmdTslDedicatedRawVisibilityDebug(enabled = true) {
   if (!isTslViewerPipeline() || state.renderer?.isWebGPURenderer !== true) {
     return false;
+  }
+  if (isNativeTslWebGpuPipeline() && mmdTslPipeline && state.currentModel) {
+    mmdTslDedicatedRawVisibilityDebugActive = enabled === true;
+    const changed = mmdTslPipeline.setReceiverVisibilityDebug(
+      state.currentModel,
+      enabled,
+      state.debugSelfShadowEnabled === true
+    );
+    if (changed) {
+      submitViewerRender();
+    }
+    return changed;
   }
   const root = state.currentModel?.root;
   if (enabled) {
@@ -270,6 +317,13 @@ export function setMmdTslDedicatedRawVisibilityDebug(enabled = true) {
 }
 
 export function syncMmdTslDedicatedRawVisibilityDebug() {
+  if (isNativeTslWebGpuPipeline() && mmdTslDedicatedRawVisibilityDebugActive && mmdTslPipeline && state.currentModel) {
+    return mmdTslPipeline.setReceiverVisibilityDebug(
+      state.currentModel,
+      true,
+      state.debugSelfShadowEnabled === true
+    );
+  }
   if (!mmdTslDedicatedRawVisibilityDebugActive || !mmdTslSelfShadowPass) {
     return false;
   }
@@ -288,6 +342,11 @@ export function syncMmdTslDedicatedShadowVisibility(root = state.currentModel?.r
   if (!isTslViewerPipeline()) {
     return false;
   }
+  if (isNativeTslWebGpuPipeline() && mmdTslPipeline) {
+    return mmdTslPipeline.setSelfShadowEnabled(
+      state.debugSelfShadowEnabled === true && state.keyLight?.castShadow === true
+    );
+  }
   if (
     state.renderer?.isWebGPURenderer === true &&
     state.debugSelfShadowEnabled === true &&
@@ -305,6 +364,9 @@ export function syncMmdTslDedicatedShadowMode(mode = 1) {
   if (!isTslViewerPipeline() || state.renderer?.isWebGPURenderer !== true || !state.keyLight) {
     return false;
   }
+  if (isNativeTslWebGpuPipeline() && mmdTslPipeline) {
+    return mmdTslPipeline.setSelfShadowMode(mode);
+  }
   // A pass is normally created while the model pipeline is applied. Keep this
   // guard allocation-free on the frame path, while still allowing a pass to be
   // initialized when self-shadow is enabled before the first playback tick.
@@ -318,6 +380,15 @@ export function syncMmdTslDedicatedShadowMode(mode = 1) {
 }
 
 export function getMmdTslDedicatedShadowState() {
+  if (isNativeTslWebGpuPipeline() && mmdTslPipeline) {
+    const debugState = mmdTslPipeline.getSelfShadowDebugState();
+    return {
+      passReady: debugState.passReady,
+      registeredRootCount: debugState.attachedModelCount,
+      uniformCount: debugState.receiverUniformCount,
+      enabledCount: debugState.enabledReceiverUniformCount
+    };
+  }
   let enabledCount = 0;
   for (const uniform of mmdTslDedicatedShadowUniforms) {
     if (uniform.value === 1) {
@@ -528,6 +599,7 @@ async function loadWebgpuPipelineModule() {
       import("../../../dist/webgpu/index.js"),
       import("../../../dist/webgpu/self-shadow-pass.js")
     ]).then(([module, selfShadowModule]) => {
+      createMmdTslPipeline = module.createMmdTslPipeline;
       replaceMmdModelMaterialsWithTsl = module.replaceMmdModelMaterialsWithTsl;
       createMmdTslShadowCaster = module.createMmdTslShadowCaster;
       disposeMmdTslShadowCaster = module.disposeMmdTslShadowCaster;
@@ -540,6 +612,26 @@ async function loadWebgpuPipelineModule() {
     });
   }
   return webgpuPipelineModulePromise;
+}
+
+async function ensureMmdTslPipeline() {
+  if (!isNativeTslWebGpuPipeline() || !state.renderer || !state.keyLight || !createMmdTslPipeline) {
+    throw new Error("Native WebGPU TSL pipeline is not ready");
+  }
+  if (mmdTslPipeline && mmdTslPipelineRenderer !== state.renderer) {
+    mmdTslPipeline.dispose();
+    mmdTslPipeline = undefined;
+    mmdTslPipelineRenderer = undefined;
+  }
+  if (!mmdTslPipeline) {
+    mmdTslPipeline = await createMmdTslPipeline(state.renderer, {
+      light: state.keyLight,
+      selfShadowEnabled: state.debugSelfShadowEnabled === true,
+      toonCoordinateOffset: syncedLightToonCoordinateOffset
+    });
+    mmdTslPipelineRenderer = state.renderer;
+  }
+  return mmdTslPipeline;
 }
 
 function ensureMmdTslSelfShadowPass() {

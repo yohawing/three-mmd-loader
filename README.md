@@ -105,226 +105,58 @@ const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 
 ## Experimental - WebGPU / TSL
 
-`@yohawing/three-mmd-loader/webgpu` is the experimental TSL path. It does not
-change the default WebGL path, and the verified Three.js version is `0.184.0` at
-development time. The Three.js TSL API can still change, so keep using the
-default path for normal loading and playback.
+`@yohawing/three-mmd-loader/webgpu` is an experimental TSL path. It does not
+change the default WebGL route. The Three.js TSL API evolves quickly, so pin a
+compatible Three.js version and prefer the default route for normal use.
+
+`createMmdTslPipeline` owns model conversion, sparse morphs, TSL materials, and
+the dedicated self-shadow pass. Creating the renderer, scene, camera, and light,
+and calling `model.update()` every frame, remain application responsibilities.
 
 ```ts
-import {
-  createMmdTslToonMaterial,
-  replaceMmdModelMaterialsWithTsl
-} from "@yohawing/three-mmd-loader/webgpu";
+import * as THREE from "three/webgpu";
+import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
+import { createMmdTslPipeline } from "@yohawing/three-mmd-loader/webgpu";
 
-const tslMaterial = createMmdTslToonMaterial();
-replaceMmdModelMaterialsWithTsl(model.mesh);
-void tslMaterial;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+const clock = new THREE.Clock();
+
+const light = new THREE.DirectionalLight(0xffffff, 2);
+light.castShadow = true;
+scene.add(light, light.target);
+
+const pipeline = await createMmdTslPipeline(renderer, {
+  light,
+  selfShadowEnabled: true
+});
+
+const loader = new ThreeMmdLoader();
+const model = await loader.loadModel("model.pmx", pipeline.createModelLoadOptions());
+scene.add(model.root);
+pipeline.attach(model);
+
+renderer.setAnimationLoop(() => {
+  model.update(clock.getElapsedTime());
+  pipeline.render(scene, camera);
+});
 ```
 
-Main limitations: self-shadow is an approximation close to the current WebGL
-path, not a byte-for-byte match for the GLSL-side `min(shadow, lightVisibility)`.
-The WebGPU backend is not a required CI gate; the portable gate primarily uses
+Provide the pipeline `light` before attaching a model that receives self-shadow.
+Use `setSelfShadowEnabled()` and `setSelfShadowMode()` for UI controls, and
+`detach()` / `dispose()` when destroying a model or renderer. `pipeline.render()`
+temporarily disables Three's standard shadow map to avoid double-applying the
+dedicated self-shadow result.
+
+Low-level exports such as `replaceMmdModelMaterialsWithTsl` remain available for
+advanced integration. Prefer the pipeline API unless you need custom material
+assembly or diagnostics.
+
+Native WebGPU is not a required CI gate; the portable route primarily uses
 `forceWebGL`. Compare generated-PMX baseline and native WebGPU captures with
 `npm run render:visual:generated-pmx:webgpu` followed by
 `npm run visual:report:generated-pmx:webgpu`.
-
-## Recipes
-
-### Full Playback Loop (Model + VMD + Camera + Physics)
-
-```ts
-import * as THREE from "three";
-import {
-  ThreeMmdLoader,
-  applyMmdCameraStateToThreeCamera,
-  applyMmdLightStateToThreeDirectionalLight,
-  configureMmdSelfShadowDirectionalLight,
-  disposeMmdModel
-} from "@yohawing/three-mmd-loader";
-import {
-  createCustomBulletMmdPhysicsBackend,
-  loadCustomBulletMmdModule
-} from "@yohawing/three-mmd-loader/physics";
-
-// 1. Physics backend.
-const mmdBullet = await loadCustomBulletMmdModule();
-const physics = createCustomBulletMmdPhysicsBackend(mmdBullet);
-
-// 2. Loader with physics wired in.
-const loader = new ThreeMmdLoader({
-  runtime: { physics: "external", physicsBackend: physics }
-});
-
-// 3. Scene, camera, light.
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
-const light = new THREE.DirectionalLight(0xffffff, 2);
-light.castShadow = true;
-configureMmdSelfShadowDirectionalLight(light, { mapSize: 2048, normalBias: 0.01 });
-scene.add(light, light.target);
-
-// 4. Load model and VMD.
-const model = await loader.loadModel("model.pmx");
-scene.add(model.root);
-const { animation } = await loader.loadAnimation("motion.vmd");
-model.setAnimation(animation);
-
-// 5. Camera and light tracks from the same VMD.
-const cameraTrack = loader.createCameraTrack(animation);
-const lightTrack = loader.createLightTrack(animation);
-
-// 6. Render loop.
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.shadowMap.enabled = true;
-
-const clock = new THREE.Clock();
-renderer.setAnimationLoop(() => {
-  const seconds = clock.getElapsedTime();
-  model.update(seconds, { physics: true });
-
-  const cameraState = model.runtime.cameraState();
-  if (cameraState) {
-    applyMmdCameraStateToThreeCamera(camera, cameraState, {
-      aspect: renderer.domElement.clientWidth / renderer.domElement.clientHeight
-    });
-  }
-  const lightState = model.runtime.lightState();
-  if (lightState) {
-    applyMmdLightStateToThreeDirectionalLight(light, lightState);
-  }
-
-  renderer.render(scene, camera);
-});
-
-// 7. Cleanup when done.
-disposeMmdModel(model);
-physics.dispose();
-```
-
-### Local File Loading (File API / Drag-and-Drop)
-
-```ts
-import {
-  ThreeMmdLoader,
-  findMmdModelFiles,
-  findMmdMotionFiles,
-  createMmdTextureMapFromFiles
-} from "@yohawing/three-mmd-loader";
-
-async function handleFiles(files: File[]) {
-  const modelFiles = findMmdModelFiles(files);
-  const motionFiles = findMmdMotionFiles(files);
-  if (modelFiles.length === 0) return;
-
-  const modelFile = modelFiles[0];
-  const textureMap = createMmdTextureMapFromFiles(files, modelFile);
-
-  const loader = new ThreeMmdLoader({ textureMap });
-  const model = await loader.loadModel(modelFile);
-  scene.add(model.root);
-
-  if (motionFiles.length > 0) {
-    const { animation } = await loader.loadAnimation(motionFiles[0]);
-    model.setAnimation(animation);
-  }
-}
-
-// <input type="file"> example.
-const input = document.querySelector<HTMLInputElement>("#file-input")!;
-input.addEventListener("change", () => {
-  if (input.files) handleFiles([...input.files]);
-});
-
-// Drag-and-drop example.
-document.addEventListener("drop", async (event) => {
-  event.preventDefault();
-  if (!event.dataTransfer) return;
-  const entries = [...event.dataTransfer.items]
-    .map((item) => item.webkitGetAsEntry?.())
-    .filter((entry): entry is FileSystemEntry => entry != null);
-  const files = await collectFilesFromEntries(entries);
-  handleFiles(files);
-});
-```
-
-### Self-Shadow Setup
-
-```ts
-import {
-  configureMmdSelfShadowDirectionalLight,
-  fitMmdSelfShadowDirectionalLightToBox,
-  MMD_SELF_SHADOW_LAYER
-} from "@yohawing/three-mmd-loader";
-
-const light = new THREE.DirectionalLight(0xffffff, 2);
-light.castShadow = true;
-
-// Configure shadow map and layer.
-configureMmdSelfShadowDirectionalLight(light, {
-  mapSize: 2048,
-  bias: -0.0005,
-  normalBias: 0.01
-});
-
-// Fit shadow frustum to the model's bounding box (call after model load).
-const box = new THREE.Box3().setFromObject(model.root);
-fitMmdSelfShadowDirectionalLightToBox(light, box);
-
-// Models with self-shadow materials are automatically assigned
-// to MMD_SELF_SHADOW_LAYER. The shadow camera only renders that layer.
-scene.add(light, light.target);
-```
-
-### Model Disposal
-
-```ts
-import { disposeMmdModel } from "@yohawing/three-mmd-loader";
-
-// Dispose model, its geometry, materials, textures, skeleton, and runtime.
-disposeMmdModel(model);
-
-// When textures are shared between models:
-disposeMmdModel(model, { textures: "none" });
-```
-
-### VPD Pose Loading
-
-```ts
-const loader = new ThreeMmdLoader();
-const model = await loader.loadModel("model.pmx");
-
-// Apply as a one-shot pose.
-const { pose } = await loader.loadPose("pose.vpd");
-
-// Or convert a VPD into an animation so it can be used with setAnimation.
-const poseAnimation = await loader.loadPoseAnimation("pose.vpd", "idle");
-model.setAnimation(poseAnimation);
-model.update(0);
-```
-
-### Diagnostics Inspection
-
-```ts
-const model = await loader.loadModel("model.pmx");
-
-// Core (WASM or TypeScript fallback).
-console.log(model.diagnostics.core);
-
-// Texture load issues (missing files, format errors).
-for (const diag of model.diagnostics.textures) {
-  console.warn(`[${diag.code}] material ${diag.materialIndex}: ${diag.path}`);
-}
-
-// Material transparency decisions.
-for (const diag of model.diagnostics.materials) {
-  console.log(diag.materialIndex, diag.finalTransparencyMode, diag.reason);
-}
-
-// Load performance (when loader was created with { performance: true }).
-for (const measure of model.diagnostics.performance) {
-  console.log(`${measure.name}: ${measure.durationMs.toFixed(1)}ms`);
-}
-```
 
 ## Development
 

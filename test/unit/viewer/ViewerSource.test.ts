@@ -266,6 +266,13 @@ describe("example viewer source", () => {
     expect(pipelineSource).not.toContain('from "../../../dist/webgpu/index.js"');
     expect(pipelineSource).toContain('import("../../../dist/webgpu/index.js")');
     expect(pipelineSource).toContain('import("../../../dist/webgpu/self-shadow-pass.js")');
+    expect(pipelineSource).toContain("createMmdTslPipeline = module.createMmdTslPipeline");
+    expect(pipelineSource).toContain("async function ensureMmdTslPipeline()");
+    expect(pipelineSource).toContain("pipeline.attach(model, {");
+    expect(pipelineSource).toContain("return mmdTslPipeline.render(state.scene, state.camera);");
+    expect(pipelineSource).toContain("mmdTslPipeline.setSelfShadowEnabled(");
+    expect(pipelineSource).toContain("mmdTslPipeline.setSelfShadowMode(mode)");
+    expect(pipelineSource).toContain("mmdTslPipeline.setReceiverVisibilityDebug(");
     expect(pipelineSource).toContain("dom.pipelineBackendSwitcher.value = state.rendererBackend");
     expect(pipelineSource).toContain('dom.pipelineBackendSwitcher.setAttribute("value", state.rendererBackend)');
     expect(pipelineSource).toContain('replaceMmdModelMaterialsWithTsl(model.mesh, {');
