@@ -5,12 +5,14 @@ export {
   createMmdTslToonMaterial,
   syncMmdTslMaterialState
 } from "./material-core.js";
+export type { MmdTslMaterialCoreOptions, MmdTslMaterialUniforms } from "./material-core.js";
 
 export {
   appendMmdTslOutlineGroups,
   createMmdTslMaterialFromSource,
   replaceMmdModelMaterialsWithTsl
 } from "./material-assembly.js";
+export type { MmdTslMaterialAssemblyOptions } from "./material-assembly.js";
 
 export {
   createMmdTslShadowCaster,

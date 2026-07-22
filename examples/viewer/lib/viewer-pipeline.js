@@ -301,6 +301,22 @@ export function syncMmdTslDedicatedShadowVisibility(root = state.currentModel?.r
   return syncTslDedicatedShadowVisibility(root, enabled);
 }
 
+export function syncMmdTslDedicatedShadowMode(mode = 1) {
+  if (!isTslViewerPipeline() || state.renderer?.isWebGPURenderer !== true || !state.keyLight) {
+    return false;
+  }
+  // A pass is normally created while the model pipeline is applied. Keep this
+  // guard allocation-free on the frame path, while still allowing a pass to be
+  // initialized when self-shadow is enabled before the first playback tick.
+  if (!mmdTslSelfShadowPass) {
+    if (state.debugSelfShadowEnabled !== true || state.keyLight.castShadow !== true) {
+      return false;
+    }
+    ensureMmdTslSelfShadowPass();
+  }
+  return mmdTslSelfShadowPass?.setMode(mode) ?? false;
+}
+
 export function getMmdTslDedicatedShadowState() {
   let enabledCount = 0;
   for (const uniform of mmdTslDedicatedShadowUniforms) {

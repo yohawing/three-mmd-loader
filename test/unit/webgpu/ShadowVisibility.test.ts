@@ -15,7 +15,11 @@ describe("dedicated raw shadow visibility graph", () => {
     // Real MMD 9.32 (mmd-shading-notes.md §10.2) uses a continuous depth-delta ramp,
     // not a binary depth compare: shadowVis = 1 - saturate(depthDelta * 1500 - 0.3).
     expect(source).not.toContain("shadowCoord.z.lessThanEqual(sampledDepth).select(float(1), float(0))");
-    expect(source).toContain("float(1).sub(saturate(depthDelta.mul(1500).sub(0.3)))");
+    expect(source).toContain("const rampScale = shadowMode.equal(2).select(");
+    expect(source).toContain("shadowCoord.y.mul(8000)");
+    expect(source).toContain("float(1500)");
+    expect(source).toContain('reference("intensity", "float", light.shadow)');
+    expect(source).toContain("saturate(depthDelta.mul(rampScale).sub(0.3)).mul(shadowIntensity)");
     expect(source).not.toContain("occluderDepthDelta");
     expect(source).toContain("shadowCoord.x");
     expect(source).toContain(".greaterThanEqual(0)");

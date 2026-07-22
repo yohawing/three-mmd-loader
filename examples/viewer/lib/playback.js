@@ -13,6 +13,7 @@ import { updateSelfShadowDepthBias, updateShadowCameraForFrame } from "./scene-s
 import {
   isTslViewerPipeline,
   submitViewerRender,
+  syncMmdTslDedicatedShadowMode,
   syncMmdTslDedicatedShadowVisibility,
   syncViewerTslLight,
   syncCurrentModelTslMaterialStates
@@ -105,6 +106,7 @@ function applySelfShadowMotion() {
   }
   if (!state.debugSelfShadowEnabled) {
     state.keyLight.castShadow = false;
+    syncMmdTslDedicatedShadowMode(1);
     updateSelfShadowDepthBias();
     syncMmdTslDedicatedShadowVisibility();
     return;
@@ -112,6 +114,7 @@ function applySelfShadowMotion() {
   const frames = state.currentMotion?.animation?.selfShadowFrames;
   if (!frames || frames.length === 0) {
     state.keyLight.castShadow = true;
+    syncMmdTslDedicatedShadowMode(1);
     state.selfShadowFrameHint.index = 0;
     updateSelfShadowDepthBias();
     syncMmdTslDedicatedShadowVisibility();
@@ -129,6 +132,7 @@ function applySelfShadowMotion() {
     selfShadowState,
     state.selfShadowLightOptionsScratch
   );
+  syncMmdTslDedicatedShadowMode(selfShadowState.mode);
   updateSelfShadowDepthBias();
   syncMmdTslDedicatedShadowVisibility();
 }

@@ -76,7 +76,10 @@ import {
 import {
   MMD_TSL_DEFAULT_LIGHT_COLOR,
   createMmdTslToonMaterial,
-  syncMmdTslMaterialState
+  syncMmdTslMaterialState,
+  type MmdTslMaterialAssemblyOptions,
+  type MmdTslMaterialCoreOptions,
+  type MmdTslMaterialUniforms
 } from "@yohawing/three-mmd-loader/webgpu";
 import { createCustomBulletMmdPhysicsBackend, createDisabledMmdPhysicsBackend, loadCustomBulletMmdModule } from "@yohawing/three-mmd-loader/physics";
 
@@ -87,6 +90,9 @@ declare const model: ThreeMmdModel;
 declare const animation: ThreeMmdAnimation;
 declare const parserWasm: { parseMmdFormatJson(data: Uint8Array, fileName?: string | null): string };
 declare const exporterWasm: { exportVmdAnimationJsonBytes(json: string): Uint8Array };
+declare const webgpuCoreOptions: MmdTslMaterialCoreOptions;
+declare const webgpuAssemblyOptions: MmdTslMaterialAssemblyOptions;
+declare const webgpuUniforms: MmdTslMaterialUniforms;
 model.root.add(model.mesh);
 model.setAnimation(animation);
 model.update(0);
@@ -117,6 +123,9 @@ void createMmdTextureMapFromFiles;
 void MMD_TSL_DEFAULT_LIGHT_COLOR;
 void createMmdTslToonMaterial;
 void syncMmdTslMaterialState;
+void webgpuCoreOptions;
+void webgpuAssemblyOptions;
+void webgpuUniforms;
 void createCustomBulletMmdPhysicsBackend;
 void loadCustomBulletMmdModule;
 `

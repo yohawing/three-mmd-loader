@@ -8,6 +8,11 @@ export interface MmdTslSelfShadowPass {
   readonly renderTarget: THREE.RenderTarget;
   readonly depthTexture: THREE.DepthTexture;
   readonly visibilityNode: ReturnType<typeof createMmdTslShadowVisibilityNode>;
+  /**
+   * Selects the precompiled VMD self-shadow ramp. Only mode 2 is distinct;
+   * every other value (including disabled/missing state) safely uses mode 1.
+   */
+  setMode(mode: number): boolean;
   render(renderer: THREE.WebGPURenderer, scene: THREE.Scene, light: THREE.DirectionalLight): boolean;
   setReceiverVisibilityDebug(root: THREE.Object3D, enabled: boolean, sampleTarget?: boolean): boolean;
   dispose(): void;
@@ -41,6 +46,9 @@ export function createMmdTslSelfShadowPass(
   // TSL forceWebGL stay non-reversed.
   const reversedDepth = renderer.reversedDepthBuffer === true;
   const visibilityNode = createMmdTslShadowVisibilityNode(light, depthTexture, { reversedDepth });
+  const shadowModeUniform = (visibilityNode as unknown as {
+    mmdTslShadowMode: { value: number };
+  }).mmdTslShadowMode;
 
   const shadowMaterial = getShadowMaterial(light);
   const shadowRenderObjectFunction = getShadowRenderObjectFunction(
@@ -66,6 +74,14 @@ export function createMmdTslSelfShadowPass(
     renderTarget,
     depthTexture,
     visibilityNode,
+    setMode(mode) {
+      const nextMode = mode === 2 ? 2 : 1;
+      if (shadowModeUniform.value === nextMode) {
+        return false;
+      }
+      shadowModeUniform.value = nextMode;
+      return true;
+    },
     render(currentRenderer, scene, currentLight) {
       if (
         disposed ||
