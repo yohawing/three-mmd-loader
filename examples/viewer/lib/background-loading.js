@@ -6,7 +6,6 @@ import {
 } from "../../../dist/three/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
-import { scheduleViewerShaderPrewarm } from "./debug.js";
 import { reportTextureDiagnostics } from "./diagnostics.js";
 import { dom, setLoadedFileSwitcherOptions, setStatus, updateStageState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
@@ -91,7 +90,6 @@ async function loadBackground(source, label, loaderFactory, entry) {
     }
     state.scene.add(background.root);
     adaptCameraDepthRange();
-    scheduleViewerShaderPrewarm();
     reportTextureDiagnostics(background);
     updateBackgroundSwitcher({
       ...entry,
@@ -103,7 +101,9 @@ async function loadBackground(source, label, loaderFactory, entry) {
     return true;
   } catch (error) {
     disposeLoadedBackground();
-    setStatus(error instanceof Error ? error.message : String(error), "error");
+    if (generation === backgroundLoadGeneration) {
+      setStatus(error instanceof Error ? error.message : String(error), "error");
+    }
     return false;
   }
 
@@ -141,7 +141,6 @@ function clearCommittedBackground() {
   updateBackgroundSwitcher();
   updateStageState();
   adaptCameraDepthRange();
-  scheduleViewerShaderPrewarm();
 }
 
 function updateBackgroundSwitcher(selectedEntry) {

@@ -53,7 +53,7 @@ async function main() {
       : `/${fixturePath}`;
     const baseline = await loadAndCapture(browser, server.origin, backgroundUrl, "baseline-webgl", options.outputDir);
     report.cases.push(serializableCase(baseline));
-    const native = await switchToNativeAndCapture(baseline.page, baseline.messages, options.outputDir);
+    const native = await switchToNativeAndCapture(baseline.page, baseline.pageErrorListener, options.outputDir);
     report.cases.push(serializableCase(native));
     const parity = comparePng(baseline.png, native.png);
     report.parity = parity;
@@ -92,7 +92,8 @@ function serializableCase(result) {
 async function loadAndCapture(browser, origin, backgroundUrl, name, outputDir) {
   const page = await browser.newPage({ viewport: { width: 960, height: 720 }, deviceScaleFactor: 1 });
   const messages = [];
-  page.on("pageerror", error => messages.push(error.message));
+  const pageErrorListener = error => messages.push(error.message);
+  page.on("pageerror", pageErrorListener);
   await page.goto(`${origin}/examples/viewer/?backend=baseline`, { waitUntil: "domcontentloaded" });
   await waitForViewer(page, "baseline viewer");
   const loaded = await page.evaluate(async (url) => globalThis.mmdViewer.loadBackgroundUrl(url), backgroundUrl);
@@ -101,10 +102,17 @@ async function loadAndCapture(browser, origin, backgroundUrl, name, outputDir) {
   const observation = await observeBackground(page);
   const png = PNG.sync.read(await page.locator("canvas").screenshot());
   await writeFile(path.join(outputDir, `${name}.png`), PNG.sync.write(png));
-  return { name, page, png, stats: analyzePng(png), observation, messages, pass: observation.backgroundPresent && !observation.characterRegistered && messages.length === 0 };
+  return { name, page, png, stats: analyzePng(png), observation, messages, pageErrorListener, pass: observation.backgroundPresent && !observation.characterRegistered && messages.length === 0 };
 }
 
-async function switchToNativeAndCapture(page, messages, outputDir) {
+async function switchToNativeAndCapture(page, baselinePageErrorListener, outputDir) {
+  // Keep baseline and native page errors independent. The same page is reused
+  // for the backend switch, so leaving the baseline listener attached would
+  // retroactively turn a clean baseline case red when native initialization
+  // reports an error.
+  page.off("pageerror", baselinePageErrorListener);
+  const messages = [];
+  page.on("pageerror", error => messages.push(error.message));
   const switcher = page.locator("#pipeline-backend-switcher");
   await switcher.evaluate((element) => {
     element.value = "webgpu";

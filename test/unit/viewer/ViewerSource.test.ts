@@ -87,7 +87,7 @@ describe("example viewer source", () => {
     expect(backgroundSource).toContain("import { adaptCameraDepthRange } from \"./scene-setup.js\";");
     expect(backgroundSource).toContain("state.scene.add(background.root);\n    adaptCameraDepthRange();");
     expect(backgroundSource).toContain(
-      "updateStageState();\n  adaptCameraDepthRange();\n  scheduleViewerShaderPrewarm();\n}"
+      "updateStageState();\n  adaptCameraDepthRange();\n}"
     );
 
     expect(mainSource).toContain("import { adaptCameraDepthRange, resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from \"./lib/scene-setup.js\";");
@@ -105,7 +105,7 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("material.polygonOffsetFactor = polygonOffsetSign * (1 + 2 * outlineWidth);");
   });
 
-  it("compiles view-toggle shader variants asynchronously and pre-warms them on idle (T070-19)", async () => {
+  it("compiles view-toggle shader variants asynchronously without idle prewarm (T070-19)", async () => {
     const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
     const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
@@ -125,19 +125,15 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("submitViewerRenderAsync\n} from \"./viewer-pipeline.js\";");
     expect(debugSource).toContain("export async function setDebugMaterialMode(mode)");
     expect(debugSource).toContain("export async function setSelfShadowEnabled(enabled)");
-    expect(debugSource).toContain("invalidatePendingShaderPrewarm();");
     expect(debugSource).toContain("await submitViewerRenderAsync();");
     expect(debugSource).toContain("async showNormals() {");
     expect(debugSource).toContain("await setDebugMaterialMode(\"normals\");");
     expect(debugSource).toContain("async selfShadow(enabled = true) {");
     expect(debugSource).toContain("return `selfShadow=${await setSelfShadowEnabled(enabled)}`;");
-    expect(debugSource).toContain("export function scheduleViewerShaderPrewarm()");
-    expect(debugSource).toContain("let shaderPrewarmToken = 0;");
-    expect(debugSource).toContain("let shaderPrewarmInFlight = false;");
-    expect(debugSource).toContain("async function prewarmSelfShadowShaderVariant(renderer, token)");
-    expect(debugSource).toContain("async function prewarmNormalsDebugMaterial(renderer, token)");
-    expect(debugSource).toContain("const opposite = !state.debugSelfShadowEnabled;");
-    expect(debugSource).toContain("if (state.debugMaterialMode !== \"default\") {");
+    expect(debugSource).not.toContain("scheduleViewerShaderPrewarm");
+    expect(debugSource).not.toContain("shaderPrewarmToken");
+    expect(debugSource).not.toContain("prewarmSelfShadowShaderVariant");
+    expect(debugSource).not.toContain("prewarmNormalsDebugMaterial");
     // Outline stays a synchronous toggle (no shader recompile involved), so it
     // must keep calling submitViewerRender() directly rather than the async path.
     const outlineStart = debugSource.indexOf("export function setOutlineHidden(hidden)");
@@ -147,18 +143,15 @@ describe("example viewer source", () => {
     expect(debugSource.slice(outlineStart, outlineEnd)).toContain("submitViewerRender();");
 
     expect(modelSource).toContain(
-      "import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, scheduleViewerShaderPrewarm, setOutlineHidden, showColliderHelpers } from \"./debug.js\";"
+      "import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, setOutlineHidden, showColliderHelpers } from \"./debug.js\";"
     );
-    expect(
-      modelSource.match(/adaptCameraDepthRange\(\);\n {4}\}\n {4}scheduleViewerShaderPrewarm\(\);/g)
-    ).toHaveLength(3);
-
-    expect(backgroundSource).toContain('import { scheduleViewerShaderPrewarm } from "./debug.js";');
-    expect(backgroundSource).toContain(
-      "state.scene.add(background.root);\n    adaptCameraDepthRange();\n    scheduleViewerShaderPrewarm();"
+    expect(modelSource).not.toContain("scheduleViewerShaderPrewarm");
+    expect(backgroundSource).not.toContain("scheduleViewerShaderPrewarm");
+    expect(modelSource).toContain(
+      "if (generation === modelLoadGeneration) {\n      resetFolderModelState();\n      setStatus(error instanceof Error ? error.message : String(error), \"error\");"
     );
     expect(backgroundSource).toContain(
-      "updateStageState();\n  adaptCameraDepthRange();\n  scheduleViewerShaderPrewarm();\n}"
+      "if (generation === backgroundLoadGeneration) {\n      setStatus(error instanceof Error ? error.message : String(error), \"error\");"
     );
   });
 
@@ -459,6 +452,8 @@ describe("example viewer source", () => {
     expect(gateSource).toContain("diffuseTexturesResolved");
     expect(gateSource).toContain("resolvedDiffuseTextureCount");
     expect(gateSource).toContain("shadowCasters");
+    expect(gateSource).toContain('page.off("pageerror", baselinePageErrorListener)');
+    expect(gateSource).toContain("const pageErrorListener = error => messages.push(error.message);");
     expect(gateSource).toContain("analyzeSyntheticRois");
     expect(gateSource).toContain("maximumBlackPropMean");
     expect(gateSource).toContain("clear-background");
