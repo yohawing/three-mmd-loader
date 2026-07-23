@@ -6,6 +6,11 @@ import type {
 } from "./messages.js";
 import { copyMmdRuntimePoseInto, type MmdRuntimePoseBuffer } from "./protocol.js";
 import { MmdRuntimeTransferablePosePool } from "./transferablePool.js";
+import {
+  acquireMmdRuntimeSharedPoseWriteSlot,
+  publishMmdRuntimeSharedPose,
+  type MmdRuntimeSharedPoseSlot
+} from "./sharedPose.js";
 
 const maxPreReadyCommands = 32;
 type ReadyCommand = Exclude<MmdRuntimeWorkerCommand, { readonly type: "init" }>;
@@ -19,6 +24,8 @@ export class MmdRuntimeWorkerEndpoint {
     pose: undefined as unknown as MmdRuntimePoseBuffer
   };
   private readonly poseTransferList: Transferable[] = new Array<Transferable>(2);
+  private sharedPoseSlots: readonly MmdRuntimeSharedPoseSlot[] | undefined;
+  private sharedPoseEvents: readonly Extract<MmdRuntimeWorkerEvent, { readonly type: "sharedPose" }>[] = [];
   private host: MmdRuntimeWorkerHost | undefined;
   private pool: MmdRuntimeTransferablePosePool | undefined;
   private pendingTick: Extract<MmdRuntimeWorkerCommand, { readonly type: "tick" }> | undefined;
@@ -64,6 +71,18 @@ export class MmdRuntimeWorkerEndpoint {
       command.descriptor.bones.length,
       command.descriptor.morphCount
     );
+    if (command.sharedPoseSlots) {
+      validateSharedPoseSlots(
+        command.sharedPoseSlots,
+        command.descriptor.bones.length,
+        command.descriptor.morphCount
+      );
+      this.sharedPoseSlots = command.sharedPoseSlots;
+      this.sharedPoseEvents = command.sharedPoseSlots.map((_, slot) => ({
+        type: "sharedPose" as const,
+        slot
+      }));
+    }
     this.port.postMessage({ type: "ready", epoch: this.host.epoch() });
     for (let index = 0; index < this.preReadyCommands.length; index += 1) {
       const queued = this.preReadyCommands[index];
@@ -121,6 +140,9 @@ export class MmdRuntimeWorkerEndpoint {
           this.publishPendingTick();
         }
         break;
+      case "sharedRelease":
+        this.publishPendingTick();
+        break;
       case "dispose":
         this.dispose();
         break;
@@ -132,6 +154,22 @@ export class MmdRuntimeWorkerEndpoint {
   ): boolean {
     const host = this.host;
     const pool = this.pool;
+    const sharedPoseSlots = this.sharedPoseSlots;
+    if (host && sharedPoseSlots) {
+      const target = acquireMmdRuntimeSharedPoseWriteSlot(sharedPoseSlots);
+      if (!target) {
+        return false;
+      }
+      const pose = host.evaluate(command.seconds, command.options);
+      publishMmdRuntimeSharedPose(target, pose);
+      const slot = sharedPoseSlots.indexOf(target);
+      const event = this.sharedPoseEvents[slot];
+      if (!event) {
+        throw new Error(`MMD runtime shared pose slot index is invalid: ${slot}`);
+      }
+      this.port.postMessage(event);
+      return true;
+    }
     const target = pool?.acquire();
     if (!host || !target) {
       return false;
@@ -173,6 +211,30 @@ export class MmdRuntimeWorkerEndpoint {
     this.host?.dispose();
     this.host = undefined;
     this.pool = undefined;
+    this.sharedPoseSlots = undefined;
+    this.sharedPoseEvents = [];
     this.port.postMessage({ type: "disposed" });
+  }
+}
+
+function validateSharedPoseSlots(
+  slots: readonly MmdRuntimeSharedPoseSlot[],
+  boneCount: number,
+  morphCount: number
+): void {
+  if (slots.length < 3) {
+    throw new RangeError("MMD runtime worker shared pose transport requires at least 3 slots");
+  }
+  for (let index = 0; index < slots.length; index += 1) {
+    const slot = slots[index];
+    if (
+      !slot ||
+      slot.control.length !== 3 ||
+      slot.timing.length !== 3 ||
+      slot.worldMatricesColumnMajor.length !== boneCount * 16 ||
+      slot.morphWeights.length !== morphCount
+    ) {
+      throw new RangeError(`MMD runtime worker shared pose slot ${index} has an invalid layout`);
+    }
   }
 }
