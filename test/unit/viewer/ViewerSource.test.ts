@@ -1231,6 +1231,7 @@ describe("example viewer source", () => {
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
+    const buildDeploySource = await readLocalOptionalText("scripts/build-deploy.mjs");
 
     expect(configSource).toContain('if (normalized === "worker")');
     expect(configSource).toContain('return "mmd-anim"');
@@ -1260,6 +1261,10 @@ describe("example viewer source", () => {
     expect(serverSource).toContain("function rewriteWorkerModule(source)");
     expect(serverSource).toContain('from "three"');
     expect(serverSource).toContain("isPathInside(filePath, workerDistRoot)");
+    if (buildDeploySource !== undefined) {
+      expect(buildDeploySource).toContain('["/__mmd_worker_dist__/", `/${deployDistPath}/`]');
+      expect(buildDeploySource).toContain("rewriteCopiedDistModules(join(outDir, deployDistPath))");
+    }
   });
 
   it("serves Wasm with the browser streaming MIME type", async () => {
