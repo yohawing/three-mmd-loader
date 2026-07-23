@@ -8,7 +8,9 @@ import { ThreeMmdLoader } from "../../../src/index.js";
 import { DefaultMmdRuntime } from "../../../src/runtime/index.js";
 import {
   createMmdRuntimePoseBuffer,
+  acquireMmdRuntimeSharedPoseWriteSlot,
   createWorkerMmdRuntimeFactory,
+  publishMmdRuntimeSharedPose,
   type MmdRuntimeWorkerEvent,
   type MmdRuntimeWorkerCommand,
   type MmdRuntimeWorkerLike,
@@ -117,6 +119,48 @@ describe("WorkerMmdRuntime", () => {
     expect(runtime.frameState().seconds).toBe(0.25);
     runtime.dispose();
   });
+
+  it("uses shared pose slots when cross-origin isolation is available", async () => {
+    let transport: ManualWorker | undefined;
+    const loader = new ThreeMmdLoader({
+      runtimeFactory: createWorkerMmdRuntimeFactory({
+        sharedMemory: "required",
+        workerFactory: () => {
+          transport = new ManualWorker();
+          return transport;
+        }
+      })
+    });
+    const originalIsolation = globalThis.crossOriginIsolated;
+    Object.defineProperty(globalThis, "crossOriginIsolated", {
+      value: true,
+      configurable: true
+    });
+    try {
+      const model = await loader.loadModel(
+        await readFile(resolve("test/fixtures/test_1bone_cube.pmx")),
+        { outline: false, materialRenderOrder: false }
+      );
+      const runtime = model.runtime as WorkerMmdRuntime;
+      expect(runtime.sharedMemoryEnabled()).toBe(true);
+      const slot = acquireMmdRuntimeSharedPoseWriteSlot(transport?.sharedPoseSlots ?? []);
+      if (!slot) {
+        throw new Error("Expected a writable shared pose slot");
+      }
+      const source = createMmdRuntimePoseBuffer(model.mesh.skeleton.bones.length, 0);
+      Object.assign(source, { epoch: 0, sequence: 2, seconds: 0.5, frame: 15 });
+      publishMmdRuntimeSharedPose(slot, source);
+      transport?.emit({ type: "sharedPose", slot: 0 });
+      expect(runtime.frameState().seconds).toBe(0.5);
+      expect(transport?.sharedReleaseCount).toBe(1);
+      runtime.dispose();
+    } finally {
+      Object.defineProperty(globalThis, "crossOriginIsolated", {
+        value: originalIsolation,
+        configurable: true
+      });
+    }
+  });
 });
 
 class CrashableWorker implements MmdRuntimeWorkerLike {
@@ -148,6 +192,8 @@ class CrashableWorker implements MmdRuntimeWorkerLike {
 
 class ManualWorker implements MmdRuntimeWorkerLike {
   descriptor: Extract<MmdRuntimeWorkerCommand, { type: "init" }>["descriptor"] | undefined;
+  sharedPoseSlots: Extract<MmdRuntimeWorkerCommand, { type: "init" }>["sharedPoseSlots"];
+  sharedReleaseCount = 0;
   private messageListener: ((event: MmdRuntimeWorkerEvent) => void) | undefined;
 
   on(type: string, listener: (event: MmdRuntimeWorkerEvent) => void): void {
@@ -163,7 +209,10 @@ class ManualWorker implements MmdRuntimeWorkerLike {
   postMessage(message: MmdRuntimeWorkerCommand): void {
     if (message.type === "init") {
       this.descriptor = message.descriptor;
+      this.sharedPoseSlots = message.sharedPoseSlots;
       this.messageListener?.({ type: "ready", epoch: 0 });
+    } else if (message.type === "sharedRelease") {
+      this.sharedReleaseCount += 1;
     }
   }
 

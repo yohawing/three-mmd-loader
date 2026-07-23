@@ -22,6 +22,13 @@ import type {
 } from "./messages.js";
 import { serializeMmdRuntimeModelDescriptor } from "./modelDescriptor.js";
 import type { MmdRuntimePoseBuffer } from "./protocol.js";
+import {
+  createMmdRuntimeSharedPoseReadBuffer,
+  createMmdRuntimeSharedPoseSlots,
+  readMmdRuntimeSharedPoseInto,
+  releaseMmdRuntimeSharedPoseReadSlot,
+  type MmdRuntimeSharedPoseSlot
+} from "./sharedPose.js";
 
 export interface MmdRuntimeWorkerLike {
   postMessage(message: MmdRuntimeWorkerCommand, transfer?: Transferable[]): void;
@@ -42,6 +49,8 @@ export interface WorkerMmdRuntimeOptions {
   readonly workerOptions?: WorkerOptions;
   readonly runtimeOptions?: DefaultMmdRuntimeOptions;
   readonly onFallback?: (error: unknown) => void;
+  /** Uses SAB pose transport when cross-origin isolation permits it. Defaults to auto. */
+  readonly sharedMemory?: "auto" | "required" | "disabled";
 }
 
 export interface WorkerMmdRuntimeFactoryOptions extends WorkerMmdRuntimeOptions {
@@ -118,6 +127,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     type: "recycle" as const,
     pose: undefined as unknown as MmdRuntimePoseBuffer
   };
+  private readonly sharedReleaseCommand = { type: "sharedRelease" as const };
   private readonly onMessageBound = (event: { readonly data: MmdRuntimeWorkerEvent }) => {
     this.handleEvent(event.data);
   };
@@ -128,6 +138,8 @@ export class WorkerMmdRuntime implements MmdRuntime {
     this.activateFallback(error);
   };
   private readonly worker: MmdRuntimeWorkerLike;
+  private readonly sharedPoseSlots: readonly MmdRuntimeSharedPoseSlot[] | undefined;
+  private readonly sharedPoseReadBuffer: MmdRuntimePoseBuffer | undefined;
   private fallbackRuntime: DefaultMmdRuntime | undefined;
   private animation: MmdAnimation | undefined;
   private currentEpoch = 0;
@@ -153,10 +165,18 @@ export class WorkerMmdRuntime implements MmdRuntime {
     }
     this.attachWorker(this.worker);
     const descriptor = serializeMmdRuntimeModelDescriptor(this.mesh);
+    const sharedMemory = resolveSharedMemoryMode(options.sharedMemory ?? "auto");
+    this.sharedPoseSlots = sharedMemory
+      ? createMmdRuntimeSharedPoseSlots(descriptor.bones.length, descriptor.morphCount)
+      : undefined;
+    this.sharedPoseReadBuffer = sharedMemory
+      ? createMmdRuntimeSharedPoseReadBuffer(descriptor.bones.length, descriptor.morphCount)
+      : undefined;
     this.worker.postMessage({
       type: "init",
       descriptor,
-      runtimeOptions: workerRuntimeOptions(this.runtimeOptions)
+      runtimeOptions: workerRuntimeOptions(this.runtimeOptions),
+      sharedPoseSlots: this.sharedPoseSlots
     });
     this.frameStateScratch.frameRate = this.runtimeOptions.frameRate ?? 30;
     this.frameStateScratch.seconds = this.runtimeOptions.initialSeconds ?? 0;
@@ -173,6 +193,10 @@ export class WorkerMmdRuntime implements MmdRuntime {
 
   workerReady(): boolean {
     return this.ready && !this.disposed && this.fallbackRuntime === undefined;
+  }
+
+  sharedMemoryEnabled(): boolean {
+    return this.sharedPoseSlots !== undefined;
   }
 
   setAnimation(animation: MmdAnimation, mesh: ThreeMmdRuntimeFactoryContext["mesh"]): void {
@@ -322,6 +346,10 @@ export class WorkerMmdRuntime implements MmdRuntime {
       this.applyPose(event.pose);
       return;
     }
+    if (event.type === "sharedPose") {
+      this.applySharedPose(event.slot);
+      return;
+    }
     if (event.type === "error") {
       this.activateFallback(new Error(event.message));
     }
@@ -340,6 +368,32 @@ export class WorkerMmdRuntime implements MmdRuntime {
       this.recycleCommand as MmdRuntimeWorkerCommand,
       [pose.worldMatricesColumnMajor.buffer, pose.morphWeights.buffer]
     );
+  }
+
+  private applySharedPose(slotIndex: number): void {
+    const slot = this.sharedPoseSlots?.[slotIndex];
+    const target = this.sharedPoseReadBuffer;
+    if (!slot || !target) {
+      this.activateFallback(new Error(`MMD runtime shared pose slot is invalid: ${slotIndex}`));
+      return;
+    }
+    try {
+      const pose = readMmdRuntimeSharedPoseInto(slot, target);
+      if (!pose) {
+        throw new Error(`MMD runtime shared pose slot is not ready: ${slotIndex}`);
+      }
+      const isCurrent = pose.epoch === this.currentEpoch && pose.sequence > this.lastAppliedSequence;
+      if (isCurrent) {
+        applyMmdRuntimePoseToMesh(pose, this.mesh, this.applyScratch);
+        this.lastAppliedSequence = pose.sequence;
+        this.copyPoseFrameState(pose);
+        this.lastPoseAgeSeconds = Math.max(this.lastRequestedSeconds - pose.seconds, 0);
+      }
+      releaseMmdRuntimeSharedPoseReadSlot(slot);
+      this.post(this.sharedReleaseCommand);
+    } catch (error) {
+      this.activateFallback(error);
+    }
   }
 
   private activateFallback(error: unknown): void {
@@ -482,6 +536,20 @@ function workerRuntimeOptions(
     ikTolerance: options.ikTolerance,
     ikMaxIterationsCap: options.ikMaxIterationsCap
   };
+}
+
+function resolveSharedMemoryMode(mode: NonNullable<WorkerMmdRuntimeOptions["sharedMemory"]>): boolean {
+  if (mode === "disabled") {
+    return false;
+  }
+  const available =
+    typeof SharedArrayBuffer !== "undefined" &&
+    typeof Atomics !== "undefined" &&
+    globalThis.crossOriginIsolated === true;
+  if (mode === "required" && !available) {
+    throw new Error("MMD runtime shared memory requires cross-origin isolation and SharedArrayBuffer");
+  }
+  return available;
 }
 
 interface MutableFrameState {
