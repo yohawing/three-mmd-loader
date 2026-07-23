@@ -96,8 +96,10 @@ describe("MMD runtime worker pool", () => {
     const slot0LeaseAEvents: MmdRuntimeWorkerEvent[] = [];
     const slot0LeaseBEvents: MmdRuntimeWorkerEvent[] = [];
     const slot1Events: MmdRuntimeWorkerEvent[] = [];
+    const slot0Errors: unknown[] = [];
 
     slot0LeaseA.worker.on("message", (event) => slot0LeaseAEvents.push(event));
+    slot0LeaseA.worker.on("error", ((error: unknown) => slot0Errors.push(error)) as never);
     slot0LeaseB.worker.on("message", (event) => slot0LeaseBEvents.push(event));
     slot1Lease.worker.on("message", (event) => slot1Events.push(event));
 
@@ -106,6 +108,7 @@ describe("MMD runtime worker pool", () => {
 
     expect(slot0LeaseAEvents).toEqual([{ type: "error", message: "slot 0 crashed" }]);
     expect(slot0LeaseBEvents).toEqual([{ type: "error", message: "slot 0 crashed" }]);
+    expect(slot0Errors).toEqual([expect.objectContaining({ message: "slot 0 crashed" })]);
     expect(slot1Events).toEqual([]);
     expect(pool.activeLeaseCount()).toBe(1);
 

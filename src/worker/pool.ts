@@ -399,6 +399,12 @@ class LeaseWorker implements MmdRuntimeWorkerLike {
     if (this.released) {
       return;
     }
+    const onerror =
+      this.onerrorListener ?? (typeof this.onerror === "function" ? this.onerror : undefined);
+    onerror?.(error);
+    if (this.released) {
+      return;
+    }
     this.dispatch({
       type: "error",
       message: error instanceof Error ? error.message : String(error)
