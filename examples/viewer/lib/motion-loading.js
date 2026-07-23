@@ -8,6 +8,8 @@ import { ensurePhysicsBackendReady } from "./physics-backend.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { labelFromUrl } from "./url-label.js";
 
+let secondaryMotionLoadGeneration = 0;
+
 async function fetchBytes(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error("Failed to fetch " + url + ": " + response.status);
@@ -18,6 +20,52 @@ export async function loadMotionFromUrl(url) {
   try {
     setStatus(`Loading ${url}`, "loading");
     return await loadMotion(url, labelFromUrl(url));
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+    return false;
+  }
+}
+
+export async function loadSecondaryMotionFromUrl(url) {
+  const generation = ++secondaryMotionLoadGeneration;
+  const targetModel = state.secondaryModel;
+  try {
+    if (!targetModel) {
+      setStatus("Load a secondary model before loading its motion.", "error");
+      return false;
+    }
+    setStatus(`Loading secondary motion: ${url}`, "loading");
+    const loaded = await state.animationLoader.loadAnimation(url);
+    if (generation !== secondaryMotionLoadGeneration || state.secondaryModel !== targetModel) {
+      return false;
+    }
+    const { animation } = loaded;
+    if (isCameraOnlyVmdAnimation(animation)) {
+      setStatus("Secondary character motion cannot be camera-only.", "error");
+      return false;
+    }
+    await ensurePhysicsBackendReady();
+    if (generation !== secondaryMotionLoadGeneration || state.secondaryModel !== targetModel) {
+      return false;
+    }
+    targetModel.setAnimation(animation);
+    state.secondaryMotion = {
+      source: url,
+      name: animation.metadata.modelName,
+      animation,
+      durationSeconds: animationDurationSeconds(animation)
+    };
+    dom.timeline.max = Math.max(
+      state.currentMotion?.durationSeconds ?? 0,
+      state.secondaryMotion.durationSeconds,
+      state.currentCameraMotion?.durationSeconds ?? 0,
+      0.001
+    );
+    updatePlaybackDisplay();
+    updateTransportState();
+    setStatus("", "ready");
+    renderStillFrame();
+    return true;
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
     return false;
@@ -41,6 +89,7 @@ async function readAnimationSourceBytes(source) {
 }
 
 export async function loadMotion(source, label = source.name ?? "motion") {
+  secondaryMotionLoadGeneration += 1;
   try {
     const switcherEntry = createMotionSwitcherEntry(source, label);
     setStatus(`Loading motion: ${label}`, "loading");
@@ -69,6 +118,7 @@ export async function loadMotion(source, label = source.name ?? "motion") {
       animation,
       durationSeconds: animationDurationSeconds(animation)
     };
+    state.secondaryMotion = undefined;
     await ensurePhysicsBackendReady();
     state.currentModel.setAnimation(animation);
     for (let index = 1; index < state.characterModels.length; index += 1) {
@@ -92,6 +142,7 @@ export async function loadMotion(source, label = source.name ?? "motion") {
 }
 
 export async function loadPose(source, label = source.name ?? "pose") {
+  secondaryMotionLoadGeneration += 1;
   try {
     if (!state.currentModel) {
       setStatus("Load a model before loading a pose.", "error");
@@ -103,6 +154,7 @@ export async function loadPose(source, label = source.name ?? "pose") {
       ...poseAnimation,
       durationSeconds: 1
     };
+    state.secondaryMotion = undefined;
     state.currentPoseSource = source;
     state.currentPoseLabel = label;
     state.currentModel.setAnimation(poseAnimation);
@@ -153,7 +205,9 @@ export async function switchMotion(file) {
 }
 
 export function clearMotion() {
+  secondaryMotionLoadGeneration += 1;
   state.currentMotion = undefined;
+  state.secondaryMotion = undefined;
   state.currentPoseSource = undefined;
   state.currentPoseLabel = undefined;
   state.pendingMotionSource = undefined;

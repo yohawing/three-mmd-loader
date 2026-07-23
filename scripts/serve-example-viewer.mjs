@@ -323,6 +323,12 @@ function createPresetEntries(cases, byExtension) {
     const modelUrl = dataUrlForFixturePath(modelPath);
     const motionPath = byExtension?.vmd?.[fixtureCase.motion?.key];
     const motionUrl = dataUrlForFixturePath(motionPath);
+    const secondaryModelPath = byExtension?.[fixtureCase.secondary?.model?.extension]?.[
+      fixtureCase.secondary?.model?.key
+    ];
+    const secondaryModelUrl = dataUrlForFixturePath(secondaryModelPath);
+    const secondaryMotionPath = byExtension?.vmd?.[fixtureCase.secondary?.motion?.key];
+    const secondaryMotionUrl = dataUrlForFixturePath(secondaryMotionPath);
     const backgroundUrl = dataUrlForFixturePath(
       byExtension?.[fixtureCase.background?.extension]?.[fixtureCase.background?.key]
     );
@@ -336,11 +342,23 @@ function createPresetEntries(cases, byExtension) {
     if (modelUrl === undefined || motionUrl === undefined) {
       return [];
     }
+    if (fixtureCase.secondary && (secondaryModelUrl === undefined || secondaryMotionUrl === undefined)) {
+      return [];
+    }
     return [{
       id: fixtureCase.name,
       name: fixtureCase.name,
       modelUrl,
       motionUrl,
+      ...(secondaryModelUrl && secondaryMotionUrl
+        ? {
+            secondaryModelUrl,
+            secondaryMotionUrl,
+            ...(Array.isArray(fixtureCase.secondary?.position)
+              ? { secondaryPosition: fixtureCase.secondary.position }
+              : {})
+          }
+        : {}),
       ...(backgroundUrl ? { backgroundUrl } : {}),
       ...(cameraUrl ? { cameraUrl } : {}),
       ...(audioUrl ? { audioUrl } : {}),

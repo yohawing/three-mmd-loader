@@ -60,11 +60,13 @@ export const state = {
   keyLight: undefined,
   currentModel: undefined,
   secondaryModel: undefined,
+  secondaryModelSource: undefined,
   // Reused by the playback loop so multi-character playback does not create
   // a temporary collection on every frame. Index 0 is always the primary.
   characterModels: [],
   currentBackground: undefined,
   currentMotion: undefined,
+  secondaryMotion: undefined,
   currentPoseSource: undefined,
   currentPoseLabel: undefined,
   currentCameraMotion: undefined,
@@ -270,12 +272,18 @@ export const kurokoModelUrl = "assets/yw_test_model.pmx";
 state.kurokoModelLoadPromise = undefined;
 
 export function hasCurrentMotion() {
-  return state.currentMotion?.animation !== undefined;
+  return state.currentMotion?.animation !== undefined || state.secondaryMotion?.animation !== undefined;
 }
 
 export function currentMotionDurationSeconds() {
   const motionDuration = state.currentMotion?.durationSeconds ?? (state.currentMotion ? animationDurationSeconds(state.currentMotion.animation) : 0);
-  return Math.max(motionDuration, state.currentCameraMotion?.durationSeconds ?? 0);
+  const secondaryMotionDuration = state.secondaryMotion?.durationSeconds
+    ?? (state.secondaryMotion ? animationDurationSeconds(state.secondaryMotion.animation) : 0);
+  return Math.max(
+    motionDuration,
+    secondaryMotionDuration,
+    state.currentCameraMotion?.durationSeconds ?? 0
+  );
 }
 
 export function animationDurationSeconds(animation) {

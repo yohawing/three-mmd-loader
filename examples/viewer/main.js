@@ -8,7 +8,7 @@ import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHe
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
 import { loadModelFolder, loadModelFromUrl, loadSecondaryModelFromUrl, loadSecondaryModelFile, loadSecondaryModelFolder, modelFileKey, bindDropTarget, clearModel, clearSecondaryModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
-import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
+import { clearMotion, loadMotion, loadMotionFromUrl, loadSecondaryMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
 import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
@@ -25,12 +25,14 @@ const viewerApi = {
   loadModelUrl: loadModelFromUrl,
   loadSecondaryModelUrl: loadSecondaryModelFromUrl,
   loadMotionUrl: loadMotionFromUrl,
+  loadSecondaryMotionUrl: loadSecondaryMotionFromUrl,
   loadBackgroundUrl: loadBackgroundFromUrl,
   loadCameraUrl: loadCameraFromUrl,
   frameModel: frameCurrentModel,
   get currentModel() { return state.currentModel; },
   get secondaryModel() { return state.secondaryModel; },
   get currentMotion() { return state.currentMotion; },
+  get secondaryMotion() { return state.secondaryMotion; },
   get currentBackground() { return state.currentBackground; },
   get currentCameraMotion() { return state.currentCameraMotion; }
 };

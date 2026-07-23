@@ -20,7 +20,7 @@ import { disposeModelResources } from "./dispose.js";
 import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
-import { createViewerRuntimeOptions, currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
+import { createViewerRuntimeOptions, currentMotionDurationSeconds, state } from "./state.js";
 import { adaptCameraDepthRange, fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
 import { viewerConfig } from "./viewer-config.js";
@@ -78,8 +78,12 @@ export async function loadModelFromUrl(url, loadOptions = {}) {
   }
 }
 
-export function loadSecondaryModelFromUrl(url, loadOptions = {}) {
-  return loadModelFromUrl(url, { ...loadOptions, secondary: true, autoFitCamera: false });
+export async function loadSecondaryModelFromUrl(url, loadOptions = {}) {
+  const loaded = await loadModelFromUrl(url, { ...loadOptions, secondary: true, autoFitCamera: false });
+  if (loaded && state.secondaryModel) {
+    state.secondaryModelSource = url;
+  }
+  return loaded;
 }
 
 async function fetchBytes(url) {
@@ -99,7 +103,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
   }
   loadProfile?.mark("load-start");
   let loadedModel;
-  let previousSecondaryModel;
+  let previousSecondaryState;
   try {
     if (!isCurrentLoad()) {
       loadProfile?.mark("cancelled");
@@ -128,12 +132,20 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
       loadProfile?.mark("cancelled");
       return false;
     }
-    previousSecondaryModel = isSecondary ? state.secondaryModel : undefined;
+    previousSecondaryState = isSecondary
+      ? {
+          model: state.secondaryModel,
+          source: state.secondaryModelSource,
+          motion: state.secondaryMotion
+        }
+      : undefined;
     if (isSecondary) {
       if (!state.characterModels[0]) {
         state.characterModels[0] = state.currentModel;
       }
       state.secondaryModel = loadedModel;
+      state.secondaryModelSource = undefined;
+      state.secondaryMotion = undefined;
       state.characterModels[1] = loadedModel;
       state.characterModels.length = 2;
     } else {
@@ -145,7 +157,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     if (!isCurrentLoad()) {
       if (isSecondary ? state.secondaryModel === loadedModel : state.currentModel === loadedModel) {
         if (isSecondary) {
-          restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryModel);
+          restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryState);
         } else {
           state.currentModel = undefined;
           state.characterModels.length = 0;
@@ -183,16 +195,16 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
       if (!isCurrentLoad()) {
         if (isSecondary) {
-          restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryModel);
+          restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryState);
         }
         loadProfile?.mark("cancelled");
         return false;
       }
-    } else if (hasCurrentMotion()) {
+    } else if (state.currentMotion?.animation !== undefined) {
       await ensurePhysicsBackendReady();
       if (!isCurrentLoad()) {
         if (isSecondary) {
-          restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryModel);
+          restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryState);
         }
         loadProfile?.mark("cancelled");
         return false;
@@ -226,9 +238,9 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     if (state.showDebugColliders) {
       showColliderHelpers();
     }
-    if (previousSecondaryModel) {
-      state.scene.remove(previousSecondaryModel.root);
-      disposeModelResources(previousSecondaryModel);
+    if (previousSecondaryState?.model) {
+      state.scene.remove(previousSecondaryState.model.root);
+      disposeModelResources(previousSecondaryState.model);
     }
     renderStillFrame();
     refreshDebugPanelState();
@@ -237,7 +249,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
   } catch (error) {
     loadProfile?.mark("error");
     if (isSecondary && loadedModel) {
-      restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryModel);
+      restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryState);
     }
     if (generation === modelLoadGeneration) {
       if (!isSecondary) {
@@ -328,7 +340,7 @@ export async function loadModelFolder(files, loadOptions = {}) {
         profile?.mark("cancelled");
         return;
       }
-    } else if (hasCurrentMotion()) {
+    } else if (state.currentMotion?.animation !== undefined) {
       await ensurePhysicsBackendReady();
       if (!isCurrentLoad()) {
         profile?.mark("cancelled");
@@ -427,7 +439,7 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     } else {
       adaptCameraDepthRange();
     }
-    if (hasCurrentMotion()) {
+    if (state.currentMotion?.animation !== undefined) {
       await ensurePhysicsBackendReady();
       if (!isCurrentLoad()) {
         profile?.mark("cancelled");
@@ -484,6 +496,8 @@ export function clearModel(options = {}) {
   }
   state.currentModel = undefined;
   state.secondaryModel = undefined;
+  state.secondaryModelSource = undefined;
+  state.secondaryMotion = undefined;
   state.characterModels.length = 0;
   clearViewerPipelineModel();
   hideCreditPopup();
@@ -520,9 +534,19 @@ export function clearSecondaryModel(options = {}) {
     disposeModelResources(state.secondaryModel);
   }
   state.secondaryModel = undefined;
+  state.secondaryModelSource = undefined;
+  state.secondaryMotion = undefined;
   state.characterModels.length = state.currentModel ? 1 : 0;
+  const durationSeconds = Math.max(currentMotionDurationSeconds(), 0.001);
+  state.elapsedSeconds = Math.min(state.elapsedSeconds, durationSeconds);
+  if (dom.timeline) {
+    dom.timeline.max = durationSeconds;
+    dom.timeline.value = state.elapsedSeconds;
+  }
   adaptCameraDepthRange();
+  updatePlaybackDisplay();
   updateStageState();
+  updateTransportState();
 }
 
 export function frameCurrentModel() {
@@ -566,15 +590,17 @@ export async function loadSecondaryModelFolder(files, loadOptions = {}) {
   );
 }
 
-function restoreSecondaryModelAfterLoadFailure(model, previousModel) {
+function restoreSecondaryModelAfterLoadFailure(model, previousState) {
   if (!model) {
     return;
   }
   state.scene?.remove(model.root);
   if (state.secondaryModel === model) {
-    state.secondaryModel = previousModel;
-    state.characterModels[1] = previousModel;
-    state.characterModels.length = previousModel ? 2 : 1;
+    state.secondaryModel = previousState?.model;
+    state.secondaryModelSource = previousState?.source;
+    state.secondaryMotion = previousState?.motion;
+    state.characterModels[1] = previousState?.model;
+    state.characterModels.length = previousState?.model ? 2 : 1;
   }
   disposeModelResources(model);
 }

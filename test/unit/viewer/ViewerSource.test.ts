@@ -36,6 +36,7 @@ describe("example viewer source", () => {
     const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
     const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const fixtureSchema = await readFile("test/fixtures/fixtures.schema.json", "utf8");
 
     expect(html).toContain('id="choose-secondary-model"');
     expect(html).toContain('id="choose-secondary-model-folder"');
@@ -46,7 +47,9 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("loadSecondaryModelFile(file)");
     expect(mainSource).toContain("loadSecondaryModelFolder(Array.from(files))");
     expect(mainSource).toContain("loadSecondaryModelUrl");
+    expect(mainSource).toContain("loadSecondaryMotionUrl");
     expect(mainSource).toContain("get secondaryModel() { return state.secondaryModel; }");
+    expect(mainSource).toContain("get secondaryMotion() { return state.secondaryMotion; }");
     expect(modelSource).toContain("loadOptions.secondary === true && state.currentModel !== undefined");
     expect(modelSource).toContain("if (!isSecondary) {");
     expect(modelSource).toContain("state.secondaryModel = loadedModel");
@@ -56,6 +59,9 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("folderTextureMap: textureMap");
     expect(modelSource).toContain("disposeModelResources(state.secondaryModel)");
     expect(stateSource).toContain("characterModels: []");
+    expect(stateSource).toContain("secondaryMotion: undefined");
+    expect(stateSource).toContain("state.secondaryMotion?.animation !== undefined");
+    expect(stateSource).toContain("secondaryMotionDuration");
     expect(playbackSource).toContain("const models = state.characterModels");
     expect(playbackSource).toContain("for (let index = 0; index < models.length; index += 1)");
     expect(playbackSource).toContain("state.currentModel.update(currentMmdSeconds(), updateOptions)");
@@ -68,6 +74,13 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("setTslOutlineHidden(material, hidden)");
     expect(debugSource).toContain("state.characterModels[index]?.outlineMeshes?.forEach");
     expect(motionSource).toContain("state.characterModels[index]?.setAnimation(animation)");
+    expect(motionSource).toContain("export async function loadSecondaryMotionFromUrl(url)");
+    expect(motionSource).toContain("targetModel.setAnimation(animation)");
+    expect(motionSource).toContain("generation !== secondaryMotionLoadGeneration");
+    expect(motionSource).toContain("state.secondaryModel !== targetModel");
+    expect(modelSource).toContain("state.secondaryMotion = undefined");
+    expect(modelSource).toContain("state.elapsedSeconds = Math.min(state.elapsedSeconds, durationSeconds)");
+    expect(fixtureSchema).toContain('"playbackSmokeSecondaryCharacter"');
   });
 
   it("keeps the default viewer camera far clip distance wide enough for large stages", async () => {
@@ -737,6 +750,13 @@ describe("example viewer source", () => {
     expect(assetLibrarySource).not.toContain("hasRestorableSelection");
     expect(assetLibrarySource).toContain("loadModelFromUrl(preset.modelUrl)");
     expect(assetLibrarySource).toContain("loadMotionFromUrl(preset.motionUrl)");
+    expect(assetLibrarySource).toContain("loadSecondaryModelFromUrl(preset.secondaryModelUrl)");
+    expect(assetLibrarySource).toContain("loadSecondaryMotionFromUrl(preset.secondaryMotionUrl)");
+    expect(assetLibrarySource).toContain("applyPresetSecondaryPosition(preset.secondaryPosition)");
+    expect(assetLibrarySource).toContain("state.secondaryModel.root.position.set(x, y, z)");
+    expect(assetLibrarySource).toContain("state.secondaryModelSource");
+    expect(assetLibrarySource).toContain("state.secondaryMotion?.source");
+    expect(assetLibrarySource).toContain("secondaryPosition");
     expect(assetLibrarySource).toContain("loadBackgroundFromUrl");
     expect(assetLibrarySource).toContain("preset.backgroundUrl");
     expect(assetLibrarySource).toContain("preset.audioUrl");
@@ -766,6 +786,8 @@ describe("example viewer source", () => {
     expect(serverSource).toContain("backgroundPmd");
     expect(serverSource).toContain("audios");
     expect(serverSource).toContain("cameras");
+    expect(serverSource).toContain("secondaryModelUrl");
+    expect(serverSource).toContain("secondaryMotionUrl");
     expect(serverSource).toContain("fixtureCase.background?.extension");
     expect(serverSource).toContain("fixtureCase.camera?.key");
     expect(serverSource).toContain("fixtureCase.audio?.extension");

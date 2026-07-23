@@ -141,6 +141,10 @@
         "motion": {
           "$ref": "#/$defs/playbackSmokeMotionRef"
         },
+        "secondary": {
+          "$ref": "#/$defs/playbackSmokeSecondaryCharacter",
+          "description": "Optional secondary model and its character-specific motion for a multi-character viewer preset."
+        },
         "background": {
           "$ref": "#/$defs/playbackSmokeBackgroundRef",
           "description": "Optional background fixture to load with the viewer preset."
@@ -242,6 +246,28 @@
         "key": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "playbackSmokeSecondaryCharacter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "motion"],
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/playbackSmokeModelRef"
+        },
+        "motion": {
+          "$ref": "#/$defs/playbackSmokeMotionRef"
+        },
+        "position": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number"
+          },
+          "description": "Optional secondary root position [x, y, z] in viewer world units."
         }
       }
     },

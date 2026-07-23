@@ -1,8 +1,8 @@
 import { loadAudioFromUrl } from "./audio-loading.js";
 import { loadBackgroundFromUrl } from "./background-loading.js";
 import { loadCameraFromUrl } from "./camera-loading.js";
-import { loadModelFromUrl } from "./model-loading.js";
-import { loadMotionFromUrl } from "./motion-loading.js";
+import { loadModelFromUrl, loadSecondaryModelFromUrl } from "./model-loading.js";
+import { loadMotionFromUrl, loadSecondaryMotionFromUrl } from "./motion-loading.js";
 import { labelFromUrl } from "./url-label.js";
 import { dom, loadedFileSwitcherValue, removeFixtureUi, setStatus, updateChromeHeights, updatePresetSectionVisibility } from "./dom.js";
 import { state } from "./state.js";
@@ -111,7 +111,14 @@ async function loadAssetPreset(preset) {
   if (preset.modelUrl && !await loadModelFromUrl(preset.modelUrl)) {
     return;
   }
+  if (preset.secondaryModelUrl && !await loadSecondaryModelFromUrl(preset.secondaryModelUrl)) {
+    return;
+  }
+  applyPresetSecondaryPosition(preset.secondaryPosition);
   if (preset.motionUrl && !await loadMotionFromUrl(preset.motionUrl)) {
+    return;
+  }
+  if (preset.secondaryMotionUrl && !await loadSecondaryMotionFromUrl(preset.secondaryMotionUrl)) {
     return;
   }
   if (preset.backgroundUrl && !await loadBackgroundFromUrl(preset.backgroundUrl)) {
@@ -128,6 +135,16 @@ async function loadAssetPreset(preset) {
     return;
   }
   setStatus("", "ready");
+}
+
+function applyPresetSecondaryPosition(position) {
+  if (!state.secondaryModel || !Array.isArray(position) || position.length !== 3) {
+    return;
+  }
+  const [x, y, z] = position.map(Number);
+  if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+    state.secondaryModel.root.position.set(x, y, z);
+  }
 }
 
 function saveCurrentAssetPreset() {
@@ -366,10 +383,19 @@ function findSelectedAsset(assets, select) {
 function createCurrentAssetPreset() {
   const modelUrl = currentModelUrl();
   const motionUrl = currentMotionUrl();
+  const secondaryModelUrl = typeof state.secondaryModelSource === "string"
+    ? state.secondaryModelSource
+    : undefined;
+  const secondaryMotionUrl = typeof state.secondaryMotion?.source === "string"
+    ? state.secondaryMotion.source
+    : undefined;
+  const secondaryPosition = state.secondaryModel
+    ? state.secondaryModel.root.position.toArray()
+    : undefined;
   const backgroundUrl = selectedEntryUrl(state.currentBackgroundEntries, dom.backgroundSwitcher);
   const audioUrl = selectedEntryUrl(state.currentAudioEntries, dom.audioSwitcher);
   const cameraUrl = selectedEntryUrl(state.currentCameraEntries, dom.cameraSwitcher);
-  if (!modelUrl && !motionUrl && !backgroundUrl && !audioUrl && !cameraUrl) {
+  if (!modelUrl && !motionUrl && !secondaryModelUrl && !secondaryMotionUrl && !backgroundUrl && !audioUrl && !cameraUrl) {
     return undefined;
   }
   return {
@@ -377,6 +403,9 @@ function createCurrentAssetPreset() {
     name: defaultPresetName(modelUrl, motionUrl),
     ...(modelUrl ? { modelUrl } : {}),
     ...(motionUrl ? { motionUrl } : {}),
+    ...(secondaryModelUrl ? { secondaryModelUrl } : {}),
+    ...(secondaryMotionUrl ? { secondaryMotionUrl } : {}),
+    ...(secondaryModelUrl && secondaryPosition ? { secondaryPosition } : {}),
     ...(backgroundUrl ? { backgroundUrl } : {}),
     ...(audioUrl ? { audioUrl, audioOffsetFrame: state.audioOffsetFrame } : {}),
     ...(cameraUrl ? { cameraUrl } : {})
@@ -440,6 +469,8 @@ function isCustomPresetAsset(preset) {
   return preset && typeof preset.id === "string" && typeof preset.name === "string" && (
     typeof preset.modelUrl === "string" ||
     typeof preset.motionUrl === "string" ||
+    typeof preset.secondaryModelUrl === "string" ||
+    typeof preset.secondaryMotionUrl === "string" ||
     typeof preset.backgroundUrl === "string" ||
     typeof preset.audioUrl === "string" ||
     typeof preset.cameraUrl === "string"
