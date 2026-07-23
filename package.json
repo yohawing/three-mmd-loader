@@ -92,7 +92,7 @@
     "snapshot:real-models:rest-pose:baseline": "npm run build && node scripts/visual-regression/snapshot-real-models-rest-pose.mjs --mode baseline",
     "compare:real-models:rest-pose": "node scripts/visual-regression/compare-real-models-rest-pose.mjs",
     "visual:report:generated-pmx": "node scripts/visual-regression/compute-metrics.mjs --profile generated-pmx --baseline-dir test/fixtures/visual-baselines/generated-pmx",
-    "visual:report:generated-pmx:webgpu": "node scripts/visual-regression/compare-generated-pmx-webgpu.mjs",
+    "visual:report:generated-pmx:webgpu": "node scripts/visual-regression/compute-metrics.mjs --profile generated-pmx --baseline-dir test/fixtures/visual-baselines/generated-pmx --current-dir test-results/visual/generated-pmx-webgpu/current --diff-dir test-results/visual/generated-pmx-webgpu/diff --report test-results/visual/generated-pmx-webgpu/report.json",
     "visual:report:camera-light-vmd": "node scripts/visual-regression/compute-metrics.mjs --profile camera-light-vmd --baseline-dir test/fixtures/visual-baselines/camera-light-vmd",
     "visual:report:generated-pmx:flip": "node scripts/visual-regression/compute-metrics.mjs --metric flip --profile generated-pmx --baseline-dir test/fixtures/visual-baselines/generated-pmx",
     "visual:report:self-shadow": "node scripts/visual-regression/compute-shadow-metrics.mjs --manifest scripts/visual-regression/self-shadow.manifest.json --output-dir test-results/visual/self-shadow/current",
