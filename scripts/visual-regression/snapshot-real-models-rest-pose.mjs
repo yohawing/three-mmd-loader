@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
+import { isPathInside } from "./render-shared.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -145,7 +146,7 @@ function resolveAssetPath(dataRoot, relativePath) {
     return undefined;
   }
   const resolved = path.resolve(dataRoot, relativePath);
-  return isInsideRoot(resolved, dataRoot) ? resolved : undefined;
+  return isPathInside(resolved, dataRoot) ? resolved : undefined;
 }
 
 async function snapshotCase(visualCase, ThreeMmdLoader) {
@@ -234,11 +235,6 @@ function createNoopTextureLoader() {
       return texture;
     }
   };
-}
-
-function isInsideRoot(filePath, root) {
-  const relative = path.relative(root, filePath);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function requireRawValue(args, index, flag) {

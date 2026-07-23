@@ -948,14 +948,18 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
       axisModel
         .metadata()
         .diagnostics.some(
-          (diagnostic) => diagnostic.code === "BONE_FIXED_AXIS_CONSTRAINTS_UNSUPPORTED"
+          (diagnostic) =>
+            diagnostic.code === "BONE_FIXED_AXIS_CONSTRAINTS_UNSUPPORTED" &&
+            diagnostic.category === "skeleton"
         )
     ).toBe(true);
     expect(
       axisModel
         .metadata()
         .diagnostics.some(
-          (diagnostic) => diagnostic.code === "BONE_LOCAL_AXIS_CONSTRAINTS_UNSUPPORTED"
+          (diagnostic) =>
+            diagnostic.code === "BONE_LOCAL_AXIS_CONSTRAINTS_UNSUPPORTED" &&
+            diagnostic.category === "skeleton"
         )
     ).toBe(true);
   });

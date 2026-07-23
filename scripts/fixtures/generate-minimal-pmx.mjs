@@ -234,6 +234,64 @@ const SKINNING_CASES = {
 };
 
 const VISUAL_CASES = {
+  "mmd-viewer-self-shadow-receiver": {
+    name: "generated viewer self shadow receiver",
+    englishName: "GeneratedViewerSelfShadowReceiver",
+    comment: "redistribution-safe fixed-camera caster and receiver fixture for the main viewer native WebGPU self-shadow gate",
+    englishComment: "A broad horizontal receiver and a floating opaque caster make receiver darkening and its world-space centroid measurable after a camera-only move.",
+    morphs: true,
+    geometry: mergeGeometries([
+      boxGeometry({ min: [-2.1, -0.08, -1.6], max: [2.1, 0, 1.6], bone: 0, normalMode: "face" }),
+      transformGeometry(
+        boxGeometry({ min: [-0.28, 0.04, -0.28], max: [0.28, 0.9, 0.28], bone: 0, normalMode: "corner" }),
+        { rotateY: 0.32, translate: [0.22, 0, 0.1] }
+      )
+    ]),
+    textures: ["viewer-self-shadow-toon.png"],
+    assets: [{ path: "viewer-self-shadow-toon.png", bytes: () => viewerSelfShadowToonPng() }],
+    materials: [
+      material("mat_self_shadow_receiver", "SelfShadowReceiver", {
+        diffuse: [0.82, 0.74, 0.5, 1], specular: [0.01, 0.01, 0.01], ambient: [0.12, 0.1, 0.06],
+        edgeColor: [0, 0, 0, 0], edgeSize: 0, toonShared: 0, toonTextureIndex: 0, flags: 0x09, faceVertexCount: 36,
+        comment: "broad horizontal receiver with PMX self-shadow receive flag and deterministic dark shader-v=0 source-bottom toon row"
+      }),
+      material("mat_self_shadow_caster", "SelfShadowCaster", {
+        diffuse: [0.22, 0.48, 0.88, 1], specular: [0.02, 0.04, 0.08], ambient: [0.04, 0.08, 0.16],
+        edgeColor: [0, 0, 0, 0], edgeSize: 0, toonShared: 0, toonTextureIndex: 0, flags: 0x05, faceVertexCount: 36,
+        comment: "floating opaque caster with PMX self-shadow map flag"
+      })
+    ]
+  },
+  "mmd-viewer-background-room": {
+    name: "generated viewer background room",
+    englishName: "GeneratedViewerBackgroundRoom",
+    comment: "redistribution-safe textured floor and wall fixture for the main viewer background lane",
+    englishComment: "A small textured room with a deliberately black prop catches WebGPU background texture resolution and black-crush regressions.",
+    geometry: mergeGeometries([
+      boxGeometry({ min: [-2.4, -0.12, -1.5], max: [2.4, 0, 1.5], bone: 0, normalMode: "face" }),
+      boxGeometry({ min: [-2.4, 0, 1.25], max: [2.4, 2.2, 1.38], bone: 0, normalMode: "face" }),
+      boxGeometry({ min: [-0.32, 0, 0.22], max: [0.32, 0.68, 0.7], bone: 0, normalMode: "corner" })
+    ]),
+    textures: ["background-room-checker.png"],
+    assets: [{ path: "background-room-checker.png", bytes: () => backgroundRoomCheckerPng() }],
+    materials: [
+      material("mat_background_floor", "BackgroundFloor", {
+        diffuse: [1, 1, 1, 1], specular: [0.02, 0.02, 0.02], ambient: [0.38, 0.38, 0.38],
+        edgeColor: [0, 0, 0, 0], edgeSize: 0, flags: 0x05, textureIndex: 0, faceVertexCount: 36,
+        comment: "textured floor; must retain saturated checker colours"
+      }),
+      material("mat_background_wall", "BackgroundWall", {
+        diffuse: [1, 1, 1, 1], specular: [0.02, 0.02, 0.02], ambient: [0.38, 0.38, 0.38],
+        edgeColor: [0, 0, 0, 0], edgeSize: 0, flags: 0x05, textureIndex: 0, faceVertexCount: 36,
+        comment: "textured wall; exercises URL-relative diffuse texture resolution"
+      }),
+      material("mat_background_black_prop", "BackgroundBlackProp", {
+        diffuse: [0, 0, 0, 1], specular: [0, 0, 0], ambient: [0, 0, 0],
+        edgeColor: [0, 0, 0, 0], edgeSize: 0, flags: 0x05, faceVertexCount: 36,
+        comment: "intentionally black prop; it must remain black without turning the full background black"
+      })
+    ]
+  },
   "mmd-diffuse-lit-box": {
     name: "generated visual diffuse lit box",
     englishName: "GeneratedVisualDiffuseLitBox",
@@ -900,6 +958,83 @@ const VISUAL_CASES = {
         comment: "opaque PMX material sampling a stepped alpha ramp texture"
       })
     ]
+  },
+  "mmd-tga-soft-cheek-overlay": {
+    name: "generated visual tga soft cheek overlay",
+    englishName: "GeneratedVisualTgaSoftCheekOverlay",
+    comment: "redistribution-safe PMX visual fixture for TGA soft alpha cheek overlay name heuristic (T070-20)",
+    englishComment: "An opaque skin-tone base plane with a soft-alpha TGA cheek overlay material named 照れデフォ (outside the existing soft-overlay name vocabulary) plus a binary-alpha control overlay on the same UV shape that must remain alphaTest.",
+    geometry: mergeGeometries([
+      boxGeometry({
+        min: [-0.5, 0.1, -0.3],
+        max: [0.5, 1.0, 0.3],
+        bone: 0,
+        normalMode: "corner"
+      }),
+      transformGeometry(
+        boxGeometry({
+          min: [-0.22, 0.32, -0.12],
+          max: [0.22, 0.68, 0.12],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { translate: [-0.16, 0, -0.34] }
+      ),
+      transformGeometry(
+        boxGeometry({
+          min: [-0.22, 0.32, -0.12],
+          max: [0.22, 0.68, 0.12],
+          bone: 0,
+          normalMode: "corner"
+        }),
+        { translate: [0.16, 0, -0.34] }
+      )
+    ]),
+    textures: ["tga-cheek-soft-alpha.tga", "tga-cheek-binary-alpha-control.tga"],
+    assets: [
+      {
+        path: "tga-cheek-soft-alpha.tga",
+        bytes: () => cheekOverlayTga([232, 96, 104], { binary: false })
+      },
+      {
+        path: "tga-cheek-binary-alpha-control.tga",
+        bytes: () => cheekOverlayTga([232, 96, 104], { binary: true })
+      }
+    ],
+    materials: [
+      material("mat_cheek_skin_base", "CheekSkinBase", {
+        diffuse: [0.94, 0.78, 0.68, 1],
+        specular: [0.02, 0.02, 0.02],
+        ambient: [0.34, 0.28, 0.24],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        flags: 0x01,
+        faceVertexCount: 36,
+        comment: "opaque skin-tone base plane"
+      }),
+      material("照れデフォ", "TereDefo", {
+        diffuse: [1, 1, 1, 1],
+        specular: [0.01, 0.01, 0.01],
+        ambient: [0.3, 0.12, 0.13],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        flags: 0x00,
+        textureIndex: 0,
+        faceVertexCount: 36,
+        comment: "T070-20: soft-alpha TGA cheek overlay whose material name does not match the soft-overlay vocabulary"
+      }),
+      material("mat_binary_alpha_control", "BinaryAlphaControl", {
+        diffuse: [1, 1, 1, 1],
+        specular: [0.01, 0.01, 0.01],
+        ambient: [0.3, 0.12, 0.13],
+        edgeColor: [0, 0, 0, 0],
+        edgeSize: 0,
+        flags: 0x00,
+        textureIndex: 1,
+        faceVertexCount: 36,
+        comment: "binary alpha (0/255) control overlay on the same UV shape that must remain alphaTest"
+      })
+    ]
   }
 };
 
@@ -1023,6 +1158,14 @@ export function restPoseCaseIds() {
 
 export function visualCaseIds() {
   return Object.keys(VISUAL_CASES);
+}
+
+export function visualCaseAssets(caseId) {
+  const visualCase = VISUAL_CASES[caseId];
+  if (!visualCase) {
+    throw new Error(`Unknown visual PMX case: ${caseId}`);
+  }
+  return (visualCase.assets ?? []).map((asset) => ({ path: asset.path, bytes: asset.bytes() }));
 }
 
 export function restPoseCaseMetadata(caseId) {
@@ -1925,6 +2068,25 @@ function uvOrientationPng() {
   return PNG.sync.write(png);
 }
 
+function backgroundRoomCheckerPng() {
+  const size = 128;
+  const png = new PNG({ width: size, height: size });
+  const colors = [[36, 176, 222], [242, 166, 48], [70, 196, 112], [220, 74, 100]];
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const index = (y * size + x) * 4;
+      const cell = (Math.floor(x / 32) + Math.floor(y / 32)) % colors.length;
+      const color = colors[cell];
+      const border = x % 32 < 3 || y % 32 < 3;
+      png.data[index] = border ? 245 : color[0];
+      png.data[index + 1] = border ? 245 : color[1];
+      png.data[index + 2] = border ? 245 : color[2];
+      png.data[index + 3] = 255;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
 function sphereRadialPng(centerColor, edgeColor) {
   const size = 96;
   const png = new PNG({ width: size, height: size });
@@ -1954,6 +2116,25 @@ function toonRampPng() {
       : t < 0.72
       ? [226, 142, 62]
       : [112, 58, 38];
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      png.data[index] = color[0];
+      png.data[index + 1] = color[1];
+      png.data[index + 2] = color[2];
+      png.data[index + 3] = 255;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+function viewerSelfShadowToonPng() {
+  const width = 16;
+  const height = 16;
+  const png = new PNG({ width, height });
+  for (let y = 0; y < height; y += 1) {
+    // PMX toon shader hooks sample with flipY=true, so shader v=0 reads the
+    // PNG bottom row rather than y=0 in source image coordinates.
+    const color = y === height - 1 ? [28, 20, 12] : [246, 222, 158];
     for (let x = 0; x < width; x += 1) {
       const index = (y * width + x) * 4;
       png.data[index] = color[0];
@@ -2063,6 +2244,66 @@ function writeSoftAlphaPixels(data, width, height, color) {
       const band = Math.exp(-Math.pow((v - (0.28 + u * 0.38)) / 0.13, 2));
       const fade = Math.max(0, 1 - Math.abs(u - 0.5) * 1.35);
       const alpha = Math.round(205 * band * fade);
+      data[index] = color[0];
+      data[index + 1] = color[1];
+      data[index + 2] = color[2];
+      data[index + 3] = alpha;
+    }
+  }
+}
+
+function cheekOverlayTga(color, { binary = false } = {}) {
+  const width = 64;
+  const height = 64;
+  const header = new Uint8Array(18);
+  header[2] = 2;
+  header[12] = width & 0xff;
+  header[13] = (width >> 8) & 0xff;
+  header[14] = height & 0xff;
+  header[15] = (height >> 8) & 0xff;
+  header[16] = 32;
+  header[17] = 0x28;
+  const rgba = new Uint8Array(width * height * 4);
+  writeCheekOverlayPixels(rgba, width, height, color, binary);
+  const bytes = new Uint8Array(header.length + rgba.length);
+  bytes.set(header, 0);
+  for (let index = 0; index < width * height; index += 1) {
+    const source = index * 4;
+    const target = header.length + source;
+    bytes[target] = rgba[source + 2];
+    bytes[target + 1] = rgba[source + 1];
+    bytes[target + 2] = rgba[source];
+    bytes[target + 3] = rgba[source + 3];
+  }
+  return bytes;
+}
+
+// A small transparent-background texture with a continuous soft-alpha (or, for the
+// control variant, hard-cutout binary-alpha) circular blush blob centered in the
+// texture. Mirrors the real-model 頬小.tga proportions directionally: a tiny fully
+// opaque core, a modest continuous soft-alpha ring, and a mostly-transparent
+// background (T070-20).
+function writeCheekOverlayPixels(data, width, height, color, binary) {
+  const centerX = (width - 1) / 2;
+  const centerY = (height - 1) / 2;
+  const innerRadius = 1.2;
+  const outerRadius = 9;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const r = Math.sqrt(dx * dx + dy * dy);
+      let alpha;
+      if (binary) {
+        alpha = r <= outerRadius ? 255 : 0;
+      } else if (r <= innerRadius) {
+        alpha = 255;
+      } else if (r < outerRadius) {
+        alpha = Math.round((255 * (outerRadius - r)) / (outerRadius - innerRadius));
+      } else {
+        alpha = 0;
+      }
       data[index] = color[0];
       data[index + 1] = color[1];
       data[index + 2] = color[2];

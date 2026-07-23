@@ -10,8 +10,16 @@ import { reportTextureDiagnostics } from "./diagnostics.js";
 import { dom, setLoadedFileSwitcherOptions, setStatus, updateStageState } from "./dom.js";
 import { disposeModelResources } from "./dispose.js";
 import { renderStillFrame } from "./playback.js";
+import { adaptCameraDepthRange } from "./scene-setup.js";
 import { state } from "./state.js";
 import { labelFromUrl } from "./url-label.js";
+import {
+  applyViewerPipelineToModel,
+  createViewerBackgroundLoadOptions,
+  isTslViewerPipeline
+} from "./viewer-pipeline.js";
+
+let backgroundLoadGeneration = 0;
 
 export async function loadBackgroundFromUrl(url) {
   return await loadBackground(url, labelFromUrl(url), () => createBackgroundLoader(url), {
@@ -21,10 +29,13 @@ export async function loadBackgroundFromUrl(url) {
 }
 
 export async function loadBackgroundFile(file) {
-  await loadBackground(file, file.name, createBackgroundLoader, {
+  const loaded = await loadBackground(file, file.name, createBackgroundLoader, {
     id: `file:${file.name}:${file.lastModified}`,
     source: file
   });
+  if (loaded) {
+    state.currentBackgroundFiles = [file];
+  }
 }
 
 export async function loadBackgroundFolder(files) {
@@ -36,10 +47,13 @@ export async function loadBackgroundFolder(files) {
   }
   const textureMap = createMmdTextureMapFromFiles(files, modelFile);
   const folderLoader = createBackgroundLoader(undefined, { textureMap });
-  await loadBackground(modelFile, modelFile.name, () => folderLoader, {
+  const loaded = await loadBackground(modelFile, modelFile.name, () => folderLoader, {
     id: `folder:${modelFile.name}`,
     source: modelFile
   });
+  if (loaded) {
+    state.currentBackgroundFiles = files;
+  }
 }
 
 export async function switchBackgroundEntry(entry) {
@@ -53,14 +67,29 @@ export async function switchBackgroundEntry(entry) {
 }
 
 async function loadBackground(source, label, loaderFactory, entry) {
+  const generation = ++backgroundLoadGeneration;
+  let background;
+  let backgroundDisposed = false;
   try {
     setStatus(`Loading background: ${label}`, "loading");
-    clearBackground();
+    clearCommittedBackground();
     const loader = loaderFactory();
-    const background = await loader.loadModel(source, { frustumCulled: false });
+    background = await loader.loadModel(source, createViewerBackgroundLoadOptions());
+    if (generation !== backgroundLoadGeneration) {
+      disposeLoadedBackground();
+      return false;
+    }
+    await applyViewerPipelineToModel(background, label, { role: "background" });
+    if (generation !== backgroundLoadGeneration) {
+      disposeLoadedBackground();
+      return false;
+    }
     state.currentBackground = background;
-    syncMmdSpecularDirection(background.mesh.material, state.keyLight);
+    if (!isTslViewerPipeline()) {
+      syncMmdSpecularDirection(background.mesh.material, state.keyLight);
+    }
     state.scene.add(background.root);
+    adaptCameraDepthRange();
     reportTextureDiagnostics(background);
     updateBackgroundSwitcher({
       ...entry,
@@ -71,13 +100,34 @@ async function loadBackground(source, label, loaderFactory, entry) {
     renderStillFrame();
     return true;
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error), "error");
+    disposeLoadedBackground();
+    if (generation === backgroundLoadGeneration) {
+      setStatus(error instanceof Error ? error.message : String(error), "error");
+    }
     return false;
+  }
+
+  function disposeLoadedBackground() {
+    if (!background || backgroundDisposed) {
+      return;
+    }
+    backgroundDisposed = true;
+    if (state.currentBackground === background) {
+      clearBackground();
+      return;
+    }
+    disposeModelResources(background);
   }
 }
 
 export function clearBackground() {
+  backgroundLoadGeneration += 1;
+  clearCommittedBackground();
+}
+
+function clearCommittedBackground() {
   if (!state.currentBackground) {
+    state.currentBackgroundFiles = [];
     state.currentBackgroundEntries = [];
     updateBackgroundSwitcher();
     updateStageState();
@@ -86,9 +136,11 @@ export function clearBackground() {
   state.scene.remove(state.currentBackground.root);
   disposeModelResources(state.currentBackground);
   state.currentBackground = undefined;
+  state.currentBackgroundFiles = [];
   state.currentBackgroundEntries = [];
   updateBackgroundSwitcher();
   updateStageState();
+  adaptCameraDepthRange();
 }
 
 function updateBackgroundSwitcher(selectedEntry) {

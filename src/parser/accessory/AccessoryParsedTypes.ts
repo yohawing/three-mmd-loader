@@ -7,7 +7,7 @@ export interface AccessoryParsedManifest {
   readonly materialCount: number;
   readonly meshSummaries: readonly AccessoryMeshSummary[];
   readonly materials: readonly AccessoryMaterial[];
-  readonly vacSettings?: AccessoryVacSettings;
+  readonly vacSettings?: AccessoryVacSettings | null;
   readonly textureReferences: readonly string[];
   readonly diagnostics: readonly AccessoryDiagnostic[];
 }
@@ -35,22 +35,22 @@ export interface AccessoryVertexColor {
 }
 
 export interface AccessoryMaterial {
-  readonly name?: string;
-  readonly faceColor?: readonly [number, number, number, number];
-  readonly power?: number;
-  readonly specularColor?: readonly [number, number, number];
-  readonly emissiveColor?: readonly [number, number, number];
+  readonly name?: string | null;
+  readonly faceColor?: readonly [number, number, number, number] | null;
+  readonly power?: number | null;
+  readonly specularColor?: readonly [number, number, number] | null;
+  readonly emissiveColor?: readonly [number, number, number] | null;
   readonly textureReferences: readonly string[];
 }
 
 export interface AccessoryVacSettings {
   readonly rawLines: readonly string[];
-  readonly xFile?: string;
-  readonly scale?: number;
-  readonly position?: readonly [number, number, number];
-  readonly rotation?: readonly [number, number, number];
+  readonly xFile?: string | null;
+  readonly scale?: number | null;
+  readonly position?: readonly [number, number, number] | null;
+  readonly rotation?: readonly [number, number, number] | null;
   readonly numericValues: readonly number[];
-  readonly attachmentTarget?: string;
+  readonly attachmentTarget?: string | null;
 }
 
 export interface AccessoryDiagnostic {

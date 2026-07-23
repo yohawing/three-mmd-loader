@@ -4,17 +4,30 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Load and play MikuMikuDance (MMD) models (PMX/PMD) and motions (VMD) with physics, right in your browser. Files stay on your device — nothing is uploaded." />
-    <meta name="mmd-viewer-version" content="0.6.0" />
+    <meta name="mmd-viewer-version" content="0.7.0" />
     <title>MMD Loader for Three.js · three-mmd-loader</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" />
     <!-- The import map must precede any module load (e.g. the Shoelace autoloader below). -->
-    <script type="importmap">
+    <script>
       {
-        "imports": {
-          "three": "/node_modules/three/build/three.module.js",
-          "three/addons/": "/node_modules/three/examples/jsm/"
-        }
+        const query = new URLSearchParams(window.location.search);
+        const backend = query.get("backend")?.toLowerCase();
+        const baseline = backend === "baseline" || backend === "webgl";
+        const threeBuild = baseline
+          ? "/node_modules/three/build/three.module.js"
+          : "/node_modules/three/build/three.webgpu.js";
+        const importMap = document.createElement("script");
+        importMap.type = "importmap";
+        importMap.textContent = JSON.stringify({
+          imports: {
+            "three": threeBuild,
+            "three/webgpu": "/node_modules/three/build/three.webgpu.js",
+            "three/tsl": "/node_modules/three/build/three.tsl.js",
+            "three/addons/": "/node_modules/three/examples/jsm/"
+          }
+        });
+        document.currentScript.after(importMap);
       }
     </script>
     <!-- Shoelace UI spike (no-build, CDN autoloader). Vendor it like three if adopted. -->
@@ -151,7 +164,6 @@
         </div>
 
         <span class="status" id="status"></span>
-
         <input id="model-folder" type="file" webkitdirectory directory multiple />
         <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
         <input id="pose-file" type="file" accept=".vpd,text/plain" />
@@ -179,7 +191,6 @@
             <div class="info-links">
               <a href="https://github.com/yohawing/three-mmd-loader" target="_blank" rel="noopener noreferrer">GitHub</a>
               <a href="https://www.npmjs.com/package/@yohawing/three-mmd-loader" target="_blank" rel="noopener noreferrer">npm</a>
-              <a href="../webgpu-poc/?backend=forcewebgl" target="_blank" rel="noopener noreferrer">WebGPU PoC</a>
             </div>
             <p class="info-version">v<span id="app-version">0.0.0</span></p>
           </div>
@@ -190,6 +201,14 @@
           </summary>
           <div class="debug-menu-panel" role="menu" aria-label="Debug panel">
             <h2 class="debug-title">Debug</h2>
+            <label class="debug-backend-control">
+              <span>Backend</span>
+              <sl-select id="pipeline-backend-switcher" size="small" hoist value="forcewebgl" aria-label="Renderer backend">
+                <sl-option value="forcewebgl">TSL WebGL</sl-option>
+                <sl-option value="webgpu">WebGPU</sl-option>
+                <sl-option value="baseline">Baseline</sl-option>
+              </sl-select>
+            </label>
             <div class="debug-metrics" aria-label="Debug performance metrics">
               <div class="debug-metric">
                 <span>FPS</span>

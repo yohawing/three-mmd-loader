@@ -231,6 +231,19 @@
         "far": 20
       },
       "thresholds": { "mean": 0.03, "p95": 0.12 }
+    },
+    {
+      "name": "mmd-tga-soft-cheek-overlay",
+      "model": "test/fixtures/generated/visual/mmd-tga-soft-cheek-overlay.pmx",
+      "timeSeconds": 0,
+      "camera": {
+        "position": [0, 0.6, 3.3],
+        "target": [0, 0.6, 0],
+        "fov": 27,
+        "near": 0.1,
+        "far": 20
+      },
+      "thresholds": { "mean": 0.03, "p95": 0.12 }
     }
   ]
 }

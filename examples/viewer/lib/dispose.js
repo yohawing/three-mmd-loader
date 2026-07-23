@@ -1,6 +1,9 @@
 import { disposeMmdModel } from "../../../dist/three/index.js";
 
+import { disposeViewerPipelineModel } from "./viewer-pipeline.js";
+
 export function disposeModelResources(model) {
+  disposeViewerPipelineModel(model);
   disposeMmdModel(model);
 }
 

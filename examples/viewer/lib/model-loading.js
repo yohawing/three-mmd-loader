@@ -21,11 +21,31 @@ import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitc
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
 import { createViewerRuntimeOptions, currentMotionDurationSeconds, hasCurrentMotion, state } from "./state.js";
-import { fitCameraToObject } from "./scene-setup.js";
+import { adaptCameraDepthRange, fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
 import { viewerConfig } from "./viewer-config.js";
+import {
+  applyViewerPipelineToModel,
+  clearViewerPipelineModel,
+  createViewerModelLoadOptions,
+  isTslViewerPipeline,
+  syncMmdTslDedicatedShadowVisibility
+} from "./viewer-pipeline.js";
+
+let modelLoadGeneration = 0;
+
+function beginModelLoad() {
+  return ++modelLoadGeneration;
+}
+
+function createLoadGuard(generation, loadOptions) {
+  return () =>
+    generation === modelLoadGeneration &&
+    (!loadOptions.shouldCommit || loadOptions.shouldCommit());
+}
 
 export async function loadModelFromUrl(url, loadOptions = {}) {
+  const generation = beginModelLoad();
   const profile = createViewerLoadProfile(`url:${url}`);
   profile?.mark("start");
   const label = labelFromUrl(url);
@@ -43,14 +63,17 @@ export async function loadModelFromUrl(url, loadOptions = {}) {
         name: label,
         source: url
       },
-      loadOptions
+      loadOptions,
+      generation
     );
   } catch (error) {
     profile?.mark("error");
     profile?.measure("source-bytes", "start", "bytes");
     profile?.measure("failed-total", "start", "error");
     profile?.report();
-    setStatus(error instanceof Error ? error.message : String(error), "error");
+    if (generation === modelLoadGeneration && (!loadOptions.shouldCommit || loadOptions.shouldCommit())) {
+      setStatus(error instanceof Error ? error.message : String(error), "error");
+    }
     return false;
   }
 }
@@ -63,23 +86,26 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-export async function loadModel(source, label = source.name ?? "model", modelLoader, profile, switcherEntry, loadOptions = {}) {
+export async function loadModel(source, label = source.name ?? "model", modelLoader, profile, switcherEntry, loadOptions = {}, generation = beginModelLoad()) {
+  const isCurrentLoad = createLoadGuard(generation, loadOptions);
   const loadProfile = profile ?? createViewerLoadProfile(describeViewerSource(source, label));
   if (!profile) {
     loadProfile?.mark("start");
   }
   loadProfile?.mark("load-start");
   try {
-    if (loadOptions.shouldCommit && !loadOptions.shouldCommit()) {
+    if (!isCurrentLoad()) {
       loadProfile?.mark("cancelled");
       return false;
     }
     setStatus(`Loading model: ${label}`, "loading");
+    const shouldAutoFitCamera = shouldAutoFitCameraOnModelLoad(loadOptions);
     resetFolderModelState();
     const preservedMotion = state.currentMotion;
     clearModel({
       preserveMotion: Boolean(preservedMotion),
-      preserveModelSwitcher: true
+      preserveModelSwitcher: true,
+      preserveLoadGeneration: true
     });
     loadProfile?.mark("cleared");
     const resolvedModelLoader =
@@ -87,28 +113,54 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
         ? await modelLoader()
         : await (modelLoader ?? createModelLoader());
     loadProfile?.mark("loader-ready");
-    const loadedModel = await resolvedModelLoader.loadModel(source, { frustumCulled: false });
-    if (loadOptions.shouldCommit && !loadOptions.shouldCommit()) {
+    const loadedModel = await resolvedModelLoader.loadModel(source, createViewerModelLoadOptions());
+    if (!isCurrentLoad()) {
       disposeModelResources(loadedModel);
       loadProfile?.mark("cancelled");
       return false;
     }
     state.currentModel = loadedModel;
+    await applyViewerPipelineToModel(state.currentModel, label, { shouldCommit: isCurrentLoad });
+    if (!isCurrentLoad()) {
+      if (state.currentModel === loadedModel) {
+        state.currentModel = undefined;
+        disposeModelResources(loadedModel);
+      }
+      loadProfile?.mark("cancelled");
+      return false;
+    }
     loadProfile?.mark("model-loaded");
-    syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    if (!isTslViewerPipeline()) {
+      syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
     addModelToScene(state.currentModel);
     loadProfile?.mark("scene-ready");
-    state.currentFolderPmxFiles = [switcherEntry ?? createModelSwitcherEntry(source, label)];
-    updateModelSwitcher(state.currentFolderPmxFiles[0]);
+    const selectedModelEntry = switcherEntry ?? createModelSwitcherEntry(source, label);
+    state.currentFolderTextureMap = loadOptions.folderTextureMap ?? state.currentFolderTextureMap;
+    state.currentFolderFiles = loadOptions.folderFiles ?? (source instanceof window.File ? [source] : []);
+    state.currentFolderPmxFiles = loadOptions.folderModelFiles ?? [selectedModelEntry];
+    updateModelSwitcher(selectedModelEntry);
     state.elapsedSeconds = 0;
     dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
     dom.timeline.value = 0;
     updatePlaybackDisplay();
-    fitCameraToObject(state.currentModel.mesh);
+    if (shouldAutoFitCamera) {
+      frameCurrentModel();
+    } else {
+      adaptCameraDepthRange();
+    }
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
+      if (!isCurrentLoad()) {
+        loadProfile?.mark("cancelled");
+        return false;
+      }
     } else if (hasCurrentMotion()) {
       await ensurePhysicsBackendReady();
+      if (!isCurrentLoad()) {
+        loadProfile?.mark("cancelled");
+        return false;
+      }
       state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
@@ -136,8 +188,10 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     return true;
   } catch (error) {
     loadProfile?.mark("error");
-    resetFolderModelState();
-    setStatus(error instanceof Error ? error.message : String(error), "error");
+    if (generation === modelLoadGeneration) {
+      resetFolderModelState();
+      setStatus(error instanceof Error ? error.message : String(error), "error");
+    }
     updateStageState();
     return false;
   } finally {
@@ -145,7 +199,10 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
   }
 }
 
-export async function loadModelFolder(files) {
+export async function loadModelFolder(files, loadOptions = {}) {
+  const generation = beginModelLoad();
+  const isCurrentLoad = createLoadGuard(generation, loadOptions);
+  const shouldAutoFitCamera = shouldAutoFitCameraOnModelLoad(loadOptions);
   resetFolderModelState();
   resetMotionSwitcherState();
   const modelFiles = findModelFiles(files);
@@ -162,6 +219,7 @@ export async function loadModelFolder(files) {
   profile?.mark("start");
   profile?.mark("texture-map");
   state.currentFolderTextureMap = textureMap;
+  state.currentFolderFiles = files;
   state.currentFolderPmxFiles = modelFiles;
   updateModelSwitcher(modelFile);
 
@@ -171,25 +229,55 @@ export async function loadModelFolder(files) {
     const preservedMotion = state.currentMotion;
     clearModel({
       preserveMotion: Boolean(preservedMotion),
-      preserveModelSwitcher: true
+      preserveModelSwitcher: true,
+      preserveLoadGeneration: true
     });
     profile?.mark("cleared");
     const folderLoader = await createModelLoader({ textureMap });
     profile?.mark("loader-ready");
-    state.currentModel = await folderLoader.loadModel(modelFile, { frustumCulled: false });
+    const loadedModel = await folderLoader.loadModel(modelFile, createViewerModelLoadOptions());
+    if (!isCurrentLoad()) {
+      disposeModelResources(loadedModel);
+      profile?.mark("cancelled");
+      return;
+    }
+    state.currentModel = loadedModel;
+    await applyViewerPipelineToModel(state.currentModel, modelFile.name, { shouldCommit: isCurrentLoad });
+    if (!isCurrentLoad()) {
+      if (state.currentModel === loadedModel) {
+        state.currentModel = undefined;
+        disposeModelResources(loadedModel);
+      }
+      profile?.mark("cancelled");
+      return;
+    }
     profile?.mark("model-loaded");
-    syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    if (!isTslViewerPipeline()) {
+      syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
     addModelToScene(state.currentModel);
     profile?.mark("scene-ready");
     state.elapsedSeconds = 0;
     dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
     dom.timeline.value = 0;
     updatePlaybackDisplay();
-    fitCameraToObject(state.currentModel.mesh);
+    if (shouldAutoFitCamera) {
+      frameCurrentModel();
+    } else {
+      adaptCameraDepthRange();
+    }
     if (state.pendingMotionSource && !preservedMotion) {
       await loadMotion(state.pendingMotionSource, state.pendingMotionLabel);
+      if (!isCurrentLoad()) {
+        profile?.mark("cancelled");
+        return;
+      }
     } else if (hasCurrentMotion()) {
       await ensurePhysicsBackendReady();
+      if (!isCurrentLoad()) {
+        profile?.mark("cancelled");
+        return;
+      }
       state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
@@ -216,18 +304,23 @@ export async function loadModelFolder(files) {
     profile?.mark("first-render");
   } catch (error) {
     profile?.mark("error");
-    resetFolderModelState();
-    setStatus(error instanceof Error ? error.message : String(error), "error");
+    if (generation === modelLoadGeneration) {
+      resetFolderModelState();
+      setStatus(error instanceof Error ? error.message : String(error), "error");
+    }
     updateStageState();
   } finally {
     measureModelLoadProfile(profile);
   }
 }
 
-export async function switchFolderModel(modelFile) {
+export async function switchFolderModel(modelFile, loadOptions = {}) {
   if (!state.currentFolderTextureMap) {
     return;
   }
+  const generation = beginModelLoad();
+  const isCurrentLoad = createLoadGuard(generation, loadOptions);
+  const shouldAutoFitCamera = shouldAutoFitCameraOnModelLoad(loadOptions);
 
   const profile = createViewerLoadProfile(`switch:${modelFile.name}`);
   profile?.mark("start");
@@ -237,14 +330,32 @@ export async function switchFolderModel(modelFile) {
     const preservedMotion = state.currentMotion;
     clearModel({
       preserveMotion: Boolean(preservedMotion),
-      preserveModelSwitcher: true
+      preserveModelSwitcher: true,
+      preserveLoadGeneration: true
     });
     profile?.mark("cleared");
     const folderLoader = await createModelLoader({ textureMap: state.currentFolderTextureMap });
     profile?.mark("loader-ready");
-    state.currentModel = await folderLoader.loadModel(modelFile, { frustumCulled: false });
+    const loadedModel = await folderLoader.loadModel(modelFile, createViewerModelLoadOptions());
+    if (!isCurrentLoad()) {
+      disposeModelResources(loadedModel);
+      profile?.mark("cancelled");
+      return;
+    }
+    state.currentModel = loadedModel;
+    await applyViewerPipelineToModel(state.currentModel, modelFile.name, { shouldCommit: isCurrentLoad });
+    if (!isCurrentLoad()) {
+      if (state.currentModel === loadedModel) {
+        state.currentModel = undefined;
+        disposeModelResources(loadedModel);
+      }
+      profile?.mark("cancelled");
+      return;
+    }
     profile?.mark("model-loaded");
-    syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    if (!isTslViewerPipeline()) {
+      syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
     addModelToScene(state.currentModel);
     updateModelSwitcher(modelFile);
     profile?.mark("scene-ready");
@@ -252,9 +363,17 @@ export async function switchFolderModel(modelFile) {
     dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
     dom.timeline.value = 0;
     updatePlaybackDisplay();
-    fitCameraToObject(state.currentModel.mesh);
+    if (shouldAutoFitCamera) {
+      frameCurrentModel();
+    } else {
+      adaptCameraDepthRange();
+    }
     if (hasCurrentMotion()) {
       await ensurePhysicsBackendReady();
+      if (!isCurrentLoad()) {
+        profile?.mark("cancelled");
+        return;
+      }
       state.currentModel.setAnimation(state.currentMotion);
       dom.timeline.max = Math.max(currentMotionDurationSeconds(), 0.001);
       syncAudioToMotionTime();
@@ -281,7 +400,9 @@ export async function switchFolderModel(modelFile) {
     profile?.mark("first-render");
   } catch (error) {
     profile?.mark("error");
-    setStatus(error instanceof Error ? error.message : String(error), "error");
+    if (generation === modelLoadGeneration) {
+      setStatus(error instanceof Error ? error.message : String(error), "error");
+    }
     updateStageState();
   } finally {
     measureModelLoadProfile(profile);
@@ -289,6 +410,9 @@ export async function switchFolderModel(modelFile) {
 }
 
 export function clearModel(options = {}) {
+  if (!options.preserveLoadGeneration) {
+    beginModelLoad();
+  }
   hideColliderHelpers();
   restoreDebugMaterials();
   if (state.currentModel) {
@@ -296,12 +420,15 @@ export function clearModel(options = {}) {
     disposeModelResources(state.currentModel);
   }
   state.currentModel = undefined;
+  clearViewerPipelineModel();
   hideCreditPopup();
   clearDiagnosticsPanel();
   clearBoneDetectionPanel();
   disposeActivePhysicsBackend();
   if (!options.preserveMotion) {
     state.currentMotion = undefined;
+    state.currentPoseSource = undefined;
+    state.currentPoseLabel = undefined;
   }
   if (!options.preserveModelSwitcher) {
     resetFolderModelState();
@@ -319,8 +446,30 @@ export function clearModel(options = {}) {
   updateTransportState();
 }
 
+export function frameCurrentModel() {
+  if (!state.currentModel) {
+    return false;
+  }
+  fitCameraToObject(state.currentModel.mesh);
+  return true;
+}
+
+export function loadModelFile(file, loadOptions = {}) {
+  return loadModel(file, file.name, undefined, undefined, undefined, loadOptions);
+}
+
+function shouldAutoFitCameraOnModelLoad(loadOptions) {
+  return (
+    loadOptions.autoFitCamera !== false &&
+    !state.currentModel &&
+    !state.currentBackground &&
+    !state.currentCameraMotion
+  );
+}
+
 function addModelToScene(model) {
   state.scene.add(model.root);
+  syncMmdTslDedicatedShadowVisibility(model.root);
 }
 
 export function bindDropTarget() {
@@ -477,6 +626,7 @@ export function updateModelSwitcher(selectedFile) {
 
 export function resetFolderModelState() {
   state.currentFolderTextureMap = undefined;
+  state.currentFolderFiles = [];
   state.currentFolderPmxFiles = [];
   clearLoadedFileSwitcher(dom.modelSwitcher);
   if (dom.modelControl) {

@@ -507,6 +507,22 @@ select:focus-visible {
     gap: 6px;
 }
 
+.debug-backend-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 136px;
+    align-items: center;
+    gap: 12px;
+    min-height: 32px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgb(202 211 219 / 48%);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.debug-backend-control sl-select {
+    width: 100%;
+}
+
 .debug-metrics {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

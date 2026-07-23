@@ -5,6 +5,8 @@ import { viewerConfig } from "./viewer-config.js";
 
 export const debugEnabled = new window.URLSearchParams(location.search).has("debug");
 const query = new window.URLSearchParams(location.search);
+export const initialViewerPipeline = resolveInitialViewerPipeline(query);
+export const initialRendererBackend = rendererBackendForPipeline(initialViewerPipeline);
 const viewportStorageKey = "three-mmd-loader.viewer.viewport.v1";
 const storedViewportSettings = readStoredViewportSettings();
 const initialPhysicsMaxSubSteps = parseDebugInteger(query.get("maxSubSteps"), 5);
@@ -19,7 +21,7 @@ const initialSplitImpulsePenetrationThreshold = parseDebugNumber(
   query.get("splitImpulsePenetrationThreshold"),
   -0.04
 );
-const initialSelfShadowEnabled = query.get("selfShadow") === "0" ? false : true;
+const initialSelfShadowEnabled = query.get("selfShadow") !== "0";
 const initialPhysicsEnabled = query.get("physics") === "0" ? false : true;
 
 export const state = {
@@ -40,6 +42,10 @@ export const state = {
   customBulletMmdLoadPromise: undefined,
   animationLoader: new ThreeMmdLoader({ runtime: createViewerRuntimeOptions() }),
   frameTimer: new THREE.Timer(),
+  viewerPipeline: initialViewerPipeline,
+  rendererBackend: initialRendererBackend,
+  rendererStatus: "pending",
+  pipelineModelName: "(none)",
   renderer: undefined,
   scene: undefined,
   gridHelper: undefined,
@@ -55,11 +61,15 @@ export const state = {
   currentModel: undefined,
   currentBackground: undefined,
   currentMotion: undefined,
+  currentPoseSource: undefined,
+  currentPoseLabel: undefined,
   currentCameraMotion: undefined,
   currentFolderTextureMap: undefined,
+  currentFolderFiles: [],
   currentFolderPmxFiles: [],
   currentMotionVmdFiles: [],
   currentAudioEntries: [],
+  currentBackgroundFiles: [],
   currentBackgroundEntries: [],
   currentCameraEntries: [],
   mmdFrameRate: viewerConfig.mmdFrameRate,
@@ -94,6 +104,7 @@ export const state = {
   cameraUpScratch: new THREE.Vector3(),
   lightDirectionScratch: new THREE.Vector3(),
   selfShadowBoundsScratch: new THREE.Box3(),
+  selfShadowBoundsRefreshCountdown: 0,
   selfShadowStateScratch: {
     mode: 1,
     distance: 0.4
@@ -209,6 +220,30 @@ function parseDebugNumber(value, fallback) {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function resolveInitialViewerPipeline(params) {
+  const backend = params.get("backend")?.toLowerCase();
+  if (backend === "baseline" || backend === "webgl") {
+    return "baseline-webgl";
+  }
+  if (backend === "webgpu") {
+    return "tsl-webgpu";
+  }
+  if (backend === "forcewebgl") {
+    return "tsl-forcewebgl";
+  }
+  return "tsl-forcewebgl";
+}
+
+function rendererBackendForPipeline(pipeline) {
+  if (pipeline === "baseline-webgl") {
+    return "baseline";
+  }
+  if (pipeline === "tsl-webgpu") {
+    return "webgpu";
+  }
+  return "forcewebgl";
 }
 
 state.cameraApplyOptions = {

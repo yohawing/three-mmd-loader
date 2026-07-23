@@ -61,8 +61,27 @@ try {
     `import { ThreeMmdLoader, type ThreeMmdAnimation, type ThreeMmdModel } from "@yohawing/three-mmd-loader";
 import { parsePmxMetadata } from "@yohawing/three-mmd-loader/parser";
 import { DefaultMmdRuntime, exportMmdAnimWasmVmdAnimationJsonBytes, loadMmdAnimWasmVmd, parseMmdAnimWasmFormatJson } from "@yohawing/three-mmd-loader/runtime";
-import { createThreeSkeleton } from "@yohawing/three-mmd-loader/three";
-import { createDisabledMmdPhysicsBackend } from "@yohawing/three-mmd-loader/physics";
+import {
+  applyMmdCameraStateToThreeCamera,
+  applyMmdLightStateToThreeDirectionalLight,
+  configureMmdSelfShadowDirectionalLight,
+  createMmdTextureMapFromFiles,
+  createThreeSkeleton,
+  disposeMmdModel,
+  findMmdModelFiles,
+  findMmdMotionFiles,
+  fitMmdSelfShadowDirectionalLightToBox,
+  MMD_SELF_SHADOW_LAYER
+} from "@yohawing/three-mmd-loader/three";
+import {
+  MMD_TSL_DEFAULT_LIGHT_COLOR,
+  createMmdTslToonMaterial,
+  syncMmdTslMaterialState,
+  type MmdTslMaterialAssemblyOptions,
+  type MmdTslMaterialCoreOptions,
+  type MmdTslMaterialUniforms
+} from "@yohawing/three-mmd-loader/webgpu";
+import { createCustomBulletMmdPhysicsBackend, createDisabledMmdPhysicsBackend, loadCustomBulletMmdModule } from "@yohawing/three-mmd-loader/physics";
 
 const loader: ThreeMmdLoader = new ThreeMmdLoader();
 const runtime: DefaultMmdRuntime = new DefaultMmdRuntime();
@@ -71,10 +90,15 @@ declare const model: ThreeMmdModel;
 declare const animation: ThreeMmdAnimation;
 declare const parserWasm: { parseMmdFormatJson(data: Uint8Array, fileName?: string | null): string };
 declare const exporterWasm: { exportVmdAnimationJsonBytes(json: string): Uint8Array };
+declare const webgpuCoreOptions: MmdTslMaterialCoreOptions;
+declare const webgpuAssemblyOptions: MmdTslMaterialAssemblyOptions;
+declare const webgpuUniforms: MmdTslMaterialUniforms;
 model.root.add(model.mesh);
 model.setAnimation(animation);
 model.update(0);
 model.diagnostics.textures.forEach((diagnostic) => void diagnostic.code);
+model.diagnostics.materials.forEach((diag) => void diag.finalTransparencyMode);
+model.diagnostics.performance.forEach((m) => void m.durationMs);
 const parsed: unknown = parseMmdAnimWasmFormatJson(parserWasm, new Uint8Array(), "motion.vmd");
 const runtimeAnimation = loadMmdAnimWasmVmd(parserWasm, new Uint8Array(), "motion.vmd");
 const exported: Uint8Array = exportMmdAnimWasmVmdAnimationJsonBytes(exporterWasm, "{}");
@@ -87,6 +111,23 @@ void runtimeAnimation;
 void exported;
 void parsePmxMetadata;
 void createThreeSkeleton;
+void applyMmdCameraStateToThreeCamera;
+void applyMmdLightStateToThreeDirectionalLight;
+void configureMmdSelfShadowDirectionalLight;
+void fitMmdSelfShadowDirectionalLightToBox;
+void MMD_SELF_SHADOW_LAYER;
+void disposeMmdModel;
+void findMmdModelFiles;
+void findMmdMotionFiles;
+void createMmdTextureMapFromFiles;
+void MMD_TSL_DEFAULT_LIGHT_COLOR;
+void createMmdTslToonMaterial;
+void syncMmdTslMaterialState;
+void webgpuCoreOptions;
+void webgpuAssemblyOptions;
+void webgpuUniforms;
+void createCustomBulletMmdPhysicsBackend;
+void loadCustomBulletMmdModule;
 `
   );
 

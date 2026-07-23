@@ -43,6 +43,17 @@ describe("parseAccessory", () => {
     expect(() => parseAccessory(new Uint8Array([0x78]), core)).toThrow(/WASM core/);
   });
 
+  it("rejects a non-object root from the WASM JSON response", () => {
+    const core = new MmdAnimBackedCore({
+      parseMmdFormatJson: vi.fn(() => "null"),
+      wasm_wrapper_version: () => 7
+    });
+
+    expect(() => parseAccessory(new Uint8Array([0x78]), core, "test.x")).toThrow(
+      /WASM JSON response must be an object/
+    );
+  });
+
   it("parses .x fixture with full WASM core", async () => {
     const core = await initCore();
     const bytes = await readFile(fixtureXPath);
@@ -52,6 +63,7 @@ describe("parseAccessory", () => {
     expect(result.text).toBe(true);
     expect(result.header).toMatch(/^xof/);
     expect(result.meshCount).toBeGreaterThanOrEqual(1);
+    expect(result.vacSettings).toBeNull();
 
     const mesh = result.meshSummaries[0]!;
     expect(mesh.vertexCount).toBe(4);
@@ -64,6 +76,7 @@ describe("parseAccessory", () => {
     const material = result.materials[0]!;
     expect(material.faceColor).toBeDefined();
     expect(material.power).toBeDefined();
+    expect(material.name).toBeNull();
   });
 
   it("parses .vac fixture with placement settings", async () => {

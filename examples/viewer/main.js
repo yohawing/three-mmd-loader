@@ -7,20 +7,15 @@ import { captureCanvas, captureAfterAndCompare, createViewerDebugApi, markBefore
 import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updatePlayToggle, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
-import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
+import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
 import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
+import { updateViewerPipelineStatus } from "./lib/viewer-pipeline.js";
 
 const volumeStorageKey = "three-mmd-loader.viewer.volume.v1";
 let frameCurrentInputDirty = false;
-
-setupScene();
-initLocalization();
-initVolumeControls();
-// Warm browser cache for kuroko stand-in model (silent on failure).
-fetch(kurokoModelUrl).catch(() => {});
 
 const viewerApi = {
   get camera() { return state.camera; },
@@ -31,6 +26,7 @@ const viewerApi = {
   loadMotionUrl: loadMotionFromUrl,
   loadBackgroundUrl: loadBackgroundFromUrl,
   loadCameraUrl: loadCameraFromUrl,
+  frameModel: frameCurrentModel,
   get currentModel() { return state.currentModel; },
   get currentMotion() { return state.currentMotion; },
   get currentBackground() { return state.currentBackground; },
@@ -42,11 +38,29 @@ if (debugEnabled) {
 }
 window.mmdViewer = viewerApi;
 
-bindControls();
-void initializeAssetLibrary();
-resize();
-state.frameTimer.update();
-state.renderer.setAnimationLoop(render);
+void initializeViewer();
+
+async function initializeViewer() {
+  try {
+    await setupScene();
+    initLocalization();
+    initVolumeControls();
+    // Warm browser cache for kuroko stand-in model (silent on failure).
+    fetch(kurokoModelUrl).catch(() => {});
+    bindControls();
+    void initializeAssetLibrary();
+    resize();
+    updateViewerPipelineStatus();
+    state.frameTimer.update();
+    state.renderer.setAnimationLoop(render);
+  } catch (error) {
+    state.rendererStatus = "error";
+    updateViewerPipelineStatus();
+    const message = error instanceof Error ? error.message : String(error);
+    window.console?.error("[viewer] Failed to initialize:", error);
+    setStatus(message, "error");
+  }
+}
 
 function bindControls() {
   window.addEventListener("resize", resize);
@@ -57,6 +71,12 @@ function bindControls() {
     if (!dom.languageSelect) return;
     setLocale(dom.languageSelect.value);
     updateChromeHeights();
+  });
+  dom.pipelineBackendSwitcher?.addEventListener("sl-change", () => {
+    const backend = dom.pipelineBackendSwitcher?.value;
+    if (backend === "forcewebgl" || backend === "webgpu" || backend === "baseline") {
+      void switchRendererBackend(backend);
+    }
   });
   document.querySelector("#choose-model-folder")?.addEventListener("click", () => dom.modelFolderInput?.click());
   document.querySelector("#choose-motion")?.addEventListener("click", () => dom.motionFileInput?.click());
@@ -449,7 +469,7 @@ function hasTimelineSource() {
 function disposeViewerResources() {
   if (state.viewerDisposed) return;
   state.viewerDisposed = true;
-  state.renderer.setAnimationLoop(null);
+  state.renderer?.setAnimationLoop?.(null);
   clearModel();
   clearBackground();
   clearCameraMotion();
@@ -460,8 +480,19 @@ function disposeViewerResources() {
   clearAudioSource();
   disposeActivePhysicsBackend();
   state.frameTimer.dispose();
-  state.controls.dispose();
-  state.renderer.dispose();
-  state.renderer.forceContextLoss?.();
+  state.controls?.dispose();
+  state.renderer?.dispose();
+  state.renderer?.forceContextLoss?.();
+}
+
+function switchRendererBackend(backend) {
+  if (backend === state.rendererBackend) {
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.delete("baseline");
+  url.searchParams.delete("pipeline");
+  url.searchParams.set("backend", backend);
+  window.location.assign(url);
 }
 

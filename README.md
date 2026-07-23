@@ -29,11 +29,11 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | --- | --- |
 | Parser | ✅ PMX / PMD / VMD / VPD; ⚠️ PMM / `.x` / `.vac` expose structured parsing APIs only |
 | Deform / skinning | ✅ BDEF1/2/4, SDEF, QDEF |
-| MMD material / toon shader | ✅ Toon textures, alpha blending decisions, render ordering, and self shadow |
+| MMD material / toon shader | ✅ Toon textures, alpha blending decisions, render ordering, self shadow, and TSL (WebGPU/WebGL) support |
 | IK / append-transform rigging | ✅ Verified through the mmd-anim/WASM-backed path |
 | VMD Camera / Light | ✅ Applies to Three.js Camera and DirectionalLight |
 | Physics | ✅ MMD-focused Bullet Physics. |
-| Soft Body | ⚠️ PMX data parsed; runtime simulation not implemented |
+| Soft Body | ⚠️ PMX data parsed; runtime simulation is not planned |
 
 The main PMX parser, structured PMM / `.x` / `.vac` parsing, and animation path are backed by
 [yohawing/mmd-anim](https://github.com/yohawing/mmd-anim).
@@ -101,6 +101,41 @@ import {
 // Default: MMD-focused Bullet Physics backend.
 const mmdBullet = await loadCustomBulletMmdModule();
 const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
+```
+
+## Experimental - WebGPU / TSL
+
+This is an experimental TSL implementation. The TSL API evolves quickly and may
+change on the Three.js side, so use it with caution.
+
+```ts
+import * as THREE from "three/webgpu";
+import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
+import { createMmdTslPipeline } from "@yohawing/three-mmd-loader/webgpu";
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+const clock = new THREE.Clock();
+
+const light = new THREE.DirectionalLight(0xffffff, 2);
+light.castShadow = true;
+scene.add(light, light.target);
+
+const pipeline = await createMmdTslPipeline(renderer, {
+  light,
+  selfShadowEnabled: true
+});
+
+const loader = new ThreeMmdLoader();
+const model = await loader.loadModel("model.pmx", pipeline.createModelLoadOptions());
+scene.add(model.root);
+pipeline.attach(model);
+
+renderer.setAnimationLoop(() => {
+  model.update(clock.getElapsedTime());
+  pipeline.render(scene, camera);
+});
 ```
 
 ## Development

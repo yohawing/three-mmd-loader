@@ -51,6 +51,7 @@ interface AlphaStats {
   maxAlpha: number;
   middleAlphaTotal: number;
   middleAlphaCount: number;
+  solidAlphaCount: number;
   sampleCount: number;
 }
 
@@ -60,6 +61,7 @@ function createAlphaStats(): AlphaStats {
     maxAlpha: 0,
     middleAlphaTotal: 0,
     middleAlphaCount: 0,
+    solidAlphaCount: 0,
     sampleCount: 0
   };
 }
@@ -76,7 +78,23 @@ function recordAlphaSample(stats: AlphaStats, alpha: number | undefined): void {
     stats.middleAlphaTotal += value;
     stats.middleAlphaCount += 1;
   }
+  if (value >= SOLID_ALPHA_MIN) {
+    stats.solidAlphaCount += 1;
+  }
 }
+
+// T070-20 soft-alpha-dominance thresholds.
+// SOLID_ALPHA_MIN: alpha value at/above which a sample is considered "solid"
+// (fully or near-fully opaque) rather than a soft/AA edge value.
+const SOLID_ALPHA_MIN = 250;
+// SOFT_DOMINANCE_RATIO: among visible pixels (middle + solid, excluding alpha=0),
+// the fraction that must be "middle" for the texture to be treated as a soft
+// overlay rather than a hard cutout with AA edges.
+const SOFT_DOMINANCE_RATIO = 0.75;
+// SOFT_OCCUPANCY_MIN: the middle-alpha population must also cover at least this
+// fraction of ALL samples (including alpha=0) so that a handful of stray
+// mid-range texels near a huge alpha=0 field can't trigger promotion.
+const SOFT_OCCUPANCY_MIN = 0.005;
 
 function evaluateAlphaStats(
   stats: AlphaStats,
@@ -90,6 +108,20 @@ function evaluateAlphaStats(
     return "opaque";
   }
   if (stats.middleAlphaCount / stats.sampleCount >= 0.25) {
+    return "alphaBlend";
+  }
+  // Soft-alpha-dominance promotion (T070-20): cutouts have solid-dominated
+  // visible pixels with only anti-aliased edges falling in the middle range;
+  // soft overlays (e.g. cheek blush) have middle-dominated visible pixels with
+  // near-zero solid population. Alpha=0 samples are excluded from the
+  // dominance ratio's denominator so transparent atlas padding cannot inflate
+  // it into a false promotion (preserves the existing atlas-padding contract).
+  if (
+    stats.middleAlphaCount > 0 &&
+    stats.middleAlphaCount / (stats.middleAlphaCount + stats.solidAlphaCount) >=
+      SOFT_DOMINANCE_RATIO &&
+    stats.middleAlphaCount / stats.sampleCount >= SOFT_OCCUPANCY_MIN
+  ) {
     return "alphaBlend";
   }
   return averageMiddleAlpha + alphaBlendThreshold < stats.maxAlpha ? "alphaTest" : "alphaBlend";

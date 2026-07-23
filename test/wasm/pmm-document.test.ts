@@ -55,6 +55,17 @@ describe("parsePmmDocument", () => {
     );
   });
 
+  it("rejects a non-object root from the WASM JSON response", () => {
+    const core = new MmdAnimBackedCore({
+      parseMmdFormatJson: vi.fn(() => "null"),
+      wasm_wrapper_version: () => 7
+    });
+
+    expect(() => parsePmmDocument(new Uint8Array([0x50]), core)).toThrow(
+      /WASM JSON response must be an object/
+    );
+  });
+
   it("parses the ik_multi_bone fixture PMM with full WASM core", async () => {
     const core = await initCore();
     const bytes = await readFile(fixturePmmPath);
@@ -71,6 +82,7 @@ describe("parsePmmDocument", () => {
     expect(result.timeline).toBeDefined();
     expect(result.projectSettings).toBeDefined();
     expect(result.displayState).toBeDefined();
+    expect(result.displayState.accessorySlotCount).toBeNull();
   });
 
   it("exposes document summary with per-model structure", async () => {

@@ -199,6 +199,13 @@ export const SELF_SHADOW_VMD_CASES = {
       { frame: 0, mode: 1, distance: 0.4 }
     ]
   },
+  "mmd-self-shadow-vmd-mode2": {
+    modelName: "shadowMode2",
+    boneFrames: [],
+    selfShadowFrames: [
+      { frame: 0, mode: 2, distance: 0.2 }
+    ]
+  },
   "mmd-self-shadow-sdef-depth": {
     modelName: "sdefShadow",
     boneFrames: [

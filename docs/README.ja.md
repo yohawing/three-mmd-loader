@@ -29,11 +29,11 @@ Three.js 上で MMD モデルとモーションを読み込み・再生するた
 | --- | --- |
 | パーサー | ✅ PMX / PMD / VMD / VPD、⚠️ PMM / `.x` / `.vac` は構造化解析 API のみ |
 | 変形 / スキニング | ✅ BDEF1/2/4, SDEF, QDEF |
-| MMD マテリアル / Toon シェーダー | ✅ Toon、AlphaBlend 判定、描画順、自己影 |
+| MMD マテリアル / Toon シェーダー | ✅ Toon、AlphaBlend判定、描画順、セルフ影、TSL(WebGPU/WebGL)対応 |
 | IK / 付与変形などのリギング | ✅ mmd-anim/WASM 経路で検証 |
 | VMD カメラ / ライト | ✅ Three.js の Camera、DirectionalLight に適用 |
 | 物理 | ✅ MMD 向け Bullet Physics |
-| ソフトボディ | ⚠️ PMX データは解析 / ランタイムシミュレーションは未実装 |
+| ソフトボディ | ⚠️ PMX データは解析 / ランタイムシミュレーションは実装予定なし |
 
 PMX パーサー、PMM / `.x` / `.vac` の構造化解析、アニメーション処理の主要経路には
 [yohawing/mmd-anim](https://github.com/yohawing/mmd-anim) を使用しています。
@@ -101,6 +101,40 @@ import {
 // 標準: MMD 向け Bullet Physics バックエンド。
 const mmdBullet = await loadCustomBulletMmdModule();
 const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
+```
+
+## Experimental - WebGPU / TSL
+
+実験的なTSLの実装です。TSL APIは変化が大きくThree.js側で変わる可能性があるため、使う場合はご注意ください。
+
+```ts
+import * as THREE from "three/webgpu";
+import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
+import { createMmdTslPipeline } from "@yohawing/three-mmd-loader/webgpu";
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+const clock = new THREE.Clock();
+
+const light = new THREE.DirectionalLight(0xffffff, 2);
+light.castShadow = true;
+scene.add(light, light.target);
+
+const pipeline = await createMmdTslPipeline(renderer, {
+  light,
+  selfShadowEnabled: true
+});
+
+const loader = new ThreeMmdLoader();
+const model = await loader.loadModel("model.pmx", pipeline.createModelLoadOptions());
+scene.add(model.root);
+pipeline.attach(model);
+
+renderer.setAnimationLoop(() => {
+  model.update(clock.getElapsedTime());
+  pipeline.render(scene, camera);
+});
 ```
 
 ## Development
