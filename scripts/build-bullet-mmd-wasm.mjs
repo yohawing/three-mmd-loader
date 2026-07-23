@@ -9,11 +9,21 @@ const bulletRoot = join(root, "native", "third_party", "bullet3");
 const bindings = join(root, "native", "bullet-mmd", "mmd_bindings.cc");
 const outDir = join(root, "native", "bullet-mmd", "dist");
 const buildDir = join(outDir, ".tmp", `mmd-${process.pid}-${Date.now().toString(36)}`);
-const tmpJs = join(buildDir, "mmd_bullet.js");
-const tmpWasm = join(buildDir, "mmd_bullet.wasm");
-const responseFile = join(buildDir, "emcc-mmd-args.rsp");
-const outJs = join(outDir, "mmd_bullet.js");
-const outWasm = join(outDir, "mmd_bullet.wasm");
+
+const builds = [
+  {
+    name: "classic",
+    scriptName: "mmd_bullet.js",
+    environment: "web,node",
+    extraArgs: []
+  },
+  {
+    name: "module worker",
+    scriptName: "mmd_bullet.worker.mjs",
+    environment: "web,worker,node",
+    extraArgs: ["-sEXPORT_ES6=1"]
+  }
+];
 
 const sourceRoots = [
   join(bulletRoot, "src", "LinearMath"),
@@ -214,34 +224,41 @@ async function main() {
     "_mmd_bullet_debug_rigid_body_world_matrices"
   ];
 
-  const args = [
-    ...sources,
-    "-I",
-    join(bulletRoot, "src"),
-    "-O3",
-    "-DNDEBUG",
-    "-Wno-deprecated",
-    "-sMODULARIZE=1",
-    "-sEXPORT_NAME=MmdBullet",
-    "-sENVIRONMENT=web,node",
-    "-sINITIAL_MEMORY=67108864",
-    `-sEXPORTED_FUNCTIONS=${JSON.stringify(exportedFunctions)}`,
-    "--post-js",
-    join(scriptDir, "expose-memory.js"),
-    "-o",
-    tmpJs
-  ];
-
   console.log(`Using ${commandInfo.kind === "emsdk" ? "emsdk" : "PATH"} Emscripten: ${commandInfo.command}`);
-  console.log(`Compiling Bullet MMD build with ${sources.length} sources.`);
+  console.log(`Compiling Bullet MMD classic and module-worker builds with ${sources.length} sources.`);
 
   await mkdir(buildDir, { recursive: true });
   try {
-    await writeFile(responseFile, `${args.map(quoteResponseArg).join("\n")}\n`);
-    await spawnCommand(commandInfo, [`@${responseFile}`], env);
     await mkdir(outDir, { recursive: true });
-    await copyFile(tmpJs, outJs);
-    await copyFile(tmpWasm, outWasm);
+    for (const build of builds) {
+      const tmpScript = join(buildDir, build.scriptName);
+      const tmpWasm = tmpScript.replace(/\.(?:m?js)$/i, ".wasm");
+      const responseFile = join(buildDir, `emcc-mmd-${build.name.replaceAll(" ", "-")}-args.rsp`);
+      const args = [
+        ...sources,
+        "-I",
+        join(bulletRoot, "src"),
+        "-O3",
+        "-DNDEBUG",
+        "-Wno-deprecated",
+        "-sMODULARIZE=1",
+        "-sEXPORT_NAME=MmdBullet",
+        `-sENVIRONMENT=${build.environment}`,
+        ...build.extraArgs,
+        "-sINITIAL_MEMORY=67108864",
+        `-sEXPORTED_FUNCTIONS=${JSON.stringify(exportedFunctions)}`,
+        "--post-js",
+        join(scriptDir, "expose-memory.js"),
+        "-o",
+        tmpScript
+      ];
+
+      await writeFile(responseFile, `${args.map(quoteResponseArg).join("\n")}\n`);
+      console.log(`Compiling ${build.name} artifact: ${build.scriptName}`);
+      await spawnCommand(commandInfo, [`@${responseFile}`], env);
+      await copyFile(tmpScript, join(outDir, build.scriptName));
+      await copyFile(tmpWasm, join(outDir, build.scriptName.replace(/\.(?:m?js)$/i, ".wasm")));
+    }
   } finally {
     await rm(buildDir, { recursive: true, force: true });
   }
