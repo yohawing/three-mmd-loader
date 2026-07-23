@@ -1,15 +1,22 @@
 /// <reference lib="webworker" />
 
-import { MmdRuntimeWorkerEndpoint } from "./endpoint.js";
-import type { MmdRuntimeWorkerCommand, MmdRuntimeWorkerEvent } from "./messages.js";
+import { MmdRuntimeWorkerDispatcher } from "./dispatcher.js";
+import type {
+  MmdRuntimeWorkerCommandEnvelope,
+  MmdRuntimeWorkerEventEnvelope
+} from "./messages.js";
 
 const workerScope = self as DedicatedWorkerGlobalScope;
-const endpoint = new MmdRuntimeWorkerEndpoint({
-  postMessage(message: MmdRuntimeWorkerEvent, transfer?: Transferable[]) {
-    workerScope.postMessage(message, transfer ?? []);
+const dispatcher = new MmdRuntimeWorkerDispatcher({
+  postMessage(message: MmdRuntimeWorkerEventEnvelope, transfer?: Transferable[]) {
+    if (transfer) {
+      workerScope.postMessage(message, transfer);
+    } else {
+      workerScope.postMessage(message);
+    }
   }
 });
 
-workerScope.addEventListener("message", (event: MessageEvent<MmdRuntimeWorkerCommand>) => {
-  endpoint.handle(event.data);
+workerScope.addEventListener("message", (event: MessageEvent<MmdRuntimeWorkerCommandEnvelope>) => {
+  dispatcher.handle(event.data);
 });

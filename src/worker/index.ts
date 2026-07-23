@@ -6,6 +6,11 @@ export { MmdRuntimeWorkerHost } from "./host.js";
 export { MmdRuntimeWorkerEndpoint } from "./endpoint.js";
 export { MmdRuntimeWorkerDispatcher } from "./dispatcher.js";
 export {
+  MmdRuntimeWorkerPool,
+  getDefaultMmdRuntimeWorkerPoolSize,
+  resolveMmdRuntimeWorkerPoolSize
+} from "./pool.js";
+export {
   applyMmdRuntimePoseToMesh,
   createMmdRuntimePoseApplyScratch
 } from "./applyPose.js";
@@ -32,6 +37,11 @@ export type {
 } from "./modelDescriptor.js";
 export type { MmdRuntimeWorkerHostOptions } from "./host.js";
 export type { MmdRuntimeWorkerEndpointOptions } from "./endpoint.js";
+export type {
+  MmdRuntimeWorkerLease,
+  MmdRuntimeWorkerPhysicalFactory,
+  MmdRuntimeWorkerPoolOptions
+} from "./pool.js";
 export type { CustomBulletWorkerPhysicsConfig } from "./externalPhysics.js";
 export type {
   MmdRuntimeWorkerCommandEnvelope,
@@ -57,6 +67,7 @@ export {
 } from "./runtime.js";
 export type {
   MmdRuntimeWorkerLike,
+  WorkerMmdRuntimeFactory,
   WorkerMmdRuntimeFactoryOptions,
   WorkerMmdRuntimeOptions
 } from "./runtime.js";

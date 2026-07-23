@@ -20,6 +20,7 @@ import type {
   MmdRuntimeWorkerCommand,
   MmdRuntimeWorkerEvent
 } from "./messages.js";
+import type { CustomBulletWorkerPhysicsConfig } from "./externalPhysics.js";
 import { serializeMmdRuntimeModelDescriptor } from "./modelDescriptor.js";
 import type { MmdRuntimePoseBuffer } from "./protocol.js";
 import {
@@ -29,6 +30,11 @@ import {
   releaseMmdRuntimeSharedPoseReadSlot,
   type MmdRuntimeSharedPoseSlot
 } from "./sharedPose.js";
+import {
+  MmdRuntimeWorkerPool,
+  type MmdRuntimeWorkerLease,
+  type MmdRuntimeWorkerPhysicalFactory
+} from "./pool.js";
 
 export interface MmdRuntimeWorkerLike {
   postMessage(message: MmdRuntimeWorkerCommand, transfer?: Transferable[]): void;
@@ -49,12 +55,24 @@ export interface WorkerMmdRuntimeOptions {
   readonly workerOptions?: WorkerOptions;
   readonly runtimeOptions?: DefaultMmdRuntimeOptions;
   readonly onFallback?: (error: unknown) => void;
+  /** Explicit bounded pool; the factory creates one lazily when omitted. */
+  readonly pool?: MmdRuntimeWorkerPool;
+  /** Physical slot count for the factory-owned pool. */
+  readonly poolSize?: number;
+  /** Structured-clone-safe external physics configuration for worker init. */
+  readonly externalPhysics?: CustomBulletWorkerPhysicsConfig;
   /** Uses SAB pose transport when cross-origin isolation permits it. Defaults to auto. */
   readonly sharedMemory?: "auto" | "required" | "disabled";
 }
 
 export interface WorkerMmdRuntimeFactoryOptions extends WorkerMmdRuntimeOptions {
   readonly fallback?: boolean;
+}
+
+export interface WorkerMmdRuntimeFactory {
+  (context: ThreeMmdRuntimeFactoryContext): MmdRuntime;
+  /** Releases a factory-owned pool and its physical workers. */
+  dispose(): void;
 }
 
 interface MutableWorkerCommand {
@@ -138,6 +156,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     this.activateFallback(error);
   };
   private readonly worker: MmdRuntimeWorkerLike;
+  private readonly poolLease: MmdRuntimeWorkerLease | undefined;
   private readonly sharedPoseSlots: readonly MmdRuntimeSharedPoseSlot[] | undefined;
   private readonly sharedPoseReadBuffer: MmdRuntimePoseBuffer | undefined;
   private fallbackRuntime: DefaultMmdRuntime | undefined;
@@ -157,9 +176,12 @@ export class WorkerMmdRuntime implements MmdRuntime {
     this.runtimeOptions = options.runtimeOptions ?? {};
     this.fallbackCallback = options.onFallback;
     this.applyScratch = createMmdRuntimePoseApplyScratch(this.mesh);
-    this.worker = options.workerFactory
-      ? options.workerFactory(context)
-      : createDefaultWorker(options);
+    this.poolLease = options.pool?.acquire(
+      context,
+      options.workerFactory as MmdRuntimeWorkerPhysicalFactory | undefined
+    );
+    this.worker = this.poolLease?.worker ??
+      (options.workerFactory ? options.workerFactory(context) : createDefaultWorker(options));
     if (!this.worker) {
       throw new Error("MMD runtime worker is unavailable");
     }
@@ -176,7 +198,8 @@ export class WorkerMmdRuntime implements MmdRuntime {
       type: "init",
       descriptor,
       runtimeOptions: workerRuntimeOptions(this.runtimeOptions),
-      sharedPoseSlots: this.sharedPoseSlots
+      sharedPoseSlots: this.sharedPoseSlots,
+      externalPhysics: options.externalPhysics
     });
     this.frameStateScratch.frameRate = this.runtimeOptions.frameRate ?? 30;
     this.frameStateScratch.seconds = this.runtimeOptions.initialSeconds ?? 0;
@@ -327,11 +350,14 @@ export class WorkerMmdRuntime implements MmdRuntime {
     this.disposed = true;
     if (this.fallbackRuntime) {
       this.fallbackRuntime.clearAnimation();
-    } else {
+    } else if (!this.poolLease) {
       this.worker.postMessage({ type: "dispose" });
     }
+    this.poolLease?.dispose();
     this.detachWorker();
-    void this.worker.terminate?.();
+    if (!this.poolLease) {
+      void this.worker.terminate?.();
+    }
   }
 
   private handleEvent(event: MmdRuntimeWorkerEvent): void {
@@ -407,7 +433,11 @@ export class WorkerMmdRuntime implements MmdRuntime {
     this.ready = false;
     this.onFallback(error);
     this.detachWorker();
-    void this.worker.terminate?.();
+    if (this.poolLease) {
+      this.poolLease.dispose();
+    } else {
+      void this.worker.terminate?.();
+    }
   }
 
   private onFallback(error: unknown): void {
@@ -487,13 +517,20 @@ export class WorkerMmdRuntime implements MmdRuntime {
 
 export function createWorkerMmdRuntimeFactory(
   options: WorkerMmdRuntimeFactoryOptions = {}
-): (context: ThreeMmdRuntimeFactoryContext) => MmdRuntime {
-  return (context) => {
+): WorkerMmdRuntimeFactory {
+  let internalPool: MmdRuntimeWorkerPool | undefined;
+  const factory = (context: ThreeMmdRuntimeFactoryContext): MmdRuntime => {
     try {
-      if (options.runtimeOptions?.physics === "external") {
+      if (options.runtimeOptions?.physics === "external" && !options.externalPhysics) {
         throw new Error("MMD runtime worker does not support external physics");
       }
-      const runtime = new WorkerMmdRuntime(context, options);
+      const pool = options.pool ?? (internalPool ??= new MmdRuntimeWorkerPool({
+        size: options.poolSize,
+        workerFactory: options.workerFactory as MmdRuntimeWorkerPhysicalFactory | undefined,
+        workerUrl: options.workerUrl,
+        workerOptions: options.workerOptions
+      }));
+      const runtime = new WorkerMmdRuntime(context, { ...options, pool });
       return runtime;
     } catch (error) {
       options.onFallback?.(error);
@@ -503,6 +540,12 @@ export function createWorkerMmdRuntimeFactory(
       return new DefaultMmdRuntime(options.runtimeOptions);
     }
   };
+  factory.dispose = () => {
+    if (!options.pool) {
+      internalPool?.dispose();
+    }
+  };
+  return factory;
 }
 
 export function createWorkerMmdRuntime(
@@ -532,7 +575,7 @@ function workerRuntimeOptions(
   return {
     frameRate: options.frameRate,
     initialSeconds: options.initialSeconds,
-    physics: options.physics === "external" ? "none" : options.physics,
+    physics: options.physics,
     ikTolerance: options.ikTolerance,
     ikMaxIterationsCap: options.ikMaxIterationsCap
   };
