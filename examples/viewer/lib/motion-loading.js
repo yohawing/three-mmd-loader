@@ -119,8 +119,12 @@ export async function loadMotion(source, label = source.name ?? "motion") {
       durationSeconds: animationDurationSeconds(animation)
     };
     state.secondaryMotion = undefined;
+    const targetModel = state.currentModel;
     await ensurePhysicsBackendReady();
-    state.currentModel.setAnimation(animation);
+    if (state.currentModel !== targetModel) {
+      return false;
+    }
+    targetModel.setAnimation(animation);
     for (let index = 1; index < state.characterModels.length; index += 1) {
       state.characterModels[index]?.setAnimation(animation);
     }

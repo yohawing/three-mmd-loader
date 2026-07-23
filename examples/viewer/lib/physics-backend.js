@@ -8,26 +8,64 @@ import { dom, setStatus } from "./dom.js";
 import { state } from "./state.js";
 
 export async function createPhysicsBackend() {
-  disposeActivePhysicsBackend();
-  state.activePhysicsBackend = createDeferredPhysicsBackend();
-  return state.activePhysicsBackend;
+  const backend = createDeferredPhysicsBackend();
+  state.physicsBackends.add(backend);
+  if (!state.activePhysicsBackend) {
+    state.activePhysicsBackend = backend;
+  }
+  return backend;
 }
 
 export async function ensurePhysicsBackendReady() {
-  if (!state.activePhysicsBackend) {
+  if (state.physicsBackends.size === 0) {
     await createPhysicsBackend();
   }
-  if (typeof state.activePhysicsBackend?.prepare === "function") {
-    await state.activePhysicsBackend.prepare();
+  const backends = Array.from(state.physicsBackends);
+  for (const backend of backends) {
+    if (typeof backend.prepare === "function") {
+      await backend.prepare();
+    }
   }
   return state.activePhysicsBackend;
 }
 
 export function disposeActivePhysicsBackend() {
-  if (state.activePhysicsBackend && !state.activePhysicsBackend.disposed) {
-    state.activePhysicsBackend.dispose?.();
+  for (const backend of state.physicsBackends) {
+    if (!backend.disposed) {
+      backend.dispose?.();
+    }
   }
+  state.physicsBackends.clear();
   state.activePhysicsBackend = undefined;
+}
+
+export function registerPhysicsBackendForModel(model, backend) {
+  if (!model || !backend) {
+    return;
+  }
+  state.physicsBackendByModel.set(model, backend);
+}
+
+export function releasePhysicsBackend(backend) {
+  if (!backend) {
+    return;
+  }
+  if (!backend.disposed) {
+    backend.dispose?.();
+  }
+  state.physicsBackends.delete(backend);
+  if (state.activePhysicsBackend === backend) {
+    state.activePhysicsBackend = state.physicsBackends.values().next().value;
+  }
+}
+
+export function disposePhysicsBackendForModel(model) {
+  const backend = state.physicsBackendByModel.get(model);
+  if (!backend) {
+    return;
+  }
+  state.physicsBackendByModel.delete(model);
+  releasePhysicsBackend(backend);
 }
 
 function createDeferredPhysicsBackend() {

@@ -38,6 +38,11 @@ export const state = {
   physicsEnabled: initialPhysicsEnabled,
   showDebugColliders: query.has("collision") || query.has("debugCollision"),
   activePhysicsBackend: undefined,
+  // Each loaded character owns one backend. A WeakMap keeps model disposal
+  // independent while the Set lets the motion gate prepare every backend.
+  physicsBackends: new Set(),
+  physicsBackendByModel: new WeakMap(),
+  physicsBackendByLoader: new WeakMap(),
   customBulletMmdModule: undefined,
   customBulletMmdLoadPromise: undefined,
   animationLoader: new ThreeMmdLoader({ runtime: createViewerRuntimeOptions() }),

@@ -9,7 +9,13 @@ import { detectStandardBones } from "../../../dist/parser/index.js";
 import { MmdAnimRuntime, DefaultMmdRuntime } from "../../../dist/runtime/index.js";
 import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 
-import { createPhysicsBackend, disposeActivePhysicsBackend, ensurePhysicsBackendReady } from "./physics-backend.js";
+import {
+  createPhysicsBackend,
+  disposeActivePhysicsBackend,
+  ensurePhysicsBackendReady,
+  registerPhysicsBackendForModel,
+  releasePhysicsBackend
+} from "./physics-backend.js";
 import { loadAudioFile, isAudioFile } from "./audio-loading.js";
 import { loadCameraFile } from "./camera-loading.js";
 import { hideCreditPopup, showModelCredits } from "./credits.js";
@@ -126,7 +132,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
         ? await modelLoader()
         : await (modelLoader ?? createModelLoader());
     loadProfile?.mark("loader-ready");
-    loadedModel = await resolvedModelLoader.loadModel(source, createViewerModelLoadOptions());
+    loadedModel = await loadManagedModel(resolvedModelLoader, source);
     if (!isCurrentLoad()) {
       disposeModelResources(loadedModel);
       loadProfile?.mark("cancelled");
@@ -238,18 +244,22 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     if (state.showDebugColliders) {
       showColliderHelpers();
     }
+    renderStillFrame();
+    refreshDebugPanelState();
+    loadProfile?.mark("first-render");
     if (previousSecondaryState?.model) {
       state.scene.remove(previousSecondaryState.model.root);
       disposeModelResources(previousSecondaryState.model);
     }
-    renderStillFrame();
-    refreshDebugPanelState();
-    loadProfile?.mark("first-render");
     return true;
   } catch (error) {
     loadProfile?.mark("error");
-    if (isSecondary && loadedModel) {
-      restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryState);
+    if (loadedModel) {
+      if (isSecondary) {
+        restoreSecondaryModelAfterLoadFailure(loadedModel, previousSecondaryState);
+      } else {
+        disposeFailedPrimaryModel(loadedModel);
+      }
     }
     if (generation === modelLoadGeneration) {
       if (!isSecondary) {
@@ -288,6 +298,7 @@ export async function loadModelFolder(files, loadOptions = {}) {
   state.currentFolderPmxFiles = modelFiles;
   updateModelSwitcher(modelFile);
 
+  let loadedModel;
   try {
     profile?.mark("load-start");
     setStatus(`Loading model folder: ${folderName}`, "loading");
@@ -300,7 +311,7 @@ export async function loadModelFolder(files, loadOptions = {}) {
     profile?.mark("cleared");
     const folderLoader = await createModelLoader({ textureMap });
     profile?.mark("loader-ready");
-    const loadedModel = await folderLoader.loadModel(modelFile, createViewerModelLoadOptions());
+    loadedModel = await loadManagedModel(folderLoader, modelFile);
     if (!isCurrentLoad()) {
       disposeModelResources(loadedModel);
       profile?.mark("cancelled");
@@ -372,6 +383,7 @@ export async function loadModelFolder(files, loadOptions = {}) {
     profile?.mark("first-render");
   } catch (error) {
     profile?.mark("error");
+    disposeFailedPrimaryModel(loadedModel);
     if (generation === modelLoadGeneration) {
       resetFolderModelState();
       setStatus(error instanceof Error ? error.message : String(error), "error");
@@ -393,6 +405,7 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
   const profile = createViewerLoadProfile(`switch:${modelFile.name}`);
   profile?.mark("start");
   profile?.mark("load-start");
+  let loadedModel;
   try {
     setStatus(`Switching to ${modelFile.name}`, "loading");
     const preservedMotion = state.currentMotion;
@@ -404,7 +417,7 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     profile?.mark("cleared");
     const folderLoader = await createModelLoader({ textureMap: state.currentFolderTextureMap });
     profile?.mark("loader-ready");
-    const loadedModel = await folderLoader.loadModel(modelFile, createViewerModelLoadOptions());
+    loadedModel = await loadManagedModel(folderLoader, modelFile);
     if (!isCurrentLoad()) {
       disposeModelResources(loadedModel);
       profile?.mark("cancelled");
@@ -471,6 +484,7 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     profile?.mark("first-render");
   } catch (error) {
     profile?.mark("error");
+    disposeFailedPrimaryModel(loadedModel);
     if (generation === modelLoadGeneration) {
       setStatus(error instanceof Error ? error.message : String(error), "error");
     }
@@ -601,6 +615,18 @@ function restoreSecondaryModelAfterLoadFailure(model, previousState) {
     state.secondaryMotion = previousState?.motion;
     state.characterModels[1] = previousState?.model;
     state.characterModels.length = previousState?.model ? 2 : 1;
+  }
+  disposeModelResources(model);
+}
+
+function disposeFailedPrimaryModel(model) {
+  if (!model) {
+    return;
+  }
+  state.scene?.remove(model.root);
+  if (state.currentModel === model) {
+    state.currentModel = undefined;
+    state.characterModels.length = 0;
   }
   disposeModelResources(model);
 }
@@ -814,18 +840,38 @@ export async function createUrlTextureLoader(modelUrl) {
 export async function createModelLoader(extraOptions = {}) {
   const runtimeOptions = extraOptions.runtime ?? {};
   const physicsBackend = await createPhysicsBackend();
-  const runtimeFactory = extraOptions.runtimeFactory ?? await createRuntimeFactory(physicsBackend);
-  return new ThreeMmdLoader({
-    ...extraOptions,
-    ddsLoader: extraOptions.ddsLoader ?? new DDSLoader(),
-    geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
-    runtimeFactory,
-    runtime: createViewerRuntimeOptions({
-      ...runtimeOptions,
-      physics: "external",
-      physicsBackend
-    })
-  });
+  try {
+    const runtimeFactory = extraOptions.runtimeFactory ?? await createRuntimeFactory(physicsBackend);
+    const loader = new ThreeMmdLoader({
+      ...extraOptions,
+      ddsLoader: extraOptions.ddsLoader ?? new DDSLoader(),
+      geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
+      runtimeFactory,
+      runtime: createViewerRuntimeOptions({
+        ...runtimeOptions,
+        physics: "external",
+        physicsBackend
+      })
+    });
+    state.physicsBackendByLoader.set(loader, physicsBackend);
+    return loader;
+  } catch (error) {
+    releasePhysicsBackend(physicsBackend);
+    throw error;
+  }
+}
+
+async function loadManagedModel(loader, source) {
+  const managedPhysicsBackend = state.physicsBackendByLoader.get(loader);
+  state.physicsBackendByLoader.delete(loader);
+  try {
+    const model = await loader.loadModel(source, createViewerModelLoadOptions());
+    registerPhysicsBackendForModel(model, managedPhysicsBackend);
+    return model;
+  } catch (error) {
+    releasePhysicsBackend(managedPhysicsBackend);
+    throw error;
+  }
 }
 
 async function createRuntimeFactory(physicsBackend) {
