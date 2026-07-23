@@ -181,10 +181,12 @@ describe("runtime hot path allocation guards", () => {
   it("keeps worker pose capture on caller-owned buffers", async () => {
     const protocolSource = await readFile("src/worker/protocol.ts", "utf8");
     const applySource = await readFile("src/worker/applyPose.ts", "utf8");
+    const endpointSource = await readFile("src/worker/endpoint.ts", "utf8");
     const hotPathBodies = [
       extractFunctionBody(protocolSource, "captureMmdRuntimePoseInto"),
       extractFunctionBody(protocolSource, "copyMmdRuntimePoseInto"),
-      extractFunctionBody(applySource, "applyMmdRuntimePoseToMesh")
+      extractFunctionBody(applySource, "applyMmdRuntimePoseToMesh"),
+      extractMethodBody(endpointSource, "publishTick")
     ];
     const forbiddenPatterns: Array<readonly [string, RegExp]> = [
       ["new Float32Array", /new\s+Float32Array\s*\(/],
