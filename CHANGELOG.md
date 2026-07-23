@@ -28,9 +28,8 @@ All notable changes to this project will be documented in this file.
 - Expose the structured PMM document and project-summary types from the parser
   entry point, and represent nullable fields from the WASM JSON contract
   explicitly in the public TypeScript types.
-- Preserve the active camera when loading a model or switching renderer
-  backends, and adapt viewer near/far planes to scene bounds without moving the
-  camera.
+- Preserve the active camera when loading a model, and adapt viewer near/far
+  planes to scene bounds without moving the camera.
 - Consolidate duplicated viewer backend parameters, model-load guards, sparse
   morph builders, and visual-regression helpers.
 
