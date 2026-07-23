@@ -35,8 +35,7 @@ describe("example viewer source", () => {
     expect(sceneSetupSource).not.toContain("Math.max(radius * 40, 100)");
   });
 
-  it("auto-fits only an initially empty stage and preserves restored camera views", async () => {
-    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+  it("auto-fits only an initially empty stage", async () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
 
     expect(modelSource).toContain("function shouldAutoFitCameraOnModelLoad(loadOptions)");
@@ -47,23 +46,12 @@ describe("example viewer source", () => {
     expect(modelSource.match(/if \(shouldAutoFitCamera\) \{\n {6}frameCurrentModel\(\);\n {4}\}/g)).toHaveLength(3);
     expect(modelSource).toContain("export function frameCurrentModel()");
     expect(modelSource).toContain("fitCameraToObject(state.currentModel.mesh)");
-    expect(mainSource).toContain("frameModel: frameCurrentModel");
-    expect(mainSource).toContain("const restoreModelLoadOptions = { autoFitCamera: false };");
-    expect(mainSource).toContain("loadModelFromUrl(model.url, restoreModelLoadOptions)");
-    expect(mainSource).toContain("loadModelFolder(files, restoreModelLoadOptions)");
-    expect(mainSource).toContain("switchFolderModel(selectedModel, restoreModelLoadOptions)");
-    expect(mainSource).toContain("loadModelFile(restoreFiles([model.file])[0], restoreModelLoadOptions)");
-    expect(mainSource).toContain("restoreRendererSwitchCameraView(snapshot.cameraView)");
-    expect(mainSource).toContain("camera.position.fromArray(view.position)");
-    expect(mainSource).toContain("state.controls.target.fromArray(view.target)");
-    expect(mainSource).toContain("camera.fov = view.fov");
   });
 
   it("adapts camera near/far to scene bounds on auto-fit-suppressed commit paths without moving the camera (T070-18)", async () => {
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
-    const mainSource = await readFile("examples/viewer/main.js", "utf8");
 
     expect(sceneSetupSource).toContain("export function adaptCameraDepthRange()");
     const adaptStart = sceneSetupSource.indexOf("export function adaptCameraDepthRange()");
@@ -89,10 +77,6 @@ describe("example viewer source", () => {
     expect(backgroundSource).toContain(
       "updateStageState();\n  adaptCameraDepthRange();\n}"
     );
-
-    expect(mainSource).toContain("import { adaptCameraDepthRange, resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from \"./lib/scene-setup.js\";");
-    expect(mainSource).toContain("const hasSavedDepthRange = typeof view.near === \"number\" && typeof view.far === \"number\";");
-    expect(mainSource).toContain("if (!hasSavedDepthRange) {");
   });
 
   it("enables reversed-Z depth only on the native WebGPU viewer renderer (T070-18)", async () => {
@@ -163,7 +147,6 @@ describe("example viewer source", () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
     const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
-    const rendererSwitchSource = await readFile("examples/viewer/lib/renderer-switch-state.js", "utf8");
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const selfShadowGateSource = await readFile("scripts/visual-regression/check-viewer-self-shadow.mjs", "utf8");
@@ -213,17 +196,11 @@ describe("example viewer source", () => {
     expect(sceneSetupSource).toContain("await state.renderer.init()");
     expect(mainSource).toContain("void initializeViewer();");
     expect(mainSource).toContain("await setupScene();");
-    expect(mainSource).toContain("await restoreRendererSwitchState();");
     expect(mainSource).toContain("function switchRendererBackend(backend)");
-    expect(mainSource).toContain("saveRendererSwitchSnapshot(snapshot)");
-    expect(mainSource).toContain("setRendererSwitchRestoreParam(url, restoreId)");
-    expect(mainSource).toContain("async function restoreRendererSwitchState()");
-    expect(mainSource).toContain("state.debugBeforeCapture = snapshot.debugBeforeCapture");
-    expect(mainSource).toContain("await restoreRendererSwitchPose(snapshot.pose)");
-    expect(mainSource).toContain("restoreRendererSwitchCameraView(snapshot.cameraView)");
-    expect(mainSource).toContain("camera.position.fromArray(view.position)");
-    expect(mainSource).toContain("state.controls.target.fromArray(view.target)");
-    expect(mainSource).toContain("setSelfShadowEnabled(snapshot.debugSelfShadowEnabled)");
+    expect(mainSource).toContain("window.location.assign(url)");
+    expect(mainSource).not.toContain("restoreRendererSwitchState");
+    expect(mainSource).not.toContain("restoreState");
+    expect(mainSource).not.toContain("indexedDB");
     expect(mainSource).toContain("updateViewerPipelineStatus();");
     expect(mainSource).toContain('url.searchParams.set("backend", backend)');
     expect(modelSource).toContain("loadOptions.folderFiles");
@@ -255,16 +232,6 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain('if (shouldCommit && !shouldCommit()) {');
     expect(pipelineSource).toContain("return false;");
     expect(modelSource).toContain("syncMmdTslDedicatedShadowVisibility(model.root);");
-    expect(rendererSwitchSource).toContain("const restoreParamName = \"restoreState\"");
-    expect(rendererSwitchSource).toContain("window.indexedDB.open");
-    expect(rendererSwitchSource).toContain("snapshotModel()");
-    expect(rendererSwitchSource).toContain("snapshotMotion()");
-    expect(rendererSwitchSource).toContain("snapshotPose()");
-    expect(rendererSwitchSource).toContain("snapshotCameraView()");
-    expect(rendererSwitchSource).toContain("state.controls.target.toArray()");
-    expect(rendererSwitchSource).toContain("snapshotAudio()");
-    expect(rendererSwitchSource).toContain("debugSelfShadowEnabled: state.debugSelfShadowEnabled");
-    expect(rendererSwitchSource).toContain("relativePath: file.webkitRelativePath || \"\"");
     expect(pipelineSource).not.toContain('from "../../../dist/webgpu/index.js"');
     expect(pipelineSource).toContain('import("../../../dist/webgpu/index.js")');
     expect(pipelineSource).toContain('import("../../../dist/webgpu/self-shadow-pass.js")');
@@ -416,7 +383,6 @@ describe("example viewer source", () => {
   it("routes backgrounds through the role-aware TSL pipeline without replacing character state", async () => {
     const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
     const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");
-    const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
     const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
 
@@ -445,8 +411,6 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("syncViewerTslLight()");
     expect(playbackSource).toContain("} else {\n    if (state.currentModel?.mesh?.material)");
     expect(playbackSource).toContain("if (state.currentBackground?.mesh?.material)");
-    expect(mainSource).toContain("await restoreRendererSwitchBackground(snapshot.background)");
-    expect(mainSource).toContain("await loadBackgroundFromUrl(background.url)");
   });
 
   it("keeps the independent main-viewer native WebGPU background visual gate wired to its synthetic fixture", async () => {
@@ -460,6 +424,7 @@ describe("example viewer source", () => {
     expect(generatorSource).toContain("background-room-checker.png");
     expect(gateSource).toContain('"#pipeline-backend-switcher"');
     expect(gateSource).toContain('CustomEvent("sl-change"');
+    expect(gateSource).toContain("globalThis.mmdViewer.loadBackgroundUrl(url)");
     expect(gateSource).toContain("nativeWebgpu");
     expect(gateSource).toContain("diffuseTexturesResolved");
     expect(gateSource).toContain("resolvedDiffuseTextureCount");

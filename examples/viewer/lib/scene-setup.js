@@ -162,9 +162,8 @@ export function fitCameraToObject(object) {
 
 // Recomputes only camera.near/far from current scene content bounds (model +
 // background bounding spheres + camera distance). Never touches
-// position/target/fov -- used on auto-fit-suppressed commit paths (model
-// swap, background add/clear, renderer-switch restore without saved
-// near/far) so the depth range still tracks what is actually on stage
+// position/target/fov -- used on auto-fit-suppressed commit paths such as
+// model swaps and background add/clear, so the depth range tracks the stage
 // instead of staying pinned at the wide 0.01/2000 default (T070-18).
 const adaptCameraDepthRangeMaxRatio = 20000;
 const adaptCameraDepthRangeBoundsScratch = new THREE.Box3();

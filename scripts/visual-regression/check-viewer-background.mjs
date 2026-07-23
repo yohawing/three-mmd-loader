@@ -53,7 +53,12 @@ async function main() {
       : `/${fixturePath}`;
     const baseline = await loadAndCapture(browser, server.origin, backgroundUrl, "baseline-webgl", options.outputDir);
     report.cases.push(serializableCase(baseline));
-    const native = await switchToNativeAndCapture(baseline.page, baseline.pageErrorListener, options.outputDir);
+    const native = await switchToNativeAndCapture(
+      baseline.page,
+      baseline.pageErrorListener,
+      backgroundUrl,
+      options.outputDir
+    );
     report.cases.push(serializableCase(native));
     const parity = comparePng(baseline.png, native.png);
     report.parity = parity;
@@ -105,7 +110,7 @@ async function loadAndCapture(browser, origin, backgroundUrl, name, outputDir) {
   return { name, page, png, stats: analyzePng(png), observation, messages, pageErrorListener, pass: observation.backgroundPresent && !observation.characterRegistered && messages.length === 0 };
 }
 
-async function switchToNativeAndCapture(page, baselinePageErrorListener, outputDir) {
+async function switchToNativeAndCapture(page, baselinePageErrorListener, backgroundUrl, outputDir) {
   // Keep baseline and native page errors independent. The same page is reused
   // for the backend switch, so leaving the baseline listener attached would
   // retroactively turn a clean baseline case red when native initialization
@@ -120,6 +125,8 @@ async function switchToNativeAndCapture(page, baselinePageErrorListener, outputD
   });
   await page.waitForURL(url => new URL(url).searchParams.get("backend") === "webgpu", { timeout: 15000 });
   await waitForViewer(page, "native WebGPU viewer");
+  const loaded = await page.evaluate(async (url) => globalThis.mmdViewer.loadBackgroundUrl(url), backgroundUrl);
+  if (!loaded) throw new Error("Native WebGPU background URL load returned false.");
   await page.waitForFunction(() => Boolean(globalThis.mmdViewer.currentBackground), null, { timeout: 20000 });
   await page.waitForTimeout(700);
   const observation = await observeBackground(page);
