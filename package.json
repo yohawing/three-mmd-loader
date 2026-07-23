@@ -68,6 +68,7 @@
     "compare:bullet:mmd:local": "node scripts/compare-bullet-mmd-local-fixture.mjs",
     "compare:runtime:js": "node scripts/compare-runtime-js.mjs",
     "bench:runtime:worker": "node scripts/bench-runtime-worker.mjs",
+    "bench:runtime:worker:browser": "node scripts/bench-runtime-worker-browser.mjs",
     "smoke:bullet:mmd": "node scripts/smoke-bullet-mmd.mjs",
     "bench:runtime:js": "node scripts/bench-runtime-js.mjs",
     "bench:wasm:perf": "node scripts/bench_wasm_perf.mjs",
