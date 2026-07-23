@@ -43,6 +43,8 @@ export const state = {
   physicsBackends: new Set(),
   physicsBackendByModel: new WeakMap(),
   physicsBackendByLoader: new WeakMap(),
+  workerRuntimeFallback: undefined,
+  workerRuntimeFallbackCount: 0,
   customBulletMmdModule: undefined,
   customBulletMmdLoadPromise: undefined,
   animationLoader: new ThreeMmdLoader({ runtime: createViewerRuntimeOptions() }),

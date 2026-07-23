@@ -7,6 +7,7 @@ import { captureCanvas, captureAfterAndCompare, createViewerDebugApi, markBefore
 import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updatePlayToggle, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
+import { disposeWorkerRuntimeFactory } from "./lib/runtime-worker.js";
 import { loadModelFolder, loadModelFromUrl, loadSecondaryModelFromUrl, loadSecondaryModelFile, loadSecondaryModelFolder, modelFileKey, bindDropTarget, clearModel, clearSecondaryModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadSecondaryMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
@@ -497,6 +498,7 @@ function disposeViewerResources() {
   state.pendingMotionLabel = undefined;
   clearAudioSource();
   disposeActivePhysicsBackend();
+  disposeWorkerRuntimeFactory();
   state.frameTimer.dispose();
   state.controls?.dispose();
   state.renderer?.dispose();

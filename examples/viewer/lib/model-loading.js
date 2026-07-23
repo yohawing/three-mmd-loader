@@ -27,6 +27,7 @@ import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitc
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
 import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
 import { createViewerRuntimeOptions, currentMotionDurationSeconds, state } from "./state.js";
+import { getWorkerRuntimeFactory, isWorkerRuntimeEnabled } from "./runtime-worker.js";
 import { adaptCameraDepthRange, fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
 import { viewerConfig } from "./viewer-config.js";
@@ -839,6 +840,19 @@ export async function createUrlTextureLoader(modelUrl) {
 
 export async function createModelLoader(extraOptions = {}) {
   const runtimeOptions = extraOptions.runtime ?? {};
+  if (isWorkerRuntimeEnabled()) {
+    const runtimeFactory = extraOptions.runtimeFactory ?? await getWorkerRuntimeFactory();
+    return new ThreeMmdLoader({
+      ...extraOptions,
+      ddsLoader: extraOptions.ddsLoader ?? new DDSLoader(),
+      geometryAwareAlpha: extraOptions.geometryAwareAlpha ?? true,
+      runtimeFactory,
+      runtime: createViewerRuntimeOptions({
+        ...runtimeOptions,
+        physics: "external"
+      })
+    });
+  }
   const physicsBackend = await createPhysicsBackend();
   try {
     const runtimeFactory = extraOptions.runtimeFactory ?? await createRuntimeFactory(physicsBackend);

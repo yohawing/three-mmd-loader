@@ -1223,6 +1223,45 @@ describe("example viewer source", () => {
     expect(performanceSource).toContain('window.console?.table(');
   });
 
+  it("opts the viewer into a shared worker runtime without preparing main-thread physics", async () => {
+    const configSource = await readFile("examples/viewer/lib/viewer-config.js", "utf8");
+    const workerSource = await readFile("examples/viewer/lib/runtime-worker.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
+
+    expect(configSource).toContain('if (normalized === "worker")');
+    expect(configSource).toContain('return "mmd-anim"');
+    expect(workerSource).toContain("createWorkerMmdRuntimeFactory");
+    expect(workerSource).toContain('import("../../../dist/worker/index.js")');
+    expect(workerSource).toContain("const resettablePromise = import");
+    expect(workerSource).toContain("let workerRuntimeGeneration = 0");
+    expect(workerSource).toContain("const generation = workerRuntimeGeneration");
+    expect(workerSource).toContain("generation !== workerRuntimeGeneration");
+    expect(workerSource).toContain("factory.dispose()");
+    expect(workerSource).toContain("workerRuntimeGeneration += 1");
+    expect(workerSource).toContain('kind: "custom-bullet-mmd"');
+    expect(workerSource).toContain('sharedMemory: "auto"');
+    expect(workerSource).toContain('workerDistRoute = "/__mmd_worker_dist__/"');
+    expect(workerSource).toContain("fallback: false");
+    expect(workerSource).toContain("state.workerRuntimeFallbackCount += 1");
+    expect(workerSource).toContain('setStatus(`Runtime Worker failed: ${message}`, "error")');
+    expect(modelSource).toContain("if (isWorkerRuntimeEnabled())");
+    expect(modelSource).toContain("getWorkerRuntimeFactory()");
+    expect(modelSource).toContain('physics: "external"');
+    expect(physicsSource).toContain('if (viewerConfig.runtime === "worker")');
+    expect(stateSource).toContain("workerRuntimeFallback");
+    expect(mainSource).toContain("disposeWorkerRuntimeFactory()");
+    expect(serverSource).toContain('const workerDistRoute = "/__mmd_worker_dist__/"');
+    expect(serverSource).toContain('const workerDistRoot = resolve(root, "dist")');
+    expect(serverSource).toContain('[".mjs", "text/javascript; charset=utf-8"]');
+    expect(serverSource).toContain("function rewriteWorkerModule(source)");
+    expect(serverSource).toContain('from "three"');
+    expect(serverSource).toContain("isPathInside(filePath, workerDistRoot)");
+  });
+
   it("serves Wasm with the browser streaming MIME type", async () => {
     const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
 
