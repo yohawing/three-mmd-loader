@@ -3,6 +3,7 @@ import type { DefaultMmdRuntimeOptions, MmdRuntimeEvaluateOptions } from "../run
 import type { MmdRuntimeModelDescriptor } from "./modelDescriptor.js";
 import type { MmdRuntimePoseBuffer } from "./protocol.js";
 import type { MmdRuntimeSharedPoseSlot } from "./sharedPose.js";
+import type { CustomBulletWorkerPhysicsConfig } from "./externalPhysics.js";
 
 export type MmdRuntimeWorkerCommand =
   | {
@@ -10,6 +11,7 @@ export type MmdRuntimeWorkerCommand =
       readonly descriptor: MmdRuntimeModelDescriptor;
       readonly runtimeOptions?: Omit<DefaultMmdRuntimeOptions, "physicsBackend">;
       readonly sharedPoseSlots?: readonly MmdRuntimeSharedPoseSlot[];
+      readonly externalPhysics?: CustomBulletWorkerPhysicsConfig;
     }
   | { readonly type: "setAnimation"; readonly epoch: number; readonly animation: MmdAnimation }
   | {

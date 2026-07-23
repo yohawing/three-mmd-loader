@@ -11,13 +11,27 @@ import {
   publishMmdRuntimeSharedPose,
   type MmdRuntimeSharedPoseSlot
 } from "./sharedPose.js";
+import {
+  createWorkerExternalPhysicsBackend,
+  type CustomBulletWorkerPhysicsConfig
+} from "./externalPhysics.js";
+import type { MmdPhysicsBackend } from "../physics/index.js";
 
 const maxPreReadyCommands = 32;
 type ReadyCommand = Exclude<MmdRuntimeWorkerCommand, { readonly type: "init" }>;
 
+export interface MmdRuntimeWorkerEndpointOptions {
+  readonly createExternalPhysicsBackend?: (
+    config: CustomBulletWorkerPhysicsConfig
+  ) => Promise<MmdPhysicsBackend>;
+}
+
 /** Owns one logical character runtime behind any Worker-like message port. */
 export class MmdRuntimeWorkerEndpoint {
   private readonly port: MmdRuntimeWorkerMessagePort;
+  private readonly createExternalPhysicsBackend: NonNullable<
+    MmdRuntimeWorkerEndpointOptions["createExternalPhysicsBackend"]
+  >;
   private readonly preReadyCommands: ReadyCommand[] = [];
   private readonly poseEvent: Extract<MmdRuntimeWorkerEvent, { readonly type: "pose" }> = {
     type: "pose",
@@ -30,9 +44,16 @@ export class MmdRuntimeWorkerEndpoint {
   private pool: MmdRuntimeTransferablePosePool | undefined;
   private pendingTick: Extract<MmdRuntimeWorkerCommand, { readonly type: "tick" }> | undefined;
   private disposed = false;
+  private initializing = false;
+  private ownedPhysicsBackend: MmdPhysicsBackend | undefined;
 
-  constructor(port: MmdRuntimeWorkerMessagePort) {
+  constructor(
+    port: MmdRuntimeWorkerMessagePort,
+    options: MmdRuntimeWorkerEndpointOptions = {}
+  ) {
     this.port = port;
+    this.createExternalPhysicsBackend =
+      options.createExternalPhysicsBackend ?? createWorkerExternalPhysicsBackend;
   }
 
   handle(command: MmdRuntimeWorkerCommand): void {
@@ -58,14 +79,67 @@ export class MmdRuntimeWorkerEndpoint {
   }
 
   private initialize(command: Extract<MmdRuntimeWorkerCommand, { readonly type: "init" }>): void {
-    if (this.host) {
+    if (this.host || this.initializing) {
       throw new Error("MMD runtime worker endpoint is already initialized");
     }
     if (command.runtimeOptions?.physics === "external") {
-      throw new Error("External MMD physics is not supported by the transferable worker endpoint");
+      if (!command.externalPhysics) {
+        throw new Error("External MMD physics worker configuration is required");
+      }
+      this.initializing = true;
+      void this.initializeExternal(command);
+      return;
     }
+    if (command.externalPhysics) {
+      throw new Error("External MMD physics worker configuration requires physics mode external");
+    }
+    this.finishInitialize(command);
+  }
+
+  private async initializeExternal(
+    command: Extract<MmdRuntimeWorkerCommand, { readonly type: "init" }>
+  ): Promise<void> {
+    let backend: MmdPhysicsBackend | undefined;
+    try {
+      const config = command.externalPhysics;
+      if (!config) {
+        throw new Error("External MMD physics worker configuration is required");
+      }
+      backend = await this.createExternalPhysicsBackend(config);
+      if (this.disposed) {
+        backend.dispose?.();
+        return;
+      }
+      this.ownedPhysicsBackend = backend;
+      this.finishInitialize(command, backend);
+    } catch (error) {
+      backend?.dispose?.();
+      if (this.ownedPhysicsBackend === backend) {
+        this.ownedPhysicsBackend = undefined;
+      }
+      this.host?.dispose();
+      this.host = undefined;
+      this.pool = undefined;
+      this.preReadyCommands.length = 0;
+      if (!this.disposed) {
+        this.port.postMessage({
+          type: "error",
+          message: error instanceof Error ? error.message : String(error)
+        });
+      }
+    } finally {
+      this.initializing = false;
+    }
+  }
+
+  private finishInitialize(
+    command: Extract<MmdRuntimeWorkerCommand, { readonly type: "init" }>,
+    physicsBackend?: MmdPhysicsBackend
+  ): void {
     this.host = new MmdRuntimeWorkerHost(command.descriptor, {
-      runtimeOptions: command.runtimeOptions
+      runtimeOptions: physicsBackend
+        ? { ...command.runtimeOptions, physicsBackend }
+        : command.runtimeOptions
     });
     this.pool = new MmdRuntimeTransferablePosePool(
       command.descriptor.bones.length,
@@ -213,6 +287,8 @@ export class MmdRuntimeWorkerEndpoint {
     this.pool = undefined;
     this.sharedPoseSlots = undefined;
     this.sharedPoseEvents = [];
+    this.ownedPhysicsBackend?.dispose?.();
+    this.ownedPhysicsBackend = undefined;
     this.port.postMessage({ type: "disposed" });
   }
 }

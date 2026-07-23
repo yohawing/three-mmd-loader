@@ -31,6 +31,8 @@ export type {
   MmdRuntimeModelDescriptor
 } from "./modelDescriptor.js";
 export type { MmdRuntimeWorkerHostOptions } from "./host.js";
+export type { MmdRuntimeWorkerEndpointOptions } from "./endpoint.js";
+export type { CustomBulletWorkerPhysicsConfig } from "./externalPhysics.js";
 export type {
   MmdRuntimeWorkerCommandEnvelope,
   MmdRuntimeWorkerCommand,

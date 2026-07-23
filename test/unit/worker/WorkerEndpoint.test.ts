@@ -16,6 +16,11 @@ import type {
   MmdRuntimeWorkerEvent,
   MmdRuntimeWorkerMessagePort
 } from "../../../src/worker/index.js";
+import type {
+  MmdPhysicsBackend,
+  MmdPhysicsStepContext,
+  MmdPhysicsStepResult
+} from "../../../src/physics/index.js";
 
 describe("MMD runtime worker endpoint", () => {
   it("queues before ready, coalesces ticks, recycles buffers, and disposes", async () => {
@@ -116,7 +121,75 @@ describe("MMD runtime worker endpoint", () => {
     expect(port.events.at(-1)).toEqual({ type: "sharedPose", slot: 0 });
     expect(readMmdRuntimeSharedPoseInto(firstSlot, pose)?.seconds).toBe(0.3);
   });
+
+  it("initializes and disposes an external backend owned by the worker", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx"))
+    );
+    const port = new TransferEmulatingPort();
+    const backend = new RecordingPhysicsBackend();
+    const endpoint = new MmdRuntimeWorkerEndpoint(port, {
+      createExternalPhysicsBackend: async () => backend
+    });
+    endpoint.handle({
+      type: "init",
+      descriptor: serializeMmdRuntimeModelDescriptor(model.mesh),
+      runtimeOptions: { physics: "external" },
+      externalPhysics: { kind: "custom-bullet-mmd" }
+    });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.25 });
+    await Promise.resolve();
+    expect(port.events[0]).toEqual({ type: "ready", epoch: 0 });
+    expect(port.poseEvents().at(-1)?.pose.seconds).toBe(0.25);
+    endpoint.handle({ type: "dispose" });
+    expect(backend.disposeCount).toBe(1);
+  });
+
+  it("disposes an external backend that resolves after the endpoint", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx"))
+    );
+    const port = new TransferEmulatingPort();
+    const backend = new RecordingPhysicsBackend();
+    let resolveBackend: ((backend: MmdPhysicsBackend) => void) | undefined;
+    const endpoint = new MmdRuntimeWorkerEndpoint(port, {
+      createExternalPhysicsBackend: () => new Promise((resolvePromise) => {
+        resolveBackend = resolvePromise;
+      })
+    });
+    endpoint.handle({
+      type: "init",
+      descriptor: serializeMmdRuntimeModelDescriptor(model.mesh),
+      runtimeOptions: { physics: "external" },
+      externalPhysics: { kind: "custom-bullet-mmd" }
+    });
+    endpoint.handle({ type: "dispose" });
+    resolveBackend?.(backend);
+    await Promise.resolve();
+    expect(backend.disposeCount).toBe(1);
+    expect(port.events).toEqual([{ type: "disposed" }]);
+  });
 });
+
+class RecordingPhysicsBackend implements MmdPhysicsBackend {
+  readonly name = "recording";
+  readonly disabled = false;
+  disposeCount = 0;
+
+  get disposed(): boolean {
+    return this.disposeCount > 0;
+  }
+
+  step(_context: MmdPhysicsStepContext): MmdPhysicsStepResult {
+    return { simulated: true };
+  }
+
+  dispose(): void {
+    this.disposeCount += 1;
+  }
+}
 
 class TransferEmulatingPort implements MmdRuntimeWorkerMessagePort {
   readonly events: MmdRuntimeWorkerEvent[] = [];
