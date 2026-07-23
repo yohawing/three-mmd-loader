@@ -10,6 +10,15 @@ export {
 } from "./applyPose.js";
 export { MmdRuntimeTransferablePosePool } from "./transferablePool.js";
 export {
+  acquireMmdRuntimeSharedPoseWriteSlot,
+  createMmdRuntimeSharedPoseReadBuffer,
+  createMmdRuntimeSharedPoseSlots,
+  publishMmdRuntimeSharedPose,
+  readMmdRuntimeSharedPoseInto,
+  releaseMmdRuntimeSharedPoseReadSlot,
+  resetMmdRuntimeSharedPoseSlot
+} from "./sharedPose.js";
+export {
   MMD_RUNTIME_POSE_PROTOCOL_VERSION,
   captureMmdRuntimePoseInto,
   copyMmdRuntimePoseInto,
@@ -28,3 +37,4 @@ export type {
 } from "./messages.js";
 export type { MmdRuntimePoseApplyScratch } from "./applyPose.js";
 export type { MmdRuntimePoseBuffer } from "./protocol.js";
+export type { MmdRuntimeSharedPoseSlot } from "./sharedPose.js";
