@@ -26,6 +26,7 @@ describe("browser runtime worker benchmark source", () => {
     expect(source).toContain("fallbackCount");
     expect(source).toContain("fallbackErrors");
     expect(source).toContain("At least one runtime-worker fixture case is required");
+    expect(source).toContain('characters.push({ role: "secondary", ...fixtureCase.secondary })');
     expect(source).toContain("runtimeFactory.dispose()");
   });
 

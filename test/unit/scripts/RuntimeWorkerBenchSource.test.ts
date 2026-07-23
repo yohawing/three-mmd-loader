@@ -19,6 +19,7 @@ describe("runtime worker benchmark source", () => {
     expect(source).toContain('physics: "external"');
     expect(source).toContain('{ kind: "custom-bullet-mmd" }');
     expect(source).toContain("parsedCases[characterIndex % parsedCases.length]");
+    expect(source).toContain('characters.push({ role: "secondary", ...fixtureCase.secondary })');
     expect(source).toContain("poseAgeFrames()");
     expect(source).toContain("runtime.frameState().seconds");
     expect(source).toContain("model.update(seconds, { physics: true })");

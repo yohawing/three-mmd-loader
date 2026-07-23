@@ -317,21 +317,23 @@ function resolveFixtureCases(fixtures, requestedNames, fixturesPath) {
   const names = requestedNames.length > 0 ? requestedNames : candidates
     .filter((candidate) => candidate.regressionTags?.includes("runtime-worker"))
     .map((candidate) => candidate.name);
-  return names.map((name) => {
+  return names.flatMap((name) => {
     const fixtureCase = candidates.find((candidate) => candidate.name === name);
     if (!fixtureCase) {
       throw new Error(`Fixture case not found: ${name}`);
     }
-    const modelPath = resolveFixtureReference(root, byExtension, fixtureCase.model);
-    const motionPath = resolveFixtureReference(root, byExtension, {
-      extension: "vmd",
-      key: fixtureCase.motion?.key
-    });
-    return {
-      name,
-      modelPath,
-      motionPath
-    };
+    const characters = [{ role: "primary", model: fixtureCase.model, motion: fixtureCase.motion }];
+    if (fixtureCase.secondary) {
+      characters.push({ role: "secondary", ...fixtureCase.secondary });
+    }
+    return characters.map((character) => ({
+      name: characters.length === 1 ? name : `${name}:${character.role}`,
+      modelPath: resolveFixtureReference(root, byExtension, character.model),
+      motionPath: resolveFixtureReference(root, byExtension, {
+        extension: "vmd",
+        key: character.motion?.key
+      })
+    }));
   });
 }
 

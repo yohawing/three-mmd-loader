@@ -393,21 +393,27 @@ function resolveFixtureCases(fixtures, requestedNames, fixturesPath) {
   const dataRoot = typeof fixtures.basePath === "string"
     ? resolve(dirname(fixturesPath), fixtures.basePath)
     : undefined;
-  return names.map((name) => {
+  return names.flatMap((name) => {
     const fixtureCase = candidates.find((candidate) => candidate.name === name);
     if (!fixtureCase) {
       throw new Error(`Fixture case not found: ${name}`);
     }
-    const modelPath = byExtension?.[fixtureCase.model.extension]?.[fixtureCase.model.key];
-    const motionPath = byExtension?.vmd?.[fixtureCase.motion.key];
-    if (!dataRoot || typeof modelPath !== "string" || typeof motionPath !== "string") {
-      throw new Error(`Fixture paths are unavailable for ${name}`);
+    const characters = [{ role: "primary", model: fixtureCase.model, motion: fixtureCase.motion }];
+    if (fixtureCase.secondary) {
+      characters.push({ role: "secondary", ...fixtureCase.secondary });
     }
-    return {
-      name,
-      modelUrl: fixtureDataUrl(dataRoot, modelPath),
-      motionUrl: fixtureDataUrl(dataRoot, motionPath)
-    };
+    return characters.map((character) => {
+      const modelPath = byExtension?.[character.model.extension]?.[character.model.key];
+      const motionPath = byExtension?.vmd?.[character.motion.key];
+      if (!dataRoot || typeof modelPath !== "string" || typeof motionPath !== "string") {
+        throw new Error(`Fixture paths are unavailable for ${name}:${character.role}`);
+      }
+      return {
+        name: characters.length === 1 ? name : `${name}:${character.role}`,
+        modelUrl: fixtureDataUrl(dataRoot, modelPath),
+        motionUrl: fixtureDataUrl(dataRoot, motionPath)
+      };
+    });
   });
 }
 
