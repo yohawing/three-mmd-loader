@@ -53,6 +53,10 @@
     "./physics": {
       "types": "./dist/physics/index.d.ts",
       "default": "./dist/physics/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker/index.d.ts",
+      "default": "./dist/worker/index.js"
     }
   },
   "scripts": {

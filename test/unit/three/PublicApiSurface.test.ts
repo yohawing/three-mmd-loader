@@ -11,6 +11,7 @@ describe("public API surface", () => {
     const publicRootIndex = await readFile("src/index.ts", "utf8");
 
     expect(packageJson.exports).toHaveProperty("./webgpu");
+    expect(packageJson.exports).toHaveProperty("./worker");
     expect(packageJson.exports).not.toHaveProperty("./webgpu/material-core");
     expect(packageJson.exports).not.toHaveProperty("./webgpu/material-assembly");
     expect(publicThreeIndex).not.toContain("../webgpu/");
