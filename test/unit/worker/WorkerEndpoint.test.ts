@@ -146,6 +146,38 @@ describe("MMD runtime worker endpoint", () => {
     expect(backend.disposeCount).toBe(1);
   });
 
+  it("coalesces ticks while an external backend initializes", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx"))
+    );
+    const port = new TransferEmulatingPort();
+    const backend = new RecordingPhysicsBackend();
+    let resolveBackend: ((backend: MmdPhysicsBackend) => void) | undefined;
+    const endpoint = new MmdRuntimeWorkerEndpoint(port, {
+      createExternalPhysicsBackend: () => new Promise((resolvePromise) => {
+        resolveBackend = resolvePromise;
+      })
+    });
+    endpoint.handle({
+      type: "init",
+      descriptor: serializeMmdRuntimeModelDescriptor(model.mesh),
+      runtimeOptions: { physics: "external" },
+      externalPhysics: { kind: "custom-bullet-mmd" }
+    });
+    for (let index = 0; index < 64; index += 1) {
+      endpoint.handle({ type: "tick", epoch: 0, seconds: index / 60 });
+    }
+
+    expect(port.events).toEqual([]);
+    resolveBackend?.(backend);
+    await Promise.resolve();
+
+    expect(port.events[0]).toEqual({ type: "ready", epoch: 0 });
+    expect(port.poseEvents()).toHaveLength(1);
+    expect(port.poseEvents()[0]?.pose.seconds).toBe(63 / 60);
+  });
+
   it("disposes an external backend that resolves after the endpoint", async () => {
     const loader = new ThreeMmdLoader();
     const model = await loader.loadModel(

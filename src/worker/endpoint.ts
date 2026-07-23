@@ -42,6 +42,7 @@ export class MmdRuntimeWorkerEndpoint {
   private sharedPoseEvents: readonly Extract<MmdRuntimeWorkerEvent, { readonly type: "sharedPose" }>[] = [];
   private host: MmdRuntimeWorkerHost | undefined;
   private pool: MmdRuntimeTransferablePosePool | undefined;
+  private preReadyTick: Extract<MmdRuntimeWorkerCommand, { readonly type: "tick" }> | undefined;
   private pendingTick: Extract<MmdRuntimeWorkerCommand, { readonly type: "tick" }> | undefined;
   private disposed = false;
   private initializing = false;
@@ -121,6 +122,7 @@ export class MmdRuntimeWorkerEndpoint {
       this.host = undefined;
       this.pool = undefined;
       this.preReadyCommands.length = 0;
+      this.preReadyTick = undefined;
       if (!this.disposed) {
         this.port.postMessage({
           type: "error",
@@ -165,11 +167,20 @@ export class MmdRuntimeWorkerEndpoint {
       }
     }
     this.preReadyCommands.length = 0;
+    const preReadyTick = this.preReadyTick;
+    this.preReadyTick = undefined;
+    if (preReadyTick) {
+      this.handleReadyCommand(preReadyTick);
+    }
   }
 
   private queueBeforeReady(command: ReadyCommand): void {
     if (command.type === "dispose") {
       this.dispose();
+      return;
+    }
+    if (command.type === "tick") {
+      this.preReadyTick = command;
       return;
     }
     if (this.preReadyCommands.length >= maxPreReadyCommands) {
@@ -282,6 +293,7 @@ export class MmdRuntimeWorkerEndpoint {
     this.disposed = true;
     this.pendingTick = undefined;
     this.preReadyCommands.length = 0;
+    this.preReadyTick = undefined;
     this.host?.dispose();
     this.host = undefined;
     this.pool = undefined;
