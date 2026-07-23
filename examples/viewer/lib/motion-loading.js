@@ -71,6 +71,9 @@ export async function loadMotion(source, label = source.name ?? "motion") {
     };
     await ensurePhysicsBackendReady();
     state.currentModel.setAnimation(animation);
+    for (let index = 1; index < state.characterModels.length; index += 1) {
+      state.characterModels[index]?.setAnimation(animation);
+    }
     dom.timeline.max = Math.max(animationDurationSeconds(animation), state.currentCameraMotion?.durationSeconds ?? 0, 0.001);
     state.elapsedSeconds = 0;
     dom.timeline.value = 0;
@@ -103,6 +106,9 @@ export async function loadPose(source, label = source.name ?? "pose") {
     state.currentPoseSource = source;
     state.currentPoseLabel = label;
     state.currentModel.setAnimation(poseAnimation);
+    for (let index = 1; index < state.characterModels.length; index += 1) {
+      state.characterModels[index]?.setAnimation(poseAnimation);
+    }
     state.elapsedSeconds = 0;
     dom.timeline.max = 1;
     dom.timeline.value = 0;
@@ -154,6 +160,9 @@ export function clearMotion() {
   state.pendingMotionLabel = undefined;
   if (state.currentModel) {
     state.currentModel.setAnimation(state.restPoseAnimation);
+  }
+  for (let index = 1; index < state.characterModels.length; index += 1) {
+    state.characterModels[index]?.setAnimation(state.restPoseAnimation);
   }
   if (dom.timeline) {
     dom.timeline.max = Math.max(state.currentCameraMotion?.durationSeconds ?? 0, 0.001);

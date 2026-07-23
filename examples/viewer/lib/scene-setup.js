@@ -181,10 +181,14 @@ export function adaptCameraDepthRange() {
     return;
   }
   const bounds = adaptCameraDepthRangeBoundsScratch.makeEmpty();
-  if (state.currentModel?.mesh) {
-    const modelBounds = new THREE.Box3().setFromObject(state.currentModel.mesh);
-    if (!modelBounds.isEmpty()) {
-      bounds.union(modelBounds);
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const mesh = models[index]?.mesh;
+    if (mesh) {
+      const modelBounds = new THREE.Box3().setFromObject(mesh);
+      if (!modelBounds.isEmpty()) {
+        bounds.union(modelBounds);
+      }
     }
   }
   if (state.currentBackground?.mesh) {
@@ -255,7 +259,22 @@ export function updateShadowCameraForFrame(object) {
     return;
   }
   if (state.selfShadowBoundsRefreshCountdown <= 0) {
-    state.selfShadowBoundsScratch.setFromObject(object);
+    const bounds = state.selfShadowBoundsScratch.makeEmpty();
+    const models = state.characterModels;
+    if (models.length > 0) {
+      for (let index = 0; index < models.length; index += 1) {
+        const mesh = models[index]?.mesh;
+        if (!mesh) {
+          continue;
+        }
+        state.selfShadowModelBoundsScratch.setFromObject(mesh);
+        if (!state.selfShadowModelBoundsScratch.isEmpty()) {
+          bounds.union(state.selfShadowModelBoundsScratch);
+        }
+      }
+    } else {
+      bounds.setFromObject(object);
+    }
     state.selfShadowBoundsRefreshCountdown = shadowBoundsRefreshFrames() - 1;
   } else {
     state.selfShadowBoundsRefreshCountdown -= 1;

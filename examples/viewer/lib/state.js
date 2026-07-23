@@ -59,6 +59,10 @@ export const state = {
   controls: undefined,
   keyLight: undefined,
   currentModel: undefined,
+  secondaryModel: undefined,
+  // Reused by the playback loop so multi-character playback does not create
+  // a temporary collection on every frame. Index 0 is always the primary.
+  characterModels: [],
   currentBackground: undefined,
   currentMotion: undefined,
   currentPoseSource: undefined,
@@ -104,6 +108,7 @@ export const state = {
   cameraUpScratch: new THREE.Vector3(),
   lightDirectionScratch: new THREE.Vector3(),
   selfShadowBoundsScratch: new THREE.Box3(),
+  selfShadowModelBoundsScratch: new THREE.Box3(),
   selfShadowBoundsRefreshCountdown: 0,
   selfShadowStateScratch: {
     mode: 1,

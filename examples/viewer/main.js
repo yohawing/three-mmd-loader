@@ -7,7 +7,7 @@ import { captureCanvas, captureAfterAndCompare, createViewerDebugApi, markBefore
 import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updatePlayToggle, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
-import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
+import { loadModelFolder, loadModelFromUrl, loadSecondaryModelFromUrl, loadSecondaryModelFile, loadSecondaryModelFolder, modelFileKey, bindDropTarget, clearModel, clearSecondaryModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
@@ -23,11 +23,13 @@ const viewerApi = {
   get renderer() { return state.renderer; },
   get scene() { return state.scene; },
   loadModelUrl: loadModelFromUrl,
+  loadSecondaryModelUrl: loadSecondaryModelFromUrl,
   loadMotionUrl: loadMotionFromUrl,
   loadBackgroundUrl: loadBackgroundFromUrl,
   loadCameraUrl: loadCameraFromUrl,
   frameModel: frameCurrentModel,
   get currentModel() { return state.currentModel; },
+  get secondaryModel() { return state.secondaryModel; },
   get currentMotion() { return state.currentMotion; },
   get currentBackground() { return state.currentBackground; },
   get currentCameraMotion() { return state.currentCameraMotion; }
@@ -79,6 +81,12 @@ function bindControls() {
     }
   });
   document.querySelector("#choose-model-folder")?.addEventListener("click", () => dom.modelFolderInput?.click());
+  document.querySelector("#choose-secondary-model")?.addEventListener("click", () => dom.secondaryModelInput?.click());
+  document.querySelector("#choose-secondary-model-folder")?.addEventListener("click", () => dom.secondaryModelFolderInput?.click());
+  document.querySelector("#clear-secondary-model")?.addEventListener("click", () => {
+    clearSecondaryModel();
+    renderStillFrame();
+  });
   document.querySelector("#choose-motion")?.addEventListener("click", () => dom.motionFileInput?.click());
   document.querySelector("#choose-pose")?.addEventListener("click", () => dom.poseFileInput?.click());
   document.querySelector("#choose-audio")?.addEventListener("click", () => dom.audioFileInput?.click());
@@ -91,6 +99,14 @@ function bindControls() {
   dom.modelFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
     if (files && files.length > 0) void loadModelFolder(Array.from(files));
+  });
+  dom.secondaryModelInput?.addEventListener("change", (event) => {
+    const file = event.target instanceof HTMLInputElement ? event.target.files?.[0] : undefined;
+    if (file) void loadSecondaryModelFile(file);
+  });
+  dom.secondaryModelFolderInput?.addEventListener("change", (event) => {
+    const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
+    if (files && files.length > 0) void loadSecondaryModelFolder(Array.from(files));
   });
   dom.modelSwitcher?.addEventListener("sl-change", () => {
     const selectedValue = loadedFileSwitcherValue(dom.modelSwitcher);

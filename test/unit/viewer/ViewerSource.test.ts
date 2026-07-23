@@ -26,6 +26,50 @@ describe("example viewer source", () => {
     expect(disposeSource).not.toContain("function collectMaterialTextures(material)");
   });
 
+  it("keeps an explicitly added character live beside the primary model", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+
+    expect(html).toContain('id="choose-secondary-model"');
+    expect(html).toContain('id="choose-secondary-model-folder"');
+    expect(html).toContain('id="secondary-model-file"');
+    expect(html).toContain('id="secondary-model-folder"');
+    expect(domSource).toContain('secondaryModelInput: document.querySelector("#secondary-model-file")');
+    expect(domSource).toContain('secondaryModelFolderInput: document.querySelector("#secondary-model-folder")');
+    expect(mainSource).toContain("loadSecondaryModelFile(file)");
+    expect(mainSource).toContain("loadSecondaryModelFolder(Array.from(files))");
+    expect(mainSource).toContain("loadSecondaryModelUrl");
+    expect(mainSource).toContain("get secondaryModel() { return state.secondaryModel; }");
+    expect(modelSource).toContain("loadOptions.secondary === true && state.currentModel !== undefined");
+    expect(modelSource).toContain("if (!isSecondary) {");
+    expect(modelSource).toContain("state.secondaryModel = loadedModel");
+    expect(modelSource).toContain("state.characterModels[1] = loadedModel");
+    expect(modelSource).toContain("export function clearSecondaryModel(options = {})");
+    expect(modelSource).toContain("export async function loadSecondaryModelFolder(files, loadOptions = {})");
+    expect(modelSource).toContain("folderTextureMap: textureMap");
+    expect(modelSource).toContain("disposeModelResources(state.secondaryModel)");
+    expect(stateSource).toContain("characterModels: []");
+    expect(playbackSource).toContain("const models = state.characterModels");
+    expect(playbackSource).toContain("for (let index = 0; index < models.length; index += 1)");
+    expect(playbackSource).toContain("state.currentModel.update(currentMmdSeconds(), updateOptions)");
+    expect(playbackSource).toContain("updateShadowCameraForFrame(state.currentModel.mesh)");
+    expect(playbackSource).not.toContain("updateShadowCameraForFrame(model.mesh)");
+    const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    expect(sceneSetupSource).toContain("selfShadowModelBoundsScratch.setFromObject(mesh)");
+    expect(sceneSetupSource).toContain("bounds.union(state.selfShadowModelBoundsScratch)");
+    expect(pipelineSource).toContain("for (let index = 0; index < models.length; index += 1)");
+    expect(pipelineSource).toContain("setTslOutlineHidden(material, hidden)");
+    expect(debugSource).toContain("state.characterModels[index]?.outlineMeshes?.forEach");
+    expect(motionSource).toContain("state.characterModels[index]?.setAnimation(animation)");
+  });
+
   it("keeps the default viewer camera far clip distance wide enough for large stages", async () => {
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
 

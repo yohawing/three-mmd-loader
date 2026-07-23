@@ -275,6 +275,11 @@ export function setOutlineHidden(hidden) {
   state.currentModel?.outlineMeshes?.forEach((outline) => {
     outline.visible = !state.debugOutlineHidden;
   });
+  for (let index = 1; index < state.characterModels.length; index += 1) {
+    state.characterModels[index]?.outlineMeshes?.forEach((outline) => {
+      outline.visible = !state.debugOutlineHidden;
+    });
+  }
   setCurrentModelTslOutlineHidden(state.debugOutlineHidden);
   submitViewerRender();
   refreshDebugPanelState();

@@ -81,6 +81,8 @@ export const dom = {
   viewportGridToggle: document.querySelector("#viewport-grid-toggle"),
   viewportAxesToggle: document.querySelector("#viewport-axes-toggle"),
   modelFolderInput: document.querySelector("#model-folder"),
+  secondaryModelInput: document.querySelector("#secondary-model-file"),
+  secondaryModelFolderInput: document.querySelector("#secondary-model-folder"),
   motionFileInput: document.querySelector("#motion-file"),
   poseFileInput: document.querySelector("#pose-file"),
   audioFileInput: document.querySelector("#audio-file"),

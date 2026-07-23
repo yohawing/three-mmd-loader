@@ -50,18 +50,27 @@ export function evaluateRuntime(options) {
     state.elapsedSeconds %= maxTime;
     syncAudioToMotionTime();
   }
-  if (state.currentModel?.runtime) {
-    const updateOptions = state.runtimeUpdateOptionsScratch;
-    updateOptions.ik = options?.ik ?? hasCurrentMotion();
-    updateOptions.physics =
-      state.physicsEnabled && (options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0));
-    state.currentModel.update(currentMmdSeconds(), updateOptions);
-    syncCurrentModelTslMaterialStates();
+  const updateOptions = state.runtimeUpdateOptionsScratch;
+  updateOptions.ik = options?.ik ?? hasCurrentMotion();
+  updateOptions.physics =
+    state.physicsEnabled && (options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0));
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
+    if (!model?.runtime) {
+      continue;
+    }
+    if (index === 0 && state.currentModel === model) {
+      state.currentModel.update(currentMmdSeconds(), updateOptions);
+    } else {
+      model.update(currentMmdSeconds(), updateOptions);
+    }
   }
-  applyLightMotion();
   if (state.currentModel?.mesh) {
     updateShadowCameraForFrame(state.currentModel.mesh);
   }
+  syncCurrentModelTslMaterialStates();
+  applyLightMotion();
   applySelfShadowMotion();
   if (dom.timeline) {
     dom.timeline.value = state.elapsedSeconds;
@@ -93,6 +102,12 @@ function applyLightMotion() {
   } else {
     if (state.currentModel?.mesh?.material) {
       syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
+    for (let index = 1; index < state.characterModels.length; index += 1) {
+      const material = state.characterModels[index]?.mesh?.material;
+      if (material) {
+        syncMmdSpecularDirection(material, state.keyLight);
+      }
     }
     if (state.currentBackground?.mesh?.material) {
       syncMmdSpecularDirection(state.currentBackground.mesh.material, state.keyLight);

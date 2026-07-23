@@ -141,8 +141,12 @@ export function syncViewerTslLight() {
   if (!isTslViewerPipeline() || isNativeTslWebGpuPipeline()) {
     return;
   }
-  if (state.currentModel?.mesh?.material) {
-    syncTslMaterialLight(state.currentModel.mesh.material);
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const material = models[index]?.mesh?.material;
+    if (material) {
+      syncTslMaterialLight(material);
+    }
   }
   if (state.currentBackground?.mesh?.material) {
     syncTslMaterialLight(state.currentBackground.mesh.material);
@@ -150,25 +154,34 @@ export function syncViewerTslLight() {
 }
 
 export function syncCurrentModelTslMaterialStates() {
-  if (!isTslViewerPipeline() || isNativeTslWebGpuPipeline() || !state.currentModel?.mesh?.material) {
+  if (!isTslViewerPipeline() || isNativeTslWebGpuPipeline()) {
     return;
   }
-  syncTslMaterialStates(state.currentModel.mesh.material);
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const material = models[index]?.mesh?.material;
+    if (material) {
+      syncTslMaterialStates(material);
+    }
+  }
 }
 
 export function computeCurrentModelTslSparsePositionMorphs() {
   if (isNativeTslWebGpuPipeline()) {
     return false;
   }
-  if (
-    !isTslViewerPipeline() ||
-    state.renderer?.backend?.isWebGPUBackend !== true ||
-    !state.currentModel?.mesh ||
-    !computeMmdTslSparsePositionMorphs
-  ) {
+  if (!isTslViewerPipeline() || state.renderer?.backend?.isWebGPUBackend !== true || !computeMmdTslSparsePositionMorphs) {
     return false;
   }
-  return computeMmdTslSparsePositionMorphs(state.renderer, state.currentModel.mesh);
+  let computed = false;
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const mesh = models[index]?.mesh;
+    if (mesh) {
+      computed = computeMmdTslSparsePositionMorphs(state.renderer, mesh) || computed;
+    }
+  }
+  return computed;
 }
 
 export function submitViewerRender() {
@@ -265,10 +278,16 @@ export function disposeViewerPipelineModel(model) {
 }
 
 export function setCurrentModelTslOutlineHidden(hidden) {
-  if (!isTslViewerPipeline() || !state.currentModel?.mesh?.material) {
+  if (!isTslViewerPipeline()) {
     return;
   }
-  setTslOutlineHidden(state.currentModel.mesh.material, hidden);
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const material = models[index]?.mesh?.material;
+    if (material) {
+      setTslOutlineHidden(material, hidden);
+    }
+  }
 }
 
 export function setMmdTslDedicatedRawVisibilityDebug(enabled = true) {
