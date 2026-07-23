@@ -95,6 +95,28 @@ export function isCurrentMmdRuntimePose(
   return pose.epoch === epoch && pose.sequence > lastAppliedSequence;
 }
 
+/** Copies pose metadata and payload into a reusable transferable buffer. */
+export function copyMmdRuntimePoseInto(
+  source: MmdRuntimePoseBuffer,
+  target: MmdRuntimePoseBuffer
+): MmdRuntimePoseBuffer {
+  if (
+    source.worldMatricesColumnMajor.length !== target.worldMatricesColumnMajor.length ||
+    source.morphWeights.length !== target.morphWeights.length
+  ) {
+    throw new RangeError("MMD runtime pose copy buffer length mismatch");
+  }
+  target.worldMatricesColumnMajor.set(source.worldMatricesColumnMajor);
+  target.morphWeights.set(source.morphWeights);
+  const mutableTarget = target as MutableMmdRuntimePoseBuffer;
+  mutableTarget.epoch = source.epoch;
+  mutableTarget.sequence = source.sequence;
+  mutableTarget.seconds = source.seconds;
+  mutableTarget.frame = source.frame;
+  mutableTarget.frameRate = source.frameRate;
+  return target;
+}
+
 function assertCount(value: number, label: string): void {
   if (!Number.isInteger(value) || value < 0) {
     throw new RangeError(`MMD runtime pose ${label} count must be a non-negative integer`);
