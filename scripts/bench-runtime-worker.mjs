@@ -35,6 +35,13 @@ const main = async () => {
       }));
     }
   }
+  const capacity = args.characterCounts.map((characterCount) => ({
+    characterCount,
+    passingPoolSizes: results
+      .filter((result) => result.characterCount === characterCount && result.gate.passed)
+      .map((result) => result.poolSize)
+  }));
+  const operational = results.every((result) => result.gate.operational);
   const output = {
     benchmark: "runtime-worker",
     runtime: {
@@ -52,14 +59,20 @@ const main = async () => {
     warmup: args.warmup,
     frames: args.frames,
     frameRate: args.frameRate,
+    displayRate: args.displayRate,
     gates: {
       updateP95Ms: `< ${UPDATE_P95_GATE_MS}`,
       poseAgeP95Frames: `<= ${POSE_AGE_P95_GATE_FRAMES}`,
       fallbackCount: "=== 0",
-      longTaskProxyCount: "=== 0"
+      longTaskProxyCount: "=== 0",
+      capacity: "Every character count must have at least one passing pool size; saturated cells remain reported."
     },
     matrices: results,
-    passed: results.every((result) => result.gate.passed)
+    capacity,
+    saturatedMatrices: results
+      .filter((result) => result.gate.operational && !result.gate.realtime)
+      .map((result) => ({ characterCount: result.characterCount, poolSize: result.poolSize })),
+    passed: operational && capacity.every((entry) => entry.passingPoolSizes.length > 0)
   };
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
   if (!output.passed) {
@@ -80,6 +93,9 @@ async function runMatrix({ args, fixtureCases, characterCount, poolSize }) {
       frameRate: args.frameRate,
       physics: args.physics
     },
+    externalPhysics: args.physics === "external"
+      ? { kind: "custom-bullet-mmd" }
+      : undefined,
     onFallback: () => {
       fallbackState.count += 1;
     },
@@ -125,8 +141,10 @@ async function runMatrix({ args, fixtureCases, characterCount, poolSize }) {
     const monitor = startLongTaskProxy();
     try {
       const totalFrames = args.warmup + args.frames;
+      const displayIntervalMs = 1_000 / args.displayRate;
+      let nextDisplayAt = performance.now();
       for (let frameIndex = 0; frameIndex < totalFrames; frameIndex += 1) {
-        const seconds = frameIndex / args.frameRate;
+        const seconds = frameIndex / args.displayRate;
         for (let characterIndex = 0; characterIndex < loadedModels.length; characterIndex += 1) {
           const model = loadedModels[characterIndex];
           const updateStartedAt = performance.now();
@@ -138,13 +156,14 @@ async function runMatrix({ args, fixtureCases, characterCount, poolSize }) {
             poseAges.push(isWorkerRuntime(runtime) ? runtime.poseAgeFrames() : 0);
           }
         }
-        await sleep(0);
+        nextDisplayAt += displayIntervalMs;
+        await sleep(Math.max(0, nextDisplayAt - performance.now()));
       }
     } finally {
       longTaskProxyCount = monitor.stop();
     }
 
-    const finalSeconds = (args.warmup + args.frames - 1) / args.frameRate;
+    const finalSeconds = (args.warmup + args.frames - 1) / args.displayRate;
     const settled = await waitUntil(
       () => runtimes.every((runtime) => {
         if (!isWorkerRuntime(runtime)) {
@@ -170,6 +189,12 @@ async function runMatrix({ args, fixtureCases, characterCount, poolSize }) {
   const update = summarizeDurations(updateDurations);
   const poseAge = summarizeDurations(poseAges);
   const wallTimeMs = performance.now() - startedAt;
+  const operational = update.p95 < UPDATE_P95_GATE_MS
+    && fallbackState.count === 0
+    && longTaskProxyCount === 0
+    && !timeout
+    && workerReady;
+  const realtime = poseAge.p95 <= POSE_AGE_P95_GATE_FRAMES;
   const gate = {
     updateP95: update.p95 < UPDATE_P95_GATE_MS,
     poseAgeP95: poseAge.p95 <= POSE_AGE_P95_GATE_FRAMES,
@@ -177,12 +202,9 @@ async function runMatrix({ args, fixtureCases, characterCount, poolSize }) {
     longTaskProxy: longTaskProxyCount === 0,
     timeout: !timeout,
     workerReady,
-    passed: update.p95 < UPDATE_P95_GATE_MS
-      && poseAge.p95 <= POSE_AGE_P95_GATE_FRAMES
-      && fallbackState.count === 0
-      && longTaskProxyCount === 0
-      && !timeout
-      && workerReady
+    operational,
+    realtime,
+    passed: operational && realtime
   };
   return {
     characterCount,
@@ -330,7 +352,8 @@ function parseArgs(argv) {
     warmup: 30,
     frames: 120,
     frameRate: 30,
-    physics: "stateful-spring",
+    displayRate: 60,
+    physics: "external",
     help: false
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -351,10 +374,12 @@ function parseArgs(argv) {
       args.frames = readPositiveInteger(readOption(argv, ++index, option), option);
     } else if (option === "--frame-rate") {
       args.frameRate = readPositiveNumber(readOption(argv, ++index, option), option);
+    } else if (option === "--display-rate") {
+      args.displayRate = readPositiveNumber(readOption(argv, ++index, option), option);
     } else if (option === "--physics") {
       args.physics = readOption(argv, ++index, option);
-      if (args.physics !== "stateful-spring" && args.physics !== "none") {
-        throw new Error("--physics must be stateful-spring or none; external custom Bullet is not wired yet");
+      if (args.physics !== "external" && args.physics !== "stateful-spring" && args.physics !== "none") {
+        throw new Error("--physics must be external, stateful-spring, or none");
       }
     } else {
       throw new Error(`Unknown argument: ${option}`);
@@ -419,7 +444,7 @@ function printUsage() {
   console.log(`Usage: npm run bench:runtime:worker -- [options]
 
 Defaults: --character-counts 1,4,8 --pool-sizes 1,2,3,4 --warmup 30 --frames 120
-          --physics stateful-spring
+          --physics external --display-rate 60
 
 Options:
   --fixtures PATH
@@ -429,6 +454,7 @@ Options:
   --warmup N
   --frames N
   --frame-rate N
-  --physics stateful-spring|none
+  --display-rate N
+  --physics external|stateful-spring|none
 `);
 }
