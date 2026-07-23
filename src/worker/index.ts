@@ -4,6 +4,7 @@ export {
 } from "./modelDescriptor.js";
 export { MmdRuntimeWorkerHost } from "./host.js";
 export { MmdRuntimeWorkerEndpoint } from "./endpoint.js";
+export { MmdRuntimeWorkerDispatcher } from "./dispatcher.js";
 export {
   applyMmdRuntimePoseToMesh,
   createMmdRuntimePoseApplyScratch
@@ -31,10 +32,20 @@ export type {
 } from "./modelDescriptor.js";
 export type { MmdRuntimeWorkerHostOptions } from "./host.js";
 export type {
+  MmdRuntimeWorkerCommandEnvelope,
   MmdRuntimeWorkerCommand,
+  MmdRuntimeWorkerEventEnvelope,
   MmdRuntimeWorkerEvent,
-  MmdRuntimeWorkerMessagePort
+  MmdRuntimeWorkerMessagePort,
+  MmdRuntimeWorkerMultiplexedCommand,
+  MmdRuntimeWorkerMultiplexedEvent,
+  MmdRuntimeWorkerMultiplexedMessagePort,
+  MmdRuntimeWorkerRuntimeId
 } from "./messages.js";
+export type {
+  MmdRuntimeWorkerDispatcherCommand,
+  MmdRuntimeWorkerDispatcherMessagePort
+} from "./dispatcher.js";
 export type { MmdRuntimePoseApplyScratch } from "./applyPose.js";
 export type { MmdRuntimePoseBuffer } from "./protocol.js";
 export {

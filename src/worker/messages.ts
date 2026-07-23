@@ -35,3 +35,27 @@ export type MmdRuntimeWorkerEvent =
 export interface MmdRuntimeWorkerMessagePort {
   postMessage(message: MmdRuntimeWorkerEvent, transfer?: Transferable[]): void;
 }
+
+/** Identifies one logical character runtime on a multiplexed worker port. */
+export type MmdRuntimeWorkerRuntimeId = number;
+
+/** Command envelope used by the worker-side runtime dispatcher. */
+export interface MmdRuntimeWorkerCommandEnvelope {
+  readonly runtimeId: MmdRuntimeWorkerRuntimeId;
+  readonly command: MmdRuntimeWorkerCommand;
+}
+
+/** Event envelope emitted by the worker-side runtime dispatcher. */
+export interface MmdRuntimeWorkerEventEnvelope {
+  readonly runtimeId: MmdRuntimeWorkerRuntimeId;
+  readonly event: MmdRuntimeWorkerEvent;
+}
+
+/** Message port for a multiplexed worker endpoint. */
+export interface MmdRuntimeWorkerMultiplexedMessagePort {
+  postMessage(message: MmdRuntimeWorkerEventEnvelope, transfer?: Transferable[]): void;
+}
+
+/** Naming aliases for callers that refer to envelopes as multiplexed messages. */
+export type MmdRuntimeWorkerMultiplexedCommand = MmdRuntimeWorkerCommandEnvelope;
+export type MmdRuntimeWorkerMultiplexedEvent = MmdRuntimeWorkerEventEnvelope;
