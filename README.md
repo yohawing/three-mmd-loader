@@ -29,11 +29,11 @@ motion [ラビットホール by mobiusP](https://www.nicovideo.jp/watch/sm42576
 | --- | --- |
 | Parser | ✅ PMX / PMD / VMD / VPD; ⚠️ PMM / `.x` / `.vac` expose structured parsing APIs only |
 | Deform / skinning | ✅ BDEF1/2/4, SDEF, QDEF |
-| MMD material / toon shader | ✅ Toon textures, alpha blending decisions, render ordering, and self shadow |
+| MMD material / toon shader | ✅ Toon textures, alpha blending decisions, render ordering, self shadow, and TSL (WebGPU/WebGL) support |
 | IK / append-transform rigging | ✅ Verified through the mmd-anim/WASM-backed path |
 | VMD Camera / Light | ✅ Applies to Three.js Camera and DirectionalLight |
 | Physics | ✅ MMD-focused Bullet Physics. |
-| Soft Body | ⚠️ PMX data parsed; runtime simulation not implemented |
+| Soft Body | ⚠️ PMX data parsed; runtime simulation is not planned |
 
 The main PMX parser, structured PMM / `.x` / `.vac` parsing, and animation path are backed by
 [yohawing/mmd-anim](https://github.com/yohawing/mmd-anim).
@@ -105,13 +105,8 @@ const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 
 ## Experimental - WebGPU / TSL
 
-`@yohawing/three-mmd-loader/webgpu` is an experimental TSL path. It does not
-change the default WebGL route. The Three.js TSL API evolves quickly, so pin a
-compatible Three.js version and prefer the default route for normal use.
-
-`createMmdTslPipeline` owns model conversion, sparse morphs, TSL materials, and
-the dedicated self-shadow pass. Creating the renderer, scene, camera, and light,
-and calling `model.update()` every frame, remain application responsibilities.
+This is an experimental TSL implementation. The TSL API evolves quickly and may
+change on the Three.js side, so use it with caution.
 
 ```ts
 import * as THREE from "three/webgpu";
@@ -142,21 +137,6 @@ renderer.setAnimationLoop(() => {
   pipeline.render(scene, camera);
 });
 ```
-
-Provide the pipeline `light` before attaching a model that receives self-shadow.
-Use `setSelfShadowEnabled()` and `setSelfShadowMode()` for UI controls, and
-`detach()` / `dispose()` when destroying a model or renderer. `pipeline.render()`
-temporarily disables Three's standard shadow map to avoid double-applying the
-dedicated self-shadow result.
-
-Low-level exports such as `replaceMmdModelMaterialsWithTsl` remain available for
-advanced integration. Prefer the pipeline API unless you need custom material
-assembly or diagnostics.
-
-Native WebGPU is not a required CI gate; the portable route primarily uses
-`forceWebGL`. Compare generated-PMX baseline and native WebGPU captures with
-`npm run render:visual:generated-pmx:webgpu` followed by
-`npm run visual:report:generated-pmx:webgpu`.
 
 ## Development
 

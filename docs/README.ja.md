@@ -105,13 +105,7 @@ const directPhysicsBackend = createCustomBulletMmdPhysicsBackend(mmdBullet);
 
 ## Experimental - WebGPU / TSL
 
-`@yohawing/three-mmd-loader/webgpu` は実験的な TSL 経路です。通常の WebGL
-経路は変更しません。Three.js 側の TSL API は変化が大きいため、対応する Three.js
-バージョンを固定し、通常の利用では既定経路を優先してください。
-
-`createMmdTslPipeline` がモデル変換、sparse morph、TSL マテリアル、専用セルフ影
-パスのライフサイクルをまとめます。renderer / scene / camera / light の生成と、毎フレームの
-`model.update()` はアプリケーション側の責務です。
+実験的なTSLの実装です。TSL APIは変化が大きくThree.js側で変わる可能性があるため、使う場合はご注意ください。
 
 ```ts
 import * as THREE from "three/webgpu";
@@ -142,18 +136,6 @@ renderer.setAnimationLoop(() => {
   pipeline.render(scene, camera);
 });
 ```
-
-セルフ影を受けるモデルは、`attach()` 前に pipeline の `light` を指定してください。
-`setSelfShadowEnabled()` と `setSelfShadowMode()` は UI の切り替えに、`detach()` と
-`dispose()` はモデルまたは renderer の破棄時に使います。`pipeline.render()` は標準
-shadow map を一時的に無効化して、専用セルフ影との二重適用を防ぎます。
-
-`replaceMmdModelMaterialsWithTsl` などの低レベル export は高度な用途向けに維持しています。
-通常は pipeline API を使い、独自のマテリアル構成や検証用途でのみ直接利用してください。
-
-native WebGPU は必須 CI gate ではありません。portable な確認は `forceWebGL` を主経路にし、
-native WebGPU の比較は `npm run render:visual:generated-pmx:webgpu` と
-`npm run visual:report:generated-pmx:webgpu` を使います。
 
 ## Development
 
