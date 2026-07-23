@@ -138,8 +138,36 @@ describe("MMD runtime worker dispatcher", () => {
       runtimeId: 123,
       event: { type: "error" }
     });
+
+    const rejectingModule = "data:text/javascript,export default async()=>{throw new Error('init failed')}";
+    dispatcher.handle({
+      runtimeId: 456,
+      command: {
+        type: "init",
+        descriptor,
+        runtimeOptions: { physics: "external" },
+        externalPhysics: {
+          kind: "custom-bullet-mmd",
+          moduleUrl: rejectingModule
+        }
+      }
+    });
+    await waitFor(() => port.events.some(
+      (entry) => entry.runtimeId === 456 && entry.event.type === "error"
+    ));
+    expect(dispatcher.runtimeCount()).toBe(1);
   });
 });
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 2000;
+  while (!predicate()) {
+    if (Date.now() >= deadline) {
+      throw new Error("Timed out waiting for dispatcher event");
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 5));
+  }
+}
 
 class RecordingPort implements MmdRuntimeWorkerMultiplexedMessagePort {
   readonly events: MmdRuntimeWorkerEventEnvelope[] = [];

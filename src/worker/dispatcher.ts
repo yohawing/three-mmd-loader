@@ -38,7 +38,14 @@ export class MmdRuntimeWorkerDispatcher {
         );
         return;
       }
-      const runtimePort = new MmdRuntimeWorkerDispatcherRuntimePort(this.port, runtimeId);
+      const runtimePort = new MmdRuntimeWorkerDispatcherRuntimePort(
+        this.port,
+        runtimeId,
+        () => {
+          this.endpoints.delete(runtimeId);
+          this.runtimePorts.delete(runtimeId);
+        }
+      );
       const runtimeEndpoint = new MmdRuntimeWorkerEndpoint(runtimePort);
       this.runtimePorts.set(runtimeId, runtimePort);
       this.endpoints.set(runtimeId, runtimeEndpoint);
@@ -98,7 +105,8 @@ class MmdRuntimeWorkerDispatcherRuntimePort implements MmdRuntimeWorkerMessagePo
 
   constructor(
     port: MmdRuntimeWorkerMultiplexedMessagePort,
-    runtimeId: MmdRuntimeWorkerRuntimeId
+    runtimeId: MmdRuntimeWorkerRuntimeId,
+    private readonly onInitializationFailure: () => void
   ) {
     this.port = port;
     this.envelope = {
@@ -112,6 +120,7 @@ class MmdRuntimeWorkerDispatcherRuntimePort implements MmdRuntimeWorkerMessagePo
       this.initialized = true;
     } else if (message.type === "error" && !this.initialized) {
       this.failed = true;
+      this.onInitializationFailure();
     }
     this.envelope.event = message;
     this.port.postMessage(this.envelope, transfer);
