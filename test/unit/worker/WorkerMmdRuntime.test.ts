@@ -86,6 +86,60 @@ describe("WorkerMmdRuntime", () => {
     runtime.dispose();
   });
 
+  it("does not inline-fallback after a worker crash when fallback is disabled", async () => {
+    let transport: CrashableWorker | undefined;
+    const fallbackErrors: unknown[] = [];
+    const loader = new ThreeMmdLoader({
+      runtimeFactory: createWorkerMmdRuntimeFactory({
+        fallback: false,
+        onFallback: (error) => fallbackErrors.push(error),
+        workerFactory: () => {
+          transport = new CrashableWorker();
+          return transport;
+        }
+      })
+    });
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx")),
+      { outline: false, materialRenderOrder: false }
+    );
+    const runtime = model.runtime as WorkerMmdRuntime;
+
+    transport?.crash(new Error("worker crashed"));
+    model.update(0.15, { physics: false });
+
+    expect(fallbackErrors).toEqual([expect.objectContaining({ message: "worker crashed" })]);
+    expect(runtime.frameState().seconds).toBe(0);
+    expect(runtime.poseAgeSeconds()).toBe(0.15);
+    runtime.dispose();
+  });
+
+  it("does not continue external physics without an inline backend after a crash", async () => {
+    let transport: CrashableWorker | undefined;
+    const loader = new ThreeMmdLoader({
+      runtimeFactory: createWorkerMmdRuntimeFactory({
+        runtimeOptions: { physics: "external" },
+        externalPhysics: { kind: "custom-bullet-mmd" },
+        workerFactory: () => {
+          transport = new CrashableWorker();
+          return transport;
+        }
+      })
+    });
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx")),
+      { outline: false, materialRenderOrder: false }
+    );
+    const runtime = model.runtime as WorkerMmdRuntime;
+
+    transport?.crash(new Error("worker crashed"));
+    model.update(0.2);
+
+    expect(runtime.frameState().seconds).toBe(0);
+    expect(runtime.poseAgeSeconds()).toBe(0.2);
+    runtime.dispose();
+  });
+
   it("rejects a pose from an older epoch before applying the current pose", async () => {
     let transport: ManualWorker | undefined;
     const loader = new ThreeMmdLoader({

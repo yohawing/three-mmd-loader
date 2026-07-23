@@ -55,6 +55,8 @@ export interface WorkerMmdRuntimeOptions {
   readonly workerOptions?: WorkerOptions;
   readonly runtimeOptions?: DefaultMmdRuntimeOptions;
   readonly onFallback?: (error: unknown) => void;
+  /** Allows a failed worker to continue through an equivalent inline runtime. Defaults to true. */
+  readonly fallback?: boolean;
   /** Explicit bounded pool; the factory creates one lazily when omitted. */
   readonly pool?: MmdRuntimeWorkerPool;
   /** Physical slot count for the factory-owned pool. */
@@ -65,9 +67,7 @@ export interface WorkerMmdRuntimeOptions {
   readonly sharedMemory?: "auto" | "required" | "disabled";
 }
 
-export interface WorkerMmdRuntimeFactoryOptions extends WorkerMmdRuntimeOptions {
-  readonly fallback?: boolean;
-}
+export type WorkerMmdRuntimeFactoryOptions = WorkerMmdRuntimeOptions;
 
 export interface WorkerMmdRuntimeFactory {
   (context: ThreeMmdRuntimeFactoryContext): MmdRuntime;
@@ -141,6 +141,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     epoch: 0
   };
   private readonly workerEvaluateOptions: MutableEvaluateOptions = {};
+  private readonly fallbackTickOptions: MutableFallbackTickOptions;
   private readonly recycleCommand = {
     type: "recycle" as const,
     pose: undefined as unknown as MmdRuntimePoseBuffer
@@ -160,6 +161,8 @@ export class WorkerMmdRuntime implements MmdRuntime {
   private readonly sharedPoseSlots: readonly MmdRuntimeSharedPoseSlot[] | undefined;
   private readonly sharedPoseReadBuffer: MmdRuntimePoseBuffer | undefined;
   private fallbackRuntime: DefaultMmdRuntime | undefined;
+  private readonly inlineFallbackAllowed: boolean;
+  private failed = false;
   private animation: MmdAnimation | undefined;
   private currentEpoch = 0;
   private lastAppliedSequence = -1;
@@ -174,6 +177,10 @@ export class WorkerMmdRuntime implements MmdRuntime {
   ) {
     this.mesh = context.mesh;
     this.runtimeOptions = options.runtimeOptions ?? {};
+    this.fallbackTickOptions = { mesh: this.mesh };
+    this.inlineFallbackAllowed =
+      options.fallback !== false &&
+      (this.runtimeOptions.physics !== "external" || this.runtimeOptions.physicsBackend !== undefined);
     this.fallbackCallback = options.onFallback;
     this.applyScratch = createMmdRuntimePoseApplyScratch(this.mesh);
     this.poolLease = options.pool?.acquire(
@@ -257,9 +264,16 @@ export class WorkerMmdRuntime implements MmdRuntime {
       ? deprecatedOptions
       : meshOrOptions ?? undefined;
     if (this.fallbackRuntime) {
-      const state = this.fallbackRuntime.tick(seconds, { mesh: this.mesh, ...options });
+      this.fallbackTickOptions.physics = options?.physics;
+      this.fallbackTickOptions.ik = options?.ik;
+      const state = this.fallbackRuntime.tick(seconds, this.fallbackTickOptions);
       this.copyFrameState(state);
       this.lastPoseAgeSeconds = 0;
+      return this.frameStateScratch;
+    }
+    if (this.failed) {
+      this.lastRequestedSeconds = seconds;
+      this.lastPoseAgeSeconds = Math.max(seconds - this.frameStateScratch.seconds, 0);
       return this.frameStateScratch;
     }
     this.lastRequestedSeconds = seconds;
@@ -423,12 +437,16 @@ export class WorkerMmdRuntime implements MmdRuntime {
   }
 
   private activateFallback(error: unknown): void {
-    if (this.disposed || this.fallbackRuntime) {
+    if (this.disposed || this.fallbackRuntime || this.failed) {
       return;
     }
-    this.fallbackRuntime = new DefaultMmdRuntime(this.runtimeOptions);
-    if (this.animation) {
-      this.fallbackRuntime.setAnimation(this.animation, this.mesh);
+    if (this.inlineFallbackAllowed) {
+      this.fallbackRuntime = new DefaultMmdRuntime(this.runtimeOptions);
+      if (this.animation) {
+        this.fallbackRuntime.setAnimation(this.animation, this.mesh);
+      }
+    } else {
+      this.failed = true;
     }
     this.ready = false;
     this.onFallback(error);
@@ -604,6 +622,10 @@ interface MutableFrameState {
 interface MutableEvaluateOptions {
   physics?: boolean;
   ik?: boolean;
+}
+
+interface MutableFallbackTickOptions extends MutableEvaluateOptions {
+  mesh: THREE.Object3D;
 }
 
 function isObject3D(value: unknown): value is THREE.Object3D {
