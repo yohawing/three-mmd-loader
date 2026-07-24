@@ -104,7 +104,7 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     const vertexMorphOffsets = {
       free: vi.fn(),
       morphSpans: () => Uint32Array.from([0, 2]),
-      vertexIndices: () => Uint32Array.from([3, 7]),
+      vertexIndices: () => Uint32Array.from([0, 0]),
       positions: () => Float32Array.from([1, 2, 3, -1, -2, -3])
     };
     const parsedHandle = {
@@ -135,10 +135,22 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
 
     const model = core.loadModel(new Uint8Array([1]), { format: "pmx" });
 
-    expect(model.morphs()[0]?.vertexOffsets).toEqual([
-      { vertexIndex: 3, position: [1, 2, 3] },
-      { vertexIndex: 7, position: [-1, -2, -3] }
+    const morph = model.morphs()[0]!;
+    expect(Object.getOwnPropertyDescriptor(morph, "vertexOffsets")?.get).toBeTypeOf("function");
+    const geometry = createThreeBufferGeometry(model.geometry(), [], model.morphs());
+    expect(Array.from(geometry.morphAttributes.position?.[0]?.array ?? [])).toEqual([-1, -2, 3]);
+    geometry.dispose();
+    expect(Object.getOwnPropertyDescriptor(morph, "vertexOffsets")?.get).toBeTypeOf("function");
+    expect(morph.vertexOffsets).toEqual([
+      { vertexIndex: 0, position: [1, 2, 3] },
+      { vertexIndex: 0, position: [-1, -2, -3] }
     ]);
+    expect(Object.getOwnPropertyDescriptor(morph, "vertexOffsets")?.value).toEqual(
+      morph.vertexOffsets
+    );
+    expect(Object.getOwnPropertyDescriptor(morph, "vertexOffsets")?.writable).toBe(true);
+    morph.vertexOffsets = [];
+    expect(morph.vertexOffsets).toEqual([]);
     expect(parsedHandle.nonGeometryJson).not.toHaveBeenCalled();
     expect(parsedHandle.nonGeometryJsonWithoutVertexOffsets).toHaveBeenCalledOnce();
     expect(parsedHandle.vertexMorphOffsets).toHaveBeenCalledOnce();

@@ -78,6 +78,58 @@ describe("position morph CSR packing", () => {
     expect(packed.values[2]).toBeCloseTo(-0.3);
   });
 
+  it("packs typed sparse provider offsets without creating dense or object offsets", () => {
+    const createPositionOffsets = vi.fn(() => {
+      throw new Error("dense path should not be used");
+    });
+    const provider: DenseMorphProvider = {
+      sparsePositionOffsets: {
+        vertexIndices: Uint32Array.from([2, 0]),
+        positions: Float32Array.from([0.25, 0.5, 0.75, 1, 2, 3]),
+        start: 0,
+        count: 2
+      },
+      createPositionOffsets,
+      createUvOffsets: () => undefined,
+      createAdditionalUvOffsets: () => undefined
+    };
+    const morph = {
+      get vertexOffsets(): never {
+        throw new Error("object path should not be used");
+      },
+      [denseMorphProviderSymbol]: provider
+    } satisfies ThreeMmdGeometryMorph & { [denseMorphProviderSymbol]: DenseMorphProvider };
+
+    const packed = packMmdPositionMorphsToVertexCsr(3, [morph]);
+
+    expect(createPositionOffsets).not.toHaveBeenCalled();
+    expect(Array.from(packed.rowOffsets)).toEqual([0, 1, 1, 2]);
+    expect(Array.from(packed.values)).toEqual([1, 2, -3, 0.25, 0.5, -0.75]);
+  });
+
+  it("keeps last-write-wins behavior for duplicate typed sparse offsets", () => {
+    const provider: DenseMorphProvider = {
+      sparsePositionOffsets: {
+        vertexIndices: Uint32Array.from([0, 0, 1]),
+        positions: Float32Array.from([1, 1, 1, 2, 3, 4, 0, 0, 0]),
+        start: 0,
+        count: 3
+      },
+      createPositionOffsets: () => undefined,
+      createUvOffsets: () => undefined,
+      createAdditionalUvOffsets: () => undefined
+    };
+    const morph = {
+      vertexOffsets: [],
+      [denseMorphProviderSymbol]: provider
+    } satisfies ThreeMmdGeometryMorph & { [denseMorphProviderSymbol]: DenseMorphProvider };
+
+    const packed = packMmdPositionMorphsToVertexCsr(2, [morph]);
+
+    expect(Array.from(packed.rowOffsets)).toEqual([0, 1, 1]);
+    expect(Array.from(packed.values)).toEqual([2, 3, -4]);
+  });
+
   it("returns empty typed arrays when no position offsets exist", () => {
     const packed = packMmdPositionMorphsToVertexCsr(2, [{}, {}]);
 

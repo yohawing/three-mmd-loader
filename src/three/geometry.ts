@@ -2,7 +2,8 @@ import * as THREE from "three";
 
 import {
   denseMorphProviderSymbol,
-  type DenseMorphProvider
+  type DenseMorphProvider,
+  type SparsePositionMorphOffsets
 } from "../parser/model/denseMorphProvider.js";
 import { setMmdGeometryMorphSource } from "./internal-morph-source.js";
 import { computeMmdMaterialRenderOrder } from "./material/material-metadata.js";
@@ -444,6 +445,27 @@ function splitVertexOffsets(
   sourceToLocal: Int32Array,
   localToSource: Uint32Array
 ): ThreeMmdVertexMorphOffset[] | undefined {
+  const sparse = getDenseMorphProvider(morph)?.sparsePositionOffsets;
+  if (sparse) {
+    const offsets: ThreeMmdVertexMorphOffset[] = [];
+    const { vertexIndices, positions, start, count } = sparse;
+    for (let offsetIndex = 0; offsetIndex < count; offsetIndex += 1) {
+      const sourceIndex = start + offsetIndex;
+      const localIndex = sourceToLocal[vertexIndices[sourceIndex] ?? 0] ?? -1;
+      if (localIndex >= 0) {
+        const positionIndex = sourceIndex * 3;
+        offsets.push({
+          vertexIndex: localIndex,
+          position: [
+            positions[positionIndex] ?? 0,
+            positions[positionIndex + 1] ?? 0,
+            positions[positionIndex + 2] ?? 0
+          ]
+        });
+      }
+    }
+    return offsets.length > 0 ? offsets : undefined;
+  }
   if (morph.densePositionOffsets) {
     const offsets: ThreeMmdVertexMorphOffset[] = [];
     for (let localIndex = 0; localIndex < localToSource.length; localIndex += 1) {
@@ -657,18 +679,23 @@ function validateMorphs(
   additionalUvCount: number
 ): void {
   morphs.forEach((morph, morphIndex) => {
-    morph.vertexOffsets?.forEach((offset, offsetIndex) => {
-      validateVertexIndex(
-        `MORPH_VERTEX:${morphIndex}:${offsetIndex}`,
-        offset.vertexIndex,
-        vertexCount
-      );
-      validateTuple(
-        `THREE_MMD_GEOMETRY_MORPH_POSITION_INVALID:${morphIndex}:${offsetIndex}`,
-        offset.position,
-        3
-      );
-    });
+    const sparse = getDenseMorphProvider(morph)?.sparsePositionOffsets;
+    if (sparse) {
+      validateSparsePositionMorphOffsets(sparse, morphIndex, vertexCount);
+    } else {
+      morph.vertexOffsets?.forEach((offset, offsetIndex) => {
+        validateVertexIndex(
+          `MORPH_VERTEX:${morphIndex}:${offsetIndex}`,
+          offset.vertexIndex,
+          vertexCount
+        );
+        validateTuple(
+          `THREE_MMD_GEOMETRY_MORPH_POSITION_INVALID:${morphIndex}:${offsetIndex}`,
+          offset.position,
+          3
+        );
+      });
+    }
     validateDenseMorphBuffer(
       `THREE_MMD_GEOMETRY_MORPH_POSITION_DENSE_INVALID:${morphIndex}`,
       morph.densePositionOffsets,
@@ -813,6 +840,7 @@ function hasUvMorphOffsets(morph: ThreeMmdGeometryMorph): boolean {
 
 function hasPositionMorphOffsets(morph: ThreeMmdGeometryMorph): boolean {
   return (
+    (getDenseMorphProvider(morph)?.sparsePositionOffsets?.count ?? 0) > 0 ||
     !!morph.vertexOffsets?.length ||
     !!morph.densePositionOffsets
   );
@@ -827,6 +855,7 @@ function hasAdditionalUvMorphOffsets(morph: ThreeMmdGeometryMorph, uvIndex: numb
 
 function hasGeometryMorphOffsets(morph: ThreeMmdGeometryMorph): boolean {
   return (
+    (getDenseMorphProvider(morph)?.sparsePositionOffsets?.count ?? 0) > 0 ||
     !!morph.vertexOffsets?.length ||
     !!morph.densePositionOffsets ||
     !!morph.uvOffsets?.length ||
@@ -918,4 +947,33 @@ function createThreeAdditionalMorphUvOffsets(
 
 function getDenseMorphProvider(morph: ThreeMmdGeometryMorph): DenseMorphProvider | undefined {
   return (morph as DenseProviderMorph)[denseMorphProviderSymbol];
+}
+
+function validateSparsePositionMorphOffsets(
+  sparse: SparsePositionMorphOffsets,
+  morphIndex: number,
+  vertexCount: number
+): void {
+  const { vertexIndices, positions, start, count } = sparse;
+  if (start + count > vertexIndices.length || positions.length !== vertexIndices.length * 3) {
+    throw new RangeError(`THREE_MMD_GEOMETRY_MORPH_POSITION_TYPED_SPAN_INVALID:${morphIndex}`);
+  }
+  for (let offsetIndex = 0; offsetIndex < count; offsetIndex += 1) {
+    const sourceIndex = start + offsetIndex;
+    validateVertexIndex(
+      `MORPH_VERTEX:${morphIndex}:${offsetIndex}`,
+      vertexIndices[sourceIndex] ?? 0,
+      vertexCount
+    );
+    const positionIndex = sourceIndex * 3;
+    if (
+      !Number.isFinite(positions[positionIndex]) ||
+      !Number.isFinite(positions[positionIndex + 1]) ||
+      !Number.isFinite(positions[positionIndex + 2])
+    ) {
+      throw new RangeError(
+        `THREE_MMD_GEOMETRY_MORPH_POSITION_INVALID:${morphIndex}:${offsetIndex}`
+      );
+    }
+  }
 }
