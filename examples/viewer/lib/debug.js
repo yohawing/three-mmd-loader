@@ -83,11 +83,6 @@ export function createViewerDebugApi() {
       return pair;
     },
     setPhysicsMaxSubSteps,
-    setDynamicWithBoneRotationFeedbackScale,
-    setCollisionMargin,
-    setSolverIterations,
-    setSplitImpulse,
-    setSplitImpulsePenetrationThreshold,
     dumpFaceNormals() {
       const mesh = state.currentModel?.mesh;
       if (!mesh) {
@@ -317,52 +312,6 @@ export function setPhysicsMaxSubSteps(value) {
   state.physicsTuningOptions.maxSubSteps = nextValue;
   refreshDebugPanelState();
   return state.physicsTuningOptions.maxSubSteps;
-}
-
-export function setDynamicWithBoneRotationFeedbackScale(value) {
-  const nextValue = Math.max(0, Math.min(Number(value), 1));
-  if (!Number.isFinite(nextValue)) {
-    return state.physicsTuningOptions.dynamicWithBoneRotationFeedbackScale;
-  }
-  state.physicsTuningOptions.dynamicWithBoneRotationFeedbackScale = nextValue;
-  refreshDebugPanelState();
-  return state.physicsTuningOptions.dynamicWithBoneRotationFeedbackScale;
-}
-
-export function setCollisionMargin(value) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return state.physicsTuningOptions.collisionMargin;
-  }
-  state.physicsTuningOptions.collisionMargin = parsed >= 0 ? parsed : -1;
-  refreshDebugPanelState();
-  return state.physicsTuningOptions.collisionMargin;
-}
-
-export function setSolverIterations(value) {
-  const nextValue = Math.max(1, Math.trunc(Number(value)));
-  if (!Number.isFinite(nextValue)) {
-    return state.physicsTuningOptions.solverIterations;
-  }
-  state.physicsTuningOptions.solverIterations = nextValue;
-  refreshDebugPanelState();
-  return state.physicsTuningOptions.solverIterations;
-}
-
-export function setSplitImpulse(enabled) {
-  state.physicsTuningOptions.splitImpulse = !!enabled;
-  refreshDebugPanelState();
-  return state.physicsTuningOptions.splitImpulse;
-}
-
-export function setSplitImpulsePenetrationThreshold(value) {
-  const nextValue = Number(value);
-  if (!Number.isFinite(nextValue)) {
-    return state.physicsTuningOptions.splitImpulsePenetrationThreshold;
-  }
-  state.physicsTuningOptions.splitImpulsePenetrationThreshold = nextValue;
-  refreshDebugPanelState();
-  return state.physicsTuningOptions.splitImpulsePenetrationThreshold;
 }
 
 export function captureCanvas() {
@@ -755,12 +704,6 @@ function createSmokeState() {
         : null),
     physicsEnabled: state.physicsEnabled,
     physicsMaxSubSteps: state.physicsTuningOptions.maxSubSteps,
-    dynamicWithBoneRotationFeedbackScale:
-      state.physicsTuningOptions.dynamicWithBoneRotationFeedbackScale,
-    collisionMargin: state.physicsTuningOptions.collisionMargin,
-    solverIterations: state.physicsTuningOptions.solverIterations,
-    splitImpulse: state.physicsTuningOptions.splitImpulse,
-    splitImpulsePenetrationThreshold: state.physicsTuningOptions.splitImpulsePenetrationThreshold,
     runtime: {
       mode: state.currentModel?.runtime?.constructor?.name ?? null,
       frameRate: state.mmdFrameRate,

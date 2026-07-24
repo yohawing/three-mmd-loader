@@ -81,11 +81,24 @@ import {
   type MmdTslMaterialCoreOptions,
   type MmdTslMaterialUniforms
 } from "@yohawing/three-mmd-loader/webgpu";
-import { createCustomBulletMmdPhysicsBackend, createDisabledMmdPhysicsBackend, loadCustomBulletMmdModule } from "@yohawing/three-mmd-loader/physics";
+import {
+  createCustomBulletMmdPhysicsBackend,
+  createDisabledMmdPhysicsBackend,
+  loadCustomBulletMmdModule,
+  type CustomBulletMmdPhysicsBackendOptions
+} from "@yohawing/three-mmd-loader/physics";
 
 const loader: ThreeMmdLoader = new ThreeMmdLoader();
 const runtime: DefaultMmdRuntime = new DefaultMmdRuntime();
 const physics = createDisabledMmdPhysicsBackend();
+const physicsOptions: CustomBulletMmdPhysicsBackendOptions = {
+  fixedTimeStep: 1 / 60,
+  maxSubSteps: 5
+};
+const unsupportedPhysicsOptions: CustomBulletMmdPhysicsBackendOptions = {
+  // @ts-expect-error solver tuning is not exposed by the mmd-anim Bullet bridge.
+  solverIterations: 20
+};
 declare const model: ThreeMmdModel;
 declare const animation: ThreeMmdAnimation;
 declare const parserWasm: { parseMmdFormatJson(data: Uint8Array, fileName?: string | null): string };
@@ -106,6 +119,8 @@ const exported: Uint8Array = exportMmdAnimWasmVmdAnimationJsonBytes(exporterWasm
 void loader;
 void runtime;
 void physics;
+void physicsOptions;
+void unsupportedPhysicsOptions;
 void parsed;
 void runtimeAnimation;
 void exported;

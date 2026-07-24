@@ -1161,22 +1161,18 @@ describe("example viewer source", () => {
     expect(playbackSource).not.toContain(".sampleArray(");
   });
 
-  it("uses the custom Bullet MMD backend without an Ammo viewer fallback", async () => {
+  it("uses the custom Bullet MMD backend directly", async () => {
     const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
 
     expect(stateSource).toContain('customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js"');
-    expect(stateSource).not.toContain("ammoScriptUrl");
     expect(stateSource).not.toContain("physicsBackendKind");
-    expect(stateSource).not.toContain("ammoNamespace");
     expect(physicsSource).toContain("loadCustomBulletMmdModule");
     expect(physicsSource).toContain("createCustomBulletMmdPhysicsBackend");
     expect(physicsSource).toContain("Physics disabled by viewer query parameter.");
     expect(physicsSource).toContain("dom.physicsErrorBanner.textContent = message");
-    expect(physicsSource).not.toContain("loadAmmoNamespace");
-    expect(physicsSource).not.toContain("createAmmoMmdPhysicsBackend");
     expect(mainSource).toContain('./lib/physics-backend.js');
     expect(modelSource).toContain('./physics-backend.js');
   });
@@ -1331,8 +1327,10 @@ describe("example viewer source", () => {
     expect(stateSource).toContain('parseDebugInteger(query.get("maxSubSteps"), 5)');
     expect(stateSource).toContain('query.get("physics") === "0" ? false : true');
     expect(stateSource).toContain("physicsEnabled: initialPhysicsEnabled");
-    expect(stateSource).toContain('solverIterations: initialSolverIterations');
-    expect(stateSource).toContain('splitImpulsePenetrationThreshold: initialSplitImpulsePenetrationThreshold');
+    expect(stateSource).not.toContain("dynamicWithBoneRotationFeedbackScale");
+    expect(stateSource).not.toContain("collisionMargin");
+    expect(stateSource).not.toContain("solverIterations");
+    expect(stateSource).not.toContain("splitImpulse");
     expect(stateSource).toContain("if (value === null)");
     expect(stateSource).toContain('debugMaterialMode: "default"');
     expect(stateSource).toContain("debugOutlineHidden: false");
@@ -1378,9 +1376,10 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("...(state.currentModel.outlineMeshes ?? [])");
     expect(debugSource).toContain("export function setOutlineHidden(hidden)");
     expect(debugSource).toContain("export function setPhysicsMaxSubSteps(value)");
-    expect(debugSource).toContain("export function setSolverIterations(value)");
-    expect(debugSource).toContain("export function setSplitImpulse(enabled)");
-    expect(debugSource).toContain("export function setSplitImpulsePenetrationThreshold(value)");
+    expect(debugSource).not.toContain("setDynamicWithBoneRotationFeedbackScale");
+    expect(debugSource).not.toContain("setCollisionMargin");
+    expect(debugSource).not.toContain("setSolverIterations");
+    expect(debugSource).not.toContain("setSplitImpulse");
     expect(debugSource).toContain("dumpRigidBodies(indices)");
     expect(debugSource).toContain("dumpCollisionPair(indexA, indexB)");
     expect(debugSource).toContain("function rigidBodyCollisionGroup(body)");

@@ -1,6 +1,3 @@
-[submodule "native/third_party/bullet3"]
-	path = native/third_party/bullet3
-	url = https://github.com/bulletphysics/bullet3.git
 [submodule "native/third_party/mmd-anim"]
 	path = native/third_party/mmd-anim
 	url = https://github.com/yohawing/mmd-anim

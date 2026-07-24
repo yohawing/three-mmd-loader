@@ -64,8 +64,6 @@
     "build:mmd-anim": "node scripts/build-mmd-anim-wasm.mjs",
     "build:bullet": "npm run build:bullet:mmd",
     "build:bullet:mmd": "node scripts/build-bullet-mmd-wasm.mjs",
-    "compare:bullet:mmd": "node scripts/compare-bullet-mmd.mjs",
-    "compare:bullet:mmd:local": "node scripts/compare-bullet-mmd-local-fixture.mjs",
     "compare:runtime:js": "node scripts/compare-runtime-js.mjs",
     "bench:runtime:worker": "node scripts/bench-runtime-worker.mjs",
     "bench:runtime:worker:browser": "node scripts/bench-runtime-worker-browser.mjs",
@@ -116,8 +114,7 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "@types/three": ">=0.176.0 <1.0.0",
-    "ammo.js": "^0.0.10"
+    "@types/three": ">=0.176.0 <1.0.0"
   },
   "peerDependencies": {
     "three": ">=0.176.0 <1.0.0"

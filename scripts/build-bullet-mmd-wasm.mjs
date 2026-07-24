@@ -5,10 +5,11 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, "..");
-const bulletRoot = join(root, "native", "third_party", "bullet3");
-const bindings = join(root, "native", "bullet-mmd", "mmd_bindings.cc");
-const outDir = join(root, "native", "bullet-mmd", "dist");
-const buildDir = join(outDir, ".tmp", `mmd-${process.pid}-${Date.now().toString(36)}`);
+const physicsRoot = join(root, "native", "third_party", "mmd-anim", "crates", "mmd-anim-physics-bullet");
+const bulletRoot = join(physicsRoot, "vendor", "bullet3");
+const bindings = join(physicsRoot, "native", "mmd_bullet_api.cpp");
+const outDir = join(root, "native", "mmd-anim-bullet", "dist");
+const buildDir = join(outDir, ".tmp", `mmd-anim-${process.pid}-${Date.now().toString(36)}`);
 
 const builds = [
   {
@@ -185,7 +186,7 @@ function quoteResponseArg(arg) {
 
 async function main() {
   if (!(await pathExists(join(bulletRoot, "src", "btBulletDynamicsCommon.h")))) {
-    throw new Error("Bullet submodule is missing. Run git submodule update --init --recursive native/third_party/bullet3.");
+    throw new Error("mmd-anim's vendored Bullet source is missing. Run git submodule update --init --recursive native/third_party/mmd-anim.");
   }
 
   const emsdkRoot = await resolveEmsdkRoot();
@@ -197,35 +198,26 @@ async function main() {
   }
 
   const exportedFunctions = [
-    "_mmd_bullet_create_world",
-    "_mmd_bullet_destroy_world",
-    "_mmd_bullet_ensure_step_buffers",
-    "_mmd_bullet_begin_model",
-    "_mmd_bullet_add_rigid_body",
-    "_mmd_bullet_add_joint",
-    "_mmd_bullet_commit_model",
-    "_mmd_bullet_model_identity",
-    "_mmd_bullet_set_tuning",
-    "_mmd_bullet_reset_world",
-    "_mmd_bullet_reset_pose_sync",
-    "_mmd_bullet_step",
-    "_mmd_bullet_input_translations",
-    "_mmd_bullet_input_rotations",
-    "_mmd_bullet_input_world_matrices",
-    "_mmd_bullet_output_translations",
-    "_mmd_bullet_output_rotations",
-    "_mmd_bullet_output_world_matrices",
-    "_mmd_bullet_bone_physics_toggles",
-    "_mmd_bullet_updated_bone_indices",
-    "_mmd_bullet_debug_contact_count",
-    "_mmd_bullet_debug_contact_pair_count",
-    "_mmd_bullet_debug_contact_pairs",
-    "_mmd_bullet_debug_rigid_body_count",
-    "_mmd_bullet_debug_rigid_body_world_matrices"
+    "_malloc",
+    "_free",
+    "_mmd_anim_bullet_world_create",
+    "_mmd_anim_bullet_world_destroy",
+    "_mmd_anim_bullet_world_reset",
+    "_mmd_anim_bullet_world_settle_to_current",
+    "_mmd_anim_bullet_world_step",
+    "_mmd_anim_bullet_world_add_rigidbody",
+    "_mmd_anim_bullet_world_get_rigidbody_count",
+    "_mmd_anim_bullet_world_get_rigidbody_transform",
+    "_mmd_anim_bullet_world_set_rigidbody_transform",
+    "_mmd_anim_bullet_world_add_6dof_spring_joint",
+    "_mmd_anim_bullet_world_get_constraint_count",
+    "_mmd_anim_bullet_world_collect_contacts",
+    "_mmd_anim_bullet_world_get_gravity",
+    "_mmd_anim_bullet_world_set_gravity"
   ];
 
   console.log(`Using ${commandInfo.kind === "emsdk" ? "emsdk" : "PATH"} Emscripten: ${commandInfo.command}`);
-  console.log(`Compiling Bullet MMD classic and module-worker builds with ${sources.length} sources.`);
+  console.log(`Compiling mmd-anim Bullet classic and module-worker builds with ${sources.length} sources.`);
 
   await mkdir(buildDir, { recursive: true });
   try {

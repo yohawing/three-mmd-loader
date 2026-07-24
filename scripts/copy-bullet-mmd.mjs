@@ -5,15 +5,16 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, "..");
 const outDir = join(root, "dist", "physics", "mmd");
+const trackedMmdAnimBulletDist = join(root, "native", "mmd-anim-bullet", "dist");
 
 const candidates = [
   process.env.THREE_MMD_LOADER_BULLET_MMD_JS,
-  join(root, "native", "bullet-mmd", "dist", "mmd_bullet.js")
+  join(trackedMmdAnimBulletDist, "mmd_bullet.js")
 ].filter(Boolean);
 
 const workerCandidates = [
   process.env.THREE_MMD_LOADER_BULLET_MMD_WORKER_MJS,
-  join(root, "native", "bullet-mmd", "dist", "mmd_bullet.worker.mjs")
+  join(trackedMmdAnimBulletDist, "mmd_bullet.worker.mjs")
 ].filter(Boolean);
 
 async function pathExists(path) {
@@ -50,11 +51,11 @@ try {
   await mkdir(outDir, { recursive: true });
   await copyPair(classicSource, "mmd_bullet.js");
   await copyPair(workerSource, "mmd_bullet.worker.mjs");
-  console.log(`Bullet MMD classic and module-worker assets copied to dist/physics/mmd/.`);
+  console.log(`mmd-anim Bullet assets copied through the stable Bullet MMD artifact paths.`);
 } catch (error) {
   const detail = error instanceof Error ? error.message : String(error);
   throw new Error(
-    `${detail} Build native/bullet-mmd/dist artifacts with npm run build:bullet:mmd, ` +
+    `${detail} Build mmd-anim Bullet artifacts with npm run build:bullet:mmd, ` +
       `or set THREE_MMD_LOADER_BULLET_MMD_JS and THREE_MMD_LOADER_BULLET_MMD_WORKER_MJS.`
   );
 }

@@ -10,17 +10,6 @@ export const initialRendererBackend = rendererBackendForPipeline(initialViewerPi
 const viewportStorageKey = "three-mmd-loader.viewer.viewport.v1";
 const storedViewportSettings = readStoredViewportSettings();
 const initialPhysicsMaxSubSteps = parseDebugInteger(query.get("maxSubSteps"), 5);
-const initialDynamicWithBoneFeedback = parseDebugNumber(
-  query.get("dynamicWithBoneRotationFeedbackScale"),
-  1
-);
-const initialCollisionMargin = parseDebugNumber(query.get("collisionMargin"), -1);
-const initialSolverIterations = parseDebugInteger(query.get("solverIterations"), 20);
-const initialSplitImpulse = query.get("splitImpulse") === "0" ? false : true;
-const initialSplitImpulsePenetrationThreshold = parseDebugNumber(
-  query.get("splitImpulsePenetrationThreshold"),
-  -0.04
-);
 const initialSelfShadowEnabled = query.get("selfShadow") !== "0";
 const initialPhysicsEnabled = query.get("physics") === "0" ? false : true;
 
@@ -28,12 +17,7 @@ export const state = {
   hasLocalFixtures: false,
   customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js",
   physicsTuningOptions: {
-    maxSubSteps: initialPhysicsMaxSubSteps,
-    dynamicWithBoneRotationFeedbackScale: initialDynamicWithBoneFeedback,
-    collisionMargin: initialCollisionMargin,
-    solverIterations: initialSolverIterations,
-    splitImpulse: initialSplitImpulse,
-    splitImpulsePenetrationThreshold: initialSplitImpulsePenetrationThreshold
+    maxSubSteps: initialPhysicsMaxSubSteps
   },
   physicsEnabled: initialPhysicsEnabled,
   showDebugColliders: query.has("collision") || query.has("debugCollision"),
@@ -226,14 +210,6 @@ function parseDebugInteger(value, fallback) {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(Math.trunc(parsed), 0) : fallback;
-}
-
-function parseDebugNumber(value, fallback) {
-  if (value === null) {
-    return fallback;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function resolveInitialViewerPipeline(params) {

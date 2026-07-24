@@ -1,0 +1,317 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  createMmdAnimBulletPhysicsBackend,
+  type MmdAnimBulletModule
+} from "../../../src/physics/mmdAnimBullet.js";
+import {
+  createCustomBulletMmdPhysicsBackend,
+  type CustomBulletMmdModule
+} from "../../../src/physics/customBulletMmd.js";
+
+function makeFakeModule() {
+  const buffer = new ArrayBuffer(1 << 16);
+  const heap = new Float32Array(buffer);
+  const heapU8 = new Uint8Array(buffer);
+  const heapU32 = new Uint32Array(buffer);
+  let next = 256;
+  let created = 0;
+  let destroyed = 0;
+  let resetCount = 0;
+  let settleCount = 0;
+  let stepHook: (() => void) | undefined;
+  const stepCalls: Array<[number, number, number]> = [];
+  const setBodyCalls: Array<{ index: number; position: [number, number, number] }> = [];
+  const bodies: Array<{ position: [number, number, number]; rotation: [number, number, number, number] }> = [];
+  const module: MmdAnimBulletModule = {
+    HEAPF32: heap,
+    HEAPU8: heapU8,
+    HEAPU32: heapU32,
+    _malloc(size) { const pointer = next; next += Math.max(8, size); return pointer; },
+    _free() {},
+    refreshMemoryViews() {},
+    _mmd_anim_bullet_world_create(out) { heapU32[out >>> 2] = 64; created += 1; return 0; },
+    _mmd_anim_bullet_world_destroy() { destroyed += 1; },
+    _mmd_anim_bullet_world_reset() { resetCount += 1; return 0; },
+    _mmd_anim_bullet_world_settle_to_current() { settleCount += 1; return 0; },
+    _mmd_anim_bullet_world_step(_world, delta, maxSubSteps, fixedSubstepSeconds) {
+      stepCalls.push([delta, maxSubSteps, fixedSubstepSeconds]);
+      stepHook?.();
+      return 0;
+    },
+    _mmd_anim_bullet_world_add_rigidbody(_world, descriptor, out) {
+      const index = descriptor >>> 2;
+      const position: [number, number, number] = [heap[index + 4] ?? 0, heap[index + 5] ?? 0, heap[index + 6] ?? 0];
+      heapU32[out >>> 2] = bodies.length;
+      bodies.push({ position, rotation: [0, 0, 0, 1] });
+      return 0;
+    },
+    _mmd_anim_bullet_world_get_rigidbody_transform(_world, index, position, rotation) {
+      const body = bodies[index];
+      if (!body) return 2;
+      heap.set(body.position, position >>> 2);
+      heap.set(body.rotation, rotation >>> 2);
+      return 0;
+    },
+    _mmd_anim_bullet_world_set_rigidbody_transform(_world, index, position, rotation) {
+      const body = bodies[index];
+      if (!body) return 2;
+      const nextPosition: [number, number, number] = [heap[position >>> 2] ?? 0, heap[(position >>> 2) + 1] ?? 0, heap[(position >>> 2) + 2] ?? 0];
+      body.position = nextPosition;
+      setBodyCalls.push({ index, position: nextPosition });
+      body.rotation = [heap[rotation >>> 2] ?? 0, heap[(rotation >>> 2) + 1] ?? 0, heap[(rotation >>> 2) + 2] ?? 0, heap[(rotation >>> 2) + 3] ?? 1];
+      return 0;
+    },
+    _mmd_anim_bullet_world_add_6dof_spring_joint() { return 0; }
+  };
+  return {
+    module,
+    bodies,
+    stepCalls,
+    setBodyCalls,
+    get created() { return created; },
+    get destroyed() { return destroyed; },
+    get resetCount() { return resetCount; },
+    get settleCount() { return settleCount; },
+    setStepHook(hook: (() => void) | undefined) { stepHook = hook; }
+  };
+}
+
+describe("mmd-anim Bullet physics backend", () => {
+  it("runs behind the stable Custom Bullet API and reuses caller buffers", () => {
+    const fake = makeFakeModule();
+    const backend = createCustomBulletMmdPhysicsBackend(
+      fake.module as unknown as CustomBulletMmdModule
+    );
+    const layout = {
+      boneCount: 2,
+      translationValueCount: 6,
+      rotationValueCount: 8,
+      worldMatrixValueCount: 32
+    };
+
+    const first = backend.acquireStepBuffers(layout);
+    const second = backend.acquireStepBuffers(layout);
+
+    expect(backend.name).toBe("custom-bullet-mmd");
+    expect(first).toBe(second);
+    expect(first?.inputTranslations).toHaveLength(6);
+    expect(first?.bonePhysicsToggles).toHaveLength(2);
+    backend.dispose?.();
+    expect(backend.disposed).toBe(true);
+  });
+
+  it("uploads PMX bind-space body positions without double-applying bone rest translation", () => {
+    const fake = makeFakeModule();
+    const backend = createMmdAnimBulletPhysicsBackend(fake.module);
+    const inputWorld = new Float32Array(16);
+    inputWorld[0] = inputWorld[5] = inputWorld[10] = inputWorld[15] = 1;
+    inputWorld[12] = 1; inputWorld[13] = 2; inputWorld[14] = 3;
+    const outputWorld = new Float32Array(16);
+    const outputTranslations = new Float32Array(3);
+    const updated = new Uint32Array(1);
+    const result = backend.step({
+      seconds: 0,
+      deltaSeconds: 1 / 60,
+      frame: 0,
+      frameRate: 30,
+      skeleton: { bones: [{ index: 0, parentIndex: -1, restTranslation: [1, 2, 3] }] },
+      rigidBodies: [{
+        index: 0,
+        boneIndex: 0,
+        motionType: "dynamic",
+        shape: { type: "sphere", size: [0.5, 0, 0] },
+        localTranslation: [4, 5, 6],
+        localRotation: [0, 0, 0, 1],
+        mass: 1
+      }],
+      inputWorldMatricesColumnMajor: inputWorld,
+      output: { worldMatricesColumnMajor: outputWorld, translations: outputTranslations, updatedBoneIndices: updated }
+    });
+    expect(fake.bodies[0]?.position).toEqual([4, 5, 6]);
+    expect(outputTranslations).toEqual(new Float32Array([1, 2, 3]));
+    expect(updated[0]).toBe(0);
+    expect(result.simulated).toBe(true);
+    expect(fake.stepCalls).toEqual([[1 / 60, 5, 1 / 60]]);
+  });
+
+  it("converts physics bone world poses back to parent-local output poses", () => {
+    const fake = makeFakeModule();
+    const backend = createMmdAnimBulletPhysicsBackend(fake.module);
+    const inputWorld = new Float32Array(32);
+    for (let boneIndex = 0; boneIndex < 2; boneIndex += 1) {
+      const base = boneIndex * 16;
+      inputWorld[base] = inputWorld[base + 5] = inputWorld[base + 10] = inputWorld[base + 15] = 1;
+    }
+    inputWorld[12] = 10;
+    inputWorld[28] = 12;
+    const outputWorld = new Float32Array(32);
+    const outputTranslations = new Float32Array(6);
+    const outputRotations = new Float32Array(8);
+    const updatedBoneIndices: number[] = [];
+
+    const result = backend.step({
+      seconds: 0,
+      deltaSeconds: 1 / 60,
+      frame: 0,
+      frameRate: 30,
+      skeleton: {
+        bones: [
+          { index: 0, parentIndex: -1, restTranslation: [10, 0, 0] },
+          { index: 1, parentIndex: 0, restTranslation: [12, 0, 0] }
+        ]
+      },
+      rigidBodies: [
+        {
+          index: 0,
+          boneIndex: 0,
+          motionType: "dynamic",
+          shape: { type: "sphere", size: [0.5, 0, 0] },
+          localTranslation: [10, 0, 0],
+          localRotation: [0, 0, 0, 1],
+          mass: 1
+        },
+        {
+          index: 1,
+          boneIndex: 1,
+          motionType: "dynamic",
+          shape: { type: "sphere", size: [0.5, 0, 0] },
+          localTranslation: [12, 0, 0],
+          localRotation: [0, 0, 0, 1],
+          mass: 1
+        }
+      ],
+      inputWorldMatricesColumnMajor: inputWorld,
+      output: {
+        worldMatricesColumnMajor: outputWorld,
+        translations: outputTranslations,
+        rotations: outputRotations,
+        updatedBoneIndices
+      }
+    });
+
+    expect(Array.from(outputTranslations)).toEqual([10, 0, 0, 2, 0, 0]);
+    expect(outputWorld[12]).toBe(10);
+    expect(outputWorld[28]).toBe(12);
+    expect(Array.from(updatedBoneIndices)).toEqual([0, 1]);
+    expect(result).toEqual({ simulated: true, updatedBoneCount: 2 });
+  });
+
+  it("re-seeds all bodies, re-pins static bodies, and reads dynamic outputs on reset", () => {
+    const fake = makeFakeModule();
+    const backend = createMmdAnimBulletPhysicsBackend(fake.module);
+    const inputWorld = new Float32Array(16 * 3);
+    const outputWorld = new Float32Array(16 * 3);
+    const inputTranslations = new Float32Array([
+      1, 2, 3,
+      4, 5, 6,
+      7, 8, 9
+    ]);
+    const outputTranslations = new Float32Array(inputTranslations);
+    const inputRotations = new Float32Array(4 * 3);
+    const outputRotations = new Float32Array(4 * 3);
+    const updatedBoneIndices = new Uint32Array(3);
+    for (let boneIndex = 0; boneIndex < 3; boneIndex += 1) {
+      const base = boneIndex * 16;
+      inputWorld[base] = 1;
+      inputWorld[base + 5] = 1;
+      inputWorld[base + 10] = 1;
+      inputWorld[base + 15] = 1;
+      inputWorld[base + 12] = inputTranslations[boneIndex * 3] ?? 0;
+      inputWorld[base + 13] = inputTranslations[boneIndex * 3 + 1] ?? 0;
+      inputWorld[base + 14] = inputTranslations[boneIndex * 3 + 2] ?? 0;
+    }
+    const context = {
+      seconds: 0,
+      deltaSeconds: 1 / 60,
+      frame: 0,
+      frameRate: 60,
+      skeleton: {
+        bones: [
+          { index: 0, parentIndex: -1, restTranslation: [0, 0, 0] },
+          { index: 1, parentIndex: -1, restTranslation: [0, 0, 0] },
+          { index: 2, parentIndex: -1, restTranslation: [0, 0, 0] }
+        ]
+      },
+      rigidBodies: [
+        { index: 0, boneIndex: 0, motionType: "static" as const, shape: { type: "sphere" as const, size: [0.5, 0.5, 0.5] }, localTranslation: [0, 0, 0], localRotation: [0, 0, 0, 1] },
+        { index: 1, boneIndex: 1, motionType: "dynamicWithBone" as const, shape: { type: "sphere" as const, size: [0.5, 0.5, 0.5] }, localTranslation: [0, 0, 0], localRotation: [0, 0, 0, 1], mass: 1 },
+        { index: 2, boneIndex: 2, motionType: "dynamic" as const, shape: { type: "sphere" as const, size: [0.5, 0.5, 0.5] }, localTranslation: [0, 0, 0], localRotation: [0, 0, 0, 1], mass: 1 }
+      ],
+      joints: [],
+      inputTranslations,
+      inputRotations,
+      inputWorldMatricesColumnMajor: inputWorld,
+      output: { worldMatricesColumnMajor: outputWorld, translations: outputTranslations, rotations: outputRotations, updatedBoneIndices },
+      bonePhysicsToggles: new Uint8Array([1, 1, 1])
+    };
+    backend.step(context);
+    expect(fake.setBodyCalls.map((call) => call.index)).toEqual([0, 1]);
+
+    inputTranslations.set([
+      11, 12, 13,
+      14, 15, 16,
+      17, 18, 19
+    ]);
+    for (let boneIndex = 0; boneIndex < 3; boneIndex += 1) {
+      const base = boneIndex * 16;
+      inputWorld[base + 12] = inputTranslations[boneIndex * 3] ?? 0;
+      inputWorld[base + 13] = inputTranslations[boneIndex * 3 + 1] ?? 0;
+      inputWorld[base + 14] = inputTranslations[boneIndex * 3 + 2] ?? 0;
+    }
+    backend.reset();
+    const result = backend.step(context);
+    expect(result.simulated).toBe(true);
+    expect(fake.resetCount).toBe(1);
+    expect(fake.settleCount).toBe(1);
+    expect(fake.stepCalls.at(-1)).toEqual([1 / 60, 2, 1 / 120]);
+    expect(fake.setBodyCalls.slice(2).map((call) => call.index)).toEqual([0, 1, 2, 0]);
+    expect(fake.setBodyCalls[2]?.position).toEqual([11, 12, 13]);
+    expect(fake.setBodyCalls[3]?.position).toEqual([14, 15, 16]);
+    expect(fake.setBodyCalls[4]?.position).toEqual([17, 18, 19]);
+    expect(fake.setBodyCalls[5]?.position).toEqual([11, 12, 13]);
+    expect(Array.from(outputTranslations.slice(3, 9))).toEqual([14, 15, 16, 17, 18, 19]);
+
+    backend.dispose();
+    backend.dispose();
+    expect(fake.created).toBe(1);
+    expect(fake.destroyed).toBe(1);
+    expect(backend.disposed).toBe(true);
+    expect(backend.step({ seconds: 0, deltaSeconds: 0, frame: 0, frameRate: 30 }).simulated).toBe(false);
+  });
+
+  it("keeps physics-disabled dynamic bodies on the animation pose without readback", () => {
+    const fake = makeFakeModule();
+    const backend = createMmdAnimBulletPhysicsBackend(fake.module);
+    const inputWorld = new Float32Array(16);
+    inputWorld[0] = inputWorld[5] = inputWorld[10] = inputWorld[15] = 1;
+    inputWorld[12] = 10;
+    inputWorld[13] = 20;
+    inputWorld[14] = 30;
+    const outputTranslations = new Float32Array([91, 92, 93]);
+
+    const result = backend.step({
+      seconds: 0,
+      deltaSeconds: 1 / 60,
+      frame: 0,
+      frameRate: 60,
+      skeleton: { bones: [{ index: 0, parentIndex: -1, restTranslation: [0, 0, 0] }] },
+      rigidBodies: [{
+        index: 0,
+        boneIndex: 0,
+        motionType: "dynamic",
+        shape: { type: "sphere", size: [0.5, 0.5, 0.5] },
+        localTranslation: [0, 0, 0],
+        localRotation: [0, 0, 0, 1],
+        mass: 1
+      }],
+      inputWorldMatricesColumnMajor: inputWorld,
+      output: { translations: outputTranslations, updatedBoneIndices: new Uint32Array(1) },
+      bonePhysicsToggles: new Uint8Array([0])
+    });
+
+    expect(fake.setBodyCalls).toEqual([{ index: 0, position: [10, 20, 30] }]);
+    expect(Array.from(outputTranslations)).toEqual([91, 92, 93]);
+    expect(result).toEqual({ simulated: false, updatedBoneCount: 0 });
+  });
+});

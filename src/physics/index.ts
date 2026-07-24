@@ -1,12 +1,4 @@
 export {
-  AmmoMmdPhysicsBackend,
-  createAmmoMmdPhysicsBackend,
-  type AmmoNamespace,
-  type AmmoPhysicsBackendOptions,
-  type AmmoPhysicsBackendTuningOptions
-} from "./ammoMmdPhysicsBackend.js";
-export { loadAmmoNamespace, type AmmoBrowserLoaderOptions } from "./ammoBrowserLoader.js";
-export {
   createCustomBulletMmdPhysicsBackend,
   customBulletMmdScriptPath,
   loadCustomBulletMmdModule,
@@ -15,7 +7,6 @@ export {
   type CustomBulletMmdPhysicsBackendOptions,
   type CustomBulletMmdModule
 } from "./customBulletMmd.js";
-
 export type MmdPhysicsDiagnosticLevel = "warning" | "error";
 
 export interface MmdPhysicsDiagnostic {

@@ -25,26 +25,24 @@ describe("worker external physics", () => {
     const moduleSource = `
       export default async function (options) {
         globalThis.__mmdWorkerLocateFile = options.locateFile("mmd_bullet.worker.wasm", "ignored/");
+        const buffer = new ArrayBuffer(65536);
+        const HEAPF32 = new Float32Array(buffer);
+        const HEAPU8 = new Uint8Array(buffer);
+        const HEAPU32 = new Uint32Array(buffer);
+        let next = 256;
         return {
-          HEAPF32: new Float32Array(16),
-          _mmd_bullet_create_world: () => 7,
-          _mmd_bullet_destroy_world: world => { globalThis.__mmdWorkerDisposedWorld = world; },
-          _mmd_bullet_ensure_step_buffers: () => 0,
-          _mmd_bullet_begin_model: () => 0,
-          _mmd_bullet_add_rigid_body: () => 0,
-          _mmd_bullet_add_joint: () => 0,
-          _mmd_bullet_commit_model: () => 0,
-          _mmd_bullet_model_identity: () => 0,
-          _mmd_bullet_reset_world: () => {},
-          _mmd_bullet_step: () => 0,
-          _mmd_bullet_input_translations: () => 0,
-          _mmd_bullet_input_rotations: () => 0,
-          _mmd_bullet_input_world_matrices: () => 0,
-          _mmd_bullet_output_translations: () => 0,
-          _mmd_bullet_output_rotations: () => 0,
-          _mmd_bullet_output_world_matrices: () => 0,
-          _mmd_bullet_bone_physics_toggles: () => 0,
-          _mmd_bullet_updated_bone_indices: () => 0
+          HEAPF32, HEAPU8, HEAPU32,
+          _malloc: size => { const pointer = next; next += size; return pointer; },
+          _free: () => {},
+          _mmd_anim_bullet_world_create: out => { HEAPU32[out >> 2] = 7; return 0; },
+          _mmd_anim_bullet_world_destroy: world => { globalThis.__mmdWorkerDisposedWorld = world; },
+          _mmd_anim_bullet_world_reset: () => 0,
+          _mmd_anim_bullet_world_settle_to_current: () => 0,
+          _mmd_anim_bullet_world_step: () => 0,
+          _mmd_anim_bullet_world_add_rigidbody: () => 0,
+          _mmd_anim_bullet_world_get_rigidbody_transform: () => 0,
+          _mmd_anim_bullet_world_set_rigidbody_transform: () => 0,
+          _mmd_anim_bullet_world_add_6dof_spring_joint: () => 0
         };
       }
     `;

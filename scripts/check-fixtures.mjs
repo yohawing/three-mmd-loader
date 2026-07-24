@@ -10,7 +10,7 @@
 //   node scripts/check-fixtures.mjs --limit 20      # limit per category
 //   node scripts/check-fixtures.mjs --bail          # stop at first failure
 //   node scripts/check-fixtures.mjs --no-three      # parse only, skip PMX/PMD Three.js assembly
-//   node scripts/check-fixtures.mjs --physics       # also smoke-test Ammo world init + one physics step
+//   node scripts/check-fixtures.mjs --physics       # also smoke-test mmd-anim Bullet world init + one step
 //   node scripts/check-fixtures.mjs --no-physics    # explicitly disable the physics stage
 //   node scripts/check-fixtures.mjs ../data/fixtures.json
 //   node scripts/check-fixtures.mjs --limit 20 ../data/fixtures.json
@@ -18,9 +18,11 @@
 
 import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { performance } from "node:perf_hooks";
 import { resolve, dirname, relative, basename } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 import * as THREE from "three";
 
@@ -28,7 +30,7 @@ import { parsePmd } from "../dist/parser/model/PmdModelParser.js";
 import { parsePmx } from "../dist/parser/model/PmxModelParser.js";
 import { parseVmd } from "../dist/parser/vmd/VmdParser.js";
 import { parseVpdPose } from "../dist/parser/vpd/VpdMetadataParser.js";
-import { createAmmoMmdPhysicsBackend, validateConcreteMmdPhysicsStepContext } from "../dist/physics/index.js";
+import { createCustomBulletMmdPhysicsBackend, validateConcreteMmdPhysicsStepContext } from "../dist/physics/index.js";
 import { ThreeMmdLoader } from "../dist/three/index.js";
 import { parseLoaderMmdModelData } from "../dist/three/modelAssembly.js";
 
@@ -286,35 +288,45 @@ async function main() {
 function createPhysicsRuntime() {
   return {
     state: "pending",
-    Ammo: undefined,
+    module: undefined,
     failure: undefined
   };
 }
 
 async function initializePhysicsRuntime(runtime) {
   if (runtime.state === "ready") {
-    return runtime.Ammo;
+    return runtime.module;
   }
   if (runtime.state === "failed") {
     throw runtime.failure.error;
   }
 
   try {
-    const ammoModule = await import("ammo.js");
-    const ammoExport = ammoModule.default ?? ammoModule;
-    const Ammo =
-      typeof ammoExport === "function" && typeof ammoExport.btVector3 !== "function"
-        ? await ammoExport()
-        : ammoExport;
+    const scriptPath = resolve(projectRoot, "dist", "physics", "mmd", "mmd_bullet.js");
+    const scriptSource = await readFile(scriptPath, "utf8");
+    const moduleRecord = { exports: {} };
+    const sandbox = {
+      module: moduleRecord,
+      exports: moduleRecord.exports,
+      require: createRequire(import.meta.url),
+      __dirname: dirname(scriptPath),
+      __filename: scriptPath,
+      console,
+      process,
+      WebAssembly
+    };
+    vm.runInNewContext(scriptSource, sandbox, { filename: scriptPath });
+    const factory = moduleRecord.exports.default ?? moduleRecord.exports;
+    const bulletModule = await factory({ locateFile: (path) => resolve(dirname(scriptPath), path) });
     runtime.state = "ready";
-    runtime.Ammo = Ammo;
-    return Ammo;
+    runtime.module = bulletModule;
+    return bulletModule;
   } catch (error) {
     runtime.state = "failed";
     runtime.failure = {
-      code: isAmmoHeapAllocationError(error)
-        ? "PHYSICS_AMMO_HEAP_ALLOCATION_FAILED"
-        : "PHYSICS_AMMO_INIT_FAILED",
+      code: isWasmHeapAllocationError(error)
+        ? "PHYSICS_WASM_HEAP_ALLOCATION_FAILED"
+        : "PHYSICS_MMD_ANIM_BULLET_INIT_FAILED",
       error
     };
     throw error;
@@ -337,17 +349,17 @@ async function runPhysicsStage({
   }
   if (physicsRuntime.state === "failed") {
     addPhysicsDiagnostic(record, physicsRuntime.failure.code, physicsRuntime.failure.error);
-    return createSkippedPhysicsSummary("ammo init failed", modelData);
+    return createSkippedPhysicsSummary("mmd-anim Bullet init failed", modelData);
   }
 
   const start = performance.now();
-  let Ammo;
+  let bulletModule;
   try {
-    Ammo = await initializePhysicsRuntime(physicsRuntime);
+    bulletModule = await initializePhysicsRuntime(physicsRuntime);
   } catch (error) {
     addPhysicsDiagnostic(record, physicsRuntime.failure.code, error);
     return {
-      ...createSkippedPhysicsSummary("ammo init failed", modelData),
+      ...createSkippedPhysicsSummary("mmd-anim Bullet init failed", modelData),
       durationMs: +(performance.now() - start).toFixed(2)
     };
   }
@@ -362,10 +374,10 @@ async function runPhysicsStage({
         .join("; ")}`
     );
     addPhysicsDiagnostic(record, "PHYSICS_WORLD_INIT_FAILED", error);
-    return createAttemptedPhysicsSummary(start, resolvedModelData, Ammo);
+    return createAttemptedPhysicsSummary(start, resolvedModelData, bulletModule);
   }
 
-  const backend = createAmmoMmdPhysicsBackend(Ammo);
+  const backend = createCustomBulletMmdPhysicsBackend(bulletModule);
   try {
     context.seconds = 0;
     context.deltaSeconds = 0;
@@ -374,7 +386,7 @@ async function runPhysicsStage({
   } catch (error) {
     addPhysicsDiagnostic(record, "PHYSICS_WORLD_INIT_FAILED", error);
     backend.dispose?.();
-    return createAttemptedPhysicsSummary(start, resolvedModelData, Ammo);
+    return createAttemptedPhysicsSummary(start, resolvedModelData, bulletModule);
   }
 
   try {
@@ -388,7 +400,7 @@ async function runPhysicsStage({
     backend.dispose?.();
   }
 
-  return createAttemptedPhysicsSummary(start, resolvedModelData, Ammo);
+  return createAttemptedPhysicsSummary(start, resolvedModelData, bulletModule);
 }
 
 function createSkippedPhysicsSummary(skipReason, modelData) {
@@ -397,18 +409,18 @@ function createSkippedPhysicsSummary(skipReason, modelData) {
     durationMs: 0,
     rigidBodies: modelData?.rigidBodies?.length ?? 0,
     joints: modelData?.joints?.length ?? 0,
-    ammoHeapBytes: null,
+    wasmHeapBytes: null,
     skipReason
   };
 }
 
-function createAttemptedPhysicsSummary(start, modelData, Ammo) {
+function createAttemptedPhysicsSummary(start, modelData, bulletModule) {
   return {
     attempted: true,
     durationMs: +(performance.now() - start).toFixed(2),
     rigidBodies: modelData?.rigidBodies?.length ?? 0,
     joints: modelData?.joints?.length ?? 0,
-    ammoHeapBytes: getAmmoHeapBytes(Ammo)
+    wasmHeapBytes: getWasmHeapBytes(bulletModule)
   };
 }
 
@@ -429,12 +441,12 @@ function addPhysicsDiagnostic(record, code, error) {
   };
 }
 
-function isAmmoHeapAllocationError(error) {
+function isWasmHeapAllocationError(error) {
   return error?.name === "RangeError" && /allocation/i.test(error?.message ?? "");
 }
 
-function getAmmoHeapBytes(Ammo) {
-  return Ammo?.HEAPU8?.buffer?.byteLength ?? Ammo?.HEAP8?.buffer?.byteLength ?? null;
+function getWasmHeapBytes(bulletModule) {
+  return bulletModule?.HEAPU8?.buffer?.byteLength ?? null;
 }
 
 function createMinimalPhysicsStepContext(modelData) {

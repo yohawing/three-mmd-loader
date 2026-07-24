@@ -49,15 +49,17 @@ through `dist/**`.
 ### MMD Bullet
 
 ```bash
-git submodule update --init --recursive native/third_party/bullet3
+git submodule update --init --recursive native/third_party/mmd-anim
 npm run build:bullet
 npm run build
 ```
 
 `build:bullet` requires `emcc` and writes:
 
-- `native/bullet-mmd/dist/mmd_bullet.js`
-- `native/bullet-mmd/dist/mmd_bullet.wasm`
+- `native/mmd-anim-bullet/dist/mmd_bullet.js`
+- `native/mmd-anim-bullet/dist/mmd_bullet.wasm`
+- `native/mmd-anim-bullet/dist/mmd_bullet.worker.mjs`
+- `native/mmd-anim-bullet/dist/mmd_bullet.worker.wasm`
 
 `npm run build` copies `mmd_bullet.js` to `dist/physics/mmd/`. The backend uses
 the `mmd_bullet_*` C ABI and a fixed 64 MiB WASM heap so direct-buffer typed
@@ -66,8 +68,6 @@ array views remain stable during runtime physics steps.
 Focused checks after Bullet rebuilds:
 
 ```bash
-npm run compare:bullet:mmd
-npm run compare:bullet:mmd:local -- --frames 120
 npm run smoke:bullet:mmd
 ```
 
@@ -173,8 +173,6 @@ npm run check:fixtures:physics
 | `npm run compare:runtime:js` | Compares generated TypeScript runtime and WASM-backed runtime outputs. |
 | `npm run bench:runtime:js` | Measures runtime JS hot paths. |
 | `npm run bench:wasm:perf -- <model> [repeat]` | Compares WASM and TypeScript model-load performance for a local PMX / PMD. |
-| `npm run compare:bullet:mmd` | Runs a small synthetic Bullet comparison. |
-| `npm run compare:bullet:mmd:local` | Runs a local model/motion Bullet comparison. |
 | `npm run smoke:bullet:mmd` | Smoke-tests the built MMD Bullet browser backend. |
 | `npm pack --dry-run --json` | Verifies npm tarball contents without writing a package. |
 

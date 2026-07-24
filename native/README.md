@@ -7,7 +7,5 @@ of this package. The parser/runtime WASM wrapper now comes from the
 
 Current native content:
 
-- `native/bullet-mmd`: MMD-specific Bullet binding source and generated
-  browser backend artifacts.
-- `native/third_party/bullet3`: Bullet source used by the Ammo MMD physics
-  build path.
+- `native/mmd-anim-bullet`: generated browser artifacts compiled from the
+  mmd-anim submodule and published under the stable `mmd_bullet*` names.
