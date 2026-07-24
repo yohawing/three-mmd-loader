@@ -6,6 +6,7 @@ import {
 } from "../../../dist/three/index.js";
 
 import { dom, updateChromeHeights } from "./dom.js";
+import { viewerPerformanceEnabled } from "./performance.js";
 import { persistViewportSettings, state } from "./state.js";
 import { updateViewerPipelineStatus } from "./viewer-pipeline.js";
 
@@ -53,6 +54,7 @@ export async function setupScene() {
       antialias: true,
       canvas: dom.canvas,
       forceWebGL: state.viewerPipeline === "tsl-forcewebgl",
+      trackTimestamp: viewerPerformanceEnabled,
       // Reversed-Z only makes sense on the native WebGPU backend (T070-18).
       // TSL forceWebGL still renders through WebGL's non-reversed [0,1]/[-1,1]
       // depth convention, so leave it (and baseline WebGL above) unchanged.

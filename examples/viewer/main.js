@@ -8,6 +8,7 @@ import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHe
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
 import { disposeWorkerRuntimeFactory } from "./lib/runtime-worker.js";
+import { createViewerPerformanceApi } from "./lib/performance.js";
 import { loadModelFolder, loadModelFromUrl, loadSecondaryModelFromUrl, loadSecondaryModelFile, loadSecondaryModelFolder, modelFileKey, bindDropTarget, clearModel, clearSecondaryModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadSecondaryMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
@@ -37,6 +38,21 @@ const viewerApi = {
   get currentBackground() { return state.currentBackground; },
   get currentCameraMotion() { return state.currentCameraMotion; }
 };
+const performanceApi = createViewerPerformanceApi();
+if (performanceApi) {
+  viewerApi.performance = performanceApi;
+  const snapshotButton = document.querySelector("#viewer-performance-snapshot");
+  const snapshotReport = document.querySelector("#viewer-performance-report");
+  if (
+    snapshotButton instanceof window.HTMLButtonElement &&
+    snapshotReport instanceof window.HTMLOutputElement
+  ) {
+    snapshotButton.hidden = false;
+    snapshotButton.addEventListener("click", () => {
+      snapshotReport.textContent = JSON.stringify(performanceApi.snapshot());
+    });
+  }
+}
 if (debugEnabled) {
   viewerApi.debug = createViewerDebugApi();
   window.mmdDebug = viewerApi.debug;

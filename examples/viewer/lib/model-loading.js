@@ -25,7 +25,7 @@ import { clearLoadedFileSwitcher, dom, setLoadedFileSwitcherOptions, setStatus, 
 import { disposeModelResources } from "./dispose.js";
 import { loadMotion, loadPose, findVmdFiles, classifyVmdFiles, updateMotionSwitcher, resetMotionSwitcherState } from "./motion-loading.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
-import { createViewerLoadProfile, describeViewerSource } from "./performance.js";
+import { createViewerLoadProfile, describeViewerSource, resetViewerFrameProfile } from "./performance.js";
 import { createViewerRuntimeOptions, currentMotionDurationSeconds, state } from "./state.js";
 import { getWorkerRuntimeFactory, isWorkerRuntimeEnabled } from "./runtime-worker.js";
 import { adaptCameraDepthRange, fitCameraToObject } from "./scene-setup.js";
@@ -248,6 +248,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     renderStillFrame();
     refreshDebugPanelState();
     loadProfile?.mark("first-render");
+    resetViewerFrameProfile();
     if (previousSecondaryState?.model) {
       state.scene.remove(previousSecondaryState.model.root);
       disposeModelResources(previousSecondaryState.model);
@@ -382,6 +383,8 @@ export async function loadModelFolder(files, loadOptions = {}) {
     renderStillFrame();
     refreshDebugPanelState();
     profile?.mark("first-render");
+    resetViewerFrameProfile();
+    resetViewerFrameProfile();
   } catch (error) {
     profile?.mark("error");
     disposeFailedPrimaryModel(loadedModel);

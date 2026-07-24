@@ -6,6 +6,7 @@ import { animationDurationSeconds, kurokoModelUrl, state } from "./state.js";
 import { createCameraSwitcherEntry, loadCameraAnimation } from "./camera-loading.js";
 import { ensurePhysicsBackendReady } from "./physics-backend.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
+import { resetViewerFrameProfile } from "./performance.js";
 import { labelFromUrl } from "./url-label.js";
 
 let secondaryMotionLoadGeneration = 0;
@@ -65,6 +66,7 @@ export async function loadSecondaryMotionFromUrl(url) {
     updateTransportState();
     setStatus("", "ready");
     renderStillFrame();
+    resetViewerFrameProfile();
     return true;
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
@@ -138,6 +140,7 @@ export async function loadMotion(source, label = source.name ?? "motion") {
     syncPlaybackToCurrentAudioState();
     setStatus("", "ready");
     renderStillFrame();
+    resetViewerFrameProfile();
     return true;
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");

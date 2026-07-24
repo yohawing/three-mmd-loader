@@ -1210,6 +1210,8 @@ describe("example viewer source", () => {
   it("profiles viewer model load stages only behind the perf query flag", async () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const performanceSource = await readFile("examples/viewer/lib/performance.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const sceneSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
 
     expect(modelSource).toContain("createViewerLoadProfile");
     expect(modelSource).toContain('profile?.measure("loader-loadModel", "loader-ready", "model-loaded")');
@@ -1217,6 +1219,17 @@ describe("example viewer source", () => {
     expect(performanceSource).toContain('new window.URLSearchParams(location.search).has("perf")');
     expect(performanceSource).toContain('"__THREE_MMD_LOADER_PERF__"');
     expect(performanceSource).toContain('window.console?.table(');
+    expect(performanceSource).toContain("createViewerPerformanceApi");
+    expect(performanceSource).toContain('getExtension?.("EXT_disjoint_timer_query_webgl2")');
+    expect(performanceSource).toContain('renderer.resolveTimestampsAsync("render")');
+    expect(performanceSource).toContain('renderer.resolveTimestampsAsync("compute")');
+    expect(playbackSource).toContain('endViewerStageProfile("animation-ik-morph-physics"');
+    expect(playbackSource).toContain('endViewerStageProfile("shadow-color-outline-sync"');
+    expect(playbackSource).toContain('endViewerStageProfile("render-submit"');
+    expect(sceneSource).toContain("trackTimestamp: viewerPerformanceEnabled");
+    expect(await readFile("examples/viewer/index.html", "utf8")).toContain(
+      'id="viewer-performance-snapshot"'
+    );
   });
 
   it("opts the viewer into a shared worker runtime without preparing main-thread physics", async () => {

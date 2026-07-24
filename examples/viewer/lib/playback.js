@@ -2,6 +2,14 @@ import { dom, setStatus, updatePlayToggle, updatePlaybackDisplay } from "./dom.j
 import { hasActiveAudioSource, isAudioElement } from "./audio-loading.js";
 import { applyCameraMotion } from "./camera-loading.js";
 import { updateColliderHelpers, updateDebugFps } from "./debug.js";
+import {
+  beginViewerFrameProfile,
+  beginViewerGpuProfile,
+  beginViewerStageProfile,
+  endViewerFrameProfile,
+  endViewerGpuProfile,
+  endViewerStageProfile
+} from "./performance.js";
 import { currentMmdFrame, currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
 import { sampleMmdAnimWasmLightTrackInto, sampleMmdLightTrackInto, sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
 import {
@@ -20,6 +28,7 @@ import {
 } from "./viewer-pipeline.js";
 
 export function render() {
+  beginViewerFrameProfile();
   state.frameTimer.update();
   const delta = state.frameTimer.getDelta();
   updateDebugFps(delta);
@@ -28,11 +37,23 @@ export function render() {
   } else if (state.isPlaying && !state.isSeeking) {
     state.elapsedSeconds += delta;
   }
+  let stageStartedAt = beginViewerStageProfile();
   evaluateRuntime();
+  endViewerStageProfile("animation-ik-morph-physics", stageStartedAt);
+  stageStartedAt = beginViewerStageProfile();
   updateColliderHelpers();
   state.controls.update();
   applyCameraMotion();
-  submitViewerRender();
+  endViewerStageProfile("shadow-color-outline-sync", stageStartedAt);
+  stageStartedAt = beginViewerStageProfile();
+  beginViewerGpuProfile(state.renderer);
+  try {
+    submitViewerRender();
+  } finally {
+    endViewerGpuProfile(state.renderer);
+  }
+  endViewerStageProfile("render-submit", stageStartedAt);
+  endViewerFrameProfile(state.renderer);
 }
 
 export function renderStillFrame() {
