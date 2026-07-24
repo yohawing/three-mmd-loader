@@ -44,14 +44,18 @@ console.log("\nWasm / JavaScript bridge (cold / warm median):");
 for (const key of [
   "parseProfiled",
   "profileJson",
-  "nonGeometryJson",
+  "compactJson",
   "jsonParse",
+  "vertexMorphDto",
+  "vertexMorphGetters",
+  "materializeVertexMorphs",
   "geometryDto",
   "geometryGetters",
   "profiledPipeline"
 ]) {
-  const byteCount = key === "nonGeometryJson"
-    ? runs[0].nonGeometryJsonBytes
+  const byteCount = key === "compactJson"
+    ? runs[0].compactJsonBytes
+    : key === "vertexMorphGetters" ? runs[0].vertexMorphBytes
     : key === "geometryGetters" ? runs[0].geometryBytes : undefined;
   printRow(key, runs.map((run) => run.timings[key]), byteCount);
 }
@@ -82,7 +86,8 @@ console.log(JSON.stringify({
     };
   }),
   geometryBytes: runs[0].geometryBytes,
-  nonGeometryJsonBytes: runs[0].nonGeometryJsonBytes
+  vertexMorphBytes: runs[0].vertexMorphBytes,
+  compactJsonBytes: runs[0].compactJsonBytes
 }, null, 2));
 
 function profileOnce(ParsedModel, input) {
@@ -95,53 +100,97 @@ function profileOnce(ParsedModel, input) {
     const profileJsonAt = performance.now();
     const profile = JSON.parse(profileJson);
 
-    const nonGeometryJsonStarted = performance.now();
-    const nonGeometryJson = handle.nonGeometryJson();
-    const nonGeometryJsonAt = performance.now();
-    JSON.parse(nonGeometryJson);
+    const compactJsonStarted = performance.now();
+    const compactJson = handle.nonGeometryJsonWithoutVertexOffsets();
+    const compactJsonAt = performance.now();
+    const compactModel = JSON.parse(compactJson);
     const jsonParsedAt = performance.now();
 
-    const geometry = handle.geometry();
-    const geometryAt = performance.now();
+    const vertexMorphs = handle.vertexMorphOffsets();
+    const vertexMorphDtoAt = performance.now();
     try {
-      const arrays = [
-        geometry.positions(),
-        geometry.normals(),
-        geometry.uvs(),
-        geometry.additionalUvs(),
-        geometry.indices(),
-        geometry.materialGroups(),
-        geometry.skinIndices(),
-        geometry.skinWeights(),
-        geometry.edgeScale(),
-        geometry.sdefEnabled(),
-        geometry.sdefC(),
-        geometry.sdefR0(),
-        geometry.sdefR1(),
-        geometry.sdefRw0(),
-        geometry.sdefRw1(),
-        geometry.qdefEnabled()
-      ];
-      const gettersAt = performance.now();
-      return {
-        profile,
-        nonGeometryJsonBytes: Buffer.byteLength(nonGeometryJson),
-        geometryBytes: arrays.reduce((sum, array) => sum + array.byteLength, 0),
-        timings: {
-          parseProfiled: parsedAt - parseStarted,
-          profileJson: profileJsonAt - parsedAt,
-          nonGeometryJson: nonGeometryJsonAt - nonGeometryJsonStarted,
-          jsonParse: jsonParsedAt - nonGeometryJsonAt,
-          geometryDto: geometryAt - jsonParsedAt,
-          geometryGetters: gettersAt - geometryAt,
-          profiledPipeline: gettersAt - pipelineStarted
-        }
-      };
+      const morphSpans = vertexMorphs.morphSpans();
+      const vertexIndices = vertexMorphs.vertexIndices();
+      const vertexPositions = vertexMorphs.positions();
+      const vertexMorphGettersAt = performance.now();
+      materializeVertexMorphOffsets(
+        compactModel.morphs,
+        morphSpans,
+        vertexIndices,
+        vertexPositions
+      );
+      const vertexMorphsMaterializedAt = performance.now();
+
+      const geometry = handle.geometry();
+      const geometryAt = performance.now();
+      try {
+        const arrays = [
+          geometry.positions(),
+          geometry.normals(),
+          geometry.uvs(),
+          geometry.additionalUvs(),
+          geometry.indices(),
+          geometry.materialGroups(),
+          geometry.skinIndices(),
+          geometry.skinWeights(),
+          geometry.edgeScale(),
+          geometry.sdefEnabled(),
+          geometry.sdefC(),
+          geometry.sdefR0(),
+          geometry.sdefR1(),
+          geometry.sdefRw0(),
+          geometry.sdefRw1(),
+          geometry.qdefEnabled()
+        ];
+        const gettersAt = performance.now();
+        return {
+          profile,
+          compactJsonBytes: Buffer.byteLength(compactJson),
+          vertexMorphBytes:
+            morphSpans.byteLength + vertexIndices.byteLength + vertexPositions.byteLength,
+          geometryBytes: arrays.reduce((sum, array) => sum + array.byteLength, 0),
+          timings: {
+            parseProfiled: parsedAt - parseStarted,
+            profileJson: profileJsonAt - parsedAt,
+            compactJson: compactJsonAt - compactJsonStarted,
+            jsonParse: jsonParsedAt - compactJsonAt,
+            vertexMorphDto: vertexMorphDtoAt - jsonParsedAt,
+            vertexMorphGetters: vertexMorphGettersAt - vertexMorphDtoAt,
+            materializeVertexMorphs: vertexMorphsMaterializedAt - vertexMorphGettersAt,
+            geometryDto: geometryAt - vertexMorphsMaterializedAt,
+            geometryGetters: gettersAt - geometryAt,
+            profiledPipeline: gettersAt - pipelineStarted
+          }
+        };
+      } finally {
+        geometry.free();
+      }
     } finally {
-      geometry.free();
+      vertexMorphs.free();
     }
   } finally {
     handle.free();
+  }
+}
+
+function materializeVertexMorphOffsets(morphs, spans, vertexIndices, positions) {
+  for (let morphIndex = 0; morphIndex < morphs.length; morphIndex += 1) {
+    const start = spans[morphIndex * 2] ?? 0;
+    const count = spans[morphIndex * 2 + 1] ?? 0;
+    const offsets = new Array(count);
+    for (let offsetIndex = 0; offsetIndex < count; offsetIndex += 1) {
+      const sourceIndex = start + offsetIndex;
+      const positionIndex = sourceIndex * 3;
+      offsets[offsetIndex] = {
+        vertexIndex: vertexIndices[sourceIndex] ?? 0,
+        position: [
+          positions[positionIndex] ?? 0,
+          positions[positionIndex + 1] ?? 0,
+          positions[positionIndex + 2] ?? 0
+        ]
+      };
+    }
+    morphs[morphIndex].vertexOffsets = offsets;
   }
 }
 

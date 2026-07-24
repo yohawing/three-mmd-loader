@@ -80,6 +80,72 @@ describe("@yw-mmd/core-wasm PMX metadata", () => {
     expect(Array.from(model.geometry().positions)).toEqual([2, 4, 6]);
   });
 
+  it("restores vertex morph offsets from the compact typed-array ABI", () => {
+    const geometryHandle = {
+      additionalUvCount: () => 0,
+      additionalUvs: () => new Float32Array(0),
+      edgeScale: () => Float32Array.from([1]),
+      indices: () => Uint32Array.from([0, 0, 0]),
+      materialGroups: () => Uint32Array.from([0, 3, 0]),
+      normals: () => Float32Array.from([0, 1, 0]),
+      positions: () => Float32Array.from([2, 4, 6]),
+      qdefEnabled: () => new Uint8Array([0]),
+      sdefC: () => new Float32Array(3),
+      sdefEnabled: () => new Uint8Array([0]),
+      sdefR0: () => new Float32Array(3),
+      sdefR1: () => new Float32Array(3),
+      sdefRw0: () => new Float32Array(3),
+      sdefRw1: () => new Float32Array(3),
+      skinIndices: () => Uint32Array.from([0, 0, 0, 0]),
+      skinWeights: () => Float32Array.from([1, 0, 0, 0]),
+      uvs: () => Float32Array.from([0, 0]),
+      vertexCount: () => 1
+    };
+    const vertexMorphOffsets = {
+      free: vi.fn(),
+      morphSpans: () => Uint32Array.from([0, 2]),
+      vertexIndices: () => Uint32Array.from([3, 7]),
+      positions: () => Float32Array.from([1, 2, 3, -1, -2, -3])
+    };
+    const parsedHandle = {
+      free: vi.fn(),
+      geometry: () => geometryHandle,
+      nonGeometryJson: vi.fn(() => {
+        throw new Error("legacy JSON path should not be used");
+      }),
+      nonGeometryJsonWithoutVertexOffsets: vi.fn(() =>
+        JSON.stringify({
+          metadata: { diagnostics: [] },
+          materials: [],
+          skeleton: { bones: [] },
+          morphs: [{ name: "move", type: "vertex", vertexOffsets: [] }],
+          displayFrames: [],
+          rigidBodies: [],
+          joints: [],
+          softBodies: [],
+          diagnostics: []
+        })
+      ),
+      vertexMorphOffsets: vi.fn(() => vertexMorphOffsets)
+    };
+    const core = new MmdAnimBackedCore({
+      WasmPmxParsedModel: { parse: () => parsedHandle },
+      wasm_wrapper_version: () => 1
+    });
+
+    const model = core.loadModel(new Uint8Array([1]), { format: "pmx" });
+
+    expect(model.morphs()[0]?.vertexOffsets).toEqual([
+      { vertexIndex: 3, position: [1, 2, 3] },
+      { vertexIndex: 7, position: [-1, -2, -3] }
+    ]);
+    expect(parsedHandle.nonGeometryJson).not.toHaveBeenCalled();
+    expect(parsedHandle.nonGeometryJsonWithoutVertexOffsets).toHaveBeenCalledOnce();
+    expect(parsedHandle.vertexMorphOffsets).toHaveBeenCalledOnce();
+    expect(vertexMorphOffsets.free).toHaveBeenCalledOnce();
+    expect(parsedHandle.free).toHaveBeenCalledOnce();
+  });
+
   it("loads PMX geometry through the typed-array DTO when the split ABI is available", () => {
     const geometryHandle = {
       free: vi.fn(),

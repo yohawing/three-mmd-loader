@@ -212,6 +212,10 @@ export class WasmPmxParsedModel {
      */
     nonGeometryJson(): string;
     /**
+     * Return non-geometry JSON with vertex morph offsets replaced by empty arrays.
+     */
+    nonGeometryJsonWithoutVertexOffsets(): string;
+    /**
      * Parse PMX bytes once and expose split non-geometry JSON plus geometry DTO getters.
      */
     static parse(data: Uint8Array): WasmPmxParsedModel;
@@ -223,6 +227,34 @@ export class WasmPmxParsedModel {
      * Return the opt-in parse profile collected by `parseProfiled`.
      */
     profileJson(): string;
+    /**
+     * Return all vertex morph offsets through compact typed arrays.
+     */
+    vertexMorphOffsets(): WasmPmxVertexMorphOffsets;
+}
+
+/**
+ * Typed-array DTO for all PMX vertex morph offsets.
+ *
+ * `morphSpans` stores `[start, count]` per morph. `vertexIndices` stores one
+ * vertex index per offset and `positions` stores the matching XYZ triples.
+ */
+export class WasmPmxVertexMorphOffsets {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Copy of `[start, count]` spans for every morph.
+     */
+    morphSpans(): Uint32Array;
+    /**
+     * Copy of flattened XYZ position offsets.
+     */
+    positions(): Float32Array;
+    /**
+     * Copy of one vertex index per flattened vertex morph offset.
+     */
+    vertexIndices(): Uint32Array;
 }
 
 export class WasmReducedPoseResult {
@@ -370,6 +402,7 @@ export interface InitOutput {
     readonly __wbg_wasmmmdruntimeinstance_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxgeometry_free: (a: number, b: number) => void;
     readonly __wbg_wasmpmxparsedmodel_free: (a: number, b: number) => void;
+    readonly __wbg_wasmpmxvertexmorphoffsets_free: (a: number, b: number) => void;
     readonly __wbg_wasmreducedposeresult_free: (a: number, b: number) => void;
     readonly __wbg_wasmvmdcameratrack_free: (a: number, b: number) => void;
     readonly __wbg_wasmvmdlighttrack_free: (a: number, b: number) => void;
@@ -472,9 +505,14 @@ export interface InitOutput {
     readonly wasmpmxgeometry_vertexCount: (a: number) => number;
     readonly wasmpmxparsedmodel_geometry: (a: number) => number;
     readonly wasmpmxparsedmodel_nonGeometryJson: (a: number) => [number, number, number, number];
+    readonly wasmpmxparsedmodel_nonGeometryJsonWithoutVertexOffsets: (a: number) => [number, number, number, number];
     readonly wasmpmxparsedmodel_parse: (a: number, b: number) => [number, number, number];
     readonly wasmpmxparsedmodel_parseProfiled: (a: number, b: number) => [number, number, number];
     readonly wasmpmxparsedmodel_profileJson: (a: number) => [number, number, number, number];
+    readonly wasmpmxparsedmodel_vertexMorphOffsets: (a: number) => [number, number, number];
+    readonly wasmpmxvertexmorphoffsets_morphSpans: (a: number) => [number, number];
+    readonly wasmpmxvertexmorphoffsets_positions: (a: number) => [number, number];
+    readonly wasmpmxvertexmorphoffsets_vertexIndices: (a: number) => [number, number];
     readonly wasmreducedposeresult_boneCount: (a: number) => number;
     readonly wasmreducedposeresult_maxLocalPositionError: (a: number) => number;
     readonly wasmreducedposeresult_maxLocalRotationErrorRadians: (a: number) => number;

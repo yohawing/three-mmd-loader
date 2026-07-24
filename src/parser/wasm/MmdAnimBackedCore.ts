@@ -40,7 +40,16 @@ interface WasmPmxParsedModelConstructor {
 interface WasmPmxParsedModelDto {
   free?(): void;
   nonGeometryJson(): string;
+  nonGeometryJsonWithoutVertexOffsets?(): string;
   geometry(): WasmPmxGeometryDto;
+  vertexMorphOffsets?(): WasmPmxVertexMorphOffsetsDto;
+}
+
+interface WasmPmxVertexMorphOffsetsDto {
+  free?(): void;
+  morphSpans(): Uint32Array;
+  vertexIndices(): Uint32Array;
+  positions(): Float32Array;
 }
 
 interface WasmPmxGeometryConstructor {
@@ -122,6 +131,53 @@ function buildGeometryFromWasm(g: WasmPmxGeometryDto): GeometryBuffers {
     sdef: buildSdefFromWasm(g),
     qdef: buildQdefFromWasm(g)
   };
+}
+
+function restoreVertexMorphOffsetsFromWasm(
+  json: Record<string, unknown>,
+  dto: WasmPmxVertexMorphOffsetsDto
+): void {
+  const morphs = asArray<Record<string, unknown>>(json["morphs"]);
+  const spans = dto.morphSpans();
+  const vertexIndices = dto.vertexIndices();
+  const positions = dto.positions();
+  if (spans.length !== morphs.length * 2) {
+    throw new RangeError(
+      `PMX_VERTEX_MORPH_SPAN_LENGTH_INVALID:${spans.length}:${morphs.length * 2}`
+    );
+  }
+  if (positions.length !== vertexIndices.length * 3) {
+    throw new RangeError(
+      `PMX_VERTEX_MORPH_POSITION_LENGTH_INVALID:${positions.length}:${vertexIndices.length * 3}`
+    );
+  }
+  for (let morphIndex = 0; morphIndex < morphs.length; morphIndex += 1) {
+    const start = spans[morphIndex * 2] ?? 0;
+    const count = spans[morphIndex * 2 + 1] ?? 0;
+    const end = start + count;
+    if (end > vertexIndices.length) {
+      throw new RangeError(
+        `PMX_VERTEX_MORPH_SPAN_INVALID:${morphIndex}:${start}:${count}:${vertexIndices.length}`
+      );
+    }
+    const offsets = new Array<MorphData["vertexOffsets"][number]>(count);
+    for (let offsetIndex = 0; offsetIndex < count; offsetIndex += 1) {
+      const sourceIndex = start + offsetIndex;
+      const positionIndex = sourceIndex * 3;
+      offsets[offsetIndex] = {
+        vertexIndex: vertexIndices[sourceIndex] ?? 0,
+        position: [
+          positions[positionIndex] ?? 0,
+          positions[positionIndex + 1] ?? 0,
+          positions[positionIndex + 2] ?? 0
+        ]
+      };
+    }
+    const morph = morphs[morphIndex];
+    if (morph) {
+      morph["vertexOffsets"] = offsets;
+    }
+  }
 }
 
 function buildAdditionalUvsFromWasm(
@@ -331,10 +387,23 @@ export class MmdAnimBackedCore implements MmdCore {
       if (this.wasm.WasmPmxParsedModel != null) {
         const parsedHandle = this.wasm.WasmPmxParsedModel.parse(input);
         try {
+          const hasVertexMorphSplit =
+            parsedHandle.nonGeometryJsonWithoutVertexOffsets != null &&
+            parsedHandle.vertexMorphOffsets != null;
           const json = parseWasmJsonResponse<Record<string, unknown>>(
-            parsedHandle.nonGeometryJson(),
+            hasVertexMorphSplit
+              ? parsedHandle.nonGeometryJsonWithoutVertexOffsets!()
+              : parsedHandle.nonGeometryJson(),
             "PMX model"
           );
+          if (hasVertexMorphSplit) {
+            const vertexMorphOffsets = parsedHandle.vertexMorphOffsets!();
+            try {
+              restoreVertexMorphOffsetsFromWasm(json, vertexMorphOffsets);
+            } finally {
+              vertexMorphOffsets.free?.();
+            }
+          }
           const geometryHandle = parsedHandle.geometry();
           try {
             return new MmdAnimPmxModel(json, buildGeometryFromWasm(geometryHandle));
