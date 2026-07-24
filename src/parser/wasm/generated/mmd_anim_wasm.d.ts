@@ -215,6 +215,14 @@ export class WasmPmxParsedModel {
      * Parse PMX bytes once and expose split non-geometry JSON plus geometry DTO getters.
      */
     static parse(data: Uint8Array): WasmPmxParsedModel;
+    /**
+     * Parse PMX bytes once while collecting per-section timings.
+     */
+    static parseProfiled(data: Uint8Array): WasmPmxParsedModel;
+    /**
+     * Return the opt-in parse profile collected by `parseProfiled`.
+     */
+    profileJson(): string;
 }
 
 export class WasmReducedPoseResult {
@@ -465,6 +473,8 @@ export interface InitOutput {
     readonly wasmpmxparsedmodel_geometry: (a: number) => number;
     readonly wasmpmxparsedmodel_nonGeometryJson: (a: number) => [number, number, number, number];
     readonly wasmpmxparsedmodel_parse: (a: number, b: number) => [number, number, number];
+    readonly wasmpmxparsedmodel_parseProfiled: (a: number, b: number) => [number, number, number];
+    readonly wasmpmxparsedmodel_profileJson: (a: number) => [number, number, number, number];
     readonly wasmreducedposeresult_boneCount: (a: number) => number;
     readonly wasmreducedposeresult_maxLocalPositionError: (a: number) => number;
     readonly wasmreducedposeresult_maxLocalRotationErrorRadians: (a: number) => number;
@@ -486,6 +496,7 @@ export interface InitOutput {
     readonly wasmvmdselfshadowtrack_frameCount: (a: number) => number;
     readonly wasmvmdselfshadowtrack_fromVmdBytes: (a: number, b: number) => [number, number, number];
     readonly wasmvmdselfshadowtrack_sample: (a: number, b: number, c: any) => [number, number, number];
+    readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

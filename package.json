@@ -70,6 +70,7 @@
     "smoke:bullet:mmd": "node scripts/smoke-bullet-mmd.mjs",
     "bench:runtime:js": "node scripts/bench-runtime-js.mjs",
     "bench:wasm:perf": "node scripts/bench_wasm_perf.mjs",
+    "profile:pmx": "node scripts/profile-pmx-pipeline.mjs",
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",
     "example:viewer": "npm run dev",
     "check:fixtures": "node scripts/check-fixtures.mjs",
