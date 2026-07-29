@@ -156,6 +156,10 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("typeof state.renderer?.compileAsync === \"function\"");
     expect(pipelineSource).toContain("await state.renderer.compileAsync(state.scene, state.camera)");
     expect(pipelineSource).toContain("if (!canCompileAsync) {\n    return submitViewerRender();\n  }");
+    expect(pipelineSource).toContain("let viewerRenderCompileToken = 0;");
+    expect(pipelineSource).toContain("if (skipIfCompiling && viewerRenderCompileToken !== 0) {");
+    expect(pipelineSource).toContain("viewerRenderCompileToken = token;");
+    expect(pipelineSource).toContain("if (viewerRenderCompileToken === token) {");
     expect(pipelineSource).toContain("if (token !== viewerRenderToken) {");
     expect(pipelineSource).toContain(
       "// A newer toggle/render call superseded this one while we were compiling;"
@@ -321,7 +325,8 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("export function setCurrentModelTslOutlineHidden(hidden)");
     expect(pipelineSource).toContain("material.visible = !state.debugOutlineHidden && runtimeVisible");
     expect(pipelineSource).toContain("setTslOutlineMaterialHidden(material, hidden)");
-    expect(pipelineSource).toContain("export function submitViewerRender()");
+    expect(pipelineSource).toContain("export function submitViewerRender(skipIfCompiling = false)");
+    expect(pipelineSource).toContain("if (skipIfCompiling && viewerRenderCompileToken !== 0) {");
     expect(pipelineSource).toContain("computeCurrentModelTslSparsePositionMorphs();");
     expect(pipelineSource).toContain("ensureMmdTslSelfShadowPass();");
     expect(pipelineSource).toContain("mmdTslSelfShadowPass.render(state.renderer, state.scene, state.keyLight);");
@@ -338,7 +343,7 @@ describe("example viewer source", () => {
     );
     expect(pipelineSource).toContain("state.keyLight?.castShadow === true");
     expect(pipelineSource).toContain("disposeMmdTslSelfShadowPassIfUnused();");
-    const submitViewerRenderStart = pipelineSource.indexOf("export function submitViewerRender()");
+    const submitViewerRenderStart = pipelineSource.indexOf("export function submitViewerRender(skipIfCompiling = false)");
     const submitViewerRenderEnd = pipelineSource.indexOf("export function disposeViewerPipelineModel");
     expect(submitViewerRenderStart).toBeGreaterThanOrEqual(0);
     expect(submitViewerRenderEnd).toBeGreaterThan(submitViewerRenderStart);
@@ -390,6 +395,7 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("state.renderer.render(state.scene, state.camera);");
     expect(debugSource).toContain("submitViewerRender();");
     expect(debugSource).not.toContain("state.renderer.render(state.scene, state.camera)");
+    expect(playbackSource).toContain("submitViewerRender(true);");
     expect(playbackSource).toContain("submitViewerRender();");
     expect(playbackSource).not.toContain("state.renderer.render(state.scene, state.camera)");
     expect(pipelineSource).not.toContain("Array.isArray(material) ? material : [material]");

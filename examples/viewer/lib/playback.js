@@ -48,7 +48,7 @@ export function render() {
   stageStartedAt = beginViewerStageProfile();
   beginViewerGpuProfile(state.renderer);
   try {
-    submitViewerRender();
+    submitViewerRender(true);
   } finally {
     endViewerGpuProfile(state.renderer);
   }

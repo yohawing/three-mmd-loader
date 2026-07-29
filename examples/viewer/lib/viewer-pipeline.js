@@ -184,7 +184,14 @@ export function computeCurrentModelTslSparsePositionMorphs() {
   return computed;
 }
 
-export function submitViewerRender() {
+export function submitViewerRender(skipIfCompiling = false) {
+  // compileAsync() yields between shader variants so the animation loop can
+  // run. Do not let that loop enter the synchronous render path while a view
+  // toggle owns compilation; an incomplete pipeline would compile on the
+  // main thread and recreate the multi-second freeze this async path avoids.
+  if (skipIfCompiling && viewerRenderCompileToken !== 0) {
+    return false;
+  }
   if (!state.renderer || !state.scene || !state.camera) {
     return false;
   }
@@ -221,6 +228,7 @@ export function submitViewerRender() {
 }
 
 let viewerRenderToken = 0;
+let viewerRenderCompileToken = 0;
 
 // Debug-panel view toggles (selfShadow, normals) flip a renderer/material
 // parameter that changes every currently-visible material's compiled shader
@@ -238,6 +246,7 @@ export async function submitViewerRenderAsync() {
   if (!canCompileAsync) {
     return submitViewerRender();
   }
+  viewerRenderCompileToken = token;
   const showCompilingHint = !dom.statusText?.classList.contains("is-loading");
   if (showCompilingHint) {
     setStatus("Compiling shaders…", "loading");
@@ -250,6 +259,9 @@ export async function submitViewerRenderAsync() {
       error
     );
   } finally {
+    if (viewerRenderCompileToken === token) {
+      viewerRenderCompileToken = 0;
+    }
     if (showCompilingHint && token === viewerRenderToken) {
       setStatus("", "ready");
     }
