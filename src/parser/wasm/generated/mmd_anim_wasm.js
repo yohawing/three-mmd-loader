@@ -25,6 +25,9 @@ export class WasmMmdClip {
         return ret >>> 0;
     }
     /**
+     * Builds a VMD clip paired with an imported PMX model. The PMX
+     * registration semantics include fixed-axis projection and the
+     * registered 64-byte VMD interpolation layout.
      * @param {WasmMmdModel} model
      * @param {Uint8Array} data
      * @returns {WasmMmdClip}
@@ -1098,42 +1101,6 @@ export class WasmPmxParsedModel {
         return WasmPmxParsedModel.__wrap(ret[0]);
     }
     /**
-     * Parse PMX bytes once while collecting per-section timings.
-     * @param {Uint8Array} data
-     * @returns {WasmPmxParsedModel}
-     */
-    static parseProfiled(data) {
-        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmpmxparsedmodel_parseProfiled(ptr0, len0);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return WasmPmxParsedModel.__wrap(ret[0]);
-    }
-    /**
-     * Return the opt-in parse profile collected by `parseProfiled`.
-     * @returns {string}
-     */
-    profileJson() {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const ret = wasm.wasmpmxparsedmodel_profileJson(this.__wbg_ptr);
-            var ptr1 = ret[0];
-            var len1 = ret[1];
-            if (ret[3]) {
-                ptr1 = 0; len1 = 0;
-                throw takeFromExternrefTable0(ret[2]);
-            }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
-        } finally {
-            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
-        }
-    }
-    /**
      * Return all vertex morph offsets through compact typed arrays.
      * @returns {WasmPmxVertexMorphOffsets}
      */
@@ -1902,10 +1869,6 @@ function __wbg_get_imports() {
         __wbg___wbindgen_copy_to_typed_array_7a3f7b938f93cf12: function(arg0, arg1, arg2) {
             new Uint8Array(arg2.buffer, arg2.byteOffset, arg2.byteLength).set(getArrayU8FromWasm0(arg0, arg1));
         },
-        __wbg___wbindgen_is_undefined_67b456be8673d3d7: function(arg0) {
-            const ret = arg0 === undefined;
-            return ret;
-        },
         __wbg___wbindgen_throw_1506f2235d1bdba0: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
@@ -1913,32 +1876,8 @@ function __wbg_get_imports() {
             const ret = arg0.length;
             return ret;
         },
-        __wbg_now_e7c6795a7f81e10f: function(arg0) {
-            const ret = arg0.now();
-            return ret;
-        },
-        __wbg_performance_3fcf6e32a7e1ed0a: function(arg0) {
-            const ret = arg0.performance;
-            return ret;
-        },
         __wbg_set_index_2ae12f863484ce58: function(arg0, arg1, arg2) {
             arg0[arg1 >>> 0] = arg2;
-        },
-        __wbg_static_accessor_GLOBAL_9d53f2689e622ca1: function() {
-            const ret = typeof global === 'undefined' ? null : global;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_static_accessor_GLOBAL_THIS_a1a35cec07001a8a: function() {
-            const ret = typeof globalThis === 'undefined' ? null : globalThis;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_static_accessor_SELF_4c59f6c7ea29a144: function() {
-            const ret = typeof self === 'undefined' ? null : self;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_static_accessor_WINDOW_e70ae9f2eb052253: function() {
-            const ret = typeof window === 'undefined' ? null : window;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Ref(Slice(F32)) -> NamedExternref("Float32Array")`.
@@ -2004,12 +1943,6 @@ const WasmVmdLightTrackFinalization = (typeof FinalizationRegistry === 'undefine
 const WasmVmdSelfShadowTrackFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmvmdselfshadowtrack_free(ptr, 1));
-
-function addToExternrefTable0(obj) {
-    const idx = wasm.__externref_table_alloc();
-    wasm.__wbindgen_externrefs.set(idx, obj);
-    return idx;
-}
 
 function _assertClass(instance, klass) {
     if (!(instance instanceof klass)) {
