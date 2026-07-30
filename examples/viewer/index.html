@@ -79,10 +79,11 @@
 
               <details class="load-category" id="model-load-category" open>
                 <summary data-i18n="menu.model">Model</summary>
+                <label class="model-load-option" for="model-load-add">
+                  <input id="model-load-add" type="checkbox" />
+                  <span data-i18n="model.loadAsAdditional">Add to current scene</span>
+                </label>
                 <button id="choose-model-folder" type="button" role="menuitem" data-i18n="action.loadFromFolder">Load From Folder...</button>
-                <button id="choose-secondary-model" type="button" role="menuitem" data-i18n="action.loadAdditionalModel">Add Character...</button>
-                <button id="choose-secondary-model-folder" type="button" role="menuitem" data-i18n="action.loadAdditionalModelFolder">Add Character From Folder...</button>
-                <button id="clear-secondary-model" type="button" role="menuitem" data-i18n="action.clearAdditionalModel">Clear Added Character</button>
                 <div class="asset-load-row" hidden>
                   <label for="asset-model-select" data-i18n="menu.fixture">Fixture</label>
                   <select id="asset-model-select" aria-label="Local model asset" hidden></select>
@@ -170,8 +171,6 @@
 
         <span class="status" id="status"></span>
         <input id="model-folder" type="file" webkitdirectory directory multiple />
-        <input id="secondary-model-file" type="file" accept=".pmx,.pmd,application/octet-stream" />
-        <input id="secondary-model-folder" type="file" webkitdirectory directory multiple />
         <input id="motion-file" type="file" accept=".vmd,application/octet-stream" />
         <input id="pose-file" type="file" accept=".vpd,text/plain" />
         <input id="audio-file" type="file" accept=".wav,.mp3,.ogg,audio/wav,audio/mpeg,audio/ogg" />
@@ -181,7 +180,6 @@
       </header>
 
       <nav class="utility-actions" aria-label="Viewer info and language">
-        <span id="runtime-status" class="runtime-status" aria-label="Runtime status"></span>
         <sl-select id="language-select" class="language-select" size="small" value="en" aria-label="Language" data-i18n-aria="aria.language">
           <sl-option value="en">EN</sl-option>
           <sl-option value="ja">日本語</sl-option>

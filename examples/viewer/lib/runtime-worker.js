@@ -17,7 +17,6 @@ export async function prepareViewerRuntime() {
     state.activeRuntimeMode = viewerConfig.runtime;
     state.runtimeTransport = "inline";
     state.runtimeReadiness = "ready";
-    updateRuntimeStatusUi();
     return;
   }
   try {
@@ -34,7 +33,6 @@ export async function prepareViewerRuntime() {
       ? "shared-array-buffer"
       : "transferable";
     state.runtimeReadiness = "pending";
-    updateRuntimeStatusUi();
     await getWorkerRuntimeFactory();
   } catch (error) {
     activatePreflightFallback(error);
@@ -72,7 +70,6 @@ export function markWorkerRuntimesReady() {
   state.runtimeTransport = sharedMemory ? "shared-array-buffer" : "transferable";
   state.runtimeReadiness = "ready";
   updateWorkerRuntimeTelemetry();
-  updateRuntimeStatusUi();
 }
 
 export function getViewerRuntimeEvidence() {
@@ -155,7 +152,6 @@ function activatePreflightFallback(error) {
   state.runtimeFallbackReason = message;
   state.workerRuntimeFallback = message;
   state.workerRuntimeFallbackCount += 1;
-  updateRuntimeStatusUi();
   window.console?.warn("[viewer] Worker preflight fallback", error);
   setStatus(`Worker unavailable; using inline runtime: ${message}`, "warning");
 }
@@ -172,7 +168,6 @@ function reportWorkerRuntimeFallback(error) {
   state.isPlaying = false;
   dom.bgmAudio?.pause();
   updatePlayToggle();
-  updateRuntimeStatusUi();
   window.console?.error("[viewer] Worker runtime fallback", error);
   const statusMessage = `Runtime Worker ${failureStage} failed: ${message}. Reload with ?runtime=mmd-anim to continue inline.`;
   setStatus(statusMessage, "error");
@@ -180,22 +175,4 @@ function reportWorkerRuntimeFallback(error) {
     dom.runtimeErrorBanner.textContent = statusMessage;
     dom.runtimeErrorBanner.hidden = false;
   }
-}
-
-function updateRuntimeStatusUi() {
-  if (!dom.runtimeStatus) {
-    return;
-  }
-  const runtimeLabel = state.activeRuntimeMode === "worker" ? "Worker" : `Inline ${state.activeRuntimeMode}`;
-  const transportLabel = state.runtimeTransport === "shared-array-buffer"
-    ? "SAB"
-    : state.runtimeTransport === "transferable"
-      ? "transfer"
-      : state.runtimeTransport;
-  dom.runtimeStatus.textContent = `${runtimeLabel} · ${transportLabel} · ${state.runtimeReadiness}`;
-  dom.runtimeStatus.title = state.runtimeFallbackReason
-    ? `Fallback: ${state.runtimeFallbackReason}`
-    : dom.runtimeStatus.textContent;
-  dom.runtimeStatus.classList.toggle("is-warning", state.activeRuntimeMode !== state.requestedRuntimeMode);
-  dom.runtimeStatus.classList.toggle("is-error", state.runtimeReadiness === "failed");
 }

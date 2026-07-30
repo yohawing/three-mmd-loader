@@ -178,26 +178,6 @@ select:focus-visible {
     animation: loading-dots 1s steps(4, end) infinite;
 }
 
-.runtime-status {
-    padding: 4px 7px;
-    border: 1px solid var(--surface-border);
-    border-radius: 999px;
-    background: rgb(255 255 255 / 78%);
-    color: var(--text-muted);
-    font-size: 11px;
-    white-space: nowrap;
-}
-
-.runtime-status.is-warning {
-    border-color: rgb(184 122 0 / 35%);
-    color: var(--warning);
-}
-
-.runtime-status.is-error {
-    border-color: rgb(180 35 35 / 35%);
-    color: var(--danger);
-}
-
 @keyframes loading-dots {
     0% {
         content: "";
@@ -331,6 +311,22 @@ select:focus-visible {
 
 .load-menu-panel button:hover {
     background: rgb(246 247 248 / 98%);
+}
+
+.model-load-option {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 11px;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.model-load-option input {
+    margin: 0;
+    accent-color: var(--accent);
 }
 
 .asset-load-row {

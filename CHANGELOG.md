@@ -34,6 +34,9 @@ All notable changes to this project will be documented in this file.
 - Use the Worker runtime by default in the example viewer, while keeping
   explicit `mmd-anim` and JavaScript inline routes and a reasoned capability
   fallback when the Worker API is unavailable.
+- Simplify example Viewer model loading to one new/add checkbox shared by
+  folder and local-fixture loading, and keep runtime details in diagnostics
+  instead of the persistent header badge.
 - Remove the legacy `AmmoMmdPhysicsBackend`, `createAmmoMmdPhysicsBackend`,
   and `loadAmmoNamespace` exports and the direct `ammo.js` dependency. Use
   `loadCustomBulletMmdModule()` and `createCustomBulletMmdPhysicsBackend()`

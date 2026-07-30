@@ -717,22 +717,23 @@ async function verifyRuntimeRoutes(browser, origin, modelUrl, backend) {
       { waitUntil: "domcontentloaded" }
     );
     await waitForViewer(fallbackPage);
-    const loaded = await fallbackPage.evaluate(async (url) => globalThis.mmdViewer.loadModelUrl(url), modelUrl);
-    const fallback = await fallbackPage.evaluate(() => ({
-      status: globalThis.mmdViewer.runtimeStatus,
-      badge: document.querySelector("#runtime-status")?.textContent,
-      warning: document.querySelector("#runtime-status")?.classList.contains("is-warning")
+    const preflightWarning = await fallbackPage.evaluate(() => ({
+      message: document.querySelector("#status")?.textContent,
+      warning: document.querySelector(".top-bar")?.classList.contains("is-warning")
     }));
+    const loaded = await fallbackPage.evaluate(async (url) => globalThis.mmdViewer.loadModelUrl(url), modelUrl);
+    const fallback = await fallbackPage.evaluate(() => globalThis.mmdViewer.runtimeStatus);
     if (
       !loaded ||
-      fallback.status.requested !== "worker" ||
-      fallback.status.active !== "mmd-anim" ||
-      fallback.status.readiness !== "ready" ||
-      !fallback.status.fallbackReason?.includes("Worker API") ||
-      fallback.warning !== true ||
+      fallback.requested !== "worker" ||
+      fallback.active !== "mmd-anim" ||
+      fallback.readiness !== "ready" ||
+      !fallback.fallbackReason?.includes("Worker API") ||
+      !preflightWarning.message?.includes("Worker unavailable") ||
+      preflightWarning.warning !== true ||
       fallbackPageErrors.length > 0
     ) {
-      throw new Error(`Worker preflight fallback failed: ${JSON.stringify({ loaded, fallback })}`);
+      throw new Error(`Worker preflight fallback failed: ${JSON.stringify({ loaded, fallback, preflightWarning })}`);
     }
   } finally {
     await fallbackContext.close();
