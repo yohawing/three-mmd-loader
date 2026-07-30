@@ -83,6 +83,90 @@ describe("MMD runtime worker endpoint", () => {
     });
   });
 
+  it("preserves settled ticks and prioritizes them over the latest streaming tick", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx"))
+    );
+    const animation = await loader.loadAnimation(
+      await readFile(resolve("test/fixtures/test_1bone_cube_motion.vmd"))
+    );
+    const port = new TransferEmulatingPort();
+    const endpoint = new MmdRuntimeWorkerEndpoint(port);
+    endpoint.handle({
+      type: "init",
+      descriptor: serializeMmdRuntimeModelDescriptor(model.mesh)
+    });
+    endpoint.handle({ type: "setAnimation", epoch: 1, animation: animation.animation });
+    endpoint.handle({ type: "tick", epoch: 1, seconds: 0 });
+    endpoint.handle({ type: "tick", epoch: 1, seconds: 0.1 });
+    endpoint.handle({ type: "tick", epoch: 1, seconds: 0.2 });
+    endpoint.handle({ type: "tick", epoch: 1, seconds: 0.3, requestId: 1 });
+    endpoint.handle({ type: "tick", epoch: 1, seconds: 0.4, requestId: 2 });
+    endpoint.handle({ type: "tick", epoch: 1, seconds: 0.5 });
+
+    const occupied = port.poseEvents().slice(0, 3);
+    expect(occupied).toHaveLength(3);
+    for (const poseEvent of occupied) {
+      endpoint.handle({ type: "recycle", pose: poseEvent.pose });
+    }
+
+    const resumed = port.poseEvents().slice(3);
+    expect(resumed.map((event) => [event.pose.seconds, event.requestId])).toEqual([
+      [0.3, 1],
+      [0.4, 2],
+      [0.5, undefined]
+    ]);
+  });
+
+  it("does not publish a queued settled tick after an epoch change", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx"))
+    );
+    const port = new TransferEmulatingPort();
+    const endpoint = new MmdRuntimeWorkerEndpoint(port);
+    endpoint.handle({
+      type: "init",
+      descriptor: serializeMmdRuntimeModelDescriptor(model.mesh)
+    });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.1 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.2 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.3, requestId: 1 });
+    endpoint.handle({ type: "seek", epoch: 1, seconds: 1 });
+
+    const firstPose = port.poseEvents()[0]?.pose;
+    if (!firstPose) {
+      throw new Error("Expected an occupied transferable pose");
+    }
+    endpoint.handle({ type: "recycle", pose: firstPose });
+    expect(port.poseEvents()).toHaveLength(3);
+  });
+
+  it("bounds the settled queue when transferable buffers are exhausted", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx"))
+    );
+    const port = new TransferEmulatingPort();
+    const endpoint = new MmdRuntimeWorkerEndpoint(port);
+    endpoint.handle({
+      type: "init",
+      descriptor: serializeMmdRuntimeModelDescriptor(model.mesh)
+    });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.1 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.2 });
+    for (let requestId = 1; requestId <= 33; requestId += 1) {
+      endpoint.handle({ type: "tick", epoch: 0, seconds: 1 + requestId / 60, requestId });
+    }
+    expect(port.events.at(-1)).toEqual({
+      type: "error",
+      message: "MMD runtime worker settled queue overflow"
+    });
+  });
+
   it("publishes through shared slots and resumes the latest tick after release", async () => {
     const loader = new ThreeMmdLoader();
     const model = await loader.loadModel(
@@ -120,6 +204,35 @@ describe("MMD runtime worker endpoint", () => {
     endpoint.handle({ type: "sharedRelease" });
     expect(port.events.at(-1)).toEqual({ type: "sharedPose", slot: 0 });
     expect(readMmdRuntimeSharedPoseInto(firstSlot, pose)?.seconds).toBe(0.3);
+  });
+
+  it("carries settled request ids through shared pose events", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx"))
+    );
+    const port = new TransferEmulatingPort();
+    const endpoint = new MmdRuntimeWorkerEndpoint(port);
+    const slots = createMmdRuntimeSharedPoseSlots(model.mesh.skeleton.bones.length, 0);
+    endpoint.handle({
+      type: "init",
+      descriptor: serializeMmdRuntimeModelDescriptor(model.mesh),
+      sharedPoseSlots: structuredClone(slots)
+    });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.1 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.2 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.3, requestId: 7 });
+
+    const firstSlot = slots[0];
+    if (!firstSlot) {
+      throw new Error("Expected a shared pose slot");
+    }
+    const pose = createMmdRuntimeSharedPoseReadBuffer(model.mesh.skeleton.bones.length, 0);
+    expect(readMmdRuntimeSharedPoseInto(firstSlot, pose)?.seconds).toBe(0);
+    releaseMmdRuntimeSharedPoseReadSlot(firstSlot);
+    endpoint.handle({ type: "sharedRelease" });
+    expect(port.events.at(-1)).toEqual({ type: "sharedPose", slot: 0, requestId: 7 });
   });
 
   it("initializes and disposes an external backend owned by the worker", async () => {
@@ -176,6 +289,40 @@ describe("MMD runtime worker endpoint", () => {
     expect(port.events[0]).toEqual({ type: "ready", epoch: 0 });
     expect(port.poseEvents()).toHaveLength(1);
     expect(port.poseEvents()[0]?.pose.seconds).toBe(63 / 60);
+  });
+
+  it("preserves settled ticks while an external backend initializes", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx"))
+    );
+    const port = new TransferEmulatingPort();
+    const backend = new RecordingPhysicsBackend();
+    let resolveBackend: ((backend: MmdPhysicsBackend) => void) | undefined;
+    const endpoint = new MmdRuntimeWorkerEndpoint(port, {
+      createExternalPhysicsBackend: () => new Promise((resolvePromise) => {
+        resolveBackend = resolvePromise;
+      })
+    });
+    endpoint.handle({
+      type: "init",
+      descriptor: serializeMmdRuntimeModelDescriptor(model.mesh),
+      runtimeOptions: { physics: "external" },
+      externalPhysics: { kind: "custom-bullet-mmd" }
+    });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.1, requestId: 1 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.2, requestId: 2 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.3 });
+    endpoint.handle({ type: "tick", epoch: 0, seconds: 0.4 });
+
+    resolveBackend?.(backend);
+    await Promise.resolve();
+
+    expect(port.poseEvents().map((event) => [event.pose.seconds, event.requestId])).toEqual([
+      [0.1, 1],
+      [0.2, 2],
+      [0.4, undefined]
+    ]);
   });
 
   it("disposes an external backend that resolves after the endpoint", async () => {

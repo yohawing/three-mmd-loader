@@ -35,14 +35,144 @@ describe("WorkerMmdRuntime", () => {
     );
     const runtime = model.runtime as WorkerMmdRuntime;
     model.setAnimation(animation.animation);
-    model.update(0.2, { physics: false });
-    await waitFor(() => runtime.frameState().seconds >= 0.2);
+    await runtime.whenReady();
+    const settled = await model.updateAsync(0.2, { physics: false });
+    expect(settled.seconds).toBe(0.2);
     expect(runtime.workerReady()).toBe(true);
     expect(runtime.poseAgeSeconds()).toBeGreaterThanOrEqual(0);
     expect(runtime.poseAgeFrames()).toBeGreaterThanOrEqual(0);
     expect(model.mesh.skeleton.bones[0]?.matrixWorld.elements.every(Number.isFinite)).toBe(true);
     runtime.dispose();
     expect(() => runtime.tick(0.3, { physics: false })).toThrow("disposed");
+  });
+
+  it("provides updateAsync for synchronous runtimes", async () => {
+    const loader = new ThreeMmdLoader();
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx")),
+      { outline: false, materialRenderOrder: false }
+    );
+    const state = await model.updateAsync(0.25, { physics: false });
+    expect(state).toEqual({ seconds: 0.25, frame: 7.5, frameRate: 30 });
+    expect(model.runtime.tickAsync).toBeUndefined();
+    model.update(0.5, { physics: false });
+    expect(state.seconds).toBe(0.25);
+  });
+
+  it("resolves a settled request only after its transferable pose is applied", async () => {
+    let transport: ManualWorker | undefined;
+    const loader = new ThreeMmdLoader({
+      runtimeFactory: createWorkerMmdRuntimeFactory({
+        workerFactory: () => {
+          transport = new ManualWorker();
+          return transport;
+        }
+      })
+    });
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx")),
+      { outline: false, materialRenderOrder: false }
+    );
+    const runtime = model.runtime as WorkerMmdRuntime;
+    await runtime.whenReady();
+    const pending = model.updateAsync(0.25, { physics: false });
+    const tick = transport?.lastSettledTick();
+    if (!tick?.requestId || !transport?.descriptor) {
+      throw new Error("Expected a settled worker tick");
+    }
+    expect(runtime.frameState().seconds).toBe(0);
+    const pose = createMmdRuntimePoseBuffer(
+      transport.descriptor.bones.length,
+      transport.descriptor.morphCount
+    );
+    pose.worldMatricesColumnMajor[0] = 1;
+    pose.worldMatricesColumnMajor[5] = 1;
+    pose.worldMatricesColumnMajor[10] = 1;
+    pose.worldMatricesColumnMajor[12] = 2;
+    pose.worldMatricesColumnMajor[15] = 1;
+    Object.assign(pose, { epoch: 0, sequence: 1, seconds: 0.25, frame: 7.5 });
+    transport.emit({ type: "pose", pose, requestId: tick.requestId });
+
+    await expect(pending).resolves.toEqual({ seconds: 0.25, frame: 7.5, frameRate: 30 });
+    expect(runtime.frameState().seconds).toBe(0.25);
+    expect(model.mesh.skeleton.bones[0]?.matrixWorld.elements[12]).toBeCloseTo(2);
+    expect(transport.recycleCount).toBe(1);
+    runtime.dispose();
+  });
+
+  it("rejects settled requests on abort, epoch change, and crash", async () => {
+    let transport: ManualWorker | undefined;
+    const loader = new ThreeMmdLoader({
+      runtimeFactory: createWorkerMmdRuntimeFactory({
+        fallback: false,
+        workerFactory: () => {
+          transport = new ManualWorker();
+          return transport;
+        }
+      })
+    });
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx")),
+      { outline: false, materialRenderOrder: false }
+    );
+    const animation = await loader.loadAnimation(
+      await readFile(resolve("test/fixtures/test_1bone_cube_motion.vmd"))
+    );
+    const runtime = model.runtime as WorkerMmdRuntime;
+
+    const controller = new AbortController();
+    const aborted = model.updateAsync(0.1, { signal: controller.signal });
+    controller.abort();
+    await expect(aborted).rejects.toMatchObject({ name: "AbortError" });
+
+    const invalidated = model.updateAsync(0.2);
+    model.setAnimation(animation.animation);
+    await expect(invalidated).rejects.toThrow("epoch change");
+
+    const crashed = model.updateAsync(0.3);
+    transport?.crash(new Error("worker crashed"));
+    await expect(crashed).rejects.toThrow("worker crashed");
+
+    runtime.dispose();
+    expect(() => runtime.tickAsync(0.4)).toThrow("disposed");
+  });
+
+  it("rejects a pending settled request on dispose", async () => {
+    const loader = new ThreeMmdLoader({
+      runtimeFactory: createWorkerMmdRuntimeFactory({
+        fallback: false,
+        workerFactory: () => new ManualWorker()
+      })
+    });
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx")),
+      { outline: false, materialRenderOrder: false }
+    );
+    const runtime = model.runtime as WorkerMmdRuntime;
+    const pending = model.updateAsync(0.25);
+    runtime.dispose();
+    await expect(pending).rejects.toThrow("disposed");
+  });
+
+  it("rejects readiness when a worker fails before becoming ready", async () => {
+    let transport: CrashableWorker | undefined;
+    const loader = new ThreeMmdLoader({
+      runtimeFactory: createWorkerMmdRuntimeFactory({
+        fallback: false,
+        workerFactory: () => {
+          transport = new CrashableWorker();
+          return transport;
+        }
+      })
+    });
+    const model = await loader.loadModel(
+      await readFile(resolve("test/fixtures/test_1bone_cube.pmx")),
+      { outline: false, materialRenderOrder: false }
+    );
+    const runtime = model.runtime as WorkerMmdRuntime;
+    const ready = runtime.whenReady();
+    transport?.crash(new Error("worker init failed"));
+    await expect(ready).rejects.toThrow("worker init failed");
   });
 
   it("falls back to DefaultMmdRuntime when the worker cannot be created", async () => {
@@ -197,6 +327,11 @@ describe("WorkerMmdRuntime", () => {
       );
       const runtime = model.runtime as WorkerMmdRuntime;
       expect(runtime.sharedMemoryEnabled()).toBe(true);
+      const pending = model.updateAsync(0.5);
+      const tick = transport?.lastSettledTick();
+      if (!tick?.requestId) {
+        throw new Error("Expected a settled shared-memory tick");
+      }
       const slot = acquireMmdRuntimeSharedPoseWriteSlot(transport?.sharedPoseSlots ?? []);
       if (!slot) {
         throw new Error("Expected a writable shared pose slot");
@@ -204,7 +339,8 @@ describe("WorkerMmdRuntime", () => {
       const source = createMmdRuntimePoseBuffer(model.mesh.skeleton.bones.length, 0);
       Object.assign(source, { epoch: 0, sequence: 2, seconds: 0.5, frame: 15 });
       publishMmdRuntimeSharedPose(slot, source);
-      transport?.emit({ type: "sharedPose", slot: 0 });
+      transport?.emit({ type: "sharedPose", slot: 0, requestId: tick.requestId });
+      await expect(pending).resolves.toEqual({ seconds: 0.5, frame: 15, frameRate: 30 });
       expect(runtime.frameState().seconds).toBe(0.5);
       expect(transport?.sharedReleaseCount).toBe(1);
       runtime.dispose();
@@ -248,25 +384,37 @@ class ManualWorker implements MmdRuntimeWorkerLike {
   descriptor: Extract<MmdRuntimeWorkerCommand, { type: "init" }>["descriptor"] | undefined;
   sharedPoseSlots: Extract<MmdRuntimeWorkerCommand, { type: "init" }>["sharedPoseSlots"];
   sharedReleaseCount = 0;
+  recycleCount = 0;
+  readonly commands: MmdRuntimeWorkerCommand[] = [];
   private messageListener: ((event: MmdRuntimeWorkerEvent) => void) | undefined;
+  private errorListener: ((error: unknown) => void) | undefined;
 
   on(type: string, listener: (event: MmdRuntimeWorkerEvent) => void): void {
     if (type === "message") {
       this.messageListener = listener;
+    } else if (type === "error") {
+      this.errorListener = listener as unknown as (error: unknown) => void;
     }
   }
 
   off(): void {
     this.messageListener = undefined;
+    this.errorListener = undefined;
   }
 
   postMessage(message: MmdRuntimeWorkerCommand): void {
-    if (message.type === "init") {
-      this.descriptor = message.descriptor;
-      this.sharedPoseSlots = message.sharedPoseSlots;
+    const command = "command" in message
+      ? (message as unknown as { command: MmdRuntimeWorkerCommand }).command
+      : message;
+    this.commands.push(structuredClone(command));
+    if (command.type === "init") {
+      this.descriptor = command.descriptor;
+      this.sharedPoseSlots = command.sharedPoseSlots;
       this.messageListener?.({ type: "ready", epoch: 0 });
-    } else if (message.type === "sharedRelease") {
+    } else if (command.type === "sharedRelease") {
       this.sharedReleaseCount += 1;
+    } else if (command.type === "recycle") {
+      this.recycleCount += 1;
     }
   }
 
@@ -277,14 +425,18 @@ class ManualWorker implements MmdRuntimeWorkerLike {
   emit(event: MmdRuntimeWorkerEvent): void {
     this.messageListener?.(event);
   }
-}
 
-async function waitFor(predicate: () => boolean): Promise<void> {
-  const deadline = Date.now() + 2000;
-  while (!predicate()) {
-    if (Date.now() >= deadline) {
-      throw new Error("Timed out waiting for worker pose");
+  crash(error: unknown): void {
+    this.errorListener?.(error);
+  }
+
+  lastSettledTick(): Extract<MmdRuntimeWorkerCommand, { type: "tick" }> | undefined {
+    for (let index = this.commands.length - 1; index >= 0; index -= 1) {
+      const command = this.commands[index];
+      if (command?.type === "tick" && command.requestId !== undefined) {
+        return command;
+      }
     }
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+    return undefined;
   }
 }

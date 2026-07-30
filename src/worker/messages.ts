@@ -19,6 +19,8 @@ export type MmdRuntimeWorkerCommand =
       readonly epoch: number;
       readonly seconds: number;
       readonly options?: MmdRuntimeEvaluateOptions;
+      /** Present only for settled evaluations that must not be coalesced. */
+      readonly requestId?: number;
     }
   | { readonly type: "seek"; readonly epoch: number; readonly seconds: number }
   | { readonly type: "resetPose"; readonly epoch: number }
@@ -29,8 +31,8 @@ export type MmdRuntimeWorkerCommand =
 
 export type MmdRuntimeWorkerEvent =
   | { readonly type: "ready"; readonly epoch: number }
-  | { readonly type: "pose"; readonly pose: MmdRuntimePoseBuffer }
-  | { readonly type: "sharedPose"; readonly slot: number }
+  | { readonly type: "pose"; readonly pose: MmdRuntimePoseBuffer; readonly requestId?: number }
+  | { readonly type: "sharedPose"; readonly slot: number; readonly requestId?: number }
   | { readonly type: "disposed" }
   | { readonly type: "error"; readonly message: string };
 

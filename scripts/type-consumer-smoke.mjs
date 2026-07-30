@@ -60,7 +60,7 @@ try {
     join(workDir, "consumer.ts"),
     `import { ThreeMmdLoader, type ThreeMmdAnimation, type ThreeMmdModel } from "@yohawing/three-mmd-loader";
 import { parsePmxMetadata } from "@yohawing/three-mmd-loader/parser";
-import { DefaultMmdRuntime, exportMmdAnimWasmVmdAnimationJsonBytes, loadMmdAnimWasmVmd, parseMmdAnimWasmFormatJson } from "@yohawing/three-mmd-loader/runtime";
+import { DefaultMmdRuntime, exportMmdAnimWasmVmdAnimationJsonBytes, loadMmdAnimWasmVmd, parseMmdAnimWasmFormatJson, type MmdRuntimeAsyncEvaluateOptions } from "@yohawing/three-mmd-loader/runtime";
 import {
   applyMmdCameraStateToThreeCamera,
   applyMmdLightStateToThreeDirectionalLight,
@@ -109,6 +109,9 @@ declare const webgpuUniforms: MmdTslMaterialUniforms;
 model.root.add(model.mesh);
 model.setAnimation(animation);
 model.update(0);
+const asyncUpdateOptions: MmdRuntimeAsyncEvaluateOptions = { physics: false };
+void model.updateAsync(0, asyncUpdateOptions);
+void model.runtime.whenReady?.();
 model.diagnostics.textures.forEach((diagnostic) => void diagnostic.code);
 model.diagnostics.materials.forEach((diag) => void diag.finalTransparencyMode);
 model.diagnostics.performance.forEach((m) => void m.durationMs);
@@ -118,6 +121,7 @@ const exported: Uint8Array = exportMmdAnimWasmVmdAnimationJsonBytes(exporterWasm
 
 void loader;
 void runtime;
+void asyncUpdateOptions;
 void physics;
 void physicsOptions;
 void unsupportedPhysicsOptions;

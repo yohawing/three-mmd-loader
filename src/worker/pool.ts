@@ -321,6 +321,12 @@ class LeaseWorker implements MmdRuntimeWorkerLike {
           ? this.commandEnvelope.command.options
           : undefined
       },
+      requestId: {
+        enumerable: false,
+        get: () => this.commandEnvelope.command?.type === "tick"
+          ? this.commandEnvelope.command.requestId
+          : undefined
+      },
       pose: {
         enumerable: false,
         get: () => this.commandEnvelope.command?.type === "recycle"

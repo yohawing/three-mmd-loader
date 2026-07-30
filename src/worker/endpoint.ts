@@ -18,7 +18,9 @@ import {
 import type { MmdPhysicsBackend } from "../physics/index.js";
 
 const maxPreReadyCommands = 32;
+const maxPendingSettledTicks = 32;
 type ReadyCommand = Exclude<MmdRuntimeWorkerCommand, { readonly type: "init" }>;
+type TickCommand = Extract<MmdRuntimeWorkerCommand, { readonly type: "tick" }>;
 
 export interface MmdRuntimeWorkerEndpointOptions {
   readonly createExternalPhysicsBackend?: (
@@ -37,13 +39,20 @@ export class MmdRuntimeWorkerEndpoint {
     type: "pose",
     pose: undefined as unknown as MmdRuntimePoseBuffer
   };
+  private readonly settledPoseEvent: Extract<MmdRuntimeWorkerEvent, { readonly type: "pose" }> = {
+    type: "pose",
+    pose: undefined as unknown as MmdRuntimePoseBuffer,
+    requestId: 0
+  };
   private readonly poseTransferList: Transferable[] = new Array<Transferable>(2);
   private sharedPoseSlots: readonly MmdRuntimeSharedPoseSlot[] | undefined;
   private sharedPoseEvents: readonly Extract<MmdRuntimeWorkerEvent, { readonly type: "sharedPose" }>[] = [];
   private host: MmdRuntimeWorkerHost | undefined;
   private pool: MmdRuntimeTransferablePosePool | undefined;
-  private preReadyTick: Extract<MmdRuntimeWorkerCommand, { readonly type: "tick" }> | undefined;
-  private pendingTick: Extract<MmdRuntimeWorkerCommand, { readonly type: "tick" }> | undefined;
+  private preReadyTick: TickCommand | undefined;
+  private pendingTick: TickCommand | undefined;
+  private readonly pendingSettledTicks: TickCommand[] = [];
+  private pendingSettledTickIndex = 0;
   private disposed = false;
   private initializing = false;
   private ownedPhysicsBackend: MmdPhysicsBackend | undefined;
@@ -123,6 +132,7 @@ export class MmdRuntimeWorkerEndpoint {
       this.pool = undefined;
       this.preReadyCommands.length = 0;
       this.preReadyTick = undefined;
+      this.clearPendingSettledTicks();
       if (!this.disposed) {
         this.port.postMessage({
           type: "error",
@@ -180,9 +190,18 @@ export class MmdRuntimeWorkerEndpoint {
       return;
     }
     if (command.type === "tick") {
+      this.assertRequestId(command.requestId);
+      if (command.requestId !== undefined) {
+        this.queuePreReadyCommand(command);
+        return;
+      }
       this.preReadyTick = command;
       return;
     }
+    this.queuePreReadyCommand(command);
+  }
+
+  private queuePreReadyCommand(command: ReadyCommand): void {
     if (this.preReadyCommands.length >= maxPreReadyCommands) {
       throw new Error("MMD runtime worker ready queue overflow");
     }
@@ -199,25 +218,34 @@ export class MmdRuntimeWorkerEndpoint {
       case "setAnimation":
         host.setAnimation(command.animation);
         this.assertEpoch(command.epoch);
+        this.discardStalePendingTicks(command.epoch);
         break;
       case "seek":
         host.seek(command.seconds);
         this.assertEpoch(command.epoch);
+        this.discardStalePendingTicks(command.epoch);
         break;
       case "resetPose":
         host.resetPose();
         this.assertEpoch(command.epoch);
+        this.discardStalePendingTicks(command.epoch);
         break;
       case "clearAnimation":
         host.clearAnimation();
         this.assertEpoch(command.epoch);
+        this.discardStalePendingTicks(command.epoch);
         break;
       case "tick":
+        this.assertRequestId(command.requestId);
         if (command.epoch !== host.epoch()) {
           break;
         }
         if (!this.publishTick(command)) {
-          this.pendingTick = command;
+          if (command.requestId === undefined) {
+            this.pendingTick = command;
+          } else {
+            this.queueSettledTick(command);
+          }
         }
         break;
       case "recycle":
@@ -235,7 +263,7 @@ export class MmdRuntimeWorkerEndpoint {
   }
 
   private publishTick(
-    command: Extract<MmdRuntimeWorkerCommand, { readonly type: "tick" }>
+    command: TickCommand
   ): boolean {
     const host = this.host;
     const pool = this.pool;
@@ -252,7 +280,9 @@ export class MmdRuntimeWorkerEndpoint {
       if (!event) {
         throw new Error(`MMD runtime shared pose slot index is invalid: ${slot}`);
       }
-      this.port.postMessage(event);
+      this.port.postMessage(command.requestId === undefined
+        ? event
+        : { type: "sharedPose", slot, requestId: command.requestId });
       return true;
     }
     const target = pool?.acquire();
@@ -263,21 +293,103 @@ export class MmdRuntimeWorkerEndpoint {
       host.evaluate(command.seconds, command.options),
       target
     );
-    (this.poseEvent as { pose: MmdRuntimePoseBuffer }).pose = pose;
+    const event = command.requestId === undefined ? this.poseEvent : this.settledPoseEvent;
+    (event as { pose: MmdRuntimePoseBuffer }).pose = pose;
+    if (command.requestId !== undefined) {
+      (this.settledPoseEvent as { requestId: number }).requestId = command.requestId;
+    }
     this.poseTransferList[0] = pose.worldMatricesColumnMajor.buffer;
     this.poseTransferList[1] = pose.morphWeights.buffer;
-    this.port.postMessage(this.poseEvent, this.poseTransferList);
+    this.port.postMessage(event, this.poseTransferList);
     return true;
   }
 
   private publishPendingTick(): void {
+    while (this.pendingSettledTickIndex < this.pendingSettledTicks.length) {
+      const settled = this.pendingSettledTicks[this.pendingSettledTickIndex];
+      if (!settled) {
+        this.pendingSettledTickIndex += 1;
+        continue;
+      }
+      if (settled.epoch !== this.host?.epoch()) {
+        this.pendingSettledTickIndex += 1;
+        continue;
+      }
+      if (!this.publishTick(settled)) {
+        return;
+      }
+      this.pendingSettledTickIndex += 1;
+      this.compactSettledTicksIfExhausted();
+      return;
+    }
+    this.compactSettledTicksIfExhausted();
     const pending = this.pendingTick;
     if (!pending) {
       return;
     }
     this.pendingTick = undefined;
+    if (pending.epoch !== this.host?.epoch()) {
+      return;
+    }
     if (!this.publishTick(pending)) {
       this.pendingTick = pending;
+    }
+  }
+
+  private queueSettledTick(command: TickCommand): void {
+    if (this.pendingSettledTicks.length - this.pendingSettledTickIndex >= maxPendingSettledTicks) {
+      throw new Error("MMD runtime worker settled queue overflow");
+    }
+    this.pendingSettledTicks.push(command);
+  }
+
+  private discardStalePendingTicks(epoch: number): void {
+    if (this.pendingTick?.epoch !== epoch) {
+      this.pendingTick = undefined;
+    }
+    let writeIndex = 0;
+    for (let index = this.pendingSettledTickIndex; index < this.pendingSettledTicks.length; index += 1) {
+      const command = this.pendingSettledTicks[index];
+      if (command?.epoch === epoch) {
+        this.pendingSettledTicks[writeIndex] = command;
+        writeIndex += 1;
+      }
+    }
+    this.pendingSettledTicks.length = writeIndex;
+    this.pendingSettledTickIndex = 0;
+  }
+
+  private compactSettledTicksIfExhausted(): void {
+    if (this.pendingSettledTickIndex === 0) {
+      return;
+    }
+    if (this.pendingSettledTickIndex >= this.pendingSettledTicks.length) {
+      this.clearPendingSettledTicks();
+      return;
+    }
+    if (this.pendingSettledTickIndex < maxPendingSettledTicks) {
+      return;
+    }
+    let writeIndex = 0;
+    for (let index = this.pendingSettledTickIndex; index < this.pendingSettledTicks.length; index += 1) {
+      const command = this.pendingSettledTicks[index];
+      if (command) {
+        this.pendingSettledTicks[writeIndex] = command;
+        writeIndex += 1;
+      }
+    }
+    this.pendingSettledTicks.length = writeIndex;
+    this.pendingSettledTickIndex = 0;
+  }
+
+  private clearPendingSettledTicks(): void {
+    this.pendingSettledTicks.length = 0;
+    this.pendingSettledTickIndex = 0;
+  }
+
+  private assertRequestId(requestId: number | undefined): void {
+    if (requestId !== undefined && (!Number.isSafeInteger(requestId) || requestId <= 0)) {
+      throw new RangeError("MMD runtime worker request id must be a positive safe integer");
     }
   }
 
@@ -294,6 +406,7 @@ export class MmdRuntimeWorkerEndpoint {
     this.pendingTick = undefined;
     this.preReadyCommands.length = 0;
     this.preReadyTick = undefined;
+    this.clearPendingSettledTicks();
     this.host?.dispose();
     this.host = undefined;
     this.pool = undefined;

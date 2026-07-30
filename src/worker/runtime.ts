@@ -3,6 +3,7 @@ import type {
   DefaultMmdRuntimeOptions,
   MmdFrameState,
   MmdRuntime,
+  MmdRuntimeAsyncTickOptions,
   MmdRuntimeDebugState,
   MmdRuntimeEvaluateOptions,
   MmdRuntimeTickOptions
@@ -83,6 +84,19 @@ interface MutableWorkerCommand {
   options?: MmdRuntimeEvaluateOptions;
 }
 
+interface SettledRequest {
+  readonly epoch: number;
+  readonly resolve: (state: MmdFrameState) => void;
+  readonly reject: (error: Error) => void;
+  readonly signal: AbortSignal | undefined;
+  readonly onAbort: (() => void) | undefined;
+}
+
+interface ReadyWaiter {
+  readonly resolve: () => void;
+  readonly reject: (error: Error) => void;
+}
+
 const emptyDebugState = {
   stages: {
     vmdInterpolation: { worldMatricesColumnMajor: [], morphWeights: [] },
@@ -160,6 +174,8 @@ export class WorkerMmdRuntime implements MmdRuntime {
   private readonly poolLease: MmdRuntimeWorkerLease | undefined;
   private readonly sharedPoseSlots: readonly MmdRuntimeSharedPoseSlot[] | undefined;
   private readonly sharedPoseReadBuffer: MmdRuntimePoseBuffer | undefined;
+  private readonly settledRequests = new Map<number, SettledRequest>();
+  private readonly readyWaiters: ReadyWaiter[] = [];
   private fallbackRuntime: DefaultMmdRuntime | undefined;
   private readonly inlineFallbackAllowed: boolean;
   private failed = false;
@@ -168,6 +184,8 @@ export class WorkerMmdRuntime implements MmdRuntime {
   private lastAppliedSequence = -1;
   private lastPoseAgeSeconds = 0;
   private lastRequestedSeconds = 0;
+  private nextRequestId = 1;
+  private failureError: Error | undefined;
   private ready = false;
   private disposed = false;
 
@@ -223,6 +241,20 @@ export class WorkerMmdRuntime implements MmdRuntime {
 
   workerReady(): boolean {
     return this.ready && !this.disposed && this.fallbackRuntime === undefined;
+  }
+
+  /** Resolves after the Worker and its external physics backend are initialized. */
+  whenReady(): Promise<void> {
+    if (this.workerReady()) {
+      return Promise.resolve();
+    }
+    const inactiveError = this.inactiveError();
+    if (inactiveError) {
+      return Promise.reject(inactiveError);
+    }
+    return new Promise<void>((resolve, reject) => {
+      this.readyWaiters.push({ resolve, reject });
+    });
   }
 
   sharedMemoryEnabled(): boolean {
@@ -284,6 +316,50 @@ export class WorkerMmdRuntime implements MmdRuntime {
     this.tickCommand.options = this.workerEvaluateOptions;
     this.post(this.tickCommand as MmdRuntimeWorkerCommand);
     return this.frameStateScratch;
+  }
+
+  tickAsync(seconds: number, options?: MmdRuntimeAsyncTickOptions): Promise<MmdFrameState> {
+    this.assertActive();
+    if (options?.signal?.aborted) {
+      return Promise.reject(createAbortError());
+    }
+    if (this.fallbackRuntime) {
+      this.fallbackTickOptions.physics = options?.physics;
+      this.fallbackTickOptions.ik = options?.ik;
+      const state = this.fallbackRuntime.tick(seconds, this.fallbackTickOptions);
+      this.copyFrameState(state);
+      this.lastPoseAgeSeconds = 0;
+      return Promise.resolve(this.snapshotFrameState());
+    }
+    if (this.failed) {
+      return Promise.reject(this.failureError ?? new Error("MMD runtime worker failed"));
+    }
+    const requestId = this.allocateRequestId();
+    this.lastRequestedSeconds = seconds;
+    return new Promise<MmdFrameState>((resolve, reject) => {
+      const signal = options?.signal;
+      const onAbort = signal
+        ? () => this.rejectSettledRequest(requestId, createAbortError())
+        : undefined;
+      this.settledRequests.set(requestId, {
+        epoch: this.currentEpoch,
+        resolve,
+        reject,
+        signal,
+        onAbort
+      });
+      signal?.addEventListener("abort", onAbort as () => void, { once: true });
+      this.post({
+        type: "tick",
+        epoch: this.currentEpoch,
+        seconds,
+        options: {
+          physics: options?.physics,
+          ik: options?.ik
+        },
+        requestId
+      });
+    });
   }
 
   seek(seconds: number): MmdFrameState {
@@ -350,7 +426,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
   }
 
   frameState(): MmdFrameState {
-    return { ...this.frameStateScratch };
+    return this.snapshotFrameState();
   }
 
   debugState(): MmdRuntimeDebugState {
@@ -362,6 +438,9 @@ export class WorkerMmdRuntime implements MmdRuntime {
       return;
     }
     this.disposed = true;
+    const disposeError = new Error("MMD runtime worker is disposed");
+    this.rejectSettledRequests(disposeError);
+    this.rejectReadyWaiters(disposeError);
     if (this.fallbackRuntime) {
       this.fallbackRuntime.clearAnimation();
     } else if (!this.poolLease) {
@@ -380,14 +459,15 @@ export class WorkerMmdRuntime implements MmdRuntime {
     }
     if (event.type === "ready") {
       this.ready = true;
+      this.resolveReadyWaiters();
       return;
     }
     if (event.type === "pose") {
-      this.applyPose(event.pose);
+      this.applyPose(event.pose, event.requestId);
       return;
     }
     if (event.type === "sharedPose") {
-      this.applySharedPose(event.slot);
+      this.applySharedPose(event.slot, event.requestId);
       return;
     }
     if (event.type === "error") {
@@ -395,13 +475,14 @@ export class WorkerMmdRuntime implements MmdRuntime {
     }
   }
 
-  private applyPose(pose: MmdRuntimePoseBuffer): void {
+  private applyPose(pose: MmdRuntimePoseBuffer, requestId?: number): void {
     const isCurrent = pose.epoch === this.currentEpoch && pose.sequence > this.lastAppliedSequence;
     if (isCurrent) {
       applyMmdRuntimePoseToMesh(pose, this.mesh, this.applyScratch);
       this.lastAppliedSequence = pose.sequence;
       this.copyPoseFrameState(pose);
       this.lastPoseAgeSeconds = Math.max(this.lastRequestedSeconds - pose.seconds, 0);
+      this.resolveSettledRequest(requestId, pose.epoch);
     }
     this.recycleCommand.pose = pose;
     this.worker.postMessage(
@@ -410,7 +491,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     );
   }
 
-  private applySharedPose(slotIndex: number): void {
+  private applySharedPose(slotIndex: number, requestId?: number): void {
     const slot = this.sharedPoseSlots?.[slotIndex];
     const target = this.sharedPoseReadBuffer;
     if (!slot || !target) {
@@ -428,6 +509,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
         this.lastAppliedSequence = pose.sequence;
         this.copyPoseFrameState(pose);
         this.lastPoseAgeSeconds = Math.max(this.lastRequestedSeconds - pose.seconds, 0);
+        this.resolveSettledRequest(requestId, pose.epoch);
       }
       releaseMmdRuntimeSharedPoseReadSlot(slot);
       this.post(this.sharedReleaseCommand);
@@ -440,6 +522,10 @@ export class WorkerMmdRuntime implements MmdRuntime {
     if (this.disposed || this.fallbackRuntime || this.failed) {
       return;
     }
+    const failureError = normalizeError(error, "MMD runtime worker failed");
+    this.failureError = failureError;
+    this.rejectSettledRequests(failureError);
+    this.rejectReadyWaiters(failureError);
     if (this.inlineFallbackAllowed) {
       this.fallbackRuntime = new DefaultMmdRuntime(this.runtimeOptions);
       if (this.animation) {
@@ -504,8 +590,90 @@ export class WorkerMmdRuntime implements MmdRuntime {
   }
 
   private bumpEpoch(): void {
+    this.rejectSettledRequests(new Error("MMD runtime settled request was invalidated by an epoch change"));
     this.currentEpoch += 1;
     this.lastAppliedSequence = -1;
+  }
+
+  private allocateRequestId(): number {
+    if (this.nextRequestId > Number.MAX_SAFE_INTEGER) {
+      if (this.settledRequests.size > 0) {
+        throw new Error("MMD runtime worker request id space is exhausted");
+      }
+      this.nextRequestId = 1;
+    }
+    const requestId = this.nextRequestId;
+    this.nextRequestId += 1;
+    return requestId;
+  }
+
+  private resolveSettledRequest(requestId: number | undefined, epoch: number): void {
+    if (requestId === undefined) {
+      return;
+    }
+    const request = this.settledRequests.get(requestId);
+    if (!request || request.epoch !== epoch) {
+      return;
+    }
+    this.settledRequests.delete(requestId);
+    this.detachAbortListener(request);
+    request.resolve(this.snapshotFrameState());
+  }
+
+  private rejectSettledRequest(requestId: number, error: Error): void {
+    const request = this.settledRequests.get(requestId);
+    if (!request) {
+      return;
+    }
+    this.settledRequests.delete(requestId);
+    this.detachAbortListener(request);
+    request.reject(error);
+  }
+
+  private rejectSettledRequests(error: Error): void {
+    for (const [requestId, request] of this.settledRequests) {
+      this.settledRequests.delete(requestId);
+      this.detachAbortListener(request);
+      request.reject(error);
+    }
+  }
+
+  private detachAbortListener(request: SettledRequest): void {
+    if (request.signal && request.onAbort) {
+      request.signal.removeEventListener("abort", request.onAbort);
+    }
+  }
+
+  private resolveReadyWaiters(): void {
+    for (let index = 0; index < this.readyWaiters.length; index += 1) {
+      this.readyWaiters[index]?.resolve();
+    }
+    this.readyWaiters.length = 0;
+  }
+
+  private rejectReadyWaiters(error: Error): void {
+    for (let index = 0; index < this.readyWaiters.length; index += 1) {
+      this.readyWaiters[index]?.reject(error);
+    }
+    this.readyWaiters.length = 0;
+  }
+
+  private inactiveError(): Error | undefined {
+    if (this.disposed) {
+      return new Error("MMD runtime worker is disposed");
+    }
+    if (this.fallbackRuntime || this.failed) {
+      return this.failureError ?? new Error("MMD runtime worker failed");
+    }
+    return undefined;
+  }
+
+  private snapshotFrameState(): MmdFrameState {
+    return {
+      seconds: this.frameStateScratch.seconds,
+      frame: this.frameStateScratch.frame,
+      frameRate: this.frameStateScratch.frameRate
+    };
   }
 
   private copyPoseFrameState(pose: MmdRuntimePoseBuffer): void {
@@ -630,4 +798,14 @@ interface MutableFallbackTickOptions extends MutableEvaluateOptions {
 
 function isObject3D(value: unknown): value is THREE.Object3D {
   return Boolean(value && typeof value === "object" && "isObject3D" in value);
+}
+
+function normalizeError(error: unknown, fallbackMessage: string): Error {
+  return error instanceof Error ? error : new Error(error === undefined ? fallbackMessage : String(error));
+}
+
+function createAbortError(): Error {
+  const error = new Error("MMD runtime settled request was aborted");
+  error.name = "AbortError";
+  return error;
 }
