@@ -1,6 +1,6 @@
 import { createViewerRuntimeOptions, state } from "./state.js";
 import { viewerConfig } from "./viewer-config.js";
-import { setStatus } from "./dom.js";
+import { dom, setStatus, updatePlayToggle } from "./dom.js";
 
 const workerDistRoute = "/__mmd_worker_dist__/";
 let workerRuntimeFactory;
@@ -17,6 +17,7 @@ export async function prepareViewerRuntime() {
     state.activeRuntimeMode = viewerConfig.runtime;
     state.runtimeTransport = "inline";
     state.runtimeReadiness = "ready";
+    updateRuntimeStatusUi();
     return;
   }
   try {
@@ -33,10 +34,59 @@ export async function prepareViewerRuntime() {
       ? "shared-array-buffer"
       : "transferable";
     state.runtimeReadiness = "pending";
+    updateRuntimeStatusUi();
     await getWorkerRuntimeFactory();
   } catch (error) {
     activatePreflightFallback(error);
   }
+}
+
+export function updateWorkerRuntimeTelemetry() {
+  if (!isWorkerRuntimeEnabled()) {
+    state.runtimePoseAgeFrames = 0;
+    return;
+  }
+  let maxPoseAgeFrames = 0;
+  for (let index = 0; index < state.characterModels.length; index += 1) {
+    const runtime = state.characterModels[index]?.runtime;
+    const poseAgeFrames = runtime?.poseAgeFrames?.() ?? 0;
+    if (poseAgeFrames > maxPoseAgeFrames) {
+      maxPoseAgeFrames = poseAgeFrames;
+    }
+  }
+  state.runtimePoseAgeFrames = maxPoseAgeFrames;
+}
+
+export function markWorkerRuntimesReady() {
+  if (!isWorkerRuntimeEnabled()) {
+    return;
+  }
+  let sharedMemory = false;
+  for (let index = 0; index < state.characterModels.length; index += 1) {
+    const runtime = state.characterModels[index]?.runtime;
+    if (runtime?.workerReady?.() !== true) {
+      return;
+    }
+    sharedMemory ||= runtime.sharedMemoryEnabled?.() === true;
+  }
+  state.runtimeTransport = sharedMemory ? "shared-array-buffer" : "transferable";
+  state.runtimeReadiness = "ready";
+  updateWorkerRuntimeTelemetry();
+  updateRuntimeStatusUi();
+}
+
+export function getViewerRuntimeEvidence() {
+  updateWorkerRuntimeTelemetry();
+  return {
+    requested: state.requestedRuntimeMode,
+    active: state.activeRuntimeMode,
+    transport: state.runtimeTransport,
+    readiness: state.runtimeReadiness,
+    poseAgeFrames: state.runtimePoseAgeFrames,
+    fallbackReason: state.runtimeFallbackReason ?? null,
+    failureStage: state.runtimeFailureStage ?? null,
+    fallbackCount: state.workerRuntimeFallbackCount
+  };
 }
 
 export async function getWorkerRuntimeFactory() {
@@ -105,14 +155,47 @@ function activatePreflightFallback(error) {
   state.runtimeFallbackReason = message;
   state.workerRuntimeFallback = message;
   state.workerRuntimeFallbackCount += 1;
+  updateRuntimeStatusUi();
   window.console?.warn("[viewer] Worker preflight fallback", error);
   setStatus(`Worker unavailable; using inline runtime: ${message}`, "warning");
 }
 
 function reportWorkerRuntimeFallback(error) {
   const message = error instanceof Error ? error.message : String(error);
+  const failureStage = state.runtimeFailureStage ??
+    (state.runtimeReadiness === "ready" ? "runtime" : "initialization");
   state.workerRuntimeFallbackCount += 1;
   state.workerRuntimeFallback = message;
+  state.runtimeFallbackReason = message;
+  state.runtimeFailureStage = failureStage;
+  state.runtimeReadiness = "failed";
+  state.isPlaying = false;
+  dom.bgmAudio?.pause();
+  updatePlayToggle();
+  updateRuntimeStatusUi();
   window.console?.error("[viewer] Worker runtime fallback", error);
-  setStatus(`Runtime Worker failed: ${message}`, "error");
+  const statusMessage = `Runtime Worker ${failureStage} failed: ${message}. Reload with ?runtime=mmd-anim to continue inline.`;
+  setStatus(statusMessage, "error");
+  if (dom.runtimeErrorBanner) {
+    dom.runtimeErrorBanner.textContent = statusMessage;
+    dom.runtimeErrorBanner.hidden = false;
+  }
+}
+
+function updateRuntimeStatusUi() {
+  if (!dom.runtimeStatus) {
+    return;
+  }
+  const runtimeLabel = state.activeRuntimeMode === "worker" ? "Worker" : `Inline ${state.activeRuntimeMode}`;
+  const transportLabel = state.runtimeTransport === "shared-array-buffer"
+    ? "SAB"
+    : state.runtimeTransport === "transferable"
+      ? "transfer"
+      : state.runtimeTransport;
+  dom.runtimeStatus.textContent = `${runtimeLabel} · ${transportLabel} · ${state.runtimeReadiness}`;
+  dom.runtimeStatus.title = state.runtimeFallbackReason
+    ? `Fallback: ${state.runtimeFallbackReason}`
+    : dom.runtimeStatus.textContent;
+  dom.runtimeStatus.classList.toggle("is-warning", state.activeRuntimeMode !== state.requestedRuntimeMode);
+  dom.runtimeStatus.classList.toggle("is-error", state.runtimeReadiness === "failed");
 }

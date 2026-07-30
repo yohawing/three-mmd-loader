@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { dom } from "./dom.js";
 import { normalizeMaterials } from "./dispose.js";
 import { renderStillFrame } from "./playback.js";
+import { getViewerRuntimeEvidence } from "./runtime-worker.js";
 import { debugEnabled, state } from "./state.js";
 import {
   setCurrentModelTslOutlineHidden,
@@ -725,6 +726,7 @@ function createSmokeState() {
     physicsEnabled: state.physicsEnabled,
     physicsMaxSubSteps: state.physicsTuningOptions.maxSubSteps,
     runtime: {
+      ...getViewerRuntimeEvidence(),
       mode: state.currentModel?.runtime?.constructor?.name ?? null,
       frameRate: state.mmdFrameRate,
       ikTolerance: state.ikTolerance ?? null,

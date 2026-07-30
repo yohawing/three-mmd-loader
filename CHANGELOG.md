@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Add the experimental `@yohawing/three-mmd-loader/worker` entry point with
+- Add the `@yohawing/three-mmd-loader/worker` entry point with
   worker-hosted runtime evaluation, transferable and shared-memory pose
   transport, multiplexed logical runtimes, and a bounded runtime pool.
 - Add worker-compatible external Bullet physics artifacts and integrate worker

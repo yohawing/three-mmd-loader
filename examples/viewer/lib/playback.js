@@ -11,6 +11,7 @@ import {
   endViewerStageProfile
 } from "./performance.js";
 import { currentMmdFrame, currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
+import { markWorkerRuntimesReady, updateWorkerRuntimeTelemetry } from "./runtime-worker.js";
 import { sampleMmdAnimWasmLightTrackInto, sampleMmdLightTrackInto, sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
 import {
   applyMmdLightStateToThreeDirectionalLight,
@@ -49,6 +50,7 @@ export function render() {
   }
   let stageStartedAt = beginViewerStageProfile();
   evaluateRuntime();
+  updateWorkerRuntimeTelemetry();
   endViewerStageProfile("animation-ik-morph-physics", stageStartedAt);
   stageStartedAt = beginViewerStageProfile();
   updateColliderHelpers();
@@ -132,6 +134,7 @@ async function renderSettledFrame(options) {
       }
     }
     await Promise.all(updates);
+    markWorkerRuntimesReady();
     const resumeSeconds = state.elapsedSeconds;
     state.elapsedSeconds = targetSeconds;
     try {

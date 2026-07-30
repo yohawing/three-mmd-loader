@@ -1,3 +1,5 @@
+import { getViewerRuntimeEvidence } from "./runtime-worker.js";
+
 const loaderPerformanceFlag = "__THREE_MMD_LOADER_PERF__";
 
 export const viewerPerformanceEnabled = new window.URLSearchParams(location.search).has("perf");
@@ -197,6 +199,7 @@ function createPerformanceSnapshot() {
     undefined
   );
   return {
+    runtime: getViewerRuntimeEvidence(),
     frameCount: frameSamples.length,
     frame: summarize(frameSamples.map((frame) => frame.totalMs)),
     stages,

@@ -181,6 +181,7 @@
       </header>
 
       <nav class="utility-actions" aria-label="Viewer info and language">
+        <span id="runtime-status" class="runtime-status" aria-label="Runtime status"></span>
         <sl-select id="language-select" class="language-select" size="small" value="en" aria-label="Language" data-i18n-aria="aria.language">
           <sl-option value="en">EN</sl-option>
           <sl-option value="ja">日本語</sl-option>
@@ -286,6 +287,7 @@
           <span data-i18n="drop.sub">Model textures are resolved when a folder is selected.</span>
         </div>
         <div class="physics-error" id="physics-error" role="status" hidden></div>
+        <div class="physics-error" id="runtime-error" role="alert" aria-live="assertive" hidden></div>
         <div class="loading-indicator" id="loading-indicator" role="status" aria-live="polite" hidden>
           <span class="loading-spinner" aria-hidden="true"></span>
           <span id="loading-message">Loading</span>

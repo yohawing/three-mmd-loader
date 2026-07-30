@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global Event, document, window */
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -114,6 +115,7 @@ async function main() {
     const motionUrl = options.localMotion
       ? dataUrl("motion", options.localMotion)
       : undefined;
+    await verifyRuntimeRoutes(browser, server.origin, modelUrl, options.backend);
     const characterScenario = await captureScenario(
       browser, server.origin, modelUrl, undefined, motionUrl, "character", options.outputDir, Boolean(options.localModel), options.rawVisibility, options.standardReceiver, options.dedicatedRawVisibility, options.backend
     );
@@ -678,6 +680,141 @@ function resolveRequestPath(pathname, dataRoots) {
   }
   const candidate = path.resolve(repoRoot, path.normalize(decodeURIComponent(pathname)).replace(/^[/\\]+/, "") || "examples/viewer/index.html");
   return isPathInside(candidate, repoRoot) ? candidate : undefined;
+}
+
+async function verifyRuntimeRoutes(browser, origin, modelUrl, backend) {
+  for (const runtime of ["mmd-anim", "js"]) {
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on("pageerror", error => pageErrors.push(error.message));
+    try {
+      await page.goto(
+        `${origin}/examples/viewer/?backend=${backend}&debug&physics=0&runtime=${runtime}`,
+        { waitUntil: "domcontentloaded" }
+      );
+      await waitForViewer(page);
+      const loaded = await page.evaluate(async (url) => globalThis.mmdViewer.loadModelUrl(url), modelUrl);
+      const status = await page.evaluate(() => globalThis.mmdViewer.runtimeStatus);
+      if (!loaded || status.requested !== runtime || status.active !== runtime || status.transport !== "inline" || pageErrors.length > 0) {
+        throw new Error(`Explicit runtime route failed: ${JSON.stringify({ runtime, loaded, status, pageErrors })}`);
+      }
+    } finally {
+      await page.close();
+    }
+  }
+
+  const fallbackContext = await browser.newContext();
+  await fallbackContext.addInitScript(() => {
+    Object.defineProperty(window, "Worker", { configurable: true, value: undefined });
+  });
+  const fallbackPage = await fallbackContext.newPage();
+  const fallbackPageErrors = [];
+  fallbackPage.on("pageerror", error => fallbackPageErrors.push(error.message));
+  try {
+    await fallbackPage.goto(
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await waitForViewer(fallbackPage);
+    const loaded = await fallbackPage.evaluate(async (url) => globalThis.mmdViewer.loadModelUrl(url), modelUrl);
+    const fallback = await fallbackPage.evaluate(() => ({
+      status: globalThis.mmdViewer.runtimeStatus,
+      badge: document.querySelector("#runtime-status")?.textContent,
+      warning: document.querySelector("#runtime-status")?.classList.contains("is-warning")
+    }));
+    if (
+      !loaded ||
+      fallback.status.requested !== "worker" ||
+      fallback.status.active !== "mmd-anim" ||
+      fallback.status.readiness !== "ready" ||
+      !fallback.status.fallbackReason?.includes("Worker API") ||
+      fallback.warning !== true ||
+      fallbackPageErrors.length > 0
+    ) {
+      throw new Error(`Worker preflight fallback failed: ${JSON.stringify({ loaded, fallback })}`);
+    }
+  } finally {
+    await fallbackContext.close();
+  }
+
+  const initializationFailureContext = await browser.newContext();
+  await initializationFailureContext.route("**/mmd_bullet.worker.wasm", route => route.abort());
+  const initializationFailurePage = await initializationFailureContext.newPage();
+  const initializationFailurePageErrors = [];
+  initializationFailurePage.on("pageerror", error => initializationFailurePageErrors.push(error.message));
+  try {
+    await initializationFailurePage.goto(
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await waitForViewer(initializationFailurePage);
+    const initializationFailure = await initializationFailurePage.evaluate(async (url) => {
+      const loaded = await globalThis.mmdViewer.loadModelUrl(url);
+      return {
+        loaded,
+        status: globalThis.mmdViewer.runtimeStatus,
+        bannerHidden: document.querySelector("#runtime-error")?.hidden,
+        banner: document.querySelector("#runtime-error")?.textContent
+      };
+    }, modelUrl);
+    if (
+      initializationFailure.loaded !== false ||
+      initializationFailure.status.active !== "worker" ||
+      initializationFailure.status.readiness !== "failed" ||
+      initializationFailure.status.failureStage !== "initialization" ||
+      initializationFailure.bannerHidden !== false ||
+      !initializationFailure.banner?.includes("?runtime=mmd-anim") ||
+      initializationFailurePageErrors.length > 0
+    ) {
+      throw new Error(`Worker initialization fail-closed gate failed: ${JSON.stringify(initializationFailure)}`);
+    }
+  } finally {
+    await initializationFailureContext.close();
+  }
+
+  const crashPage = await browser.newPage();
+  const crashPageErrors = [];
+  crashPage.on("pageerror", error => crashPageErrors.push(error.message));
+  try {
+    await crashPage.goto(
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await waitForViewer(crashPage);
+    const loaded = await crashPage.evaluate(async (url) => globalThis.mmdViewer.loadModelUrl(url), modelUrl);
+    if (!loaded) {
+      throw new Error("Worker runtime crash gate could not load its model.");
+    }
+    const crash = await crashPage.evaluate(async () => {
+      document.querySelector("#play-toggle")?.dispatchEvent(new Event("click"));
+      const runtime = globalThis.mmdViewer.currentModel.runtime;
+      const settledRejected = globalThis.mmdViewer.debug.evaluateAt(0.5, { physics: false })
+        .then(() => false, () => true);
+      runtime.poolLease.crash(new Error("browser runtime crash gate"));
+      await settledRejected;
+      return {
+        settledRejected: await settledRejected,
+        status: globalThis.mmdViewer.runtimeStatus,
+        playIcon: document.querySelector("#play-toggle")?.getAttribute("name"),
+        bannerHidden: document.querySelector("#runtime-error")?.hidden,
+        banner: document.querySelector("#runtime-error")?.textContent
+      };
+    });
+    if (
+      crash.settledRejected !== true ||
+      crash.status.readiness !== "failed" ||
+      crash.status.failureStage !== "runtime" ||
+      !crash.status.fallbackReason?.includes("browser runtime crash gate") ||
+      crash.playIcon !== "play" ||
+      crash.bannerHidden !== false ||
+      !crash.banner?.includes("?runtime=mmd-anim") ||
+      crashPageErrors.length > 0
+    ) {
+      throw new Error(`Worker runtime fail-closed gate failed: ${JSON.stringify(crash)}`);
+    }
+  } finally {
+    await crashPage.close();
+  }
 }
 
 function assertSettledCharacterBarrier(settledState, seconds) {

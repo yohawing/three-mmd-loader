@@ -7,7 +7,7 @@ import { captureCanvas, captureAfterAndCompare, createViewerDebugApi, markBefore
 import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updatePlayToggle, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
-import { disposeWorkerRuntimeFactory, prepareViewerRuntime } from "./lib/runtime-worker.js";
+import { disposeWorkerRuntimeFactory, getViewerRuntimeEvidence, prepareViewerRuntime } from "./lib/runtime-worker.js";
 import { createViewerPerformanceApi } from "./lib/performance.js";
 import { loadModelFolder, loadModelFromUrl, loadSecondaryModelFromUrl, loadSecondaryModelFile, loadSecondaryModelFolder, modelFileKey, bindDropTarget, clearModel, clearSecondaryModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadSecondaryMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
@@ -36,7 +36,8 @@ const viewerApi = {
   get currentMotion() { return state.currentMotion; },
   get secondaryMotion() { return state.secondaryMotion; },
   get currentBackground() { return state.currentBackground; },
-  get currentCameraMotion() { return state.currentCameraMotion; }
+  get currentCameraMotion() { return state.currentCameraMotion; },
+  get runtimeStatus() { return getViewerRuntimeEvidence(); }
 };
 const performanceApi = createViewerPerformanceApi();
 if (performanceApi) {

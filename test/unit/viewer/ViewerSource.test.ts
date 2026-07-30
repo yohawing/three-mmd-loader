@@ -1269,6 +1269,12 @@ describe("example viewer source", () => {
     expect(visualGateSource).not.toContain("runtime=worker&selfShadow=");
     expect(visualGateSource).toContain("assertSettledCharacterBarrier(observation.settledState, evaluationSeconds)");
     expect(visualGateSource).toContain("globalThis.mmdViewer.debug.captureCanvas()");
+    expect(visualGateSource).toContain('for (const runtime of ["mmd-anim", "js"])');
+    expect(visualGateSource).toContain('Object.defineProperty(window, "Worker"');
+    expect(visualGateSource).toContain('route("**/mmd_bullet.worker.wasm"');
+    expect(visualGateSource).toContain('initializationFailure.status.failureStage !== "initialization"');
+    expect(visualGateSource).toContain("runtime.poolLease.crash(new Error");
+    expect(visualGateSource).toContain('crash.status.readiness !== "failed"');
   });
 
   it("uses Worker by default with explicit inline routes and preflight fallback", async () => {
@@ -1278,6 +1284,13 @@ describe("example viewer source", () => {
     const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const performanceSource = await readFile("examples/viewer/lib/performance.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+    const changelog = await readFile("CHANGELOG.md", "utf8");
     const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
     const buildDeploySource = await readLocalOptionalText("scripts/build-deploy.mjs");
 
@@ -1291,6 +1304,14 @@ describe("example viewer source", () => {
     expect(workerSource).toContain("activatePreflightFallback(error)");
     expect(workerSource).toContain('state.activeRuntimeMode = "mmd-anim"');
     expect(workerSource).toContain('setStatus(`Worker unavailable; using inline runtime: ${message}`, "warning")');
+    expect(workerSource).toContain("export function markWorkerRuntimesReady()");
+    expect(workerSource).toContain("export function updateWorkerRuntimeTelemetry()");
+    expect(workerSource).toContain("export function getViewerRuntimeEvidence()");
+    expect(workerSource).toContain('state.runtimeReadiness = "failed"');
+    expect(workerSource).toContain("state.isPlaying = false");
+    expect(workerSource).toContain("dom.bgmAudio?.pause()");
+    expect(workerSource).toContain("dom.runtimeErrorBanner.hidden = false");
+    expect(workerSource).toContain("?runtime=mmd-anim");
     expect(workerSource).toContain('import("../../../dist/worker/index.js")');
     expect(workerSource).toContain("const resettablePromise = loadWorkerModule()");
     expect(workerSource).toContain("let workerRuntimeGeneration = 0");
@@ -1303,7 +1324,7 @@ describe("example viewer source", () => {
     expect(workerSource).toContain('workerDistRoute = "/__mmd_worker_dist__/"');
     expect(workerSource).toContain("fallback: false");
     expect(workerSource).toContain("state.workerRuntimeFallbackCount += 1");
-    expect(workerSource).toContain('setStatus(`Runtime Worker failed: ${message}`, "error")');
+    expect(workerSource).toContain('setStatus(statusMessage, "error")');
     expect(modelSource).toContain("if (isWorkerRuntimeEnabled())");
     expect(modelSource).toContain("getWorkerRuntimeFactory()");
     expect(modelSource).toContain('state.activeRuntimeMode === "js"');
@@ -1313,7 +1334,20 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("workerRuntimeFallback");
     expect(stateSource).toContain("requestedRuntimeMode: viewerConfig.runtime");
     expect(stateSource).toContain("activeRuntimeMode: viewerConfig.runtime");
+    expect(stateSource).toContain("runtimePoseAgeFrames: 0");
     expect(mainSource).toContain("await prepareViewerRuntime()");
+    expect(mainSource).toContain("get runtimeStatus() { return getViewerRuntimeEvidence(); }");
+    expect(mainSource).toContain("getViewerRuntimeEvidence");
+    expect(playbackSource).toContain("markWorkerRuntimesReady()");
+    expect(playbackSource).toContain("updateWorkerRuntimeTelemetry()");
+    expect(performanceSource).toContain("runtime: getViewerRuntimeEvidence()");
+    expect(debugSource).toContain("...getViewerRuntimeEvidence()");
+    expect(domSource).toContain('runtimeStatus: document.querySelector("#runtime-status")');
+    expect(domSource).toContain('runtimeErrorBanner: document.querySelector("#runtime-error")');
+    expect(html).toContain('id="runtime-status"');
+    expect(html).toContain('id="runtime-error"');
+    expect(styles).toContain(".runtime-status.is-error");
+    expect(changelog).not.toContain('experimental `@yohawing/three-mmd-loader/worker`');
     expect(mainSource).toContain("disposeWorkerRuntimeFactory()");
     expect(serverSource).toContain('const workerDistRoute = "/__mmd_worker_dist__/"');
     expect(serverSource).toContain('const workerDistRoot = resolve(root, "dist")');
