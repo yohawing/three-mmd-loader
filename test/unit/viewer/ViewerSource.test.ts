@@ -64,7 +64,7 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("secondaryMotionDuration");
     expect(playbackSource).toContain("const models = state.characterModels");
     expect(playbackSource).toContain("for (let index = 0; index < models.length; index += 1)");
-    expect(playbackSource).toContain("state.currentModel.update(currentMmdSeconds(), updateOptions)");
+    expect(playbackSource).toContain("model.update(seconds, updateOptions)");
     expect(playbackSource).toContain("updateShadowCameraForFrame(state.currentModel.mesh)");
     expect(playbackSource).not.toContain("updateShadowCameraForFrame(model.mesh)");
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
@@ -1106,7 +1106,7 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("state.elapsedSeconds = targetFrame / state.mmdFrameRate");
     expect(mainSource).toContain("dom.timeline.value = state.elapsedSeconds");
     expect(mainSource).toContain('dom.timeline.setAttribute("value", String(state.elapsedSeconds))');
-    expect(mainSource).toContain("evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch)");
+    expect(mainSource).toContain("void renderStillFrame(state.runtimePhysicsDisabledOptionsScratch)");
     expect(mainSource).toContain("syncAudioToMotionTime()");
     expect(domSource).toContain("dom.frameCurrentInput.value = currentText");
     expect(domSource).toContain("dom.frameTotalText.textContent = totalText");
@@ -1149,7 +1149,7 @@ describe("example viewer source", () => {
     expect(playbackSource).not.toContain("state.currentModel.update(currentMmdSeconds(), {");
     expect(playbackSource).not.toContain("applyMmdSelfShadowStateToThreeDirectionalLight(state.keyLight, selfShadowState, {");
     expect(playbackSource).toContain("const updateOptions = state.runtimeUpdateOptionsScratch");
-    expect(playbackSource).toContain("state.currentModel.update(currentMmdSeconds(), updateOptions)");
+    expect(playbackSource).toContain("model.update(seconds, updateOptions)");
     expect(playbackSource).toContain("state.selfShadowLightOptionsScratch");
     expect(stateSource).toContain("runtimeUpdateOptionsScratch");
     expect(stateSource).toContain("runtimePhysicsDisabledOptionsScratch");
@@ -1236,6 +1236,38 @@ describe("example viewer source", () => {
     expect(await readFile("examples/viewer/index.html", "utf8")).toContain(
       'id="viewer-performance-snapshot"'
     );
+  });
+
+  it("settles one-shot renders across every character without blocking the RAF path", async () => {
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+    const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const visualGateSource = await readFile("scripts/visual-regression/check-viewer-self-shadow.mjs", "utf8");
+
+    expect(playbackSource).toContain("export function renderStillFrame(options)");
+    expect(playbackSource).toContain("while (settledRenderPending)");
+    expect(playbackSource).toContain("if (!settledRenderPending)");
+    expect(playbackSource).toContain("model.updateAsync(targetSeconds, updateOptions)");
+    expect(playbackSource).toContain("await Promise.all(updates)");
+    expect(playbackSource).toMatch(/await Promise\.all\(updates\);[\s\S]*?submitViewerRender\(\);/);
+    expect(playbackSource).toContain("if (settledEvaluationInFlight > 0)");
+    expect(playbackSource).toContain("endViewerFrameProfile(state.renderer)");
+    expect(playbackSource).toContain("export function render() {");
+    expect(playbackSource).toContain("evaluateRuntime();");
+    expect(playbackSource).not.toContain("export async function render()");
+    expect(modelSource).toContain("await renderStillFrame();");
+    expect(motionSource).toContain("await renderStillFrame();");
+    expect(backgroundSource).toContain("await renderStillFrame();");
+    expect(debugSource).toContain("async evaluateAt(seconds, options = {})");
+    expect(debugSource).toContain("await renderStillFrame(options)");
+    expect(debugSource).toContain("characters: state.characterModels.map(");
+    expect(debugSource).toContain("captureCanvas,");
+    expect(visualGateSource).toContain("await viewer.debug.evaluateAt(seconds, { physics: false })");
+    expect(visualGateSource).toContain("physics=0&runtime=worker&selfShadow=");
+    expect(visualGateSource).toContain("assertSettledCharacterBarrier(observation.settledState, evaluationSeconds)");
+    expect(visualGateSource).toContain("globalThis.mmdViewer.debug.captureCanvas()");
   });
 
   it("opts the viewer into a shared worker runtime without preparing main-thread physics", async () => {
@@ -1438,8 +1470,8 @@ describe("example viewer source", () => {
     expect(html).toContain("photo_camera");
     expect(html).toContain("Capture");
     expect(domSource).toContain('debugCaptureButton: document.querySelector("#debug-capture-button")');
-    expect(debugSource).toContain("export function captureCanvas()");
-    expect(debugSource).toContain("submitViewerRender();");
+    expect(debugSource).toContain("export async function captureCanvas()");
+    expect(debugSource).toContain("await renderStillFrame();");
     expect(debugSource).toContain('state.renderer.domElement.toDataURL("image/png")');
     expect(debugSource).toContain("link.download =");
     expect(debugSource).toContain("link.click()");

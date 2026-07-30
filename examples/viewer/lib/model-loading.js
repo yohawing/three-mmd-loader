@@ -245,7 +245,11 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     if (state.showDebugColliders) {
       showColliderHelpers();
     }
-    renderStillFrame();
+    await renderStillFrame();
+    if (!isCurrentLoad()) {
+      loadProfile?.mark("cancelled");
+      return false;
+    }
     refreshDebugPanelState();
     loadProfile?.mark("first-render");
     resetViewerFrameProfile();
@@ -380,7 +384,11 @@ export async function loadModelFolder(files, loadOptions = {}) {
     if (state.showDebugColliders) {
       showColliderHelpers();
     }
-    renderStillFrame();
+    await renderStillFrame();
+    if (!isCurrentLoad()) {
+      profile?.mark("cancelled");
+      return;
+    }
     refreshDebugPanelState();
     profile?.mark("first-render");
     resetViewerFrameProfile();
@@ -483,7 +491,11 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     if (state.showDebugColliders) {
       showColliderHelpers();
     }
-    renderStillFrame();
+    await renderStillFrame();
+    if (!isCurrentLoad()) {
+      profile?.mark("cancelled");
+      return;
+    }
     refreshDebugPanelState();
     profile?.mark("first-render");
   } catch (error) {

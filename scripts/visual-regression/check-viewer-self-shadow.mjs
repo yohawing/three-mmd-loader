@@ -37,6 +37,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
+const workerDistRoute = "/__mmd_worker_dist__/";
 const syntheticFixturePath = "test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx";
 const defaultOutputDir = path.join(repoRoot, "test-results", "visual", "viewer-self-shadow");
 const cameraViews = {
@@ -53,6 +54,7 @@ const localCameraViews = {
 };
 const mimeTypes = new Map([
   ...commonWebMimeTypes,
+  [".mjs", "text/javascript; charset=utf-8"],
   [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".bmp", "image/bmp"],
   [".tga", "image/x-tga"], [".dds", "image/vnd-ms.dds"]
 ]);
@@ -71,7 +73,11 @@ async function main() {
     motion: options.localMotion ? path.dirname(options.localMotion) : undefined,
     background: options.localBackground ? path.dirname(options.localBackground) : undefined
   };
-  const server = await startStaticServer(pathname => resolveRequestPath(pathname, dataRoots), mimeTypes);
+  const server = await startStaticServer(
+    pathname => resolveRequestPath(pathname, dataRoots),
+    mimeTypes,
+    rewriteWorkerResponse
+  );
   const report = {
     fixture: options.localModel ?? syntheticFixturePath,
     backend: options.backend,
@@ -344,7 +350,7 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
   try {
     const shadowState = enabled ? "1" : "0";
     await page.goto(
-      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0&runtime=js&selfShadow=${shadowState}`,
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0&runtime=worker&selfShadow=${shadowState}`,
       { waitUntil: "domcontentloaded" }
     );
     await waitForViewer(page);
@@ -352,6 +358,16 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
     if (!loaded) {
       const status = await page.locator("#status").textContent().catch(() => "<missing>");
       throw new Error(`Main viewer model URL load returned false: status=${status}; messages=${JSON.stringify(messages)}`);
+    }
+    const settledBarrierCase = name === "character-primary" && enabled;
+    if (settledBarrierCase) {
+      const secondaryLoaded = await page.evaluate(async (url) => globalThis.mmdViewer.loadSecondaryModelUrl(url), modelUrl);
+      if (!secondaryLoaded) {
+        throw new Error("Main viewer secondary model URL load returned false.");
+      }
+      await page.evaluate(() => {
+        globalThis.mmdViewer.secondaryModel.root.visible = false;
+      });
     }
     if (backgroundUrl) {
       const backgroundLoaded = await page.evaluate(async (url) => globalThis.mmdViewer.loadBackgroundUrl(url), backgroundUrl);
@@ -379,7 +395,15 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
       throw new Error(`Unexpected renderer backend for ${backend}: ${JSON.stringify(native)}`);
     }
     const screenshotPath = path.join(outputDir, `${name}-${enabled ? "on" : "off"}.png`);
-    const observation = await captureInitialShadowState(page, camera, screenshotPath, motionUrl ? 0.5 : 0);
+    const evaluationSeconds = motionUrl || settledBarrierCase ? 0.5 : 0;
+    const observation = await captureInitialShadowState(page, camera, screenshotPath, evaluationSeconds);
+    if (settledBarrierCase) {
+      assertSettledCharacterBarrier(observation.settledState, evaluationSeconds);
+      const captureDataUrl = await page.evaluate(async () => globalThis.mmdViewer.debug.captureCanvas());
+      if (!captureDataUrl?.startsWith("data:image/png;base64,")) {
+        throw new Error("Settled canvas capture did not return a PNG data URL.");
+      }
+    }
     const characterSilhouette = backgroundUrl && enabled
       ? await captureCharacterSilhouette(page, screenshotPath.replace(/\.png$/, "-character-mask.png"))
       : undefined;
@@ -494,7 +518,7 @@ async function captureCharacterSilhouette(page, outputPath) {
 }
 
 async function captureInitialShadowState(page, view, outputPath, evaluationSeconds) {
-  const observation = await page.evaluate(({ cameraView, seconds }) => {
+  const observation = await page.evaluate(async ({ cameraView, seconds }) => {
     const viewer = globalThis.mmdViewer;
     if (cameraView.useAutoFit) {
       const target = viewer.controls.target;
@@ -515,11 +539,12 @@ async function captureInitialShadowState(page, view, outputPath, evaluationSecon
         object.visible = false;
       }
     });
-    viewer.debug.evaluateAt(seconds, { physics: false });
+    const settledState = await viewer.debug.evaluateAt(seconds, { physics: false });
     const camera = viewer.camera;
     camera.updateMatrixWorld();
     return {
       diagnostics: viewer.debug.selfShadowDiagnostics(),
+      settledState,
       camera: {
         position: camera.position.toArray(),
         target: viewer.controls.target.toArray(),
@@ -610,7 +635,7 @@ async function captureShadowCameraLayer(page, casterVisible, outputPath) {
       nonBlackPixels: countForegroundPixels(png)
     };
   } finally {
-    await page.evaluate((state) => {
+    await page.evaluate(async (state) => {
       const viewer = globalThis.mmdViewer;
       viewer.currentModel?.root?.traverse?.((object) => {
         const saved = state.casterVisibility.find((item) => item.uuid === object.uuid);
@@ -625,7 +650,7 @@ async function captureShadowCameraLayer(page, casterVisible, outputPath) {
         element.style.visibility = element.getAttribute("data-self-shadow-gate-visibility") ?? "";
         element.removeAttribute("data-self-shadow-gate-visibility");
       }
-      viewer.debug.evaluateAt(0, { physics: false });
+      await viewer.debug.evaluateAt(0, { physics: false });
     }, restoreState);
   }
 }
@@ -635,6 +660,11 @@ function dataUrl(root, filePath) {
 }
 
 function resolveRequestPath(pathname, dataRoots) {
+  if (pathname.startsWith(workerDistRoute)) {
+    const distRoot = path.join(repoRoot, "dist");
+    const candidate = path.resolve(distRoot, decodeURIComponent(pathname.slice(workerDistRoute.length)));
+    return isPathInside(candidate, distRoot) ? candidate : undefined;
+  }
   if (pathname.startsWith("/__mmd_anim_wasm/")) {
     const wasmRoot = path.join(repoRoot, "dist", "parser", "wasm", "generated");
     const candidate = path.resolve(wasmRoot, decodeURIComponent(pathname.slice(17)));
@@ -648,6 +678,30 @@ function resolveRequestPath(pathname, dataRoots) {
   }
   const candidate = path.resolve(repoRoot, path.normalize(decodeURIComponent(pathname)).replace(/^[/\\]+/, "") || "examples/viewer/index.html");
   return isPathInside(candidate, repoRoot) ? candidate : undefined;
+}
+
+function assertSettledCharacterBarrier(settledState, seconds) {
+  const expectedFrame = Math.round(seconds * (settledState?.runtime?.frameRate ?? 30));
+  const characters = settledState?.characters;
+  if (!Array.isArray(characters) || characters.length !== 2) {
+    throw new Error(`Settled barrier expected two characters: ${JSON.stringify(characters)}`);
+  }
+  const mismatched = characters.filter((character) =>
+    character.frame !== expectedFrame || Math.abs(character.seconds - seconds) > 1e-6
+  );
+  if (mismatched.length > 0) {
+    throw new Error(`Settled barrier mixed character frames: ${JSON.stringify({ expectedFrame, seconds, characters })}`);
+  }
+}
+
+function rewriteWorkerResponse(source, pathname) {
+  if (!pathname.startsWith(workerDistRoute) || !/\.(?:m?js)$/.test(pathname)) {
+    return undefined;
+  }
+  return source.toString("utf8")
+    .replaceAll('from "three"', 'from "/node_modules/three/build/three.module.js"')
+    .replaceAll('from "three/webgpu"', 'from "/node_modules/three/build/three.webgpu.js"')
+    .replaceAll('from "three/tsl"', 'from "/node_modules/three/build/three.tsl.js"');
 }
 
 function parseArgs(args) {

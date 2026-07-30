@@ -65,7 +65,10 @@ export async function loadSecondaryMotionFromUrl(url) {
     updatePlaybackDisplay();
     updateTransportState();
     setStatus("", "ready");
-    renderStillFrame();
+    await renderStillFrame();
+    if (generation !== secondaryMotionLoadGeneration || state.secondaryModel !== targetModel) {
+      return false;
+    }
     resetViewerFrameProfile();
     return true;
   } catch (error) {
@@ -139,7 +142,10 @@ export async function loadMotion(source, label = source.name ?? "motion") {
     updateTransportState();
     syncPlaybackToCurrentAudioState();
     setStatus("", "ready");
-    renderStillFrame();
+    await renderStillFrame();
+    if (state.currentModel !== targetModel) {
+      return false;
+    }
     resetViewerFrameProfile();
     return true;
   } catch (error) {
@@ -175,7 +181,7 @@ export async function loadPose(source, label = source.name ?? "pose") {
     updatePlaybackDisplay();
     updateTransportState();
     setStatus("", "ready");
-    renderStillFrame();
+    await renderStillFrame();
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
   }
@@ -234,7 +240,7 @@ export function clearMotion() {
   updatePlaybackDisplay();
   updateTransportState();
   setStatus("", "ready");
-  renderStillFrame();
+  void renderStillFrame();
 }
 
 export function updateMotionSwitcher(selectedFile) {

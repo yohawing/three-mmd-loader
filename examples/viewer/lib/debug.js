@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 import { dom } from "./dom.js";
 import { normalizeMaterials } from "./dispose.js";
-import { evaluateRuntime } from "./playback.js";
+import { renderStillFrame } from "./playback.js";
 import { debugEnabled, state } from "./state.js";
 import {
   setCurrentModelTslOutlineHidden,
@@ -41,6 +41,7 @@ export function createViewerDebugApi() {
       return `dedicatedRawVisibility=${setMmdTslDedicatedRawVisibilityDebug(enabled)}`;
     },
     selfShadowDiagnostics: createSelfShadowDiagnostics,
+    captureCanvas,
     showColliders() {
       showColliderHelpers();
       submitViewerRender();
@@ -53,15 +54,12 @@ export function createViewerDebugApi() {
       refreshDebugPanelState();
       return "collider helpers hidden";
     },
-    evaluateAt(seconds, options = {}) {
+    async evaluateAt(seconds, options = {}) {
       state.elapsedSeconds = Number(seconds);
       if (dom.timeline && state.elapsedSeconds > Number(dom.timeline.max)) {
         dom.timeline.max = state.elapsedSeconds;
       }
-      evaluateRuntime(options);
-      state.controls.update();
-      updateColliderHelpers();
-      submitViewerRender();
+      await renderStillFrame(options);
       return this.state();
     },
     state() {
@@ -292,7 +290,7 @@ export async function setSelfShadowEnabled(enabled) {
   }
   if (state.debugSelfShadowEnabled) {
     state.runtimePhysicsDisabledOptionsScratch.physics = false;
-    evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
+    await renderStillFrame(state.runtimePhysicsDisabledOptionsScratch);
   }
   syncMmdTslDedicatedShadowVisibility();
   syncMmdTslDedicatedRawVisibilityDebug();
@@ -314,11 +312,15 @@ export function setPhysicsMaxSubSteps(value) {
   return state.physicsTuningOptions.maxSubSteps;
 }
 
-export function captureCanvas() {
+export async function captureCanvas() {
   if (!state.renderer || !state.scene || !state.camera) {
     return;
   }
-  submitViewerRender();
+  try {
+    await renderStillFrame();
+  } catch {
+    return;
+  }
   const dataUrl = state.renderer.domElement.toDataURL("image/png");
   const frame = Math.round(state.elapsedSeconds * (state.mmdFrameRate ?? 30));
   const modelName = state.currentModel?.mesh.name ?? "capture";
@@ -327,22 +329,31 @@ export function captureCanvas() {
   link.download = `${safeName}_f${frame}.png`;
   link.href = dataUrl;
   link.click();
+  return dataUrl;
 }
 
-export function markBeforeCapture() {
+export async function markBeforeCapture() {
   if (!state.renderer || !state.scene || !state.camera) {
     return;
   }
-  submitViewerRender();
+  try {
+    await renderStillFrame();
+  } catch {
+    return;
+  }
   state.debugBeforeCapture = state.renderer.domElement.toDataURL("image/png");
   refreshDebugPanelState();
 }
 
-export function captureAfterAndCompare() {
+export async function captureAfterAndCompare() {
   if (!state.renderer || !state.scene || !state.camera || !state.debugBeforeCapture) {
     return;
   }
-  submitViewerRender();
+  try {
+    await renderStillFrame();
+  } catch {
+    return;
+  }
   const afterDataUrl = state.renderer.domElement.toDataURL("image/png");
   showComparisonOverlay(state.debugBeforeCapture, afterDataUrl);
 }
@@ -694,6 +705,15 @@ function createSmokeState() {
     ready: !!model,
     timeSeconds: state.elapsedSeconds,
     modelName: model?.mesh.name ?? null,
+    characters: state.characterModels.map((character, index) => {
+      const frameState = character.runtime.frameState();
+      return {
+        index,
+        role: index === 0 ? "primary" : "secondary",
+        seconds: frameState.seconds,
+        frame: frameState.frame
+      };
+    }),
     rigidBodyCount: model?.mesh.userData.mmdModel?.rigidBodyCount ?? 0,
     jointCount: model?.mesh.userData.mmdModel?.jointCount ?? 0,
     rigidBodyTransformCount: rigidBodyTransforms.length,

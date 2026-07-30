@@ -11,7 +11,7 @@ import { disposeWorkerRuntimeFactory } from "./lib/runtime-worker.js";
 import { createViewerPerformanceApi } from "./lib/performance.js";
 import { loadModelFolder, loadModelFromUrl, loadSecondaryModelFromUrl, loadSecondaryModelFile, loadSecondaryModelFolder, modelFileKey, bindDropTarget, clearModel, clearSecondaryModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadSecondaryMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
-import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
+import { finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
 import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
 import { updateViewerPipelineStatus } from "./lib/viewer-pipeline.js";
@@ -104,7 +104,7 @@ function bindControls() {
   document.querySelector("#choose-secondary-model-folder")?.addEventListener("click", () => dom.secondaryModelFolderInput?.click());
   document.querySelector("#clear-secondary-model")?.addEventListener("click", () => {
     clearSecondaryModel();
-    renderStillFrame();
+    void renderStillFrame();
   });
   document.querySelector("#choose-motion")?.addEventListener("click", () => dom.motionFileInput?.click());
   document.querySelector("#choose-pose")?.addEventListener("click", () => dom.poseFileInput?.click());
@@ -135,7 +135,7 @@ function bindControls() {
   dom.modelClearButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     clearModel();
-    renderStillFrame();
+    void renderStillFrame();
   });
   dom.motionSwitcher?.addEventListener("sl-change", () => {
     const selectedValue = loadedFileSwitcherValue(dom.motionSwitcher);
@@ -177,7 +177,7 @@ function bindControls() {
   dom.backgroundClearButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     clearBackground();
-    renderStillFrame();
+    void renderStillFrame();
   });
   dom.cameraSwitcher?.addEventListener("sl-change", () => {
     const selectedValue = loadedFileSwitcherValue(dom.cameraSwitcher);
@@ -187,7 +187,7 @@ function bindControls() {
   dom.cameraClearButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     clearCameraMotion();
-    renderStillFrame();
+    void renderStillFrame();
   });
   dom.backgroundFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
@@ -204,7 +204,7 @@ function bindControls() {
     state.isSeeking = true;
     state.elapsedSeconds = Number(dom.timeline.value);
     state.runtimePhysicsDisabledOptionsScratch.physics = false;
-    evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
+    void renderStillFrame(state.runtimePhysicsDisabledOptionsScratch);
     syncAudioToMotionTime();
     scheduleSeekEnd();
   });
@@ -397,7 +397,7 @@ function seekToFrame(frame) {
     dom.timeline.setAttribute("value", String(state.elapsedSeconds));
   }
   state.runtimePhysicsDisabledOptionsScratch.physics = false;
-  evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
+  void renderStillFrame(state.runtimePhysicsDisabledOptionsScratch);
   if (dom.frameCurrentInput instanceof window.HTMLInputElement) {
     dom.frameCurrentInput.value = String(targetFrame);
   }

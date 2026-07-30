@@ -97,7 +97,10 @@ async function loadBackground(source, label, loaderFactory, entry) {
     });
     updateStageState();
     setStatus("", "ready");
-    renderStillFrame();
+    await renderStillFrame();
+    if (generation !== backgroundLoadGeneration || state.currentBackground !== background) {
+      return false;
+    }
     return true;
   } catch (error) {
     disposeLoadedBackground();
