@@ -108,6 +108,7 @@
     "visual:smoke:viewer-background": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-background-room --output test/fixtures/generated/visual/mmd-viewer-background-room.pmx && node scripts/visual-regression/check-viewer-background.mjs",
     "visual:smoke:viewer-self-shadow": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-self-shadow-receiver --output test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx && node scripts/visual-regression/check-viewer-self-shadow.mjs",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
+    "smoke:deploy": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-self-shadow-receiver --output test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx && node scripts/build-deploy.mjs && node scripts/smoke-deploy-viewer.mjs",
     "smoke:types": "node scripts/type-consumer-smoke.mjs",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",

@@ -311,6 +311,10 @@ async function runBrowserMatrix(config) {
   const runtimes = [];
   const updateDurations = [];
   const poseAges = [];
+  const lastPoseSeconds = new Float64Array(config.characterCount);
+  lastPoseSeconds.fill(Number.NEGATIVE_INFINITY);
+  let poseStateFinite = true;
+  let poseStateMonotonic = true;
   let timeout = false;
   const parsedCases = [];
   try {
@@ -371,6 +375,14 @@ async function runBrowserMatrix(config) {
             const runtime = runtimes[index];
             if (isWorkerRuntime(runtime)) {
               poseAges.push(runtime.poseAgeFrames());
+              const frameState = runtime.frameState();
+              poseStateFinite &&= Number.isFinite(frameState.seconds) &&
+                Number.isFinite(frameState.frame) &&
+                Number.isFinite(frameState.frameRate);
+              if (frameState.seconds + 1e-9 < lastPoseSeconds[index]) {
+                poseStateMonotonic = false;
+              }
+              lastPoseSeconds[index] = frameState.seconds;
             }
           }
         }
@@ -407,6 +419,8 @@ async function runBrowserMatrix(config) {
       updateMs: update,
       poseAgeFrames: poseAge,
       poseAgeApplicable: config.runtimeMode === "worker",
+      poseStateFinite,
+      poseStateMonotonic,
       wallTimeMs: Number((performance.now() - startedAt).toFixed(3)),
       longTaskCount: longTask.count(),
       longTaskApiSupported: longTask.supported,
@@ -422,6 +436,8 @@ async function runBrowserMatrix(config) {
         comparisonOnly: config.runtimeMode === "inline",
         updateP95: update.p95 < config.updateP95GateMs,
         poseAgeP95: config.runtimeMode !== "worker" || poseAge.p95 <= config.poseAgeP95GateFrames,
+        poseStateFinite,
+        poseStateMonotonic,
         longTaskApi: longTask.supported,
         longTask: longTask.count() === 0,
         fallback: fallbackState.count === 0,
@@ -431,6 +447,8 @@ async function runBrowserMatrix(config) {
           ? null
           : update.p95 < config.updateP95GateMs
           && (config.runtimeMode !== "worker" || poseAge.p95 <= config.poseAgeP95GateFrames)
+          && poseStateFinite
+          && poseStateMonotonic
           && longTask.supported
           && longTask.count() === 0
           && fallbackState.count === 0

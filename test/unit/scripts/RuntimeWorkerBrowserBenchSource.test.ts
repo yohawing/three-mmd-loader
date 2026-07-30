@@ -21,6 +21,9 @@ describe("browser runtime worker benchmark source", () => {
     expect(source).toContain("frame / config.displayRate");
     expect(source).toContain('{ kind: "custom-bullet-mmd" }');
     expect(source).toContain("poseAgeFrames()");
+    expect(source).toContain("poseStateFinite");
+    expect(source).toContain("poseStateMonotonic");
+    expect(source).toContain("frameState.seconds + 1e-9 < lastPoseSeconds[index]");
     expect(source).toContain("updateP95GateMs: UPDATE_P95_GATE_MS");
     expect(source).toContain("poseAgeP95GateFrames: POSE_AGE_P95_GATE_FRAMES");
     expect(source).toContain("fallbackCount");

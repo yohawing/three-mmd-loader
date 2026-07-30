@@ -1245,6 +1245,8 @@ describe("example viewer source", () => {
     const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
     const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
     const visualGateSource = await readFile("scripts/visual-regression/check-viewer-self-shadow.mjs", "utf8");
+    const deploySmokeSource = await readFile("scripts/smoke-deploy-viewer.mjs", "utf8");
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
 
     expect(playbackSource).toContain("export function renderStillFrame(options)");
     expect(playbackSource).toContain("while (settledRenderPending)");
@@ -1269,6 +1271,10 @@ describe("example viewer source", () => {
     expect(visualGateSource).not.toContain("runtime=worker&selfShadow=");
     expect(visualGateSource).toContain("assertSettledCharacterBarrier(observation.settledState, evaluationSeconds)");
     expect(visualGateSource).toContain("globalThis.mmdViewer.debug.captureCanvas()");
+    expect(packageJson.scripts["smoke:deploy"]).toContain("scripts/smoke-deploy-viewer.mjs");
+    expect(deploySmokeSource).toContain('result.runtime.active !== "worker"');
+    expect(deploySmokeSource).toContain('result.runtime.transport !== "transferable"');
+    expect(deploySmokeSource).toContain("mmd_bullet.worker.wasm");
     expect(visualGateSource).toContain('for (const runtime of ["mmd-anim", "js"])');
     expect(visualGateSource).toContain('Object.defineProperty(window, "Worker"');
     expect(visualGateSource).toContain('route("**/mmd_bullet.worker.wasm"');
