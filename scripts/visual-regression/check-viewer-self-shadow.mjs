@@ -116,6 +116,7 @@ async function main() {
       ? dataUrl("motion", options.localMotion)
       : undefined;
     await verifyRuntimeRoutes(browser, server.origin, modelUrl, options.backend);
+    await verifySettledInlineReference(browser, server.origin, modelUrl, options.backend);
     const characterScenario = await captureScenario(
       browser, server.origin, modelUrl, undefined, motionUrl, "character", options.outputDir, Boolean(options.localModel), options.rawVisibility, options.standardReceiver, options.dedicatedRawVisibility, options.backend
     );
@@ -814,6 +815,96 @@ async function verifyRuntimeRoutes(browser, origin, modelUrl, backend) {
     }
   } finally {
     await crashPage.close();
+  }
+}
+
+async function verifySettledInlineReference(browser, origin, modelUrl, backend) {
+  const worker = await captureSettledRuntimeReference(browser, origin, modelUrl, backend);
+  const inline = await captureSettledRuntimeReference(browser, origin, modelUrl, backend, "mmd-anim");
+  const tolerance = 1e-6;
+
+  if (worker.characters.length !== inline.characters.length) {
+    throw new Error(`Settled runtime character count mismatch: ${JSON.stringify({ worker, inline })}`);
+  }
+  for (let characterIndex = 0; characterIndex < worker.characters.length; characterIndex += 1) {
+    const workerCharacter = worker.characters[characterIndex];
+    const inlineCharacter = inline.characters[characterIndex];
+    if (workerCharacter.length !== inlineCharacter.length) {
+      throw new Error(`Settled runtime pose length mismatch: ${JSON.stringify({ characterIndex, worker: workerCharacter.length, inline: inlineCharacter.length })}`);
+    }
+    for (let valueIndex = 0; valueIndex < workerCharacter.length; valueIndex += 1) {
+      if (
+        !Number.isFinite(workerCharacter[valueIndex]) ||
+        !Number.isFinite(inlineCharacter[valueIndex]) ||
+        Math.abs(workerCharacter[valueIndex] - inlineCharacter[valueIndex]) > tolerance
+      ) {
+        throw new Error(`Settled runtime pose mismatch: ${JSON.stringify({ characterIndex, valueIndex, worker: workerCharacter[valueIndex], inline: inlineCharacter[valueIndex], tolerance })}`);
+      }
+    }
+  }
+  if (worker.capture !== inline.capture) {
+    throw new Error("Settled Worker capture did not match the inline runtime reference.");
+  }
+}
+
+async function captureSettledRuntimeReference(browser, origin, modelUrl, backend, runtime) {
+  const page = await browser.newPage();
+  const pageErrors = [];
+  page.on("pageerror", error => pageErrors.push(error.message));
+  try {
+    const runtimeQuery = runtime ? `&runtime=${runtime}` : "";
+    await page.goto(
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0${runtimeQuery}`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await waitForViewer(page);
+    const loaded = await page.evaluate(async (url) => {
+      const viewer = globalThis.mmdViewer;
+      return await viewer.loadModelUrl(url) && await viewer.loadSecondaryModelUrl(url);
+    }, modelUrl);
+    if (!loaded) {
+      throw new Error(`Settled runtime reference model load failed: runtime=${runtime ?? "worker"}`);
+    }
+    const result = await page.evaluate(async () => {
+      const viewer = globalThis.mmdViewer;
+      const settled = await viewer.debug.evaluateAt(0.5, { physics: false });
+      const models = [viewer.currentModel, viewer.secondaryModel];
+      const characters = models.map((model) => {
+        const values = [];
+        for (const bone of model.mesh.skeleton.bones) {
+          values.push(
+            bone.position.x, bone.position.y, bone.position.z,
+            bone.quaternion.x, bone.quaternion.y, bone.quaternion.z, bone.quaternion.w,
+            bone.scale.x, bone.scale.y, bone.scale.z
+          );
+        }
+        return values;
+      });
+      return {
+        status: viewer.runtimeStatus,
+        settled,
+        characters,
+        capture: await viewer.debug.captureCanvas()
+      };
+    });
+    const expectedRuntime = runtime ?? "worker";
+    if (
+      result.status.active !== expectedRuntime ||
+      result.settled.characters?.length !== 2 ||
+      !result.capture?.startsWith("data:image/png;base64,") ||
+      pageErrors.length > 0
+    ) {
+      throw new Error(`Settled runtime reference failed: ${JSON.stringify({
+        expectedRuntime,
+        status: result.status,
+        settled: result.settled,
+        captureIsPng: result.capture?.startsWith("data:image/png;base64,"),
+        pageErrors
+      })}`);
+    }
+    return result;
+  } finally {
+    await page.close();
   }
 }
 

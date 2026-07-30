@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 - Add the `@yohawing/three-mmd-loader/worker` entry point with
   worker-hosted runtime evaluation, transferable and shared-memory pose
   transport, multiplexed logical runtimes, and a bounded runtime pool.
+- Add settled Worker evaluation through `MmdRuntime.tickAsync()`,
+  `MmdRuntime.whenReady()`, and `ThreeMmdModel.updateAsync()` for seek, still,
+  and capture workflows that must wait for the requested pose.
 - Add worker-compatible external Bullet physics artifacts and integrate worker
   runtime selection into the example viewer.
 - Add a second-character viewer workflow with independent model lifecycle and
@@ -28,6 +31,9 @@ All notable changes to this project will be documented in this file.
   optimized path.
 - Coalesce worker ticks during initialization and automatically select shared
   pose transport when the environment supports it.
+- Use the Worker runtime by default in the example viewer, while keeping
+  explicit `mmd-anim` and JavaScript inline routes and a reasoned capability
+  fallback when the Worker API is unavailable.
 - Remove the legacy `AmmoMmdPhysicsBackend`, `createAmmoMmdPhysicsBackend`,
   and `loadAmmoNamespace` exports and the direct `ammo.js` dependency. Use
   `loadCustomBulletMmdModule()` and `createCustomBulletMmdPhysicsBackend()`
@@ -40,6 +46,8 @@ All notable changes to this project will be documented in this file.
 - Preserve worker failure semantics across initialization, pooled runtime
   crashes, and viewer startup instead of silently falling back after an
   explicitly requested worker runtime fails.
+- Stop Viewer playback and show persistent runtime diagnostics when Worker
+  initialization or execution fails after preflight.
 - Avoid animation-loop render re-entry while asynchronous shader compilation
   is active without suppressing still-frame capture or explicit debug renders.
 - Synchronize IK convergence behavior with the bundled mmd-anim runtime.

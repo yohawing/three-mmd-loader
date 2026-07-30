@@ -1271,6 +1271,9 @@ describe("example viewer source", () => {
     expect(visualGateSource).not.toContain("runtime=worker&selfShadow=");
     expect(visualGateSource).toContain("assertSettledCharacterBarrier(observation.settledState, evaluationSeconds)");
     expect(visualGateSource).toContain("globalThis.mmdViewer.debug.captureCanvas()");
+    expect(visualGateSource).toContain("await verifySettledInlineReference(browser, server.origin, modelUrl, options.backend)");
+    expect(visualGateSource).toContain('captureSettledRuntimeReference(browser, origin, modelUrl, backend, "mmd-anim")');
+    expect(visualGateSource).toContain('throw new Error("Settled Worker capture did not match the inline runtime reference.")');
     expect(packageJson.scripts["smoke:deploy"]).toContain("scripts/smoke-deploy-viewer.mjs");
     expect(deploySmokeSource).toContain('result.runtime.active !== "worker"');
     expect(deploySmokeSource).toContain('result.runtime.transport !== "transferable"');
