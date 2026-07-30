@@ -63,8 +63,8 @@ function readRuntimeMode(value) {
   if (normalized === "js" || normalized === "default") {
     return "js";
   }
-  if (normalized === "worker") {
-    return "worker";
+  if (normalized === "mmd-anim" || normalized === "wasm" || normalized === "inline") {
+    return "mmd-anim";
   }
-  return "mmd-anim";
+  return "worker";
 }

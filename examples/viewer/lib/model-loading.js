@@ -30,7 +30,6 @@ import { createViewerRuntimeOptions, currentMotionDurationSeconds, state } from 
 import { getWorkerRuntimeFactory, isWorkerRuntimeEnabled } from "./runtime-worker.js";
 import { adaptCameraDepthRange, fitCameraToObject } from "./scene-setup.js";
 import { labelFromUrl } from "./url-label.js";
-import { viewerConfig } from "./viewer-config.js";
 import {
   applyViewerPipelineToModel,
   clearViewerPipelineModel,
@@ -904,13 +903,13 @@ async function loadManagedModel(loader, source) {
 }
 
 async function createRuntimeFactory(physicsBackend) {
-  if (viewerConfig.runtime === "js") {
+  if (state.activeRuntimeMode === "js") {
     return () => new DefaultMmdRuntime(createViewerRuntimeOptions({
       physics: "external",
       physicsBackend
     }));
   }
-  if (viewerConfig.runtime !== "mmd-anim") {
+  if (state.activeRuntimeMode !== "mmd-anim") {
     return undefined;
   }
   const wasm = await import("/__mmd_anim_wasm/mmd_anim_wasm.js");

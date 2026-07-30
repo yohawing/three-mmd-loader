@@ -6,7 +6,6 @@ import {
 
 import { dom, setStatus } from "./dom.js";
 import { state } from "./state.js";
-import { viewerConfig } from "./viewer-config.js";
 
 export async function createPhysicsBackend() {
   const backend = createDeferredPhysicsBackend();
@@ -18,7 +17,7 @@ export async function createPhysicsBackend() {
 }
 
 export async function ensurePhysicsBackendReady() {
-  if (viewerConfig.runtime === "worker") {
+  if (state.activeRuntimeMode === "worker") {
     return undefined;
   }
   if (state.physicsBackends.size === 0) {

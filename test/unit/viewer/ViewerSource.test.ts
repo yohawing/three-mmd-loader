@@ -1265,12 +1265,13 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("characters: state.characterModels.map(");
     expect(debugSource).toContain("captureCanvas,");
     expect(visualGateSource).toContain("await viewer.debug.evaluateAt(seconds, { physics: false })");
-    expect(visualGateSource).toContain("physics=0&runtime=worker&selfShadow=");
+    expect(visualGateSource).toContain("physics=0&selfShadow=");
+    expect(visualGateSource).not.toContain("runtime=worker&selfShadow=");
     expect(visualGateSource).toContain("assertSettledCharacterBarrier(observation.settledState, evaluationSeconds)");
     expect(visualGateSource).toContain("globalThis.mmdViewer.debug.captureCanvas()");
   });
 
-  it("opts the viewer into a shared worker runtime without preparing main-thread physics", async () => {
+  it("uses Worker by default with explicit inline routes and preflight fallback", async () => {
     const configSource = await readFile("examples/viewer/lib/viewer-config.js", "utf8");
     const workerSource = await readFile("examples/viewer/lib/runtime-worker.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
@@ -1280,11 +1281,18 @@ describe("example viewer source", () => {
     const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
     const buildDeploySource = await readLocalOptionalText("scripts/build-deploy.mjs");
 
-    expect(configSource).toContain('if (normalized === "worker")');
-    expect(configSource).toContain('return "mmd-anim"');
+    expect(configSource).toContain('if (normalized === "mmd-anim" || normalized === "wasm" || normalized === "inline")');
+    expect(configSource).toContain('return "worker"');
     expect(workerSource).toContain("createWorkerMmdRuntimeFactory");
+    expect(workerSource).toContain("export async function prepareViewerRuntime()");
+    expect(workerSource).toContain('typeof window.Worker !== "function"');
+    expect(workerSource).toContain("getDefaultMmdRuntimeWorkerPoolSize() === 0");
+    expect(workerSource).toContain("probeModuleWorker()");
+    expect(workerSource).toContain("activatePreflightFallback(error)");
+    expect(workerSource).toContain('state.activeRuntimeMode = "mmd-anim"');
+    expect(workerSource).toContain('setStatus(`Worker unavailable; using inline runtime: ${message}`, "warning")');
     expect(workerSource).toContain('import("../../../dist/worker/index.js")');
-    expect(workerSource).toContain("const resettablePromise = import");
+    expect(workerSource).toContain("const resettablePromise = loadWorkerModule()");
     expect(workerSource).toContain("let workerRuntimeGeneration = 0");
     expect(workerSource).toContain("const generation = workerRuntimeGeneration");
     expect(workerSource).toContain("generation !== workerRuntimeGeneration");
@@ -1298,9 +1306,14 @@ describe("example viewer source", () => {
     expect(workerSource).toContain('setStatus(`Runtime Worker failed: ${message}`, "error")');
     expect(modelSource).toContain("if (isWorkerRuntimeEnabled())");
     expect(modelSource).toContain("getWorkerRuntimeFactory()");
+    expect(modelSource).toContain('state.activeRuntimeMode === "js"');
+    expect(modelSource).toContain('state.activeRuntimeMode !== "mmd-anim"');
     expect(modelSource).toContain('physics: "external"');
-    expect(physicsSource).toContain('if (viewerConfig.runtime === "worker")');
+    expect(physicsSource).toContain('if (state.activeRuntimeMode === "worker")');
     expect(stateSource).toContain("workerRuntimeFallback");
+    expect(stateSource).toContain("requestedRuntimeMode: viewerConfig.runtime");
+    expect(stateSource).toContain("activeRuntimeMode: viewerConfig.runtime");
+    expect(mainSource).toContain("await prepareViewerRuntime()");
     expect(mainSource).toContain("disposeWorkerRuntimeFactory()");
     expect(serverSource).toContain('const workerDistRoute = "/__mmd_worker_dist__/"');
     expect(serverSource).toContain('const workerDistRoot = resolve(root, "dist")');

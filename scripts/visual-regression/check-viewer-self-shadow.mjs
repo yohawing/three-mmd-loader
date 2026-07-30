@@ -350,7 +350,7 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
   try {
     const shadowState = enabled ? "1" : "0";
     await page.goto(
-      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0&runtime=worker&selfShadow=${shadowState}`,
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0&selfShadow=${shadowState}`,
       { waitUntil: "domcontentloaded" }
     );
     await waitForViewer(page);

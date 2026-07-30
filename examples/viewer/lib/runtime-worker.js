@@ -6,9 +6,37 @@ const workerDistRoute = "/__mmd_worker_dist__/";
 let workerRuntimeFactory;
 let workerRuntimeFactoryPromise;
 let workerRuntimeGeneration = 0;
+let workerModulePromise;
 
 export function isWorkerRuntimeEnabled() {
-  return viewerConfig.runtime === "worker";
+  return state.activeRuntimeMode === "worker";
+}
+
+export async function prepareViewerRuntime() {
+  if (viewerConfig.runtime !== "worker") {
+    state.activeRuntimeMode = viewerConfig.runtime;
+    state.runtimeTransport = "inline";
+    state.runtimeReadiness = "ready";
+    return;
+  }
+  try {
+    if (typeof window.Worker !== "function") {
+      throw new Error("module Worker API is unavailable");
+    }
+    const workerModule = await loadWorkerModule();
+    if (workerModule.getDefaultMmdRuntimeWorkerPoolSize() === 0) {
+      throw new Error("no Worker slot is available on this device");
+    }
+    probeModuleWorker();
+    state.activeRuntimeMode = "worker";
+    state.runtimeTransport = globalThis.crossOriginIsolated === true
+      ? "shared-array-buffer"
+      : "transferable";
+    state.runtimeReadiness = "pending";
+    await getWorkerRuntimeFactory();
+  } catch (error) {
+    activatePreflightFallback(error);
+  }
 }
 
 export async function getWorkerRuntimeFactory() {
@@ -22,7 +50,7 @@ export async function getWorkerRuntimeFactory() {
     return await workerRuntimeFactoryPromise;
   }
   const generation = workerRuntimeGeneration;
-  const resettablePromise = import("../../../dist/worker/index.js").then(({ createWorkerMmdRuntimeFactory }) => {
+  const resettablePromise = loadWorkerModule().then(({ createWorkerMmdRuntimeFactory }) => {
     const factory = createWorkerMmdRuntimeFactory({
       runtimeOptions: createViewerRuntimeOptions({ physics: "external" }),
       externalPhysics: {
@@ -55,6 +83,30 @@ export function disposeWorkerRuntimeFactory() {
   workerRuntimeFactory?.dispose();
   workerRuntimeFactory = undefined;
   workerRuntimeFactoryPromise = undefined;
+}
+
+function loadWorkerModule() {
+  workerModulePromise ??= import("../../../dist/worker/index.js");
+  return workerModulePromise;
+}
+
+function probeModuleWorker() {
+  const worker = new window.Worker(new URL(`${workerDistRoute}worker/entry.js`, location.href), {
+    type: "module"
+  });
+  worker.terminate();
+}
+
+function activatePreflightFallback(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  state.activeRuntimeMode = "mmd-anim";
+  state.runtimeTransport = "inline";
+  state.runtimeReadiness = "ready";
+  state.runtimeFallbackReason = message;
+  state.workerRuntimeFallback = message;
+  state.workerRuntimeFallbackCount += 1;
+  window.console?.warn("[viewer] Worker preflight fallback", error);
+  setStatus(`Worker unavailable; using inline runtime: ${message}`, "warning");
 }
 
 function reportWorkerRuntimeFallback(error) {
