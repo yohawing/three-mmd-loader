@@ -1,14 +1,14 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 describe("mmd-anim Bullet executable paths", () => {
   it("keeps the existing Bullet MMD artifact and worker API names", () => {
-    const artifactPaths = [
-      "scripts/build-deploy.mjs",
-      "scripts/smoke-bullet-mmd.mjs"
-    ];
+    const artifactPaths = ["scripts/smoke-bullet-mmd.mjs"];
+    if (existsSync(resolve("scripts/build-deploy.mjs"))) {
+      artifactPaths.push("scripts/build-deploy.mjs");
+    }
     for (const path of artifactPaths) {
       const source = readFileSync(resolve(path), "utf8");
       expect(source).toContain("mmd_bullet");

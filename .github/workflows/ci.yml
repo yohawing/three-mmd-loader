@@ -44,11 +44,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
-
       - name: Build
         run: npm run build
+
+      - name: Test
+        run: npm test
 
       - name: Check fixtures
         run: npm run check:fixtures
