@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.8.0] - 2026-07-30
+
+### Added
+
+- Add the experimental `@yohawing/three-mmd-loader/worker` entry point with
+  worker-hosted runtime evaluation, transferable and shared-memory pose
+  transport, multiplexed logical runtimes, and a bounded runtime pool.
+- Add worker-compatible external Bullet physics artifacts and integrate worker
+  runtime selection into the example viewer.
+- Add a second-character viewer workflow with independent model lifecycle and
+  shared playback controls.
+- Add runtime worker benchmarks and viewer performance diagnostics for
+  profiling initialization, transport, animation, and rendering costs.
+
+### Changed
+
+- Replace the package-owned Ammo/Bullet binding with the mmd-anim v0.3.3
+  Bullet backend while retaining the stable Custom Bullet factory and asset
+  names.
+- Keep PMX vertex morph offsets in typed sparse buffers through parser and
+  Three.js/WebGPU consumers, avoiding per-entry object materialization on the
+  optimized path.
+- Coalesce worker ticks during initialization and automatically select shared
+  pose transport when the environment supports it.
+- Remove the legacy `AmmoMmdPhysicsBackend`, `createAmmoMmdPhysicsBackend`,
+  and `loadAmmoNamespace` exports and the direct `ammo.js` dependency. Use
+  `loadCustomBulletMmdModule()` and `createCustomBulletMmdPhysicsBackend()`
+  from the physics entry point instead.
+
+### Fixed
+
+- Preserve physics ownership and disposal when two viewer characters are
+  loaded, replaced, or cleared independently.
+- Preserve worker failure semantics across initialization, pooled runtime
+  crashes, and viewer startup instead of silently falling back after an
+  explicitly requested worker runtime fails.
+- Avoid animation-loop render re-entry while asynchronous shader compilation
+  is active without suppressing still-frame capture or explicit debug renders.
+- Synchronize IK convergence behavior with the bundled mmd-anim runtime.
+
 ## [0.7.0] - 2026-07-23
 
 ### Added
