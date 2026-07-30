@@ -28,6 +28,14 @@ describe("browser runtime worker benchmark source", () => {
     expect(source).toContain("At least one runtime-worker fixture case is required");
     expect(source).toContain('characters.push({ role: "secondary", ...fixtureCase.secondary })');
     expect(source).toContain("runtimeFactory.dispose()");
+    expect(source).toContain("--runtime");
+    expect(source).toContain('args.runtimeMode !== "worker" && args.runtimeMode !== "inline"');
+    expect(source).toContain('await import("/dist/runtime/index.js")');
+    expect(source).toContain('await import("/dist/parser/wasm/generated/mmd_anim_wasm.js")');
+    expect(source).toContain("createCustomBulletMmdPhysicsBackend");
+    expect(source).toContain("comparisonOnly");
+    expect(source).toContain("poseAgeApplicable");
+    expect(source).toContain('workerEntry: args.runtimeMode === "worker"');
   });
 
   it("provides an opt-in COOP/COEP path for cross-origin isolation", async () => {
@@ -41,5 +49,7 @@ describe("browser runtime worker benchmark source", () => {
     expect(source).toContain("sharedMemoryEnabled");
     expect(source).toContain("resolve(dirname(fixturesPath), fixtures.basePath)");
     expect(source).toContain('extension === ".js" || extension === ".mjs"');
+    expect(source).toContain("shared-array-buffer");
+    expect(source).toContain("sampleCountPerCharacter");
   });
 });

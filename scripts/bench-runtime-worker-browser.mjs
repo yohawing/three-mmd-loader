@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* global PerformanceObserver, fetch, location, requestAnimationFrame, setTimeout */
+/* global PerformanceObserver, fetch, location, navigator, requestAnimationFrame, setTimeout, window */
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
@@ -47,6 +47,7 @@ const main = async () => {
           frameRate: args.frameRate,
           displayRate: args.displayRate,
           physics: args.physics,
+          runtimeMode: args.runtimeMode,
           timeoutMs: TIMEOUT_MS,
           updateP95GateMs: UPDATE_P95_GATE_MS,
           poseAgeP95GateFrames: POSE_AGE_P95_GATE_FRAMES,
@@ -56,6 +57,13 @@ const main = async () => {
         matrices.push(result);
       }
     }
+    const browserEnvironment = await page.evaluate(() => ({
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      devicePixelRatio: window.devicePixelRatio,
+      crossOriginIsolated: globalThis.crossOriginIsolated === true
+    }));
     const output = {
       benchmark: "runtime-worker-browser",
       fixtures: args.fixturesPath,
@@ -64,22 +72,41 @@ const main = async () => {
       frameRate: args.frameRate,
       displayRate: args.displayRate,
       runtime: {
+        mode: args.runtimeMode,
+        transport: args.runtimeMode === "inline"
+          ? "inline"
+          : args.coopCoep ? "shared-array-buffer" : "transferable",
         physics: args.physics,
-        workerEntry: `${workerDistRoute}worker/entry.js`,
+        workerEntry: args.runtimeMode === "worker"
+          ? `${workerDistRoute}worker/entry.js`
+          : null,
         longTaskApi: "PerformanceObserver(type=longtask)",
         longTaskThresholdMs: LONG_TASK_THRESHOLD_MS,
         note: "Long Tasks API is browser-only; the Node event-loop proxy is reported separately by bench:runtime:worker.",
         coopCoepRequested: args.coopCoep
       },
+      environment: {
+        node: process.version,
+        browser: browserEnvironment
+      },
+      evidence: {
+        command: ["node", "scripts/bench-runtime-worker-browser.mjs", ...process.argv.slice(2)].join(" "),
+        outputPath: args.outputPath ?? null,
+        fixtureCases: fixtureCases.map((fixtureCase) => fixtureCase.name),
+        sampleCountPerCharacter: args.frames,
+        crossOriginIsolated: matrices.every((matrix) => matrix.crossOriginIsolated)
+      },
       matrices,
-      passed: matrices.every((matrix) => matrix.gate.passed)
+      passed: args.runtimeMode === "worker"
+        ? matrices.every((matrix) => matrix.gate.passed)
+        : null
     };
     const serialized = `${JSON.stringify(output, null, 2)}\n`;
     if (args.outputPath) {
       await writeFile(args.outputPath, serialized, "utf8");
     }
     process.stdout.write(serialized);
-    if (!output.passed) {
+    if (output.passed === false) {
       process.exitCode = 1;
     }
   } finally {
@@ -233,21 +260,53 @@ async function runBrowserMatrix(config) {
     return { supported, count: () => count, stop: () => observer?.disconnect() };
   };
   const three = await import("/dist/three/index.js");
-  const worker = await import("/dist/worker/index.js");
+  const worker = config.runtimeMode === "worker"
+    ? await import("/dist/worker/index.js")
+    : undefined;
+  const runtime = config.runtimeMode === "inline"
+    ? await import("/dist/runtime/index.js")
+    : undefined;
+  const wasm = config.runtimeMode === "inline"
+    ? await import("/dist/parser/wasm/generated/mmd_anim_wasm.js")
+    : undefined;
+  const physics = config.runtimeMode === "inline" && config.physics === "external"
+    ? await import("/dist/physics/index.js")
+    : undefined;
+  let bulletModule;
+  if (physics) {
+    const bulletModuleKey = "__runtimeWorkerBenchBulletModule";
+    globalThis[bulletModuleKey] ??= physics.loadCustomBulletMmdModule({
+      scriptUrl: new URL(config.workerDistRoute + "physics/mmd/mmd_bullet.js", location.href).href
+    });
+    bulletModule = await globalThis[bulletModuleKey];
+  }
   const fallbackState = { count: 0, errors: [] };
-  const runtimeFactory = worker.createWorkerMmdRuntimeFactory({
-    poolSize: config.poolSize,
-    runtimeOptions: { frameRate: config.frameRate, physics: config.physics },
-    externalPhysics: config.physics === "external"
-      ? { kind: "custom-bullet-mmd" }
-      : undefined,
-    sharedMemory: "auto",
-    workerUrl: new URL(config.workerDistRoute + "worker/entry.js", location.href),
-    onFallback: (error) => {
-      fallbackState.count += 1;
-      fallbackState.errors.push(error instanceof Error ? error.message : String(error));
-    }
-  });
+  const inlineBackends = [];
+  const runtimeFactory = config.runtimeMode === "worker"
+    ? worker.createWorkerMmdRuntimeFactory({
+      poolSize: config.poolSize,
+      runtimeOptions: { frameRate: config.frameRate, physics: config.physics },
+      externalPhysics: config.physics === "external"
+        ? { kind: "custom-bullet-mmd" }
+        : undefined,
+      sharedMemory: "auto",
+      workerUrl: new URL(config.workerDistRoute + "worker/entry.js", location.href),
+      onFallback: (error) => {
+        fallbackState.count += 1;
+        fallbackState.errors.push(error instanceof Error ? error.message : String(error));
+      }
+    })
+    : ({ modelBytes }) => {
+      const backend = physics && bulletModule
+        ? physics.createCustomBulletMmdPhysicsBackend(bulletModule)
+        : undefined;
+      if (backend) inlineBackends.push(backend);
+      return runtime.MmdAnimRuntime.fromPmxBytes(wasm, modelBytes, {
+        frameRate: config.frameRate,
+        physics: config.physics,
+        physicsBackend: backend
+      });
+    };
   const models = [];
   const runtimes = [];
   const updateDurations = [];
@@ -310,7 +369,9 @@ async function runBrowserMatrix(config) {
           if (frame >= config.warmup) {
             updateDurations.push(updateDuration);
             const runtime = runtimes[index];
-            poseAges.push(isWorkerRuntime(runtime) ? runtime.poseAgeFrames() : 0);
+            if (isWorkerRuntime(runtime)) {
+              poseAges.push(runtime.poseAgeFrames());
+            }
           }
         }
         await new Promise((resolvePromise) => requestAnimationFrame(resolvePromise));
@@ -329,9 +390,10 @@ async function runBrowserMatrix(config) {
     } finally {
       longTask.stop();
     }
-    const workerReady = runtimes.length > 0 && runtimes.every((runtime) =>
+    const workerReady = config.runtimeMode === "worker" && runtimes.length > 0 && runtimes.every((runtime) =>
       isWorkerRuntime(runtime) && runtime.workerReady()
     );
+    const runtimeReady = config.runtimeMode === "inline" || workerReady;
     const sharedMemoryEnabled = runtimes.some((runtime) =>
       typeof runtime.sharedMemoryEnabled === "function" && runtime.sharedMemoryEnabled()
     );
@@ -340,33 +402,40 @@ async function runBrowserMatrix(config) {
     const result = {
       characterCount: config.characterCount,
       poolSize: config.poolSize,
+      runtimeMode: config.runtimeMode,
       fixtureCases: config.fixtureCases.map((fixtureCase) => fixtureCase.name),
       updateMs: update,
       poseAgeFrames: poseAge,
+      poseAgeApplicable: config.runtimeMode === "worker",
       wallTimeMs: Number((performance.now() - startedAt).toFixed(3)),
       longTaskCount: longTask.count(),
       longTaskApiSupported: longTask.supported,
       fallbackCount: fallbackState.count,
       fallbackErrors: fallbackState.errors,
       timeout,
-      workerReady,
+      workerReady: config.runtimeMode === "worker" ? workerReady : null,
+      runtimeReady,
       crossOriginIsolated: globalThis.crossOriginIsolated === true,
       sharedMemoryEnabled,
       gate: {
+        productApplicable: config.runtimeMode === "worker",
+        comparisonOnly: config.runtimeMode === "inline",
         updateP95: update.p95 < config.updateP95GateMs,
-        poseAgeP95: poseAge.p95 <= config.poseAgeP95GateFrames,
+        poseAgeP95: config.runtimeMode !== "worker" || poseAge.p95 <= config.poseAgeP95GateFrames,
         longTaskApi: longTask.supported,
         longTask: longTask.count() === 0,
         fallback: fallbackState.count === 0,
         timeout: !timeout,
-        workerReady,
-        passed: update.p95 < config.updateP95GateMs
-          && poseAge.p95 <= config.poseAgeP95GateFrames
+        workerReady: runtimeReady,
+        passed: config.runtimeMode === "inline"
+          ? null
+          : update.p95 < config.updateP95GateMs
+          && (config.runtimeMode !== "worker" || poseAge.p95 <= config.poseAgeP95GateFrames)
           && longTask.supported
           && longTask.count() === 0
           && fallbackState.count === 0
           && !timeout
-          && workerReady
+          && runtimeReady
       }
     };
     return result;
@@ -374,7 +443,8 @@ async function runBrowserMatrix(config) {
     for (const model of models) {
       three.disposeMmdModel(model, { textures: "none" });
     }
-    runtimeFactory.dispose();
+    if (config.runtimeMode === "worker") runtimeFactory.dispose();
+    for (const backend of inlineBackends) backend.dispose?.();
   }
 }
 
@@ -437,6 +507,7 @@ function parseArgs(argv) {
     frameRate: 30,
     displayRate: 60,
     physics: "external",
+    runtimeMode: "worker",
     coopCoep: false,
     outputPath: undefined,
     help: false
@@ -465,6 +536,11 @@ function parseArgs(argv) {
       args.physics = readOption(argv, ++index, option);
       if (args.physics !== "external" && args.physics !== "stateful-spring" && args.physics !== "none") {
         throw new Error("--physics must be external, stateful-spring, or none");
+      }
+    } else if (option === "--runtime") {
+      args.runtimeMode = readOption(argv, ++index, option);
+      if (args.runtimeMode !== "worker" && args.runtimeMode !== "inline") {
+        throw new Error("--runtime must be worker or inline");
       }
     } else if (option === "--coop-coep" || option === "--cross-origin-isolated") {
       args.coopCoep = true;
@@ -541,6 +617,7 @@ Options:
   --frame-rate N
   --display-rate N
   --physics external|stateful-spring|none
+  --runtime worker|inline
   --coop-coep (opt in to COOP/COEP and SharedArrayBuffer)
   --output PATH
 `);
