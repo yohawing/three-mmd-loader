@@ -244,8 +244,10 @@ function createMmdTslOutlineMaterial(
 }
 
 interface TslVectorNodeOps {
+  readonly xy: TslVectorNodeOps;
   readonly w: unknown;
   add(value: unknown): TslVectorNodeOps;
+  div(value: unknown): TslVectorNodeOps;
   sub(value: unknown): TslVectorNodeOps;
   mul(value: unknown): TslVectorNodeOps;
 }
@@ -258,9 +260,18 @@ function createMmdTslScreenSpaceOutlineVertexNode(outlineWidth: THREE.Node): THR
   const outlineNormal = TSL.normalLocal.negate();
   const pos = mvp.mul(TSL.vec4(TSL.positionLocal, 1));
   const pos2 = mvp.mul(TSL.vec4(TSL.positionLocal.add(outlineNormal), 1));
-  const normalizeNode = TSL.normalize as unknown as (value: unknown) => TslVectorNodeOps;
-  const direction = normalizeNode(pos.sub(pos2));
-  return pos.add(direction.mul(outlineWidthNode.mul(0.004)).mul(pos.w)) as unknown as THREE.Node;
+  const projectedNormal = pos.xy.sub(pos2.xy);
+  const projectedNormalLength = TSL.length(projectedNormal as unknown as THREE.Node);
+  const direction = projectedNormal.div(TSL.max(projectedNormalLength, TSL.float(1e-6)));
+  const devicePixelWidth = outlineWidthNode.mul(TSL.screenDPR);
+  const clipOffset = direction
+    .mul(devicePixelWidth)
+    .mul(TSL.float(2))
+    .div(TSL.viewportSize)
+    .mul(pos.w);
+  return pos.add(
+    TSL.vec4(clipOffset as unknown as ReturnType<typeof TSL.vec2>, 0, 0)
+  ) as unknown as THREE.Node;
 }
 
 function createMaterialRuntimeStateForSource(

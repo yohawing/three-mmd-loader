@@ -127,10 +127,10 @@ function createMmdOutlineMaterial(
     depthWrite: true,
     depthTest: true,
     polygonOffset: true,
-    // The hull is shifted ~2*outlineWidth screen pixels sideways, so at a given pixel
+    // The hull is shifted outlineWidth CSS pixels sideways, so at a given pixel
     // its interpolated depth leads the body's by up to (slope x shift). A slope factor
-    // of 1 only compensates one pixel of slope; scale it with the shift so front-facing
-    // hull fragments (DoubleSide materials) always lose against their own body.
+    // of 1 only compensates one pixel of slope. Keep a conservative 2x depth-only
+    // margin so front-facing hull fragments always lose against their own body.
     polygonOffsetFactor: mmdOutlinePolygonOffsetFactor(outlineWidth),
     polygonOffsetUnits: 1,
     toneMapped: false,
@@ -212,6 +212,7 @@ function attachMmdPmxOutlineExpansion(
         "#include <common>",
         "uniform float mmdOutlineWidth;",
         "uniform vec2 mmdOutlineViewport;",
+        "uniform float mmdOutlinePixelRatio;",
         hasVertexEdgeScale ? "attribute float mmdEdgeScale;" : ""
       ]
         .filter(Boolean)
@@ -219,10 +220,12 @@ function attachMmdPmxOutlineExpansion(
     );
     const outlineViewport = new THREE.Vector2();
     const currentViewport = new THREE.Vector4();
-    updateMmdOutlineViewport(renderer, outlineViewport, currentViewport);
+    const outlinePixelRatio = { value: 1 };
+    updateMmdOutlineViewport(renderer, outlineViewport, currentViewport, outlinePixelRatio);
     shader.uniforms.mmdOutlineViewport = { value: outlineViewport };
+    shader.uniforms.mmdOutlinePixelRatio = outlinePixelRatio;
     material.userData.mmdOutlineUpdateViewport = (activeRenderer: THREE.WebGLRenderer) => {
-      updateMmdOutlineViewport(activeRenderer, outlineViewport, currentViewport);
+      updateMmdOutlineViewport(activeRenderer, outlineViewport, currentViewport, outlinePixelRatio);
     };
     shader.vertexShader = shader.vertexShader.replace(
       "#include <project_vertex>",
@@ -232,9 +235,10 @@ function attachMmdPmxOutlineExpansion(
         "vec2 mmdOutlineScreenNormal = mmdOutlineViewNormal.xy;",
         "float mmdOutlineScreenNormalLength = length( mmdOutlineScreenNormal );",
         "mmdOutlineScreenNormal = mmdOutlineScreenNormalLength > 0.0 ? mmdOutlineScreenNormal / mmdOutlineScreenNormalLength : vec2( 0.0 );",
+        "vec2 mmdOutlinePixelScale = vec2( 2.0 * mmdOutlinePixelRatio ) / mmdOutlineViewport;",
         hasVertexEdgeScale
-          ? "gl_Position.xy += mmdOutlineScreenNormal / ( mmdOutlineViewport * 0.25 ) * mmdOutlineWidth * gl_Position.w * mmdEdgeScale;"
-          : "gl_Position.xy += mmdOutlineScreenNormal / ( mmdOutlineViewport * 0.25 ) * mmdOutlineWidth * gl_Position.w;"
+          ? "gl_Position.xy += mmdOutlineScreenNormal * mmdOutlinePixelScale * mmdOutlineWidth * gl_Position.w * mmdEdgeScale;"
+          : "gl_Position.xy += mmdOutlineScreenNormal * mmdOutlinePixelScale * mmdOutlineWidth * gl_Position.w;"
       ].join("\n")
     );
   };
@@ -277,17 +281,12 @@ function syncMmdOutlineMaterialViewport(
 function updateMmdOutlineViewport(
   renderer: THREE.WebGLRenderer,
   target: THREE.Vector2,
-  currentViewport: THREE.Vector4
+  currentViewport: THREE.Vector4,
+  pixelRatioUniform: { value: number }
 ): void {
   renderer.getCurrentViewport(currentViewport);
-  // getCurrentViewport reports DEVICE pixels (pixelRatio applied). The edge
-  // expansion divides by this viewport, so a raw device viewport makes the edge
-  // width scale as 1/pixelRatio -- i.e. the outline gets thinner on hi-DPI
-  // displays or under supersampling, and thicker at pixelRatio 1. Real MMD's edge
-  // is a fixed screen-space width independent of render resolution, so normalise
-  // to CSS pixels here to keep the outline thickness DPI/supersample invariant.
-  const pixelRatio = renderer.getPixelRatio?.() || 1;
-  target.set(currentViewport.z / pixelRatio, currentViewport.w / pixelRatio);
+  target.set(currentViewport.z, currentViewport.w);
+  pixelRatioUniform.value = renderer.getPixelRatio?.() || 1;
 }
 
 function mmdOutlineExpansionWidth(

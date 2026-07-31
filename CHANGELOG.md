@@ -37,6 +37,9 @@ All notable changes to this project will be documented in this file.
 - Simplify example Viewer model loading to one new/add checkbox shared by
   folder and local-fixture loading, and keep runtime details in diagnostics
   instead of the persistent header badge.
+- Interpret PMX edge size as a CSS-pixel outline width in both WebGL and TSL,
+  deriving device-pixel expansion from the renderer pixel ratio and viewport
+  instead of resolution-tuned constants.
 - Remove the legacy `AmmoMmdPhysicsBackend`, `createAmmoMmdPhysicsBackend`,
   and `loadAmmoNamespace` exports and the direct `ammo.js` dependency. Use
   `loadCustomBulletMmdModule()` and `createCustomBulletMmdPhysicsBackend()`

@@ -10,7 +10,7 @@ import {
 import type { MaterialInfo } from "../../../src/parser/model/modelTypes.js";
 
 describe("MMD outline meshes", () => {
-  it("uses PMX edge size with babylon-mmd compatible screen-space expansion", () => {
+  it("uses PMX edge size as a CSS-pixel screen-space width", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
@@ -43,12 +43,12 @@ describe("MMD outline meshes", () => {
     expect(material?.depthTest).toBe(true);
     expect(material?.depthWrite).toBe(true);
     expect(material?.polygonOffset).toBe(true);
-    // 1 + 2 * outlineWidth: the hull shifts ~2*width screen px, so the slope factor
-    // must cover that shift for DoubleSide hull fronts to stay behind the body.
+    // Depth-only compensation remains conservative and does not scale visible width.
     expect(material?.polygonOffsetFactor).toBeCloseTo(2.2);
     expect(material?.polygonOffsetUnits).toBe(1);
     expect(shader.uniforms.mmdOutlineViewport?.value).toBeInstanceOf(THREE.Vector2);
     expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(512, 512));
+    expect(shader.uniforms.mmdOutlinePixelRatio?.value).toBe(1);
     outline.onBeforeRender(
       createRendererMock(256, 128),
       {} as THREE.Scene,
@@ -61,12 +61,12 @@ describe("MMD outline meshes", () => {
     expect(shader.vertexShader).toContain("vec3 mmdOutlineViewNormal = mat3( modelViewMatrix ) * objectNormal;");
     expect(shader.vertexShader).toContain("vec2 mmdOutlineScreenNormal = mmdOutlineViewNormal.xy;");
     expect(shader.vertexShader).toContain("mmdOutlineScreenNormalLength > 0.0");
-    expect(shader.vertexShader).toContain("mmdOutlineViewport * 0.25");
+    expect(shader.vertexShader).toContain("vec2( 2.0 * mmdOutlinePixelRatio ) / mmdOutlineViewport");
     expect(shader.vertexShader).toContain("gl_Position.xy += mmdOutlineScreenNormal");
     expect(shader.vertexShader).not.toContain("transformed += normal * mmdOutlineWidth");
   });
 
-  it("normalises the outline viewport to CSS pixels so edge width is DPI/supersample invariant", () => {
+  it("converts CSS-pixel edge width to device pixels with the renderer pixel ratio", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
@@ -91,10 +91,11 @@ describe("MMD outline meshes", () => {
       fragmentShader: ""
     };
 
-    // Device viewport 1024x1024 at devicePixelRatio 2 must report the 512x512 CSS
-    // viewport so the edge keeps a fixed screen-space width under hi-DPI / SSAA.
+    // Device viewport and renderer pixel ratio remain separate shader inputs so
+    // edgeSize maps to CSS pixels without a tuned resolution-dependent factor.
     material?.onBeforeCompile(shader, createRendererMock(1024, 1024, 2));
-    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(512, 512));
+    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(1024, 1024));
+    expect(shader.uniforms.mmdOutlinePixelRatio?.value).toBe(2);
     outline.onBeforeRender(
       createRendererMock(2048, 2048, 2),
       {} as THREE.Scene,
@@ -103,7 +104,8 @@ describe("MMD outline meshes", () => {
       material ?? new THREE.Material(),
       null
     );
-    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(1024, 1024));
+    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(2048, 2048));
+    expect(shader.uniforms.mmdOutlinePixelRatio?.value).toBe(2);
   });
 
   it("preserves PMX outline edge size without a library clamp", () => {
