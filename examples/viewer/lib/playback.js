@@ -159,8 +159,11 @@ function prepareRuntimeEvaluation(options) {
   }
   const updateOptions = state.runtimeUpdateOptionsScratch;
   updateOptions.ik = options?.ik ?? hasCurrentMotion();
+  // Let the backend seed external physics from the assigned motion at frame 0;
+  // its reset/seek path is seed-only, so Bullet advances on the next RAF.
   updateOptions.physics =
-    state.physicsEnabled && (options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0));
+    state.physicsEnabled &&
+    (options?.physics ?? (!state.isSeeking && (state.elapsedSeconds > 0 || hasCurrentMotion())));
   return currentMmdSeconds();
 }
 

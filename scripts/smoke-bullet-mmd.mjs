@@ -62,8 +62,8 @@ const context = {
 };
 
 const result = backend.step(context);
-if (!result.simulated || result.updatedBoneCount !== 1) {
-  throw new Error(`Unexpected mmd-anim Bullet step result: ${JSON.stringify(result)}`);
+if (result.simulated || result.updatedBoneCount !== 1) {
+  throw new Error(`Unexpected initial seed-only mmd-anim Bullet result: ${JSON.stringify(result)}`);
 }
 if (!Number.isFinite(outputTranslations[1])) {
   throw new Error(`Expected finite mmd-anim Bullet output translation: ${Array.from(outputTranslations).join(",")}`);
@@ -72,7 +72,24 @@ if (outputUpdatedBoneIndices[0] !== 0) {
   throw new Error(`Unexpected updated bone index: ${outputUpdatedBoneIndices[0]}`);
 }
 
+const stepped = backend.step({ ...context, seconds: 1 / 60, frame: 1 });
+if (!stepped.simulated || stepped.updatedBoneCount !== 1) {
+  throw new Error(`Unexpected first forward mmd-anim Bullet step result: ${JSON.stringify(stepped)}`);
+}
+
 backend.reset?.();
+inputWorldMatricesColumnMajor[13] = 20;
+outputTranslations.fill(0);
+outputRotations.fill(0);
+outputRotations[3] = 1;
+const reseeded = backend.step({ ...context, seconds: 1 / 30, frame: 2, seeking: true });
+if (reseeded.simulated || reseeded.updatedBoneCount !== 1) {
+  throw new Error(`Unexpected seed-only mmd-anim Bullet result: ${JSON.stringify(reseeded)}`);
+}
+if (Math.abs((outputTranslations[1] ?? 0) - 20) > 1.0e-4) {
+  throw new Error(`Expected reset/seek to preserve the seeded pose: ${Array.from(outputTranslations).join(",")}`);
+}
+
 backend.dispose?.();
 if (!backend.disposed) {
   throw new Error("mmd-anim Bullet backend did not dispose");

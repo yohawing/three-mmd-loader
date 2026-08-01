@@ -1263,6 +1263,7 @@ describe("example viewer source", () => {
     expect(playbackSource).not.toContain("export async function render()");
     expect(modelSource).toContain("await renderStillFrame();");
     expect(motionSource).toContain("await renderStillFrame();");
+    expect(playbackSource).toContain("state.elapsedSeconds > 0 || hasCurrentMotion()");
     expect(backgroundSource).toContain("await renderStillFrame();");
     expect(debugSource).toContain("async evaluateAt(seconds, options = {})");
     expect(debugSource).toContain("await renderStillFrame(options)");

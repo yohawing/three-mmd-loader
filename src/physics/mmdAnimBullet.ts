@@ -97,26 +97,25 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
     }
     const inputWorld = context.inputWorldMatricesColumnMajor;
     const toggles = context.bonePhysicsToggles;
+    const seedOnly = this.pendingReset || context.seeking === true;
     if (inputWorld && !this.pendingReset && context.seeking !== true) {
       // Dynamic-with-bone bodies are seeded on reset and remain solver-owned
       // during forward steps. Reinjecting their animated pose teleports a
       // constrained hair chain and makes the tail explode after a few frames.
       this.feedBodies(inputWorld, toggles, false, false);
     }
-    if (this.pendingReset || context.seeking === true) {
+    if (seedOnly) {
       this.module._mmd_anim_bullet_world_reset(this.world);
       if (inputWorld) this.feedBodies(inputWorld, undefined, true, true);
-      if (this.module._mmd_anim_bullet_world_step(this.world, 1 / 60, 2, 1 / 120) !== 0) {
-        return { simulated: false, diagnostics: [{ level: "error", code: "PHYSICS_BACKEND_STEP_FAILED", message: "mmd-anim Bullet reset step failed." }] };
-      }
-      if (inputWorld) this.feedBodies(inputWorld, undefined, false, false);
+      // Reset/seek is a seed-only operation. Advancing Bullet here changes the
+      // animation pose at frame 0 before the first forward physics tick.
       this.module._mmd_anim_bullet_world_settle_to_current(this.world);
       this.pendingReset = false;
     } else if (this.module._mmd_anim_bullet_world_step(this.world, Math.max(0, context.deltaSeconds), this.options.maxSubSteps ?? 5, this.options.fixedTimeStep ?? 1 / 60) !== 0) {
       return { simulated: false, diagnostics: [{ level: "error", code: "PHYSICS_BACKEND_STEP_FAILED", message: "mmd-anim Bullet step failed." }] };
     }
     const updated = this.copyDynamicOutputs(context, toggles);
-    return { simulated: updated > 0, updatedBoneCount: updated };
+    return { simulated: !seedOnly && updated > 0, updatedBoneCount: updated };
   }
 
   reset(_context?: MmdPhysicsResetContext): void {
@@ -223,6 +222,10 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
         }
       } finally { this.module._free(jointPtr); }
       this.modelKey = key;
+      // A newly uploaded model has not been seeded from the current animation
+      // pose yet. The first evaluation must preserve frame 0 and defer Bullet
+      // advancement until the next forward frame.
+      this.pendingReset = true;
       return true;
     } finally { this.module._free(bodyPtr); }
   }

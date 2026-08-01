@@ -180,8 +180,8 @@ describe("mmd-anim Bullet physics backend", () => {
     expect(fake.bodies[0]?.position).toEqual([4, 5, 6]);
     expect(outputTranslations).toEqual(new Float32Array([1, 2, 3]));
     expect(updated[0]).toBe(0);
-    expect(result.simulated).toBe(true);
-    expect(fake.stepCalls).toEqual([[1 / 60, 5, 1 / 60]]);
+    expect(result.simulated).toBe(false);
+    expect(fake.stepCalls).toEqual([]);
   });
 
   it("converts physics bone world poses back to parent-local output poses", () => {
@@ -243,7 +243,7 @@ describe("mmd-anim Bullet physics backend", () => {
     expect(outputWorld[12]).toBe(10);
     expect(outputWorld[28]).toBe(12);
     expect(Array.from(updatedBoneIndices)).toEqual([0, 1]);
-    expect(result).toEqual({ simulated: true, updatedBoneCount: 2 });
+    expect(result).toEqual({ simulated: false, updatedBoneCount: 2 });
   });
 
   it("re-seeds all bodies, re-pins static bodies, and reads dynamic outputs on reset", () => {
@@ -295,9 +295,8 @@ describe("mmd-anim Bullet physics backend", () => {
       bonePhysicsToggles: new Uint8Array([1, 1, 1])
     };
     backend.step(context);
-    // Forward steps repin static bodies only; dynamic-with-bone remains
-    // solver-owned after reset so constrained chains are not teleported.
-    expect(fake.setBodyCalls.map((call) => call.index)).toEqual([0]);
+    // Initial model seeding feeds all bodies from the animation pose.
+    expect(fake.setBodyCalls.map((call) => call.index)).toEqual([0, 1, 2]);
 
     inputTranslations.set([
       11, 12, 13,
@@ -312,15 +311,14 @@ describe("mmd-anim Bullet physics backend", () => {
     }
     backend.reset();
     const result = backend.step(context);
-    expect(result.simulated).toBe(true);
-    expect(fake.resetCount).toBe(1);
-    expect(fake.settleCount).toBe(1);
-    expect(fake.stepCalls.at(-1)).toEqual([1 / 60, 2, 1 / 120]);
-    expect(fake.setBodyCalls.slice(1).map((call) => call.index)).toEqual([0, 1, 2, 0]);
-    expect(fake.setBodyCalls[1]?.position).toEqual([11, 12, 13]);
-    expect(fake.setBodyCalls[2]?.position).toEqual([14, 15, 16]);
-    expect(fake.setBodyCalls[3]?.position).toEqual([17, 18, 19]);
-    expect(fake.setBodyCalls[4]?.position).toEqual([11, 12, 13]);
+    expect(result.simulated).toBe(false);
+    expect(fake.resetCount).toBe(2);
+    expect(fake.settleCount).toBe(2);
+    expect(fake.stepCalls).toEqual([]);
+    expect(fake.setBodyCalls.slice(3).map((call) => call.index)).toEqual([0, 1, 2]);
+    expect(fake.setBodyCalls[3]?.position).toEqual([11, 12, 13]);
+    expect(fake.setBodyCalls[4]?.position).toEqual([14, 15, 16]);
+    expect(fake.setBodyCalls[5]?.position).toEqual([17, 18, 19]);
     expect(Array.from(outputTranslations.slice(3, 9))).toEqual([14, 15, 16, 17, 18, 19]);
 
     backend.dispose();
