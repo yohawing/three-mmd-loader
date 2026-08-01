@@ -8,6 +8,7 @@ import {
   createCustomBulletMmdPhysicsBackend,
   type CustomBulletMmdModule
 } from "../../../src/physics/customBulletMmd.js";
+import { legacyMmdEulerToQuaternion } from "../../../src/physics/legacyPhysicsBridge.js";
 
 function makeFakeModule() {
   const buffer = new ArrayBuffer(1 << 16);
@@ -23,6 +24,8 @@ function makeFakeModule() {
   const stepCalls: Array<[number, number, number]> = [];
   const setBodyCalls: Array<{ index: number; position: [number, number, number] }> = [];
   const bodies: Array<{ position: [number, number, number]; rotation: [number, number, number, number] }> = [];
+  const rigidBodyRotations: Array<[number, number, number]> = [];
+  const jointRotations: Array<[number, number, number]> = [];
   const module: MmdAnimBulletModule = {
     HEAPF32: heap,
     HEAPU8: heapU8,
@@ -41,6 +44,7 @@ function makeFakeModule() {
     },
     _mmd_anim_bullet_world_add_rigidbody(_world, descriptor, out) {
       const index = descriptor >>> 2;
+      rigidBodyRotations.push([heap[index + 7] ?? 0, heap[index + 8] ?? 0, heap[index + 9] ?? 0]);
       const position: [number, number, number] = [heap[index + 4] ?? 0, heap[index + 5] ?? 0, heap[index + 6] ?? 0];
       heapU32[out >>> 2] = bodies.length;
       bodies.push({ position, rotation: [0, 0, 0, 1] });
@@ -62,11 +66,18 @@ function makeFakeModule() {
       body.rotation = [heap[rotation >>> 2] ?? 0, heap[(rotation >>> 2) + 1] ?? 0, heap[(rotation >>> 2) + 2] ?? 0, heap[(rotation >>> 2) + 3] ?? 1];
       return 0;
     },
-    _mmd_anim_bullet_world_add_6dof_spring_joint() { return 0; }
+    _mmd_anim_bullet_world_add_6dof_spring_joint(_world, descriptor, out) {
+      const index = descriptor >>> 2;
+      jointRotations.push([heap[index + 5] ?? 0, heap[index + 6] ?? 0, heap[index + 7] ?? 0]);
+      heapU32[out >>> 2] = jointRotations.length - 1;
+      return 0;
+    }
   };
   return {
     module,
     bodies,
+    rigidBodyRotations,
+    jointRotations,
     stepCalls,
     setBodyCalls,
     get created() { return created; },
@@ -78,6 +89,44 @@ function makeFakeModule() {
 }
 
 describe("mmd-anim Bullet physics backend", () => {
+  it("uploads rotations in the native Bullet ZYX encoding", () => {
+    const fake = makeFakeModule();
+    const backend = createMmdAnimBulletPhysicsBackend(fake.module);
+    const bodyEuler: [number, number, number] = [-0.56019646, -0.6526938, 0.9633895];
+    const jointEuler: [number, number, number] = [0.4, -0.7, 0.9];
+
+    backend.step({
+      seconds: 0,
+      deltaSeconds: 0,
+      frame: 0,
+      frameRate: 30,
+      skeleton: { bones: [{ index: 0, parentIndex: -1, restTranslation: [0, 0, 0] }] },
+      rigidBodies: [{
+        index: 0,
+        boneIndex: 0,
+        motionType: "dynamic",
+        shape: { type: "sphere", size: [0.5, 0, 0] },
+        localTranslation: [0, 0, 0],
+        localRotation: legacyMmdEulerToQuaternion(bodyEuler),
+        mass: 1
+      }],
+      joints: [{
+        index: 0,
+        rigidBodyIndexA: 0,
+        rigidBodyIndexB: 0,
+        rotation: legacyMmdEulerToQuaternion(jointEuler),
+        linearLimit: { lower: [0, 0, 0], upper: [0, 0, 0] },
+        angularLimit: { lower: [0, 0, 0], upper: [0, 0, 0] }
+      }]
+    });
+
+    expect(nativeBulletEulerToQuaternion(fake.rigidBodyRotations[0] ?? [0, 0, 0]))
+      .toEqual(expectQuatCloseTo(legacyMmdEulerToQuaternion(bodyEuler)));
+    expect(nativeBulletEulerToQuaternion(fake.jointRotations[0] ?? [0, 0, 0]))
+      .toEqual(expectQuatCloseTo(legacyMmdEulerToQuaternion(jointEuler)));
+    backend.dispose();
+  });
+
   it("runs behind the stable Custom Bullet API and reuses caller buffers", () => {
     const fake = makeFakeModule();
     const backend = createCustomBulletMmdPhysicsBackend(
@@ -246,7 +295,9 @@ describe("mmd-anim Bullet physics backend", () => {
       bonePhysicsToggles: new Uint8Array([1, 1, 1])
     };
     backend.step(context);
-    expect(fake.setBodyCalls.map((call) => call.index)).toEqual([0, 1]);
+    // Forward steps repin static bodies only; dynamic-with-bone remains
+    // solver-owned after reset so constrained chains are not teleported.
+    expect(fake.setBodyCalls.map((call) => call.index)).toEqual([0]);
 
     inputTranslations.set([
       11, 12, 13,
@@ -265,11 +316,11 @@ describe("mmd-anim Bullet physics backend", () => {
     expect(fake.resetCount).toBe(1);
     expect(fake.settleCount).toBe(1);
     expect(fake.stepCalls.at(-1)).toEqual([1 / 60, 2, 1 / 120]);
-    expect(fake.setBodyCalls.slice(2).map((call) => call.index)).toEqual([0, 1, 2, 0]);
-    expect(fake.setBodyCalls[2]?.position).toEqual([11, 12, 13]);
-    expect(fake.setBodyCalls[3]?.position).toEqual([14, 15, 16]);
-    expect(fake.setBodyCalls[4]?.position).toEqual([17, 18, 19]);
-    expect(fake.setBodyCalls[5]?.position).toEqual([11, 12, 13]);
+    expect(fake.setBodyCalls.slice(1).map((call) => call.index)).toEqual([0, 1, 2, 0]);
+    expect(fake.setBodyCalls[1]?.position).toEqual([11, 12, 13]);
+    expect(fake.setBodyCalls[2]?.position).toEqual([14, 15, 16]);
+    expect(fake.setBodyCalls[3]?.position).toEqual([17, 18, 19]);
+    expect(fake.setBodyCalls[4]?.position).toEqual([11, 12, 13]);
     expect(Array.from(outputTranslations.slice(3, 9))).toEqual([14, 15, 16, 17, 18, 19]);
 
     backend.dispose();
@@ -315,3 +366,25 @@ describe("mmd-anim Bullet physics backend", () => {
     expect(result).toEqual({ simulated: false, updatedBoneCount: 0 });
   });
 });
+
+function nativeBulletEulerToQuaternion([x, y, z]: readonly [number, number, number]): [number, number, number, number] {
+  const halfX = x * 0.5;
+  const halfY = y * 0.5;
+  const halfZ = z * 0.5;
+  const sx = Math.sin(halfX);
+  const cx = Math.cos(halfX);
+  const sy = Math.sin(halfY);
+  const cy = Math.cos(halfY);
+  const sz = Math.sin(halfZ);
+  const cz = Math.cos(halfZ);
+  return [
+    sx * cy * cz - cx * sy * sz,
+    cx * sy * cz + sx * cy * sz,
+    cx * cy * sz - sx * sy * cz,
+    cx * cy * cz + sx * sy * sz
+  ];
+}
+
+function expectQuatCloseTo(expected: readonly number[]) {
+  return expected.map((value) => expect.closeTo(value, 5));
+}

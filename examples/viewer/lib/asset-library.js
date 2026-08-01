@@ -21,9 +21,7 @@ const assetCategories = {
   models: {
     select: () => dom.assetModelSelect,
     button: () => dom.assetModelLoadButton,
-    load: (asset) => dom.modelLoadAddToggle?.checked
-      ? loadSecondaryModelFromUrl(asset.url)
-      : loadModelFromUrl(asset.url)
+    load: (asset) => loadModelFromUrl(asset.url)
   },
   motions: {
     select: () => dom.assetMotionSelect,

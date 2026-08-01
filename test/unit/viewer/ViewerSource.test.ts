@@ -26,7 +26,7 @@ describe("example viewer source", () => {
     expect(disposeSource).not.toContain("function collectMaterialTextures(material)");
   });
 
-  it("keeps an explicitly added character live beside the primary model", async () => {
+  it("keeps the two-character runtime path without exposing an add-model control", async () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
@@ -39,15 +39,15 @@ describe("example viewer source", () => {
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const fixtureSchema = await readFile("test/fixtures/fixtures.schema.json", "utf8");
 
-    expect(html).toContain('id="model-load-add"');
+    expect(html).not.toContain('id="model-load-add"');
     expect(html).not.toContain('id="choose-secondary-model"');
     expect(html).not.toContain('id="choose-secondary-model-folder"');
     expect(html).not.toContain('id="clear-secondary-model"');
-    expect(domSource).toContain('modelLoadAddToggle: document.querySelector("#model-load-add")');
-    expect(mainSource).toContain("dom.modelLoadAddToggle?.checked");
-    expect(mainSource).toContain("loadSecondaryModelFolder(selectedFiles)");
-    expect(assetLibrarySource).toContain("dom.modelLoadAddToggle?.checked");
-    expect(assetLibrarySource).toContain("loadSecondaryModelFromUrl(asset.url)");
+    expect(domSource).not.toContain("modelLoadAddToggle");
+    expect(mainSource).not.toContain("dom.modelLoadAddToggle?.checked");
+    expect(mainSource).toContain("loadModelFolder(Array.from(files))");
+    expect(assetLibrarySource).not.toContain("dom.modelLoadAddToggle?.checked");
+    expect(assetLibrarySource).toContain("load: (asset) => loadModelFromUrl(asset.url)");
     expect(mainSource).toContain("loadSecondaryModelUrl");
     expect(mainSource).toContain("loadSecondaryMotionUrl");
     expect(mainSource).toContain("get secondaryModel() { return state.secondaryModel; }");

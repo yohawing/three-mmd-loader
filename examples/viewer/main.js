@@ -9,7 +9,7 @@ import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
 import { disposeWorkerRuntimeFactory, getViewerRuntimeEvidence, prepareViewerRuntime } from "./lib/runtime-worker.js";
 import { createViewerPerformanceApi } from "./lib/performance.js";
-import { loadModelFolder, loadModelFromUrl, loadSecondaryModelFromUrl, loadSecondaryModelFolder, modelFileKey, bindDropTarget, clearModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
+import { loadModelFolder, loadModelFromUrl, loadSecondaryModelFromUrl, modelFileKey, bindDropTarget, clearModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
 import { clearMotion, loadMotion, loadMotionFromUrl, loadSecondaryMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
 import { finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
@@ -114,10 +114,7 @@ function bindControls() {
   dom.modelFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
     if (!files || files.length === 0) return;
-    const selectedFiles = Array.from(files);
-    void (dom.modelLoadAddToggle?.checked
-      ? loadSecondaryModelFolder(selectedFiles)
-      : loadModelFolder(selectedFiles));
+    void loadModelFolder(Array.from(files));
   });
   dom.modelSwitcher?.addEventListener("sl-change", () => {
     const selectedValue = loadedFileSwitcherValue(dom.modelSwitcher);

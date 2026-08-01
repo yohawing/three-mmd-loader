@@ -98,7 +98,10 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
     const inputWorld = context.inputWorldMatricesColumnMajor;
     const toggles = context.bonePhysicsToggles;
     if (inputWorld && !this.pendingReset && context.seeking !== true) {
-      this.feedBodies(inputWorld, toggles, false, true);
+      // Dynamic-with-bone bodies are seeded on reset and remain solver-owned
+      // during forward steps. Reinjecting their animated pose teleports a
+      // constrained hair chain and makes the tail explode after a few frames.
+      this.feedBodies(inputWorld, toggles, false, false);
     }
     if (this.pendingReset || context.seeking === true) {
       this.module._mmd_anim_bullet_world_reset(this.world);
@@ -359,7 +362,20 @@ function writeIndex(target: MmdPhysicsMutableIndexBuffer, offset: number, value:
 }
 function quaternionToEuler(q: readonly number[]): [number, number, number] {
   const x = q[0] ?? 0, y = q[1] ?? 0, z = q[2] ?? 0, w = q[3] ?? 1;
-  const sinr = 2 * (w * x + y * z), cosr = 1 - 2 * (x * x + y * y); const roll = Math.atan2(sinr, cosr);
-  const sinp = 2 * (w * y - z * x); const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * Math.PI / 2 : Math.asin(sinp);
-  const siny = 2 * (w * z + x * y), cosy = 1 - 2 * (y * y + z * z); return [roll, pitch, Math.atan2(siny, cosy)];
+  // mmd-anim Bullet receives euler[2], euler[1], euler[0] through
+  // btQuaternion::setEulerZYX(yawZ, pitchY, rollX). This is equivalent to
+  // Three.js's ZYX order for the returned [x, y, z] tuple, so decode that
+  // order here rather than handing Bullet MMD's source-order angles.
+  const m31 = 2 * (x * z - y * w);
+  const yAngle = Math.asin(Math.max(-1, Math.min(1, -m31)));
+  let xAngle: number;
+  let zAngle: number;
+  if (Math.abs(m31) < 0.9999999) {
+    xAngle = Math.atan2(2 * (y * z + x * w), 1 - 2 * (x * x + y * y));
+    zAngle = Math.atan2(2 * (x * y + z * w), 1 - 2 * (y * y + z * z));
+  } else {
+    xAngle = 0;
+    zAngle = Math.atan2(2 * (z * w - x * y), 1 - 2 * (x * x + z * z));
+  }
+  return [xAngle, yAngle, zAngle];
 }

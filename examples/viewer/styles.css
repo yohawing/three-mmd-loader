@@ -313,22 +313,6 @@ select:focus-visible {
     background: rgb(246 247 248 / 98%);
 }
 
-.model-load-option {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    min-height: 32px;
-    padding: 0 11px;
-    color: var(--text);
-    font-size: 13px;
-    cursor: pointer;
-}
-
-.model-load-option input {
-    margin: 0;
-    accent-color: var(--accent);
-}
-
 .asset-load-row {
     display: grid;
     grid-template-columns: 72px minmax(0, 1fr) auto;
