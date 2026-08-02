@@ -18,6 +18,11 @@ import type {
 } from "../model/modelTypes.js";
 import type { AccessoryParsedManifest } from "../accessory/AccessoryParsedTypes.js";
 import type { PmmParsedManifest } from "../pmm/PmmParsedTypes.js";
+import {
+  denseMorphProviderSymbol,
+  type DenseMorphProvider,
+  type SparsePositionMorphOffsets
+} from "../model/denseMorphProvider.js";
 import { parsePmd } from "../model/PmdModelParser.js";
 import { parseVmd } from "../vmd/index.js";
 import { parseVpd, vpdPoseToAnimation } from "../vpd/index.js";
@@ -40,7 +45,16 @@ interface WasmPmxParsedModelConstructor {
 interface WasmPmxParsedModelDto {
   free?(): void;
   nonGeometryJson(): string;
+  nonGeometryJsonWithoutVertexOffsets?(): string;
   geometry(): WasmPmxGeometryDto;
+  vertexMorphOffsets?(): WasmPmxVertexMorphOffsetsDto;
+}
+
+interface WasmPmxVertexMorphOffsetsDto {
+  free?(): void;
+  morphSpans(): Uint32Array;
+  vertexIndices(): Uint32Array;
+  positions(): Float32Array;
 }
 
 interface WasmPmxGeometryConstructor {
@@ -122,6 +136,127 @@ function buildGeometryFromWasm(g: WasmPmxGeometryDto): GeometryBuffers {
     sdef: buildSdefFromWasm(g),
     qdef: buildQdefFromWasm(g)
   };
+}
+
+class WasmVertexMorphProvider implements DenseMorphProvider {
+  readonly sparsePositionOffsets: SparsePositionMorphOffsets;
+
+  constructor(
+    vertexIndices: Uint32Array,
+    positions: Float32Array,
+    start: number,
+    count: number
+  ) {
+    this.sparsePositionOffsets = { vertexIndices, positions, start, count };
+  }
+
+  createPositionOffsets(vertexCount: number): Float32Array | undefined {
+    const { vertexIndices, positions, start, count } = this.sparsePositionOffsets;
+    if (count === 0) {
+      return undefined;
+    }
+    const dense = new Float32Array(vertexCount * 3);
+    for (let offsetIndex = 0; offsetIndex < count; offsetIndex += 1) {
+      const sourceIndex = start + offsetIndex;
+      const vertexIndex = vertexIndices[sourceIndex] ?? 0;
+      if (vertexIndex >= vertexCount) {
+        throw new RangeError(
+          `PMX_VERTEX_MORPH_VERTEX_INDEX_INVALID:${offsetIndex}:${vertexIndex}:${vertexCount}`
+        );
+      }
+      const sourcePosition = sourceIndex * 3;
+      const targetPosition = vertexIndex * 3;
+      dense[targetPosition] = positions[sourcePosition] ?? 0;
+      dense[targetPosition + 1] = positions[sourcePosition + 1] ?? 0;
+      dense[targetPosition + 2] = -(positions[sourcePosition + 2] ?? 0);
+    }
+    return dense;
+  }
+
+  createUvOffsets(): undefined {
+    return undefined;
+  }
+
+  createAdditionalUvOffsets(): undefined {
+    return undefined;
+  }
+}
+
+function attachVertexMorphOffsetsFromWasm(
+  json: Record<string, unknown>,
+  dto: WasmPmxVertexMorphOffsetsDto
+): void {
+  const morphs = asArray<Record<string, unknown>>(json["morphs"]);
+  const spans = dto.morphSpans();
+  const vertexIndices = dto.vertexIndices();
+  const positions = dto.positions();
+  if (spans.length !== morphs.length * 2) {
+    throw new RangeError(
+      `PMX_VERTEX_MORPH_SPAN_LENGTH_INVALID:${spans.length}:${morphs.length * 2}`
+    );
+  }
+  if (positions.length !== vertexIndices.length * 3) {
+    throw new RangeError(
+      `PMX_VERTEX_MORPH_POSITION_LENGTH_INVALID:${positions.length}:${vertexIndices.length * 3}`
+    );
+  }
+  for (let morphIndex = 0; morphIndex < morphs.length; morphIndex += 1) {
+    const start = spans[morphIndex * 2] ?? 0;
+    const count = spans[morphIndex * 2 + 1] ?? 0;
+    const end = start + count;
+    if (end > vertexIndices.length) {
+      throw new RangeError(
+        `PMX_VERTEX_MORPH_SPAN_INVALID:${morphIndex}:${start}:${count}:${vertexIndices.length}`
+      );
+    }
+    const morph = morphs[morphIndex];
+    if (morph) {
+      const provider = new WasmVertexMorphProvider(vertexIndices, positions, start, count);
+      Object.defineProperty(morph, denseMorphProviderSymbol, { value: provider });
+      Object.defineProperty(morph, "vertexOffsets", {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          const materialized = materializeVertexMorphOffsets(provider);
+          Object.defineProperty(morph, "vertexOffsets", {
+            configurable: true,
+            enumerable: true,
+            writable: true,
+            value: materialized
+          });
+          return materialized;
+        },
+        set: (value: MorphData["vertexOffsets"]) => {
+          Object.defineProperty(morph, "vertexOffsets", {
+            configurable: true,
+            enumerable: true,
+            writable: true,
+            value
+          });
+        }
+      });
+    }
+  }
+}
+
+function materializeVertexMorphOffsets(
+  provider: WasmVertexMorphProvider
+): MorphData["vertexOffsets"] {
+  const { vertexIndices, positions, start, count } = provider.sparsePositionOffsets;
+  const offsets = new Array<MorphData["vertexOffsets"][number]>(count);
+  for (let offsetIndex = 0; offsetIndex < count; offsetIndex += 1) {
+    const sourceIndex = start + offsetIndex;
+    const positionIndex = sourceIndex * 3;
+    offsets[offsetIndex] = {
+      vertexIndex: vertexIndices[sourceIndex] ?? 0,
+      position: [
+        positions[positionIndex] ?? 0,
+        positions[positionIndex + 1] ?? 0,
+        positions[positionIndex + 2] ?? 0
+      ]
+    };
+  }
+  return offsets;
 }
 
 function buildAdditionalUvsFromWasm(
@@ -331,10 +466,23 @@ export class MmdAnimBackedCore implements MmdCore {
       if (this.wasm.WasmPmxParsedModel != null) {
         const parsedHandle = this.wasm.WasmPmxParsedModel.parse(input);
         try {
+          const hasVertexMorphSplit =
+            parsedHandle.nonGeometryJsonWithoutVertexOffsets != null &&
+            parsedHandle.vertexMorphOffsets != null;
           const json = parseWasmJsonResponse<Record<string, unknown>>(
-            parsedHandle.nonGeometryJson(),
+            hasVertexMorphSplit
+              ? parsedHandle.nonGeometryJsonWithoutVertexOffsets!()
+              : parsedHandle.nonGeometryJson(),
             "PMX model"
           );
+          if (hasVertexMorphSplit) {
+            const vertexMorphOffsets = parsedHandle.vertexMorphOffsets!();
+            try {
+              attachVertexMorphOffsetsFromWasm(json, vertexMorphOffsets);
+            } finally {
+              vertexMorphOffsets.free?.();
+            }
+          }
           const geometryHandle = parsedHandle.geometry();
           try {
             return new MmdAnimPmxModel(json, buildGeometryFromWasm(geometryHandle));

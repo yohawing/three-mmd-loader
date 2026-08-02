@@ -12,6 +12,7 @@ export const dom = {
   statusText: document.querySelector("#status"),
   pipelineBackendSwitcher: document.querySelector("#pipeline-backend-switcher"),
   physicsErrorBanner: document.querySelector("#physics-error"),
+  runtimeErrorBanner: document.querySelector("#runtime-error"),
   loadingIndicator: document.querySelector("#loading-indicator"),
   loadingMessageText: document.querySelector("#loading-message"),
   creditPopup: document.querySelector("#credit-popup"),

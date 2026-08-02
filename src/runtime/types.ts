@@ -58,6 +58,18 @@ export interface MmdRuntime {
     options?: MmdRuntimeEvaluateOptions
   ): MmdFrameState;
 
+  /**
+   * Evaluates and applies an exact frame asynchronously when the runtime
+   * supports a settled evaluation path. The resolved state is stable.
+   */
+  tickAsync?(
+    seconds: number,
+    options?: MmdRuntimeAsyncTickOptions
+  ): Promise<MmdFrameState>;
+
+  /** Resolves when an asynchronously initialized runtime is ready. */
+  whenReady?(): Promise<void>;
+
   /** Seeks the runtime. The returned state is volatile; use frameState() for a snapshot. */
   seek(seconds: number): MmdFrameState;
   resetPose(): void;
@@ -98,6 +110,14 @@ export interface MmdRuntimeEvaluateOptions {
 
 export interface MmdRuntimeTickOptions extends MmdRuntimeEvaluateOptions {
   readonly mesh?: import("three").Object3D | null | undefined;
+}
+
+export interface MmdRuntimeAsyncEvaluateOptions extends MmdRuntimeEvaluateOptions {
+  readonly signal?: AbortSignal;
+}
+
+export interface MmdRuntimeAsyncTickOptions extends MmdRuntimeTickOptions {
+  readonly signal?: AbortSignal;
 }
 
 export interface DefaultMmdRuntimeOptions {

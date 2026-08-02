@@ -16,6 +16,7 @@ import { round } from "./pixel-metrics.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
+const workerDistRoute = "/__mmd_worker_dist__/";
 const fixturePath = "test/fixtures/generated/visual/mmd-viewer-background-room.pmx";
 const defaultOutputDir = path.join(repoRoot, "test-results", "visual", "viewer-background");
 const syntheticRois = {
@@ -30,7 +31,10 @@ const syntheticRoiThresholds = {
   minimumBlackPropRatio: 0.95,
   maximumRoiMeanRgbDelta: 30
 };
-const mimeTypes = commonWebMimeTypes;
+const mimeTypes = new Map([
+  ...commonWebMimeTypes,
+  [".mjs", "text/javascript; charset=utf-8"]
+]);
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -42,7 +46,11 @@ async function main() {
   }
   await mkdir(options.outputDir, { recursive: true });
   const dataRoot = options.localBackground ? path.dirname(options.localBackground) : undefined;
-  const server = await startStaticServer(pathname => resolveRequestPath(pathname, dataRoot), mimeTypes);
+  const server = await startStaticServer(
+    pathname => resolveRequestPath(pathname, dataRoot),
+    mimeTypes,
+    rewriteWorkerResponse
+  );
   let browser;
   const report = { fixture: options.localBackground ?? fixturePath, passed: false, cases: [], thresholds: { minimumColorfulSamples: 24, maxMeanRgbDelta: 92 } };
   try {
@@ -239,12 +247,27 @@ function comparePng(a, b) {
 }
 
 function resolveRequestPath(pathname, dataRoot) {
+  if (pathname.startsWith(workerDistRoute)) {
+    const distRoot = path.join(repoRoot, "dist");
+    const candidate = path.resolve(distRoot, decodeURIComponent(pathname.slice(workerDistRoute.length)));
+    return isPathInside(candidate, distRoot) ? candidate : undefined;
+  }
   if (pathname.startsWith("/__mmd_data__/")) {
     const candidate = path.resolve(dataRoot ?? "", decodeURIComponent(pathname.slice(14)));
     return dataRoot && isPathInside(candidate, dataRoot) ? candidate : undefined;
   }
   const candidate = path.resolve(repoRoot, path.normalize(decodeURIComponent(pathname)).replace(/^[/\\]+/, "") || "examples/viewer/index.html");
   return isPathInside(candidate, repoRoot) ? candidate : undefined;
+}
+
+function rewriteWorkerResponse(source, pathname) {
+  if (!pathname.startsWith(workerDistRoute) || !/\.(?:m?js)$/.test(pathname)) {
+    return undefined;
+  }
+  return source.toString("utf8")
+    .replaceAll('from "three"', 'from "/node_modules/three/build/three.module.js"')
+    .replaceAll('from "three/webgpu"', 'from "/node_modules/three/build/three.webgpu.js"')
+    .replaceAll('from "three/tsl"', 'from "/node_modules/three/build/three.tsl.js"');
 }
 
 function parseArgs(args) {

@@ -9,6 +9,10 @@ import type {
   SoftBodyData
 } from "../parser/model/modelTypes.js";
 import { sanitizeNonFiniteModelNormals } from "../parser/model/normalSanitization.js";
+import {
+  denseMorphProviderSymbol,
+  type DenseMorphProvider
+} from "../parser/model/denseMorphProvider.js";
 import type { ThreeMmdGeometryBuffers } from "./geometry.js";
 import type { ThreeMmdSkeletonData } from "./skeleton.js";
 
@@ -165,10 +169,40 @@ function validateMaterials(materials: readonly MaterialInfo[]): void {
 
 function validateMorphs(morphs: readonly MorphData[]): void {
   morphs.forEach((morph, morphIndex) => {
-    morph.vertexOffsets?.forEach((offset, offsetIndex) => {
-      validateNonNegativeInteger(`MORPH_VERTEX:${morphIndex}:${offsetIndex}`, offset.vertexIndex);
-      validateNumberTuple(`MORPH_VERTEX_POSITION:${morphIndex}:${offsetIndex}`, offset.position, 3);
-    });
+    const provider = (morph as MorphData & {
+      readonly [denseMorphProviderSymbol]?: DenseMorphProvider;
+    })[denseMorphProviderSymbol];
+    const sparse = provider?.sparsePositionOffsets;
+    if (sparse) {
+      const { vertexIndices, positions, start, count } = sparse;
+      if (start + count > vertexIndices.length || positions.length !== vertexIndices.length * 3) {
+        throw new RangeError(`MORPH_VERTEX_TYPED_SPAN_INVALID:${morphIndex}`);
+      }
+      for (let offsetIndex = 0; offsetIndex < count; offsetIndex += 1) {
+        const sourceIndex = start + offsetIndex;
+        validateNonNegativeInteger(
+          `MORPH_VERTEX:${morphIndex}:${offsetIndex}`,
+          vertexIndices[sourceIndex] ?? 0
+        );
+        const positionIndex = sourceIndex * 3;
+        if (
+          !Number.isFinite(positions[positionIndex]) ||
+          !Number.isFinite(positions[positionIndex + 1]) ||
+          !Number.isFinite(positions[positionIndex + 2])
+        ) {
+          throw new RangeError(`MORPH_VERTEX_POSITION:${morphIndex}:${offsetIndex}`);
+        }
+      }
+    } else {
+      morph.vertexOffsets?.forEach((offset, offsetIndex) => {
+        validateNonNegativeInteger(`MORPH_VERTEX:${morphIndex}:${offsetIndex}`, offset.vertexIndex);
+        validateNumberTuple(
+          `MORPH_VERTEX_POSITION:${morphIndex}:${offsetIndex}`,
+          offset.position,
+          3
+        );
+      });
+    }
     morph.uvOffsets?.forEach((offset, offsetIndex) => {
       validateNonNegativeInteger(`MORPH_UV:${morphIndex}:${offsetIndex}`, offset.vertexIndex);
       validateNumberTuple(`MORPH_UV_VALUE:${morphIndex}:${offsetIndex}`, offset.uv, 2);

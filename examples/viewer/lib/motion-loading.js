@@ -6,7 +6,10 @@ import { animationDurationSeconds, kurokoModelUrl, state } from "./state.js";
 import { createCameraSwitcherEntry, loadCameraAnimation } from "./camera-loading.js";
 import { ensurePhysicsBackendReady } from "./physics-backend.js";
 import { renderStillFrame, syncAudioToMotionTime, syncPlaybackToCurrentAudioState } from "./playback.js";
+import { resetViewerFrameProfile } from "./performance.js";
 import { labelFromUrl } from "./url-label.js";
+
+let secondaryMotionLoadGeneration = 0;
 
 async function fetchBytes(url) {
   const response = await fetch(url);
@@ -18,6 +21,56 @@ export async function loadMotionFromUrl(url) {
   try {
     setStatus(`Loading ${url}`, "loading");
     return await loadMotion(url, labelFromUrl(url));
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+    return false;
+  }
+}
+
+export async function loadSecondaryMotionFromUrl(url) {
+  const generation = ++secondaryMotionLoadGeneration;
+  const targetModel = state.secondaryModel;
+  try {
+    if (!targetModel) {
+      setStatus("Load a secondary model before loading its motion.", "error");
+      return false;
+    }
+    setStatus(`Loading secondary motion: ${url}`, "loading");
+    const loaded = await state.animationLoader.loadAnimation(url);
+    if (generation !== secondaryMotionLoadGeneration || state.secondaryModel !== targetModel) {
+      return false;
+    }
+    const { animation } = loaded;
+    if (isCameraOnlyVmdAnimation(animation)) {
+      setStatus("Secondary character motion cannot be camera-only.", "error");
+      return false;
+    }
+    await ensurePhysicsBackendReady();
+    if (generation !== secondaryMotionLoadGeneration || state.secondaryModel !== targetModel) {
+      return false;
+    }
+    targetModel.setAnimation(animation);
+    state.secondaryMotion = {
+      source: url,
+      name: animation.metadata.modelName,
+      animation,
+      durationSeconds: animationDurationSeconds(animation)
+    };
+    dom.timeline.max = Math.max(
+      state.currentMotion?.durationSeconds ?? 0,
+      state.secondaryMotion.durationSeconds,
+      state.currentCameraMotion?.durationSeconds ?? 0,
+      0.001
+    );
+    updatePlaybackDisplay();
+    updateTransportState();
+    setStatus("", "ready");
+    await renderStillFrame();
+    if (generation !== secondaryMotionLoadGeneration || state.secondaryModel !== targetModel) {
+      return false;
+    }
+    resetViewerFrameProfile();
+    return true;
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
     return false;
@@ -41,6 +94,7 @@ async function readAnimationSourceBytes(source) {
 }
 
 export async function loadMotion(source, label = source.name ?? "motion") {
+  secondaryMotionLoadGeneration += 1;
   try {
     const switcherEntry = createMotionSwitcherEntry(source, label);
     setStatus(`Loading motion: ${label}`, "loading");
@@ -69,8 +123,16 @@ export async function loadMotion(source, label = source.name ?? "motion") {
       animation,
       durationSeconds: animationDurationSeconds(animation)
     };
+    state.secondaryMotion = undefined;
+    const targetModel = state.currentModel;
     await ensurePhysicsBackendReady();
-    state.currentModel.setAnimation(animation);
+    if (state.currentModel !== targetModel) {
+      return false;
+    }
+    targetModel.setAnimation(animation);
+    for (let index = 1; index < state.characterModels.length; index += 1) {
+      state.characterModels[index]?.setAnimation(animation);
+    }
     dom.timeline.max = Math.max(animationDurationSeconds(animation), state.currentCameraMotion?.durationSeconds ?? 0, 0.001);
     state.elapsedSeconds = 0;
     dom.timeline.value = 0;
@@ -80,7 +142,11 @@ export async function loadMotion(source, label = source.name ?? "motion") {
     updateTransportState();
     syncPlaybackToCurrentAudioState();
     setStatus("", "ready");
-    renderStillFrame();
+    await renderStillFrame();
+    if (state.currentModel !== targetModel) {
+      return false;
+    }
+    resetViewerFrameProfile();
     return true;
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
@@ -89,6 +155,7 @@ export async function loadMotion(source, label = source.name ?? "motion") {
 }
 
 export async function loadPose(source, label = source.name ?? "pose") {
+  secondaryMotionLoadGeneration += 1;
   try {
     if (!state.currentModel) {
       setStatus("Load a model before loading a pose.", "error");
@@ -100,9 +167,13 @@ export async function loadPose(source, label = source.name ?? "pose") {
       ...poseAnimation,
       durationSeconds: 1
     };
+    state.secondaryMotion = undefined;
     state.currentPoseSource = source;
     state.currentPoseLabel = label;
     state.currentModel.setAnimation(poseAnimation);
+    for (let index = 1; index < state.characterModels.length; index += 1) {
+      state.characterModels[index]?.setAnimation(poseAnimation);
+    }
     state.elapsedSeconds = 0;
     dom.timeline.max = 1;
     dom.timeline.value = 0;
@@ -110,7 +181,7 @@ export async function loadPose(source, label = source.name ?? "pose") {
     updatePlaybackDisplay();
     updateTransportState();
     setStatus("", "ready");
-    renderStillFrame();
+    await renderStillFrame();
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "error");
   }
@@ -147,13 +218,18 @@ export async function switchMotion(file) {
 }
 
 export function clearMotion() {
+  secondaryMotionLoadGeneration += 1;
   state.currentMotion = undefined;
+  state.secondaryMotion = undefined;
   state.currentPoseSource = undefined;
   state.currentPoseLabel = undefined;
   state.pendingMotionSource = undefined;
   state.pendingMotionLabel = undefined;
   if (state.currentModel) {
     state.currentModel.setAnimation(state.restPoseAnimation);
+  }
+  for (let index = 1; index < state.characterModels.length; index += 1) {
+    state.characterModels[index]?.setAnimation(state.restPoseAnimation);
   }
   if (dom.timeline) {
     dom.timeline.max = Math.max(state.currentCameraMotion?.durationSeconds ?? 0, 0.001);
@@ -164,7 +240,7 @@ export function clearMotion() {
   updatePlaybackDisplay();
   updateTransportState();
   setStatus("", "ready");
-  renderStillFrame();
+  void renderStillFrame();
 }
 
 export function updateMotionSwitcher(selectedFile) {

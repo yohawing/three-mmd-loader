@@ -60,7 +60,7 @@ try {
     join(workDir, "consumer.ts"),
     `import { ThreeMmdLoader, type ThreeMmdAnimation, type ThreeMmdModel } from "@yohawing/three-mmd-loader";
 import { parsePmxMetadata } from "@yohawing/three-mmd-loader/parser";
-import { DefaultMmdRuntime, exportMmdAnimWasmVmdAnimationJsonBytes, loadMmdAnimWasmVmd, parseMmdAnimWasmFormatJson } from "@yohawing/three-mmd-loader/runtime";
+import { DefaultMmdRuntime, exportMmdAnimWasmVmdAnimationJsonBytes, loadMmdAnimWasmVmd, parseMmdAnimWasmFormatJson, type MmdRuntimeAsyncEvaluateOptions } from "@yohawing/three-mmd-loader/runtime";
 import {
   applyMmdCameraStateToThreeCamera,
   applyMmdLightStateToThreeDirectionalLight,
@@ -81,11 +81,24 @@ import {
   type MmdTslMaterialCoreOptions,
   type MmdTslMaterialUniforms
 } from "@yohawing/three-mmd-loader/webgpu";
-import { createCustomBulletMmdPhysicsBackend, createDisabledMmdPhysicsBackend, loadCustomBulletMmdModule } from "@yohawing/three-mmd-loader/physics";
+import {
+  createCustomBulletMmdPhysicsBackend,
+  createDisabledMmdPhysicsBackend,
+  loadCustomBulletMmdModule,
+  type CustomBulletMmdPhysicsBackendOptions
+} from "@yohawing/three-mmd-loader/physics";
 
 const loader: ThreeMmdLoader = new ThreeMmdLoader();
 const runtime: DefaultMmdRuntime = new DefaultMmdRuntime();
 const physics = createDisabledMmdPhysicsBackend();
+const physicsOptions: CustomBulletMmdPhysicsBackendOptions = {
+  fixedTimeStep: 1 / 60,
+  maxSubSteps: 5
+};
+const unsupportedPhysicsOptions: CustomBulletMmdPhysicsBackendOptions = {
+  // @ts-expect-error solver tuning is not exposed by the mmd-anim Bullet bridge.
+  solverIterations: 20
+};
 declare const model: ThreeMmdModel;
 declare const animation: ThreeMmdAnimation;
 declare const parserWasm: { parseMmdFormatJson(data: Uint8Array, fileName?: string | null): string };
@@ -96,6 +109,9 @@ declare const webgpuUniforms: MmdTslMaterialUniforms;
 model.root.add(model.mesh);
 model.setAnimation(animation);
 model.update(0);
+const asyncUpdateOptions: MmdRuntimeAsyncEvaluateOptions = { physics: false };
+void model.updateAsync(0, asyncUpdateOptions);
+void model.runtime.whenReady?.();
 model.diagnostics.textures.forEach((diagnostic) => void diagnostic.code);
 model.diagnostics.materials.forEach((diag) => void diag.finalTransparencyMode);
 model.diagnostics.performance.forEach((m) => void m.durationMs);
@@ -105,7 +121,10 @@ const exported: Uint8Array = exportMmdAnimWasmVmdAnimationJsonBytes(exporterWasm
 
 void loader;
 void runtime;
+void asyncUpdateOptions;
 void physics;
+void physicsOptions;
+void unsupportedPhysicsOptions;
 void parsed;
 void runtimeAnimation;
 void exported;

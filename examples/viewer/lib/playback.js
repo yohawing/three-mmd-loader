@@ -2,7 +2,16 @@ import { dom, setStatus, updatePlayToggle, updatePlaybackDisplay } from "./dom.j
 import { hasActiveAudioSource, isAudioElement } from "./audio-loading.js";
 import { applyCameraMotion } from "./camera-loading.js";
 import { updateColliderHelpers, updateDebugFps } from "./debug.js";
+import {
+  beginViewerFrameProfile,
+  beginViewerGpuProfile,
+  beginViewerStageProfile,
+  endViewerFrameProfile,
+  endViewerGpuProfile,
+  endViewerStageProfile
+} from "./performance.js";
 import { currentMmdFrame, currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
+import { markWorkerRuntimesReady, updateWorkerRuntimeTelemetry } from "./runtime-worker.js";
 import { sampleMmdAnimWasmLightTrackInto, sampleMmdLightTrackInto, sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
 import {
   applyMmdLightStateToThreeDirectionalLight,
@@ -19,54 +28,165 @@ import {
   syncCurrentModelTslMaterialStates
 } from "./viewer-pipeline.js";
 
+let settledRenderPromise;
+let settledRenderPending = false;
+let settledRenderPhysics;
+let settledRenderIk;
+let settledEvaluationInFlight = 0;
+
 export function render() {
+  beginViewerFrameProfile();
   state.frameTimer.update();
   const delta = state.frameTimer.getDelta();
   updateDebugFps(delta);
+  if (settledEvaluationInFlight > 0) {
+    endViewerFrameProfile(state.renderer);
+    return;
+  }
   if (state.isPlaying && !state.isSeeking && hasActiveAudioSource()) {
     syncMotionToAudioTime(state.audioNoEvaluateOptionsScratch);
   } else if (state.isPlaying && !state.isSeeking) {
     state.elapsedSeconds += delta;
   }
+  let stageStartedAt = beginViewerStageProfile();
   evaluateRuntime();
+  updateWorkerRuntimeTelemetry();
+  endViewerStageProfile("animation-ik-morph-physics", stageStartedAt);
+  stageStartedAt = beginViewerStageProfile();
   updateColliderHelpers();
   state.controls.update();
   applyCameraMotion();
-  submitViewerRender();
+  endViewerStageProfile("shadow-color-outline-sync", stageStartedAt);
+  stageStartedAt = beginViewerStageProfile();
+  beginViewerGpuProfile(state.renderer);
+  try {
+    submitViewerRender(true);
+  } finally {
+    endViewerGpuProfile(state.renderer);
+  }
+  endViewerStageProfile("render-submit", stageStartedAt);
+  endViewerFrameProfile(state.renderer);
 }
 
-export function renderStillFrame() {
-  state.selfShadowBoundsRefreshCountdown = 0;
-  evaluateRuntime();
-  updateColliderHelpers();
-  state.controls.update();
-  applyCameraMotion();
-  submitViewerRender();
+export function renderStillFrame(options) {
+  settledRenderPending = true;
+  settledRenderPhysics = options?.physics;
+  settledRenderIk = options?.ik;
+  if (!settledRenderPromise) {
+    settledRenderPromise = drainSettledRenders();
+    void settledRenderPromise.catch(reportSettledRenderError);
+  }
+  return settledRenderPromise;
 }
 
 export function evaluateRuntime(options) {
+  const seconds = prepareRuntimeEvaluation(options);
+  const updateOptions = state.runtimeUpdateOptionsScratch;
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
+    if (model?.runtime) {
+      model.update(seconds, updateOptions);
+    }
+  }
+  finishRuntimeEvaluation();
+}
+
+async function drainSettledRenders() {
+  try {
+    while (settledRenderPending) {
+      settledRenderPending = false;
+      const options = {
+        physics: settledRenderPhysics,
+        ik: settledRenderIk
+      };
+      try {
+        await renderSettledFrame(options);
+      } catch (error) {
+        // A model replacement can invalidate the active request while already
+        // queuing the replacement's render. Let that latest request settle;
+        // an unsuperseded failure still rejects the shared drain promise.
+        if (!settledRenderPending) {
+          throw error;
+        }
+      }
+    }
+  } finally {
+    settledRenderPending = false;
+    settledRenderPhysics = undefined;
+    settledRenderIk = undefined;
+    settledRenderPromise = undefined;
+  }
+}
+
+async function renderSettledFrame(options) {
+  state.selfShadowBoundsRefreshCountdown = 0;
+  const targetSeconds = prepareRuntimeEvaluation(options);
+  const updateOptions = state.runtimeUpdateOptionsScratch;
+  const updates = [];
+  const models = state.characterModels;
+  settledEvaluationInFlight += 1;
+  try {
+    for (let index = 0; index < models.length; index += 1) {
+      const model = models[index];
+      if (model?.runtime) {
+        updates.push(model.updateAsync(targetSeconds, updateOptions));
+      }
+    }
+    await Promise.all(updates);
+    markWorkerRuntimesReady();
+    const resumeSeconds = state.elapsedSeconds;
+    state.elapsedSeconds = targetSeconds;
+    try {
+      finishRuntimeEvaluation();
+      updateColliderHelpers();
+      state.controls.update();
+      applyCameraMotion();
+      submitViewerRender();
+    } finally {
+      state.elapsedSeconds = resumeSeconds;
+    }
+  } finally {
+    settledEvaluationInFlight -= 1;
+  }
+}
+
+function prepareRuntimeEvaluation(options) {
   const maxTime = Number(dom.timeline?.max ?? 10);
   if (state.elapsedSeconds > maxTime && maxTime > 0) {
     state.elapsedSeconds %= maxTime;
     syncAudioToMotionTime();
   }
-  if (state.currentModel?.runtime) {
-    const updateOptions = state.runtimeUpdateOptionsScratch;
-    updateOptions.ik = options?.ik ?? hasCurrentMotion();
-    updateOptions.physics =
-      state.physicsEnabled && (options?.physics ?? (!state.isSeeking && state.elapsedSeconds > 0));
-    state.currentModel.update(currentMmdSeconds(), updateOptions);
-    syncCurrentModelTslMaterialStates();
-  }
-  applyLightMotion();
+  const updateOptions = state.runtimeUpdateOptionsScratch;
+  updateOptions.ik = options?.ik ?? hasCurrentMotion();
+  // Let the backend seed external physics from the assigned motion at frame 0;
+  // its reset/seek path is seed-only, so Bullet advances on the next RAF.
+  updateOptions.physics =
+    state.physicsEnabled &&
+    (options?.physics ?? (!state.isSeeking && (state.elapsedSeconds > 0 || hasCurrentMotion())));
+  return currentMmdSeconds();
+}
+
+function finishRuntimeEvaluation() {
   if (state.currentModel?.mesh) {
     updateShadowCameraForFrame(state.currentModel.mesh);
   }
+  syncCurrentModelTslMaterialStates();
+  applyLightMotion();
   applySelfShadowMotion();
   if (dom.timeline) {
     dom.timeline.value = state.elapsedSeconds;
   }
   updatePlaybackDisplay();
+}
+
+function reportSettledRenderError(error) {
+  if (error?.name === "AbortError") {
+    return;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  window.console?.error("[viewer] Settled render failed:", error);
+  setStatus(message, "error");
 }
 
 function applyLightMotion() {
@@ -93,6 +213,12 @@ function applyLightMotion() {
   } else {
     if (state.currentModel?.mesh?.material) {
       syncMmdSpecularDirection(state.currentModel.mesh.material, state.keyLight);
+    }
+    for (let index = 1; index < state.characterModels.length; index += 1) {
+      const material = state.characterModels[index]?.mesh?.material;
+      if (material) {
+        syncMmdSpecularDirection(material, state.keyLight);
+      }
     }
     if (state.currentBackground?.mesh?.material) {
       syncMmdSpecularDirection(state.currentBackground.mesh.material, state.keyLight);
@@ -179,6 +305,9 @@ export function syncMotionToAudioTime(options) {
     return;
   }
   if (state.isSyncingAudioTime) {
+    return;
+  }
+  if (settledEvaluationInFlight > 0) {
     return;
   }
   const audioTime = Number.isFinite(dom.bgmAudio.currentTime) ? dom.bgmAudio.currentTime : 0;

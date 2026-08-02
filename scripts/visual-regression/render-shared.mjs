@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 
@@ -37,7 +37,7 @@ export const commonWebMimeTypes = new Map([
 // scripts: resolves a request to a local file via the caller-supplied
 // `resolveRequestPath`, streams it back with a Content-Type looked up from
 // `mimeTypes`, and serves `index.html` for directory paths.
-export async function startStaticServer(resolveRequestPath, mimeTypes) {
+export async function startStaticServer(resolveRequestPath, mimeTypes, transformResponse) {
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -49,7 +49,12 @@ export async function startStaticServer(resolveRequestPath, mimeTypes) {
         "Cache-Control": "no-store",
         "Content-Type": mimeTypes.get(path.extname(resolved).toLowerCase()) ?? "application/octet-stream"
       });
-      createReadStream(resolved).pipe(response);
+      if (transformResponse) {
+        const source = await readFile(resolved);
+        response.end(await transformResponse(source, url.pathname, resolved) ?? source);
+      } else {
+        createReadStream(resolved).pipe(response);
+      }
     } catch (error) {
       response.writeHead(error?.code === "ENOENT" ? 404 : 500).end("Not found");
     }

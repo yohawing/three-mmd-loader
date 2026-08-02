@@ -178,6 +178,29 @@ describe("runtime hot path allocation guards", () => {
     expectNoForbiddenPatterns(hotPathBodies, forbiddenPatterns, "runtime debug capture paths");
   });
 
+  it("keeps worker pose capture on caller-owned buffers", async () => {
+    const protocolSource = await readFile("src/worker/protocol.ts", "utf8");
+    const applySource = await readFile("src/worker/applyPose.ts", "utf8");
+    const endpointSource = await readFile("src/worker/endpoint.ts", "utf8");
+    const hotPathBodies = [
+      extractFunctionBody(protocolSource, "captureMmdRuntimePoseInto"),
+      extractFunctionBody(protocolSource, "copyMmdRuntimePoseInto"),
+      extractFunctionBody(applySource, "applyMmdRuntimePoseToMesh"),
+      extractMethodBody(endpointSource, "publishTick")
+    ];
+    const forbiddenPatterns: Array<readonly [string, RegExp]> = [
+      ["new Float32Array", /new\s+Float32Array\s*\(/],
+      ["new Array", /new\s+Array\s*\(/],
+      ["empty array literal", /\[\s*\]/],
+      ["Array.from", /Array\.from\s*\(/],
+      [".map(", /\.map\s*\(/],
+      [".filter(", /\.filter\s*\(/],
+      [".slice(", /\.slice\s*\(/]
+    ];
+
+    expectNoForbiddenPatterns(hotPathBodies, forbiddenPatterns, "worker pose capture");
+  });
+
   it("keeps TSL material state sync allocation-free", async () => {
     const source = await readFile("src/webgpu/material-core.ts", "utf8");
     const hotPathBodies = [

@@ -141,8 +141,12 @@ export function syncViewerTslLight() {
   if (!isTslViewerPipeline() || isNativeTslWebGpuPipeline()) {
     return;
   }
-  if (state.currentModel?.mesh?.material) {
-    syncTslMaterialLight(state.currentModel.mesh.material);
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const material = models[index]?.mesh?.material;
+    if (material) {
+      syncTslMaterialLight(material);
+    }
   }
   if (state.currentBackground?.mesh?.material) {
     syncTslMaterialLight(state.currentBackground.mesh.material);
@@ -150,28 +154,44 @@ export function syncViewerTslLight() {
 }
 
 export function syncCurrentModelTslMaterialStates() {
-  if (!isTslViewerPipeline() || isNativeTslWebGpuPipeline() || !state.currentModel?.mesh?.material) {
+  if (!isTslViewerPipeline() || isNativeTslWebGpuPipeline()) {
     return;
   }
-  syncTslMaterialStates(state.currentModel.mesh.material);
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const material = models[index]?.mesh?.material;
+    if (material) {
+      syncTslMaterialStates(material);
+    }
+  }
 }
 
 export function computeCurrentModelTslSparsePositionMorphs() {
   if (isNativeTslWebGpuPipeline()) {
     return false;
   }
-  if (
-    !isTslViewerPipeline() ||
-    state.renderer?.backend?.isWebGPUBackend !== true ||
-    !state.currentModel?.mesh ||
-    !computeMmdTslSparsePositionMorphs
-  ) {
+  if (!isTslViewerPipeline() || state.renderer?.backend?.isWebGPUBackend !== true || !computeMmdTslSparsePositionMorphs) {
     return false;
   }
-  return computeMmdTslSparsePositionMorphs(state.renderer, state.currentModel.mesh);
+  let computed = false;
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const mesh = models[index]?.mesh;
+    if (mesh) {
+      computed = computeMmdTslSparsePositionMorphs(state.renderer, mesh) || computed;
+    }
+  }
+  return computed;
 }
 
-export function submitViewerRender() {
+export function submitViewerRender(skipIfCompiling = false) {
+  // compileAsync() yields between shader variants so the animation loop can
+  // run. Do not let that loop enter the synchronous render path while a view
+  // toggle owns compilation; an incomplete pipeline would compile on the
+  // main thread and recreate the multi-second freeze this async path avoids.
+  if (skipIfCompiling && viewerRenderCompileToken !== 0) {
+    return false;
+  }
   if (!state.renderer || !state.scene || !state.camera) {
     return false;
   }
@@ -208,6 +228,7 @@ export function submitViewerRender() {
 }
 
 let viewerRenderToken = 0;
+let viewerRenderCompileToken = 0;
 
 // Debug-panel view toggles (selfShadow, normals) flip a renderer/material
 // parameter that changes every currently-visible material's compiled shader
@@ -225,6 +246,7 @@ export async function submitViewerRenderAsync() {
   if (!canCompileAsync) {
     return submitViewerRender();
   }
+  viewerRenderCompileToken = token;
   const showCompilingHint = !dom.statusText?.classList.contains("is-loading");
   if (showCompilingHint) {
     setStatus("Compiling shaders…", "loading");
@@ -237,6 +259,9 @@ export async function submitViewerRenderAsync() {
       error
     );
   } finally {
+    if (viewerRenderCompileToken === token) {
+      viewerRenderCompileToken = 0;
+    }
     if (showCompilingHint && token === viewerRenderToken) {
       setStatus("", "ready");
     }
@@ -265,10 +290,16 @@ export function disposeViewerPipelineModel(model) {
 }
 
 export function setCurrentModelTslOutlineHidden(hidden) {
-  if (!isTslViewerPipeline() || !state.currentModel?.mesh?.material) {
+  if (!isTslViewerPipeline()) {
     return;
   }
-  setTslOutlineHidden(state.currentModel.mesh.material, hidden);
+  const models = state.characterModels;
+  for (let index = 0; index < models.length; index += 1) {
+    const material = models[index]?.mesh?.material;
+    if (material) {
+      setTslOutlineHidden(material, hidden);
+    }
+  }
 }
 
 export function setMmdTslDedicatedRawVisibilityDebug(enabled = true) {

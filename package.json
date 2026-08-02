@@ -1,6 +1,6 @@
 {
   "name": "@yohawing/three-mmd-loader",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "TypeScript-first ESM library for Three.js MMD loading and playback.",
   "type": "module",
   "license": "MIT",
@@ -53,6 +53,10 @@
     "./physics": {
       "types": "./dist/physics/index.d.ts",
       "default": "./dist/physics/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker/index.d.ts",
+      "default": "./dist/worker/index.js"
     }
   },
   "scripts": {
@@ -60,9 +64,9 @@
     "build:mmd-anim": "node scripts/build-mmd-anim-wasm.mjs",
     "build:bullet": "npm run build:bullet:mmd",
     "build:bullet:mmd": "node scripts/build-bullet-mmd-wasm.mjs",
-    "compare:bullet:mmd": "node scripts/compare-bullet-mmd.mjs",
-    "compare:bullet:mmd:local": "node scripts/compare-bullet-mmd-local-fixture.mjs",
     "compare:runtime:js": "node scripts/compare-runtime-js.mjs",
+    "bench:runtime:worker": "node scripts/bench-runtime-worker.mjs",
+    "bench:runtime:worker:browser": "node scripts/bench-runtime-worker-browser.mjs",
     "smoke:bullet:mmd": "node scripts/smoke-bullet-mmd.mjs",
     "bench:runtime:js": "node scripts/bench-runtime-js.mjs",
     "bench:wasm:perf": "node scripts/bench_wasm_perf.mjs",
@@ -104,14 +108,14 @@
     "visual:smoke:viewer-background": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-background-room --output test/fixtures/generated/visual/mmd-viewer-background-room.pmx && node scripts/visual-regression/check-viewer-background.mjs",
     "visual:smoke:viewer-self-shadow": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-self-shadow-receiver --output test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx && node scripts/visual-regression/check-viewer-self-shadow.mjs",
     "smoke:dist": "node scripts/dist-export-smoke.mjs",
+    "smoke:deploy": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-self-shadow-receiver --output test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx && node scripts/build-deploy.mjs && node scripts/smoke-deploy-viewer.mjs",
     "smoke:types": "node scripts/type-consumer-smoke.mjs",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "@types/three": ">=0.176.0 <1.0.0",
-    "ammo.js": "^0.0.10"
+    "@types/three": ">=0.176.0 <1.0.0"
   },
   "peerDependencies": {
     "three": ">=0.176.0 <1.0.0"

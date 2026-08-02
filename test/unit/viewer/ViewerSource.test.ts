@@ -26,6 +26,65 @@ describe("example viewer source", () => {
     expect(disposeSource).not.toContain("function collectMaterialTextures(material)");
   });
 
+  it("keeps the two-character runtime path without exposing an add-model control", async () => {
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const assetLibrarySource = await readFile("examples/viewer/lib/asset-library.js", "utf8");
+    const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const fixtureSchema = await readFile("test/fixtures/fixtures.schema.json", "utf8");
+
+    expect(html).not.toContain('id="model-load-add"');
+    expect(html).not.toContain('id="choose-secondary-model"');
+    expect(html).not.toContain('id="choose-secondary-model-folder"');
+    expect(html).not.toContain('id="clear-secondary-model"');
+    expect(domSource).not.toContain("modelLoadAddToggle");
+    expect(mainSource).not.toContain("dom.modelLoadAddToggle?.checked");
+    expect(mainSource).toContain("loadModelFolder(Array.from(files))");
+    expect(assetLibrarySource).not.toContain("dom.modelLoadAddToggle?.checked");
+    expect(assetLibrarySource).toContain("load: (asset) => loadModelFromUrl(asset.url)");
+    expect(mainSource).toContain("loadSecondaryModelUrl");
+    expect(mainSource).toContain("loadSecondaryMotionUrl");
+    expect(mainSource).toContain("get secondaryModel() { return state.secondaryModel; }");
+    expect(mainSource).toContain("get secondaryMotion() { return state.secondaryMotion; }");
+    expect(modelSource).toContain("loadOptions.secondary === true && state.currentModel !== undefined");
+    expect(modelSource).toContain("if (!isSecondary) {");
+    expect(modelSource).toContain("state.secondaryModel = loadedModel");
+    expect(modelSource).toContain("state.characterModels[1] = loadedModel");
+    expect(modelSource).toContain("export function clearSecondaryModel(options = {})");
+    expect(modelSource).toContain("export async function loadSecondaryModelFolder(files, loadOptions = {})");
+    expect(modelSource).toContain("folderTextureMap: textureMap");
+    expect(modelSource).toContain("disposeModelResources(state.secondaryModel)");
+    expect(stateSource).toContain("characterModels: []");
+    expect(stateSource).toContain("secondaryMotion: undefined");
+    expect(stateSource).toContain("state.secondaryMotion?.animation !== undefined");
+    expect(stateSource).toContain("secondaryMotionDuration");
+    expect(playbackSource).toContain("const models = state.characterModels");
+    expect(playbackSource).toContain("for (let index = 0; index < models.length; index += 1)");
+    expect(playbackSource).toContain("model.update(seconds, updateOptions)");
+    expect(playbackSource).toContain("updateShadowCameraForFrame(state.currentModel.mesh)");
+    expect(playbackSource).not.toContain("updateShadowCameraForFrame(model.mesh)");
+    const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    expect(sceneSetupSource).toContain("selfShadowModelBoundsScratch.setFromObject(mesh)");
+    expect(sceneSetupSource).toContain("bounds.union(state.selfShadowModelBoundsScratch)");
+    expect(pipelineSource).toContain("for (let index = 0; index < models.length; index += 1)");
+    expect(pipelineSource).toContain("setTslOutlineHidden(material, hidden)");
+    expect(debugSource).toContain("state.characterModels[index]?.outlineMeshes?.forEach");
+    expect(motionSource).toContain("state.characterModels[index]?.setAnimation(animation)");
+    expect(motionSource).toContain("export async function loadSecondaryMotionFromUrl(url)");
+    expect(motionSource).toContain("targetModel.setAnimation(animation)");
+    expect(motionSource).toContain("generation !== secondaryMotionLoadGeneration");
+    expect(motionSource).toContain("state.secondaryModel !== targetModel");
+    expect(modelSource).toContain("state.secondaryMotion = undefined");
+    expect(modelSource).toContain("state.elapsedSeconds = Math.min(state.elapsedSeconds, durationSeconds)");
+    expect(fixtureSchema).toContain('"playbackSmokeSecondaryCharacter"');
+  });
+
   it("keeps the default viewer camera far clip distance wide enough for large stages", async () => {
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
 
@@ -99,6 +158,10 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("typeof state.renderer?.compileAsync === \"function\"");
     expect(pipelineSource).toContain("await state.renderer.compileAsync(state.scene, state.camera)");
     expect(pipelineSource).toContain("if (!canCompileAsync) {\n    return submitViewerRender();\n  }");
+    expect(pipelineSource).toContain("let viewerRenderCompileToken = 0;");
+    expect(pipelineSource).toContain("if (skipIfCompiling && viewerRenderCompileToken !== 0) {");
+    expect(pipelineSource).toContain("viewerRenderCompileToken = token;");
+    expect(pipelineSource).toContain("if (viewerRenderCompileToken === token) {");
     expect(pipelineSource).toContain("if (token !== viewerRenderToken) {");
     expect(pipelineSource).toContain(
       "// A newer toggle/render call superseded this one while we were compiling;"
@@ -264,7 +327,8 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("export function setCurrentModelTslOutlineHidden(hidden)");
     expect(pipelineSource).toContain("material.visible = !state.debugOutlineHidden && runtimeVisible");
     expect(pipelineSource).toContain("setTslOutlineMaterialHidden(material, hidden)");
-    expect(pipelineSource).toContain("export function submitViewerRender()");
+    expect(pipelineSource).toContain("export function submitViewerRender(skipIfCompiling = false)");
+    expect(pipelineSource).toContain("if (skipIfCompiling && viewerRenderCompileToken !== 0) {");
     expect(pipelineSource).toContain("computeCurrentModelTslSparsePositionMorphs();");
     expect(pipelineSource).toContain("ensureMmdTslSelfShadowPass();");
     expect(pipelineSource).toContain("mmdTslSelfShadowPass.render(state.renderer, state.scene, state.keyLight);");
@@ -281,7 +345,7 @@ describe("example viewer source", () => {
     );
     expect(pipelineSource).toContain("state.keyLight?.castShadow === true");
     expect(pipelineSource).toContain("disposeMmdTslSelfShadowPassIfUnused();");
-    const submitViewerRenderStart = pipelineSource.indexOf("export function submitViewerRender()");
+    const submitViewerRenderStart = pipelineSource.indexOf("export function submitViewerRender(skipIfCompiling = false)");
     const submitViewerRenderEnd = pipelineSource.indexOf("export function disposeViewerPipelineModel");
     expect(submitViewerRenderStart).toBeGreaterThanOrEqual(0);
     expect(submitViewerRenderEnd).toBeGreaterThan(submitViewerRenderStart);
@@ -333,6 +397,7 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain("state.renderer.render(state.scene, state.camera);");
     expect(debugSource).toContain("submitViewerRender();");
     expect(debugSource).not.toContain("state.renderer.render(state.scene, state.camera)");
+    expect(playbackSource).toContain("submitViewerRender(true);");
     expect(playbackSource).toContain("submitViewerRender();");
     expect(playbackSource).not.toContain("state.renderer.render(state.scene, state.camera)");
     expect(pipelineSource).not.toContain("Array.isArray(material) ? material : [material]");
@@ -693,6 +758,13 @@ describe("example viewer source", () => {
     expect(assetLibrarySource).not.toContain("hasRestorableSelection");
     expect(assetLibrarySource).toContain("loadModelFromUrl(preset.modelUrl)");
     expect(assetLibrarySource).toContain("loadMotionFromUrl(preset.motionUrl)");
+    expect(assetLibrarySource).toContain("loadSecondaryModelFromUrl(preset.secondaryModelUrl)");
+    expect(assetLibrarySource).toContain("loadSecondaryMotionFromUrl(preset.secondaryMotionUrl)");
+    expect(assetLibrarySource).toContain("applyPresetSecondaryPosition(preset.secondaryPosition)");
+    expect(assetLibrarySource).toContain("state.secondaryModel.root.position.set(x, y, z)");
+    expect(assetLibrarySource).toContain("state.secondaryModelSource");
+    expect(assetLibrarySource).toContain("state.secondaryMotion?.source");
+    expect(assetLibrarySource).toContain("secondaryPosition");
     expect(assetLibrarySource).toContain("loadBackgroundFromUrl");
     expect(assetLibrarySource).toContain("preset.backgroundUrl");
     expect(assetLibrarySource).toContain("preset.audioUrl");
@@ -722,6 +794,8 @@ describe("example viewer source", () => {
     expect(serverSource).toContain("backgroundPmd");
     expect(serverSource).toContain("audios");
     expect(serverSource).toContain("cameras");
+    expect(serverSource).toContain("secondaryModelUrl");
+    expect(serverSource).toContain("secondaryMotionUrl");
     expect(serverSource).toContain("fixtureCase.background?.extension");
     expect(serverSource).toContain("fixtureCase.camera?.key");
     expect(serverSource).toContain("fixtureCase.audio?.extension");
@@ -1034,7 +1108,7 @@ describe("example viewer source", () => {
     expect(mainSource).toContain("state.elapsedSeconds = targetFrame / state.mmdFrameRate");
     expect(mainSource).toContain("dom.timeline.value = state.elapsedSeconds");
     expect(mainSource).toContain('dom.timeline.setAttribute("value", String(state.elapsedSeconds))');
-    expect(mainSource).toContain("evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch)");
+    expect(mainSource).toContain("void renderStillFrame(state.runtimePhysicsDisabledOptionsScratch)");
     expect(mainSource).toContain("syncAudioToMotionTime()");
     expect(domSource).toContain("dom.frameCurrentInput.value = currentText");
     expect(domSource).toContain("dom.frameTotalText.textContent = totalText");
@@ -1077,7 +1151,7 @@ describe("example viewer source", () => {
     expect(playbackSource).not.toContain("state.currentModel.update(currentMmdSeconds(), {");
     expect(playbackSource).not.toContain("applyMmdSelfShadowStateToThreeDirectionalLight(state.keyLight, selfShadowState, {");
     expect(playbackSource).toContain("const updateOptions = state.runtimeUpdateOptionsScratch");
-    expect(playbackSource).toContain("state.currentModel.update(currentMmdSeconds(), updateOptions)");
+    expect(playbackSource).toContain("model.update(seconds, updateOptions)");
     expect(playbackSource).toContain("state.selfShadowLightOptionsScratch");
     expect(stateSource).toContain("runtimeUpdateOptionsScratch");
     expect(stateSource).toContain("runtimePhysicsDisabledOptionsScratch");
@@ -1095,22 +1169,18 @@ describe("example viewer source", () => {
     expect(playbackSource).not.toContain(".sampleArray(");
   });
 
-  it("uses the custom Bullet MMD backend without an Ammo viewer fallback", async () => {
+  it("uses the custom Bullet MMD backend directly", async () => {
     const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
     const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
     const mainSource = await readFile("examples/viewer/main.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
 
     expect(stateSource).toContain('customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js"');
-    expect(stateSource).not.toContain("ammoScriptUrl");
     expect(stateSource).not.toContain("physicsBackendKind");
-    expect(stateSource).not.toContain("ammoNamespace");
     expect(physicsSource).toContain("loadCustomBulletMmdModule");
     expect(physicsSource).toContain("createCustomBulletMmdPhysicsBackend");
     expect(physicsSource).toContain("Physics disabled by viewer query parameter.");
     expect(physicsSource).toContain("dom.physicsErrorBanner.textContent = message");
-    expect(physicsSource).not.toContain("loadAmmoNamespace");
-    expect(physicsSource).not.toContain("createAmmoMmdPhysicsBackend");
     expect(mainSource).toContain('./lib/physics-backend.js');
     expect(modelSource).toContain('./physics-backend.js');
   });
@@ -1119,14 +1189,28 @@ describe("example viewer source", () => {
     const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const disposeSource = await readFile("examples/viewer/lib/dispose.js", "utf8");
 
     expect(physicsSource).toContain("createDeferredPhysicsBackend");
+    expect(physicsSource).toContain("state.physicsBackends.add(backend)");
     expect(physicsSource).toContain("export async function ensurePhysicsBackendReady()");
+    expect(physicsSource).toContain("const backends = Array.from(state.physicsBackends)");
     expect(physicsSource).toContain("loadPromise ??= createActivePhysicsBackend()");
+    expect(physicsSource).toContain("export function disposePhysicsBackendForModel(model)");
+    expect(stateSource).toContain("physicsBackends: new Set()");
+    expect(stateSource).toContain("physicsBackendByModel: new WeakMap()");
+    expect(stateSource).toContain("physicsBackendByLoader: new WeakMap()");
     expect(modelSource).toContain("const physicsBackend = await createPhysicsBackend()");
+    expect(modelSource).toContain("async function loadManagedModel(loader, source)");
+    expect(modelSource).toContain("loadManagedModel(folderLoader, modelFile)");
+    expect(modelSource).toContain("registerPhysicsBackendForModel(model, managedPhysicsBackend)");
+    expect(modelSource).toContain("state.physicsBackendByLoader.set(loader, physicsBackend)");
+    expect(disposeSource).toContain("disposePhysicsBackendForModel(model)");
     expect(modelSource).toContain("await ensurePhysicsBackendReady();");
     expect(modelSource).toContain("state.currentModel.setAnimation(state.currentMotion)");
-    expect(motionSource).toContain("await ensurePhysicsBackendReady();\n    state.currentModel.setAnimation(animation)");
+    expect(motionSource).toContain("if (state.currentModel !== targetModel)");
+    expect(motionSource).toContain("targetModel.setAnimation(animation)");
     expect(motionSource).toContain("void loadKurokoModelForQueuedMotion()");
     expect(motionSource).not.toContain("await ensurePhysicsBackendReady();\n      state.pendingMotionSource = source");
   });
@@ -1134,6 +1218,8 @@ describe("example viewer source", () => {
   it("profiles viewer model load stages only behind the perf query flag", async () => {
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const performanceSource = await readFile("examples/viewer/lib/performance.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const sceneSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
 
     expect(modelSource).toContain("createViewerLoadProfile");
     expect(modelSource).toContain('profile?.measure("loader-loadModel", "loader-ready", "model-loaded")');
@@ -1141,6 +1227,151 @@ describe("example viewer source", () => {
     expect(performanceSource).toContain('new window.URLSearchParams(location.search).has("perf")');
     expect(performanceSource).toContain('"__THREE_MMD_LOADER_PERF__"');
     expect(performanceSource).toContain('window.console?.table(');
+    expect(performanceSource).toContain("createViewerPerformanceApi");
+    expect(performanceSource).toContain('getExtension?.("EXT_disjoint_timer_query_webgl2")');
+    expect(performanceSource).toContain('renderer.resolveTimestampsAsync("render")');
+    expect(performanceSource).toContain('renderer.resolveTimestampsAsync("compute")');
+    expect(playbackSource).toContain('endViewerStageProfile("animation-ik-morph-physics"');
+    expect(playbackSource).toContain('endViewerStageProfile("shadow-color-outline-sync"');
+    expect(playbackSource).toContain('endViewerStageProfile("render-submit"');
+    expect(sceneSource).toContain("trackTimestamp: viewerPerformanceEnabled");
+    expect(await readFile("examples/viewer/index.html", "utf8")).toContain(
+      'id="viewer-performance-snapshot"'
+    );
+  });
+
+  it("settles one-shot renders across every character without blocking the RAF path", async () => {
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const motionSource = await readFile("examples/viewer/lib/motion-loading.js", "utf8");
+    const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const visualGateSource = await readFile("scripts/visual-regression/check-viewer-self-shadow.mjs", "utf8");
+    const deploySmokeSource = await readFile("scripts/smoke-deploy-viewer.mjs", "utf8");
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+
+    expect(playbackSource).toContain("export function renderStillFrame(options)");
+    expect(playbackSource).toContain("while (settledRenderPending)");
+    expect(playbackSource).toContain("if (!settledRenderPending)");
+    expect(playbackSource).toContain("model.updateAsync(targetSeconds, updateOptions)");
+    expect(playbackSource).toContain("await Promise.all(updates)");
+    expect(playbackSource).toMatch(/await Promise\.all\(updates\);[\s\S]*?submitViewerRender\(\);/);
+    expect(playbackSource).toContain("if (settledEvaluationInFlight > 0)");
+    expect(playbackSource).toContain("endViewerFrameProfile(state.renderer)");
+    expect(playbackSource).toContain("export function render() {");
+    expect(playbackSource).toContain("evaluateRuntime();");
+    expect(playbackSource).not.toContain("export async function render()");
+    expect(modelSource).toContain("await renderStillFrame();");
+    expect(motionSource).toContain("await renderStillFrame();");
+    expect(playbackSource).toContain("state.elapsedSeconds > 0 || hasCurrentMotion()");
+    expect(backgroundSource).toContain("await renderStillFrame();");
+    expect(debugSource).toContain("async evaluateAt(seconds, options = {})");
+    expect(debugSource).toContain("await renderStillFrame(options)");
+    expect(debugSource).toContain("characters: state.characterModels.map(");
+    expect(debugSource).toContain("captureCanvas,");
+    expect(visualGateSource).toContain("await viewer.debug.evaluateAt(seconds, { physics: false })");
+    expect(visualGateSource).toContain("physics=0&selfShadow=");
+    expect(visualGateSource).not.toContain("runtime=worker&selfShadow=");
+    expect(visualGateSource).toContain("assertSettledCharacterBarrier(observation.settledState, evaluationSeconds)");
+    expect(visualGateSource).toContain("globalThis.mmdViewer.debug.captureCanvas()");
+    expect(visualGateSource).toContain("await verifySettledInlineReference(browser, server.origin, modelUrl, options.backend)");
+    expect(visualGateSource).toContain('captureSettledRuntimeReference(browser, origin, modelUrl, backend, "mmd-anim")');
+    expect(visualGateSource).toContain('throw new Error("Settled Worker capture did not match the inline runtime reference.")');
+    expect(packageJson.scripts["smoke:deploy"]).toContain("scripts/smoke-deploy-viewer.mjs");
+    expect(deploySmokeSource).toContain('result.runtime.active !== "worker"');
+    expect(deploySmokeSource).toContain('result.runtime.transport !== "transferable"');
+    expect(deploySmokeSource).toContain("mmd_bullet.worker.wasm");
+    expect(visualGateSource).toContain('for (const runtime of ["mmd-anim", "js"])');
+    expect(visualGateSource).toContain('Object.defineProperty(window, "Worker"');
+    expect(visualGateSource).toContain('route("**/mmd_bullet.worker.wasm"');
+    expect(visualGateSource).toContain('initializationFailure.status.failureStage !== "initialization"');
+    expect(visualGateSource).toContain("runtime.poolLease.crash(new Error");
+    expect(visualGateSource).toContain('crash.status.readiness !== "failed"');
+  });
+
+  it("uses Worker by default with explicit inline routes and preflight fallback", async () => {
+    const configSource = await readFile("examples/viewer/lib/viewer-config.js", "utf8");
+    const workerSource = await readFile("examples/viewer/lib/runtime-worker.js", "utf8");
+    const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
+    const physicsSource = await readFile("examples/viewer/lib/physics-backend.js", "utf8");
+    const stateSource = await readFile("examples/viewer/lib/state.js", "utf8");
+    const mainSource = await readFile("examples/viewer/main.js", "utf8");
+    const playbackSource = await readFile("examples/viewer/lib/playback.js", "utf8");
+    const performanceSource = await readFile("examples/viewer/lib/performance.js", "utf8");
+    const debugSource = await readFile("examples/viewer/lib/debug.js", "utf8");
+    const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    const styles = await readFile("examples/viewer/styles.css", "utf8");
+    const changelog = await readFile("CHANGELOG.md", "utf8");
+    const serverSource = await readFile("scripts/serve-example-viewer.mjs", "utf8");
+    const buildDeploySource = await readLocalOptionalText("scripts/build-deploy.mjs");
+
+    expect(configSource).toContain('if (normalized === "mmd-anim" || normalized === "wasm" || normalized === "inline")');
+    expect(configSource).toContain('return "worker"');
+    expect(workerSource).toContain("createWorkerMmdRuntimeFactory");
+    expect(workerSource).toContain("export async function prepareViewerRuntime()");
+    expect(workerSource).toContain('typeof window.Worker !== "function"');
+    expect(workerSource).toContain("getDefaultMmdRuntimeWorkerPoolSize() === 0");
+    expect(workerSource).toContain("probeModuleWorker()");
+    expect(workerSource).toContain("activatePreflightFallback(error)");
+    expect(workerSource).toContain('state.activeRuntimeMode = "mmd-anim"');
+    expect(workerSource).toContain('setStatus(`Worker unavailable; using inline runtime: ${message}`, "warning")');
+    expect(workerSource).toContain("export function markWorkerRuntimesReady()");
+    expect(workerSource).toContain("export function updateWorkerRuntimeTelemetry()");
+    expect(workerSource).toContain("export function getViewerRuntimeEvidence()");
+    expect(workerSource).toContain('state.runtimeReadiness = "failed"');
+    expect(workerSource).toContain("state.isPlaying = false");
+    expect(workerSource).toContain("dom.bgmAudio?.pause()");
+    expect(workerSource).toContain("dom.runtimeErrorBanner.hidden = false");
+    expect(workerSource).toContain("?runtime=mmd-anim");
+    expect(workerSource).toContain('import("../../../dist/worker/index.js")');
+    expect(workerSource).toContain("const resettablePromise = loadWorkerModule()");
+    expect(workerSource).toContain("let workerRuntimeGeneration = 0");
+    expect(workerSource).toContain("const generation = workerRuntimeGeneration");
+    expect(workerSource).toContain("generation !== workerRuntimeGeneration");
+    expect(workerSource).toContain("factory.dispose()");
+    expect(workerSource).toContain("workerRuntimeGeneration += 1");
+    expect(workerSource).toContain('kind: "custom-bullet-mmd"');
+    expect(workerSource).toContain('sharedMemory: "auto"');
+    expect(workerSource).toContain('workerDistRoute = "/__mmd_worker_dist__/"');
+    expect(workerSource).toContain("fallback: false");
+    expect(workerSource).toContain("state.workerRuntimeFallbackCount += 1");
+    expect(workerSource).toContain('setStatus(statusMessage, "error")');
+    expect(modelSource).toContain("if (isWorkerRuntimeEnabled())");
+    expect(modelSource).toContain("getWorkerRuntimeFactory()");
+    expect(modelSource).toContain('state.activeRuntimeMode === "js"');
+    expect(modelSource).toContain('state.activeRuntimeMode !== "mmd-anim"');
+    expect(modelSource).toContain('physics: "external"');
+    expect(physicsSource).toContain('if (state.activeRuntimeMode === "worker")');
+    expect(stateSource).toContain("workerRuntimeFallback");
+    expect(stateSource).toContain("requestedRuntimeMode: viewerConfig.runtime");
+    expect(stateSource).toContain("activeRuntimeMode: viewerConfig.runtime");
+    expect(stateSource).toContain("runtimePoseAgeFrames: 0");
+    expect(mainSource).toContain("await prepareViewerRuntime()");
+    expect(mainSource).toContain("get runtimeStatus() { return getViewerRuntimeEvidence(); }");
+    expect(mainSource).toContain("getViewerRuntimeEvidence");
+    expect(playbackSource).toContain("markWorkerRuntimesReady()");
+    expect(playbackSource).toContain("updateWorkerRuntimeTelemetry()");
+    expect(performanceSource).toContain("runtime: getViewerRuntimeEvidence()");
+    expect(debugSource).toContain("...getViewerRuntimeEvidence()");
+    expect(domSource).toContain('runtimeErrorBanner: document.querySelector("#runtime-error")');
+    expect(domSource).not.toContain('document.querySelector("#runtime-status")');
+    expect(html).not.toContain('id="runtime-status"');
+    expect(html).toContain('id="runtime-error"');
+    expect(styles).not.toContain(".runtime-status");
+    expect(workerSource).not.toContain("updateRuntimeStatusUi");
+    expect(changelog).not.toContain('experimental `@yohawing/three-mmd-loader/worker`');
+    expect(mainSource).toContain("disposeWorkerRuntimeFactory()");
+    expect(serverSource).toContain('const workerDistRoute = "/__mmd_worker_dist__/"');
+    expect(serverSource).toContain('const workerDistRoot = resolve(root, "dist")');
+    expect(serverSource).toContain('[".mjs", "text/javascript; charset=utf-8"]');
+    expect(serverSource).toContain("function rewriteWorkerModule(source)");
+    expect(serverSource).toContain('from "three"');
+    expect(serverSource).toContain("isPathInside(filePath, workerDistRoot)");
+    if (buildDeploySource !== undefined) {
+      expect(buildDeploySource).toContain('["/__mmd_worker_dist__/", `/${deployDistPath}/`]');
+      expect(buildDeploySource).toContain("rewriteCopiedDistModules(join(outDir, deployDistPath))");
+    }
   });
 
   it("serves Wasm with the browser streaming MIME type", async () => {
@@ -1207,8 +1438,10 @@ describe("example viewer source", () => {
     expect(stateSource).toContain('parseDebugInteger(query.get("maxSubSteps"), 5)');
     expect(stateSource).toContain('query.get("physics") === "0" ? false : true');
     expect(stateSource).toContain("physicsEnabled: initialPhysicsEnabled");
-    expect(stateSource).toContain('solverIterations: initialSolverIterations');
-    expect(stateSource).toContain('splitImpulsePenetrationThreshold: initialSplitImpulsePenetrationThreshold');
+    expect(stateSource).not.toContain("dynamicWithBoneRotationFeedbackScale");
+    expect(stateSource).not.toContain("collisionMargin");
+    expect(stateSource).not.toContain("solverIterations");
+    expect(stateSource).not.toContain("splitImpulse");
     expect(stateSource).toContain("if (value === null)");
     expect(stateSource).toContain('debugMaterialMode: "default"');
     expect(stateSource).toContain("debugOutlineHidden: false");
@@ -1254,9 +1487,10 @@ describe("example viewer source", () => {
     expect(debugSource).toContain("...(state.currentModel.outlineMeshes ?? [])");
     expect(debugSource).toContain("export function setOutlineHidden(hidden)");
     expect(debugSource).toContain("export function setPhysicsMaxSubSteps(value)");
-    expect(debugSource).toContain("export function setSolverIterations(value)");
-    expect(debugSource).toContain("export function setSplitImpulse(enabled)");
-    expect(debugSource).toContain("export function setSplitImpulsePenetrationThreshold(value)");
+    expect(debugSource).not.toContain("setDynamicWithBoneRotationFeedbackScale");
+    expect(debugSource).not.toContain("setCollisionMargin");
+    expect(debugSource).not.toContain("setSolverIterations");
+    expect(debugSource).not.toContain("setSplitImpulse");
     expect(debugSource).toContain("dumpRigidBodies(indices)");
     expect(debugSource).toContain("dumpCollisionPair(indexA, indexB)");
     expect(debugSource).toContain("function rigidBodyCollisionGroup(body)");
@@ -1296,8 +1530,8 @@ describe("example viewer source", () => {
     expect(html).toContain("photo_camera");
     expect(html).toContain("Capture");
     expect(domSource).toContain('debugCaptureButton: document.querySelector("#debug-capture-button")');
-    expect(debugSource).toContain("export function captureCanvas()");
-    expect(debugSource).toContain("submitViewerRender();");
+    expect(debugSource).toContain("export async function captureCanvas()");
+    expect(debugSource).toContain("await renderStillFrame();");
     expect(debugSource).toContain('state.renderer.domElement.toDataURL("image/png")');
     expect(debugSource).toContain("link.download =");
     expect(debugSource).toContain("link.click()");

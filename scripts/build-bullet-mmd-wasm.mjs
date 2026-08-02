@@ -5,15 +5,26 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, "..");
-const bulletRoot = join(root, "native", "third_party", "bullet3");
-const bindings = join(root, "native", "bullet-mmd", "mmd_bindings.cc");
-const outDir = join(root, "native", "bullet-mmd", "dist");
-const buildDir = join(outDir, ".tmp", `mmd-${process.pid}-${Date.now().toString(36)}`);
-const tmpJs = join(buildDir, "mmd_bullet.js");
-const tmpWasm = join(buildDir, "mmd_bullet.wasm");
-const responseFile = join(buildDir, "emcc-mmd-args.rsp");
-const outJs = join(outDir, "mmd_bullet.js");
-const outWasm = join(outDir, "mmd_bullet.wasm");
+const physicsRoot = join(root, "native", "third_party", "mmd-anim", "crates", "mmd-anim-physics-bullet");
+const bulletRoot = join(physicsRoot, "vendor", "bullet3");
+const bindings = join(physicsRoot, "native", "mmd_bullet_api.cpp");
+const outDir = join(root, "native", "mmd-anim-bullet", "dist");
+const buildDir = join(outDir, ".tmp", `mmd-anim-${process.pid}-${Date.now().toString(36)}`);
+
+const builds = [
+  {
+    name: "classic",
+    scriptName: "mmd_bullet.js",
+    environment: "web,node",
+    extraArgs: []
+  },
+  {
+    name: "module worker",
+    scriptName: "mmd_bullet.worker.mjs",
+    environment: "web,worker,node",
+    extraArgs: ["-sEXPORT_ES6=1"]
+  }
+];
 
 const sourceRoots = [
   join(bulletRoot, "src", "LinearMath"),
@@ -175,7 +186,7 @@ function quoteResponseArg(arg) {
 
 async function main() {
   if (!(await pathExists(join(bulletRoot, "src", "btBulletDynamicsCommon.h")))) {
-    throw new Error("Bullet submodule is missing. Run git submodule update --init --recursive native/third_party/bullet3.");
+    throw new Error("mmd-anim's vendored Bullet source is missing. Run git submodule update --init --recursive native/third_party/mmd-anim.");
   }
 
   const emsdkRoot = await resolveEmsdkRoot();
@@ -187,61 +198,59 @@ async function main() {
   }
 
   const exportedFunctions = [
-    "_mmd_bullet_create_world",
-    "_mmd_bullet_destroy_world",
-    "_mmd_bullet_ensure_step_buffers",
-    "_mmd_bullet_begin_model",
-    "_mmd_bullet_add_rigid_body",
-    "_mmd_bullet_add_joint",
-    "_mmd_bullet_commit_model",
-    "_mmd_bullet_model_identity",
-    "_mmd_bullet_set_tuning",
-    "_mmd_bullet_reset_world",
-    "_mmd_bullet_reset_pose_sync",
-    "_mmd_bullet_step",
-    "_mmd_bullet_input_translations",
-    "_mmd_bullet_input_rotations",
-    "_mmd_bullet_input_world_matrices",
-    "_mmd_bullet_output_translations",
-    "_mmd_bullet_output_rotations",
-    "_mmd_bullet_output_world_matrices",
-    "_mmd_bullet_bone_physics_toggles",
-    "_mmd_bullet_updated_bone_indices",
-    "_mmd_bullet_debug_contact_count",
-    "_mmd_bullet_debug_contact_pair_count",
-    "_mmd_bullet_debug_contact_pairs",
-    "_mmd_bullet_debug_rigid_body_count",
-    "_mmd_bullet_debug_rigid_body_world_matrices"
-  ];
-
-  const args = [
-    ...sources,
-    "-I",
-    join(bulletRoot, "src"),
-    "-O3",
-    "-DNDEBUG",
-    "-Wno-deprecated",
-    "-sMODULARIZE=1",
-    "-sEXPORT_NAME=MmdBullet",
-    "-sENVIRONMENT=web,node",
-    "-sINITIAL_MEMORY=67108864",
-    `-sEXPORTED_FUNCTIONS=${JSON.stringify(exportedFunctions)}`,
-    "--post-js",
-    join(scriptDir, "expose-memory.js"),
-    "-o",
-    tmpJs
+    "_malloc",
+    "_free",
+    "_mmd_anim_bullet_world_create",
+    "_mmd_anim_bullet_world_destroy",
+    "_mmd_anim_bullet_world_reset",
+    "_mmd_anim_bullet_world_settle_to_current",
+    "_mmd_anim_bullet_world_step",
+    "_mmd_anim_bullet_world_add_rigidbody",
+    "_mmd_anim_bullet_world_get_rigidbody_count",
+    "_mmd_anim_bullet_world_get_rigidbody_transform",
+    "_mmd_anim_bullet_world_set_rigidbody_transform",
+    "_mmd_anim_bullet_world_add_6dof_spring_joint",
+    "_mmd_anim_bullet_world_get_constraint_count",
+    "_mmd_anim_bullet_world_collect_contacts",
+    "_mmd_anim_bullet_world_get_gravity",
+    "_mmd_anim_bullet_world_set_gravity"
   ];
 
   console.log(`Using ${commandInfo.kind === "emsdk" ? "emsdk" : "PATH"} Emscripten: ${commandInfo.command}`);
-  console.log(`Compiling Bullet MMD build with ${sources.length} sources.`);
+  console.log(`Compiling mmd-anim Bullet classic and module-worker builds with ${sources.length} sources.`);
 
   await mkdir(buildDir, { recursive: true });
   try {
-    await writeFile(responseFile, `${args.map(quoteResponseArg).join("\n")}\n`);
-    await spawnCommand(commandInfo, [`@${responseFile}`], env);
     await mkdir(outDir, { recursive: true });
-    await copyFile(tmpJs, outJs);
-    await copyFile(tmpWasm, outWasm);
+    for (const build of builds) {
+      const tmpScript = join(buildDir, build.scriptName);
+      const tmpWasm = tmpScript.replace(/\.(?:m?js)$/i, ".wasm");
+      const responseFile = join(buildDir, `emcc-mmd-${build.name.replaceAll(" ", "-")}-args.rsp`);
+      const args = [
+        ...sources,
+        "-I",
+        join(bulletRoot, "src"),
+        "-O3",
+        "-DNDEBUG",
+        "-Wno-deprecated",
+        "-sMODULARIZE=1",
+        "-sEXPORT_NAME=MmdBullet",
+        `-sENVIRONMENT=${build.environment}`,
+        ...build.extraArgs,
+        "-sINITIAL_MEMORY=67108864",
+        `-sEXPORTED_FUNCTIONS=${JSON.stringify(exportedFunctions)}`,
+        "--post-js",
+        join(scriptDir, "expose-memory.js"),
+        "-o",
+        tmpScript
+      ];
+
+      await writeFile(responseFile, `${args.map(quoteResponseArg).join("\n")}\n`);
+      console.log(`Compiling ${build.name} artifact: ${build.scriptName}`);
+      await spawnCommand(commandInfo, [`@${responseFile}`], env);
+      await copyFile(tmpScript, join(outDir, build.scriptName));
+      await copyFile(tmpWasm, join(outDir, build.scriptName.replace(/\.(?:m?js)$/i, ".wasm")));
+    }
   } finally {
     await rm(buildDir, { recursive: true, force: true });
   }

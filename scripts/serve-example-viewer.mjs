@@ -6,10 +6,12 @@ import { parseVmdSectionInventory } from "../dist/parser/index.js";
 
 const root = process.cwd();
 const viewerRoot = resolve(root, "examples", "viewer");
+const workerDistRoot = resolve(root, "dist");
 const localFixturesPath = resolve(root, "test", "fixtures", "fixtures.local.json");
 const localFixtureInventory = loadLocalFixtureInventory();
 const dataRoot = resolveDataRoot();
 const dataRoute = "/__mmd_data/";
+const workerDistRoute = "/__mmd_worker_dist__/";
 const mmdAnimWasmRoot = prepareMmdAnimWasmRoot();
 const mmdAnimWasmRoute = "/__mmd_anim_wasm/";
 const localAssetsRoute = "/__mmd_assets__/fixtures-local.json";
@@ -26,6 +28,7 @@ const mimeTypes = new Map([
   [".jpeg", "image/jpeg"],
   [".js", "text/javascript; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
+  [".mjs", "text/javascript; charset=utf-8"],
   [".pmx", "application/octet-stream"],
   [".png", "image/png"],
   [".tga", "image/x-tga"],
@@ -84,6 +87,14 @@ const server = createServer(async (request, response) => {
     const resolvedFilePath = info.isDirectory() ? join(filePath, "index.html") : filePath;
     const resolvedInfo = info.isDirectory() ? await stat(resolvedFilePath) : info;
     const contentType = mimeTypes.get(extname(resolvedFilePath)) ?? "application/octet-stream";
+    if (pathname.startsWith(workerDistRoute) && [".js", ".mjs"].includes(extname(resolvedFilePath))) {
+      response.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Content-Type": contentType
+      });
+      response.end(rewriteWorkerModule(readFileSync(resolvedFilePath, "utf8")));
+      return;
+    }
     const totalSize = resolvedInfo.size;
     const range = parseRangeHeader(request.headers.range, totalSize);
     if (range !== undefined) {
@@ -323,6 +334,12 @@ function createPresetEntries(cases, byExtension) {
     const modelUrl = dataUrlForFixturePath(modelPath);
     const motionPath = byExtension?.vmd?.[fixtureCase.motion?.key];
     const motionUrl = dataUrlForFixturePath(motionPath);
+    const secondaryModelPath = byExtension?.[fixtureCase.secondary?.model?.extension]?.[
+      fixtureCase.secondary?.model?.key
+    ];
+    const secondaryModelUrl = dataUrlForFixturePath(secondaryModelPath);
+    const secondaryMotionPath = byExtension?.vmd?.[fixtureCase.secondary?.motion?.key];
+    const secondaryMotionUrl = dataUrlForFixturePath(secondaryMotionPath);
     const backgroundUrl = dataUrlForFixturePath(
       byExtension?.[fixtureCase.background?.extension]?.[fixtureCase.background?.key]
     );
@@ -336,11 +353,23 @@ function createPresetEntries(cases, byExtension) {
     if (modelUrl === undefined || motionUrl === undefined) {
       return [];
     }
+    if (fixtureCase.secondary && (secondaryModelUrl === undefined || secondaryMotionUrl === undefined)) {
+      return [];
+    }
     return [{
       id: fixtureCase.name,
       name: fixtureCase.name,
       modelUrl,
       motionUrl,
+      ...(secondaryModelUrl && secondaryMotionUrl
+        ? {
+            secondaryModelUrl,
+            secondaryMotionUrl,
+            ...(Array.isArray(fixtureCase.secondary?.position)
+              ? { secondaryPosition: fixtureCase.secondary.position }
+              : {})
+          }
+        : {}),
       ...(backgroundUrl ? { backgroundUrl } : {}),
       ...(cameraUrl ? { cameraUrl } : {}),
       ...(audioUrl ? { audioUrl } : {}),
@@ -373,6 +402,16 @@ function resolveFixturePath(fixturePath) {
 }
 
 function resolveRequestPath(pathname) {
+  if (pathname.startsWith(workerDistRoute)) {
+    const relativePath = normalize(decodeURIComponent(pathname.slice(workerDistRoute.length))).replace(
+      /^[/\\]+/,
+      ""
+    );
+    const filePath = resolve(workerDistRoot, relativePath);
+    return isPathInside(filePath, workerDistRoot)
+      ? filePath
+      : resolve(root, "__mmd_worker_dist_forbidden__");
+  }
   if (pathname.startsWith(dataRoute)) {
     if (dataRoot === undefined) {
       return resolve(root, "__mmd_data_root_not_configured__");
@@ -414,6 +453,13 @@ function resolveRequestPath(pathname) {
     return resolve(viewerRoot, pathname.slice(1));
   }
   return resolve(root, `.${normalize(decodeURIComponent(pathname))}`);
+}
+
+function rewriteWorkerModule(source) {
+  return source
+    .replaceAll('from "three"', 'from "/node_modules/three/build/three.module.js"')
+    .replaceAll('from "three/webgpu"', 'from "/node_modules/three/build/three.webgpu.js"')
+    .replaceAll('from "three/tsl"', 'from "/node_modules/three/build/three.tsl.js"');
 }
 
 function isAllowedPath(filePath) {

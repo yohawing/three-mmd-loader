@@ -7,9 +7,11 @@ import { captureCanvas, captureAfterAndCompare, createViewerDebugApi, markBefore
 import { dom, loadedFileSwitcherValue, setStatus, toggleLoadMenu, updateChromeHeights, updatePlaybackDisplay, updatePlayToggle, updateStageState } from "./lib/dom.js";
 import { getLocale, resolveInitialLocale, setLocale } from "./lib/i18n.js";
 import { disposeActivePhysicsBackend } from "./lib/physics-backend.js";
-import { loadModelFolder, loadModelFromUrl, modelFileKey, bindDropTarget, clearModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
-import { clearMotion, loadMotion, loadMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
-import { evaluateRuntime, finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
+import { disposeWorkerRuntimeFactory, getViewerRuntimeEvidence, prepareViewerRuntime } from "./lib/runtime-worker.js";
+import { createViewerPerformanceApi } from "./lib/performance.js";
+import { loadModelFolder, loadModelFromUrl, loadSecondaryModelFromUrl, modelFileKey, bindDropTarget, clearModel, frameCurrentModel, resetFolderModelState, switchFolderModel } from "./lib/model-loading.js";
+import { clearMotion, loadMotion, loadMotionFromUrl, loadSecondaryMotionFromUrl, loadPose, classifyVmdFiles, motionFileKey, resetMotionSwitcherState, switchMotion, updateMotionSwitcher } from "./lib/motion-loading.js";
+import { finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
 import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
 import { updateViewerPipelineStatus } from "./lib/viewer-pipeline.js";
@@ -23,15 +25,35 @@ const viewerApi = {
   get renderer() { return state.renderer; },
   get scene() { return state.scene; },
   loadModelUrl: loadModelFromUrl,
+  loadSecondaryModelUrl: loadSecondaryModelFromUrl,
   loadMotionUrl: loadMotionFromUrl,
+  loadSecondaryMotionUrl: loadSecondaryMotionFromUrl,
   loadBackgroundUrl: loadBackgroundFromUrl,
   loadCameraUrl: loadCameraFromUrl,
   frameModel: frameCurrentModel,
   get currentModel() { return state.currentModel; },
+  get secondaryModel() { return state.secondaryModel; },
   get currentMotion() { return state.currentMotion; },
+  get secondaryMotion() { return state.secondaryMotion; },
   get currentBackground() { return state.currentBackground; },
-  get currentCameraMotion() { return state.currentCameraMotion; }
+  get currentCameraMotion() { return state.currentCameraMotion; },
+  get runtimeStatus() { return getViewerRuntimeEvidence(); }
 };
+const performanceApi = createViewerPerformanceApi();
+if (performanceApi) {
+  viewerApi.performance = performanceApi;
+  const snapshotButton = document.querySelector("#viewer-performance-snapshot");
+  const snapshotReport = document.querySelector("#viewer-performance-report");
+  if (
+    snapshotButton instanceof window.HTMLButtonElement &&
+    snapshotReport instanceof window.HTMLOutputElement
+  ) {
+    snapshotButton.hidden = false;
+    snapshotButton.addEventListener("click", () => {
+      snapshotReport.textContent = JSON.stringify(performanceApi.snapshot());
+    });
+  }
+}
 if (debugEnabled) {
   viewerApi.debug = createViewerDebugApi();
   window.mmdDebug = viewerApi.debug;
@@ -43,6 +65,7 @@ void initializeViewer();
 async function initializeViewer() {
   try {
     await setupScene();
+    await prepareViewerRuntime();
     initLocalization();
     initVolumeControls();
     // Warm browser cache for kuroko stand-in model (silent on failure).
@@ -90,7 +113,8 @@ function bindControls() {
   bindDebugControls();
   dom.modelFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
-    if (files && files.length > 0) void loadModelFolder(Array.from(files));
+    if (!files || files.length === 0) return;
+    void loadModelFolder(Array.from(files));
   });
   dom.modelSwitcher?.addEventListener("sl-change", () => {
     const selectedValue = loadedFileSwitcherValue(dom.modelSwitcher);
@@ -100,7 +124,7 @@ function bindControls() {
   dom.modelClearButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     clearModel();
-    renderStillFrame();
+    void renderStillFrame();
   });
   dom.motionSwitcher?.addEventListener("sl-change", () => {
     const selectedValue = loadedFileSwitcherValue(dom.motionSwitcher);
@@ -142,7 +166,7 @@ function bindControls() {
   dom.backgroundClearButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     clearBackground();
-    renderStillFrame();
+    void renderStillFrame();
   });
   dom.cameraSwitcher?.addEventListener("sl-change", () => {
     const selectedValue = loadedFileSwitcherValue(dom.cameraSwitcher);
@@ -152,7 +176,7 @@ function bindControls() {
   dom.cameraClearButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     clearCameraMotion();
-    renderStillFrame();
+    void renderStillFrame();
   });
   dom.backgroundFolderInput?.addEventListener("change", (event) => {
     const files = event.target instanceof HTMLInputElement ? event.target.files : undefined;
@@ -169,7 +193,7 @@ function bindControls() {
     state.isSeeking = true;
     state.elapsedSeconds = Number(dom.timeline.value);
     state.runtimePhysicsDisabledOptionsScratch.physics = false;
-    evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
+    void renderStillFrame(state.runtimePhysicsDisabledOptionsScratch);
     syncAudioToMotionTime();
     scheduleSeekEnd();
   });
@@ -362,7 +386,7 @@ function seekToFrame(frame) {
     dom.timeline.setAttribute("value", String(state.elapsedSeconds));
   }
   state.runtimePhysicsDisabledOptionsScratch.physics = false;
-  evaluateRuntime(state.runtimePhysicsDisabledOptionsScratch);
+  void renderStillFrame(state.runtimePhysicsDisabledOptionsScratch);
   if (dom.frameCurrentInput instanceof window.HTMLInputElement) {
     dom.frameCurrentInput.value = String(targetFrame);
   }
@@ -479,6 +503,7 @@ function disposeViewerResources() {
   state.pendingMotionLabel = undefined;
   clearAudioSource();
   disposeActivePhysicsBackend();
+  disposeWorkerRuntimeFactory();
   state.frameTimer.dispose();
   state.controls?.dispose();
   state.renderer?.dispose();

@@ -25,6 +25,9 @@ export class WasmMmdClip {
         return ret >>> 0;
     }
     /**
+     * Builds a VMD clip paired with an imported PMX model. The PMX
+     * registration semantics include fixed-axis projection and the
+     * registered 64-byte VMD interpolation layout.
      * @param {WasmMmdModel} model
      * @param {Uint8Array} data
      * @returns {WasmMmdClip}
@@ -1062,6 +1065,28 @@ export class WasmPmxParsedModel {
         }
     }
     /**
+     * Return non-geometry JSON with vertex morph offsets replaced by empty arrays.
+     * @returns {string}
+     */
+    nonGeometryJsonWithoutVertexOffsets() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.wasmpmxparsedmodel_nonGeometryJsonWithoutVertexOffsets(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * Parse PMX bytes once and expose split non-geometry JSON plus geometry DTO getters.
      * @param {Uint8Array} data
      * @returns {WasmPmxParsedModel}
@@ -1075,8 +1100,75 @@ export class WasmPmxParsedModel {
         }
         return WasmPmxParsedModel.__wrap(ret[0]);
     }
+    /**
+     * Return all vertex morph offsets through compact typed arrays.
+     * @returns {WasmPmxVertexMorphOffsets}
+     */
+    vertexMorphOffsets() {
+        const ret = wasm.wasmpmxparsedmodel_vertexMorphOffsets(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmPmxVertexMorphOffsets.__wrap(ret[0]);
+    }
 }
 if (Symbol.dispose) WasmPmxParsedModel.prototype[Symbol.dispose] = WasmPmxParsedModel.prototype.free;
+
+/**
+ * Typed-array DTO for all PMX vertex morph offsets.
+ *
+ * `morphSpans` stores `[start, count]` per morph. `vertexIndices` stores one
+ * vertex index per offset and `positions` stores the matching XYZ triples.
+ */
+export class WasmPmxVertexMorphOffsets {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmPmxVertexMorphOffsets.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmPmxVertexMorphOffsetsFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmPmxVertexMorphOffsetsFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmpmxvertexmorphoffsets_free(ptr, 0);
+    }
+    /**
+     * Copy of `[start, count]` spans for every morph.
+     * @returns {Uint32Array}
+     */
+    morphSpans() {
+        const ret = wasm.wasmpmxvertexmorphoffsets_morphSpans(this.__wbg_ptr);
+        var v1 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of flattened XYZ position offsets.
+     * @returns {Float32Array}
+     */
+    positions() {
+        const ret = wasm.wasmpmxvertexmorphoffsets_positions(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * Copy of one vertex index per flattened vertex morph offset.
+     * @returns {Uint32Array}
+     */
+    vertexIndices() {
+        const ret = wasm.wasmpmxvertexmorphoffsets_vertexIndices(this.__wbg_ptr);
+        var v1 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+}
+if (Symbol.dispose) WasmPmxVertexMorphOffsets.prototype[Symbol.dispose] = WasmPmxVertexMorphOffsets.prototype.free;
 
 export class WasmReducedPoseResult {
     static __wrap(ptr) {
@@ -1836,6 +1928,9 @@ const WasmPmxGeometryFinalization = (typeof FinalizationRegistry === 'undefined'
 const WasmPmxParsedModelFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmpmxparsedmodel_free(ptr, 1));
+const WasmPmxVertexMorphOffsetsFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmpmxvertexmorphoffsets_free(ptr, 1));
 const WasmReducedPoseResultFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmreducedposeresult_free(ptr, 1));

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global Event, document, window */
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -37,6 +38,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
+const workerDistRoute = "/__mmd_worker_dist__/";
 const syntheticFixturePath = "test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx";
 const defaultOutputDir = path.join(repoRoot, "test-results", "visual", "viewer-self-shadow");
 const cameraViews = {
@@ -53,6 +55,7 @@ const localCameraViews = {
 };
 const mimeTypes = new Map([
   ...commonWebMimeTypes,
+  [".mjs", "text/javascript; charset=utf-8"],
   [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".bmp", "image/bmp"],
   [".tga", "image/x-tga"], [".dds", "image/vnd-ms.dds"]
 ]);
@@ -71,7 +74,11 @@ async function main() {
     motion: options.localMotion ? path.dirname(options.localMotion) : undefined,
     background: options.localBackground ? path.dirname(options.localBackground) : undefined
   };
-  const server = await startStaticServer(pathname => resolveRequestPath(pathname, dataRoots), mimeTypes);
+  const server = await startStaticServer(
+    pathname => resolveRequestPath(pathname, dataRoots),
+    mimeTypes,
+    rewriteWorkerResponse
+  );
   const report = {
     fixture: options.localModel ?? syntheticFixturePath,
     backend: options.backend,
@@ -108,6 +115,8 @@ async function main() {
     const motionUrl = options.localMotion
       ? dataUrl("motion", options.localMotion)
       : undefined;
+    await verifyRuntimeRoutes(browser, server.origin, modelUrl, options.backend);
+    await verifySettledInlineReference(browser, server.origin, modelUrl, options.backend);
     const characterScenario = await captureScenario(
       browser, server.origin, modelUrl, undefined, motionUrl, "character", options.outputDir, Boolean(options.localModel), options.rawVisibility, options.standardReceiver, options.dedicatedRawVisibility, options.backend
     );
@@ -344,7 +353,7 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
   try {
     const shadowState = enabled ? "1" : "0";
     await page.goto(
-      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0&runtime=js&selfShadow=${shadowState}`,
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0&selfShadow=${shadowState}`,
       { waitUntil: "domcontentloaded" }
     );
     await waitForViewer(page);
@@ -352,6 +361,16 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
     if (!loaded) {
       const status = await page.locator("#status").textContent().catch(() => "<missing>");
       throw new Error(`Main viewer model URL load returned false: status=${status}; messages=${JSON.stringify(messages)}`);
+    }
+    const settledBarrierCase = name === "character-primary" && enabled;
+    if (settledBarrierCase) {
+      const secondaryLoaded = await page.evaluate(async (url) => globalThis.mmdViewer.loadSecondaryModelUrl(url), modelUrl);
+      if (!secondaryLoaded) {
+        throw new Error("Main viewer secondary model URL load returned false.");
+      }
+      await page.evaluate(() => {
+        globalThis.mmdViewer.secondaryModel.root.visible = false;
+      });
     }
     if (backgroundUrl) {
       const backgroundLoaded = await page.evaluate(async (url) => globalThis.mmdViewer.loadBackgroundUrl(url), backgroundUrl);
@@ -379,7 +398,15 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
       throw new Error(`Unexpected renderer backend for ${backend}: ${JSON.stringify(native)}`);
     }
     const screenshotPath = path.join(outputDir, `${name}-${enabled ? "on" : "off"}.png`);
-    const observation = await captureInitialShadowState(page, camera, screenshotPath, motionUrl ? 0.5 : 0);
+    const evaluationSeconds = motionUrl || settledBarrierCase ? 0.5 : 0;
+    const observation = await captureInitialShadowState(page, camera, screenshotPath, evaluationSeconds);
+    if (settledBarrierCase) {
+      assertSettledCharacterBarrier(observation.settledState, evaluationSeconds);
+      const captureDataUrl = await page.evaluate(async () => globalThis.mmdViewer.debug.captureCanvas());
+      if (!captureDataUrl?.startsWith("data:image/png;base64,")) {
+        throw new Error("Settled canvas capture did not return a PNG data URL.");
+      }
+    }
     const characterSilhouette = backgroundUrl && enabled
       ? await captureCharacterSilhouette(page, screenshotPath.replace(/\.png$/, "-character-mask.png"))
       : undefined;
@@ -494,7 +521,7 @@ async function captureCharacterSilhouette(page, outputPath) {
 }
 
 async function captureInitialShadowState(page, view, outputPath, evaluationSeconds) {
-  const observation = await page.evaluate(({ cameraView, seconds }) => {
+  const observation = await page.evaluate(async ({ cameraView, seconds }) => {
     const viewer = globalThis.mmdViewer;
     if (cameraView.useAutoFit) {
       const target = viewer.controls.target;
@@ -515,11 +542,12 @@ async function captureInitialShadowState(page, view, outputPath, evaluationSecon
         object.visible = false;
       }
     });
-    viewer.debug.evaluateAt(seconds, { physics: false });
+    const settledState = await viewer.debug.evaluateAt(seconds, { physics: false });
     const camera = viewer.camera;
     camera.updateMatrixWorld();
     return {
       diagnostics: viewer.debug.selfShadowDiagnostics(),
+      settledState,
       camera: {
         position: camera.position.toArray(),
         target: viewer.controls.target.toArray(),
@@ -610,7 +638,7 @@ async function captureShadowCameraLayer(page, casterVisible, outputPath) {
       nonBlackPixels: countForegroundPixels(png)
     };
   } finally {
-    await page.evaluate((state) => {
+    await page.evaluate(async (state) => {
       const viewer = globalThis.mmdViewer;
       viewer.currentModel?.root?.traverse?.((object) => {
         const saved = state.casterVisibility.find((item) => item.uuid === object.uuid);
@@ -625,7 +653,7 @@ async function captureShadowCameraLayer(page, casterVisible, outputPath) {
         element.style.visibility = element.getAttribute("data-self-shadow-gate-visibility") ?? "";
         element.removeAttribute("data-self-shadow-gate-visibility");
       }
-      viewer.debug.evaluateAt(0, { physics: false });
+      await viewer.debug.evaluateAt(0, { physics: false });
     }, restoreState);
   }
 }
@@ -635,6 +663,11 @@ function dataUrl(root, filePath) {
 }
 
 function resolveRequestPath(pathname, dataRoots) {
+  if (pathname.startsWith(workerDistRoute)) {
+    const distRoot = path.join(repoRoot, "dist");
+    const candidate = path.resolve(distRoot, decodeURIComponent(pathname.slice(workerDistRoute.length)));
+    return isPathInside(candidate, distRoot) ? candidate : undefined;
+  }
   if (pathname.startsWith("/__mmd_anim_wasm/")) {
     const wasmRoot = path.join(repoRoot, "dist", "parser", "wasm", "generated");
     const candidate = path.resolve(wasmRoot, decodeURIComponent(pathname.slice(17)));
@@ -648,6 +681,256 @@ function resolveRequestPath(pathname, dataRoots) {
   }
   const candidate = path.resolve(repoRoot, path.normalize(decodeURIComponent(pathname)).replace(/^[/\\]+/, "") || "examples/viewer/index.html");
   return isPathInside(candidate, repoRoot) ? candidate : undefined;
+}
+
+async function verifyRuntimeRoutes(browser, origin, modelUrl, backend) {
+  for (const runtime of ["mmd-anim", "js"]) {
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on("pageerror", error => pageErrors.push(error.message));
+    try {
+      await page.goto(
+        `${origin}/examples/viewer/?backend=${backend}&debug&physics=0&runtime=${runtime}`,
+        { waitUntil: "domcontentloaded" }
+      );
+      await waitForViewer(page);
+      const loaded = await page.evaluate(async (url) => globalThis.mmdViewer.loadModelUrl(url), modelUrl);
+      const status = await page.evaluate(() => globalThis.mmdViewer.runtimeStatus);
+      if (!loaded || status.requested !== runtime || status.active !== runtime || status.transport !== "inline" || pageErrors.length > 0) {
+        throw new Error(`Explicit runtime route failed: ${JSON.stringify({ runtime, loaded, status, pageErrors })}`);
+      }
+    } finally {
+      await page.close();
+    }
+  }
+
+  const fallbackContext = await browser.newContext();
+  await fallbackContext.addInitScript(() => {
+    Object.defineProperty(window, "Worker", { configurable: true, value: undefined });
+  });
+  const fallbackPage = await fallbackContext.newPage();
+  const fallbackPageErrors = [];
+  fallbackPage.on("pageerror", error => fallbackPageErrors.push(error.message));
+  try {
+    await fallbackPage.goto(
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await waitForViewer(fallbackPage);
+    const preflightWarning = await fallbackPage.evaluate(() => ({
+      message: document.querySelector("#status")?.textContent,
+      warning: document.querySelector(".top-bar")?.classList.contains("is-warning")
+    }));
+    const loaded = await fallbackPage.evaluate(async (url) => globalThis.mmdViewer.loadModelUrl(url), modelUrl);
+    const fallback = await fallbackPage.evaluate(() => globalThis.mmdViewer.runtimeStatus);
+    if (
+      !loaded ||
+      fallback.requested !== "worker" ||
+      fallback.active !== "mmd-anim" ||
+      fallback.readiness !== "ready" ||
+      !fallback.fallbackReason?.includes("Worker API") ||
+      !preflightWarning.message?.includes("Worker unavailable") ||
+      preflightWarning.warning !== true ||
+      fallbackPageErrors.length > 0
+    ) {
+      throw new Error(`Worker preflight fallback failed: ${JSON.stringify({ loaded, fallback, preflightWarning })}`);
+    }
+  } finally {
+    await fallbackContext.close();
+  }
+
+  const initializationFailureContext = await browser.newContext();
+  await initializationFailureContext.route("**/mmd_bullet.worker.wasm", route => route.abort());
+  const initializationFailurePage = await initializationFailureContext.newPage();
+  const initializationFailurePageErrors = [];
+  initializationFailurePage.on("pageerror", error => initializationFailurePageErrors.push(error.message));
+  try {
+    await initializationFailurePage.goto(
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await waitForViewer(initializationFailurePage);
+    const initializationFailure = await initializationFailurePage.evaluate(async (url) => {
+      const loaded = await globalThis.mmdViewer.loadModelUrl(url);
+      return {
+        loaded,
+        status: globalThis.mmdViewer.runtimeStatus,
+        bannerHidden: document.querySelector("#runtime-error")?.hidden,
+        banner: document.querySelector("#runtime-error")?.textContent
+      };
+    }, modelUrl);
+    if (
+      initializationFailure.loaded !== false ||
+      initializationFailure.status.active !== "worker" ||
+      initializationFailure.status.readiness !== "failed" ||
+      initializationFailure.status.failureStage !== "initialization" ||
+      initializationFailure.bannerHidden !== false ||
+      !initializationFailure.banner?.includes("?runtime=mmd-anim") ||
+      initializationFailurePageErrors.length > 0
+    ) {
+      throw new Error(`Worker initialization fail-closed gate failed: ${JSON.stringify(initializationFailure)}`);
+    }
+  } finally {
+    await initializationFailureContext.close();
+  }
+
+  const crashPage = await browser.newPage();
+  const crashPageErrors = [];
+  crashPage.on("pageerror", error => crashPageErrors.push(error.message));
+  try {
+    await crashPage.goto(
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await waitForViewer(crashPage);
+    const loaded = await crashPage.evaluate(async (url) => globalThis.mmdViewer.loadModelUrl(url), modelUrl);
+    if (!loaded) {
+      throw new Error("Worker runtime crash gate could not load its model.");
+    }
+    const crash = await crashPage.evaluate(async () => {
+      document.querySelector("#play-toggle")?.dispatchEvent(new Event("click"));
+      const runtime = globalThis.mmdViewer.currentModel.runtime;
+      const settledRejected = globalThis.mmdViewer.debug.evaluateAt(0.5, { physics: false })
+        .then(() => false, () => true);
+      runtime.poolLease.crash(new Error("browser runtime crash gate"));
+      await settledRejected;
+      return {
+        settledRejected: await settledRejected,
+        status: globalThis.mmdViewer.runtimeStatus,
+        playIcon: document.querySelector("#play-toggle")?.getAttribute("name"),
+        bannerHidden: document.querySelector("#runtime-error")?.hidden,
+        banner: document.querySelector("#runtime-error")?.textContent
+      };
+    });
+    if (
+      crash.settledRejected !== true ||
+      crash.status.readiness !== "failed" ||
+      crash.status.failureStage !== "runtime" ||
+      !crash.status.fallbackReason?.includes("browser runtime crash gate") ||
+      crash.playIcon !== "play" ||
+      crash.bannerHidden !== false ||
+      !crash.banner?.includes("?runtime=mmd-anim") ||
+      crashPageErrors.length > 0
+    ) {
+      throw new Error(`Worker runtime fail-closed gate failed: ${JSON.stringify(crash)}`);
+    }
+  } finally {
+    await crashPage.close();
+  }
+}
+
+async function verifySettledInlineReference(browser, origin, modelUrl, backend) {
+  const worker = await captureSettledRuntimeReference(browser, origin, modelUrl, backend);
+  const inline = await captureSettledRuntimeReference(browser, origin, modelUrl, backend, "mmd-anim");
+  const tolerance = 1e-6;
+
+  if (worker.characters.length !== inline.characters.length) {
+    throw new Error(`Settled runtime character count mismatch: ${JSON.stringify({ worker, inline })}`);
+  }
+  for (let characterIndex = 0; characterIndex < worker.characters.length; characterIndex += 1) {
+    const workerCharacter = worker.characters[characterIndex];
+    const inlineCharacter = inline.characters[characterIndex];
+    if (workerCharacter.length !== inlineCharacter.length) {
+      throw new Error(`Settled runtime pose length mismatch: ${JSON.stringify({ characterIndex, worker: workerCharacter.length, inline: inlineCharacter.length })}`);
+    }
+    for (let valueIndex = 0; valueIndex < workerCharacter.length; valueIndex += 1) {
+      if (
+        !Number.isFinite(workerCharacter[valueIndex]) ||
+        !Number.isFinite(inlineCharacter[valueIndex]) ||
+        Math.abs(workerCharacter[valueIndex] - inlineCharacter[valueIndex]) > tolerance
+      ) {
+        throw new Error(`Settled runtime pose mismatch: ${JSON.stringify({ characterIndex, valueIndex, worker: workerCharacter[valueIndex], inline: inlineCharacter[valueIndex], tolerance })}`);
+      }
+    }
+  }
+  if (worker.capture !== inline.capture) {
+    throw new Error("Settled Worker capture did not match the inline runtime reference.");
+  }
+}
+
+async function captureSettledRuntimeReference(browser, origin, modelUrl, backend, runtime) {
+  const page = await browser.newPage();
+  const pageErrors = [];
+  page.on("pageerror", error => pageErrors.push(error.message));
+  try {
+    const runtimeQuery = runtime ? `&runtime=${runtime}` : "";
+    await page.goto(
+      `${origin}/examples/viewer/?backend=${backend}&debug&physics=0${runtimeQuery}`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await waitForViewer(page);
+    const loaded = await page.evaluate(async (url) => {
+      const viewer = globalThis.mmdViewer;
+      return await viewer.loadModelUrl(url) && await viewer.loadSecondaryModelUrl(url);
+    }, modelUrl);
+    if (!loaded) {
+      throw new Error(`Settled runtime reference model load failed: runtime=${runtime ?? "worker"}`);
+    }
+    const result = await page.evaluate(async () => {
+      const viewer = globalThis.mmdViewer;
+      const settled = await viewer.debug.evaluateAt(0.5, { physics: false });
+      const models = [viewer.currentModel, viewer.secondaryModel];
+      const characters = models.map((model) => {
+        const values = [];
+        for (const bone of model.mesh.skeleton.bones) {
+          values.push(
+            bone.position.x, bone.position.y, bone.position.z,
+            bone.quaternion.x, bone.quaternion.y, bone.quaternion.z, bone.quaternion.w,
+            bone.scale.x, bone.scale.y, bone.scale.z
+          );
+        }
+        return values;
+      });
+      return {
+        status: viewer.runtimeStatus,
+        settled,
+        characters,
+        capture: await viewer.debug.captureCanvas()
+      };
+    });
+    const expectedRuntime = runtime ?? "worker";
+    if (
+      result.status.active !== expectedRuntime ||
+      result.settled.characters?.length !== 2 ||
+      !result.capture?.startsWith("data:image/png;base64,") ||
+      pageErrors.length > 0
+    ) {
+      throw new Error(`Settled runtime reference failed: ${JSON.stringify({
+        expectedRuntime,
+        status: result.status,
+        settled: result.settled,
+        captureIsPng: result.capture?.startsWith("data:image/png;base64,"),
+        pageErrors
+      })}`);
+    }
+    return result;
+  } finally {
+    await page.close();
+  }
+}
+
+function assertSettledCharacterBarrier(settledState, seconds) {
+  const expectedFrame = Math.round(seconds * (settledState?.runtime?.frameRate ?? 30));
+  const characters = settledState?.characters;
+  if (!Array.isArray(characters) || characters.length !== 2) {
+    throw new Error(`Settled barrier expected two characters: ${JSON.stringify(characters)}`);
+  }
+  const mismatched = characters.filter((character) =>
+    character.frame !== expectedFrame || Math.abs(character.seconds - seconds) > 1e-6
+  );
+  if (mismatched.length > 0) {
+    throw new Error(`Settled barrier mixed character frames: ${JSON.stringify({ expectedFrame, seconds, characters })}`);
+  }
+}
+
+function rewriteWorkerResponse(source, pathname) {
+  if (!pathname.startsWith(workerDistRoute) || !/\.(?:m?js)$/.test(pathname)) {
+    return undefined;
+  }
+  return source.toString("utf8")
+    .replaceAll('from "three"', 'from "/node_modules/three/build/three.module.js"')
+    .replaceAll('from "three/webgpu"', 'from "/node_modules/three/build/three.webgpu.js"')
+    .replaceAll('from "three/tsl"', 'from "/node_modules/three/build/three.tsl.js"');
 }
 
 function parseArgs(args) {

@@ -12,6 +12,7 @@ import type {
   DefaultMmdRuntimeOptions,
   MmdFrameState,
   MmdRuntime,
+  MmdRuntimeAsyncEvaluateOptions,
   MmdRuntimeEvaluateOptions,
   MmdRuntimeTickOptions
 } from "../runtime/index.js";
@@ -306,6 +307,8 @@ export interface ThreeMmdModel {
    * need to retain a stable snapshot.
    */
   update(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState;
+  /** Evaluates and applies an exact frame before resolving. */
+  updateAsync(seconds: number, options?: MmdRuntimeAsyncEvaluateOptions): Promise<MmdFrameState>;
 }
 
 export type ThreeMmdCoreDiagnostic =
@@ -748,6 +751,23 @@ function createThreeMmdModel(options: {
       runtimeTickOptions.physics = updateOptions?.physics;
       runtimeTickOptions.ik = updateOptions?.ik;
       return options.runtime.tick(seconds, runtimeTickOptions);
+    },
+    updateAsync(seconds, updateOptions) {
+      runtimeTickOptions.physics = updateOptions?.physics;
+      runtimeTickOptions.ik = updateOptions?.ik;
+      const tickAsync = options.runtime.tickAsync;
+      if (tickAsync) {
+        return tickAsync.call(options.runtime, seconds, {
+          ...runtimeTickOptions,
+          signal: updateOptions?.signal
+        });
+      }
+      const state = options.runtime.tick(seconds, runtimeTickOptions);
+      return Promise.resolve({
+        seconds: state.seconds,
+        frame: state.frame,
+        frameRate: state.frameRate
+      });
     }
   };
 }

@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.8.0] - 2026-07-30
+
+### Added
+
+- Add the `@yohawing/three-mmd-loader/worker` entry point with
+  worker-hosted runtime evaluation, transferable and shared-memory pose
+  transport, multiplexed logical runtimes, and a bounded runtime pool.
+- Add settled Worker evaluation through `MmdRuntime.tickAsync()`,
+  `MmdRuntime.whenReady()`, and `ThreeMmdModel.updateAsync()` for seek, still,
+  and capture workflows that must wait for the requested pose.
+- Add worker-compatible external Bullet physics artifacts and integrate worker
+  runtime selection into the example viewer.
+- Add a second-character viewer workflow with independent model lifecycle and
+  shared playback controls.
+- Add runtime worker benchmarks and viewer performance diagnostics for
+  profiling initialization, transport, animation, and rendering costs.
+
+### Changed
+
+- Replace the package-owned Ammo/Bullet binding with the mmd-anim v0.3.3
+  Bullet backend while retaining the stable Custom Bullet factory and asset
+  names.
+- Keep PMX vertex morph offsets in typed sparse buffers through parser and
+  Three.js/WebGPU consumers, avoiding per-entry object materialization on the
+  optimized path.
+- Coalesce worker ticks during initialization and automatically select shared
+  pose transport when the environment supports it.
+- Use the Worker runtime by default in the example viewer, while keeping
+  explicit `mmd-anim` and JavaScript inline routes and a reasoned capability
+  fallback when the Worker API is unavailable.
+- Simplify example Viewer model loading to one new/add checkbox shared by
+  folder and local-fixture loading, and keep runtime details in diagnostics
+  instead of the persistent header badge.
+- Interpret PMX edge size as a CSS-pixel outline width in both WebGL and TSL,
+  deriving device-pixel expansion from the renderer pixel ratio and viewport
+  instead of resolution-tuned constants.
+- Remove the legacy `AmmoMmdPhysicsBackend`, `createAmmoMmdPhysicsBackend`,
+  and `loadAmmoNamespace` exports and the direct `ammo.js` dependency. Use
+  `loadCustomBulletMmdModule()` and `createCustomBulletMmdPhysicsBackend()`
+  from the physics entry point instead.
+
+### Fixed
+
+- Preserve physics ownership and disposal when two viewer characters are
+  loaded, replaced, or cleared independently.
+- Preserve worker failure semantics across initialization, pooled runtime
+  crashes, and viewer startup instead of silently falling back after an
+  explicitly requested worker runtime fails.
+- Stop Viewer playback and show persistent runtime diagnostics when Worker
+  initialization or execution fails after preflight.
+- Avoid animation-loop render re-entry while asynchronous shader compilation
+  is active without suppressing still-frame capture or explicit debug renders.
+- Synchronize IK convergence behavior with the bundled mmd-anim runtime.
+
 ## [0.7.0] - 2026-07-23
 
 ### Added

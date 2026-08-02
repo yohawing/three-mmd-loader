@@ -10,17 +10,6 @@ export const initialRendererBackend = rendererBackendForPipeline(initialViewerPi
 const viewportStorageKey = "three-mmd-loader.viewer.viewport.v1";
 const storedViewportSettings = readStoredViewportSettings();
 const initialPhysicsMaxSubSteps = parseDebugInteger(query.get("maxSubSteps"), 5);
-const initialDynamicWithBoneFeedback = parseDebugNumber(
-  query.get("dynamicWithBoneRotationFeedbackScale"),
-  1
-);
-const initialCollisionMargin = parseDebugNumber(query.get("collisionMargin"), -1);
-const initialSolverIterations = parseDebugInteger(query.get("solverIterations"), 20);
-const initialSplitImpulse = query.get("splitImpulse") === "0" ? false : true;
-const initialSplitImpulsePenetrationThreshold = parseDebugNumber(
-  query.get("splitImpulsePenetrationThreshold"),
-  -0.04
-);
 const initialSelfShadowEnabled = query.get("selfShadow") !== "0";
 const initialPhysicsEnabled = query.get("physics") === "0" ? false : true;
 
@@ -28,16 +17,25 @@ export const state = {
   hasLocalFixtures: false,
   customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js",
   physicsTuningOptions: {
-    maxSubSteps: initialPhysicsMaxSubSteps,
-    dynamicWithBoneRotationFeedbackScale: initialDynamicWithBoneFeedback,
-    collisionMargin: initialCollisionMargin,
-    solverIterations: initialSolverIterations,
-    splitImpulse: initialSplitImpulse,
-    splitImpulsePenetrationThreshold: initialSplitImpulsePenetrationThreshold
+    maxSubSteps: initialPhysicsMaxSubSteps
   },
   physicsEnabled: initialPhysicsEnabled,
   showDebugColliders: query.has("collision") || query.has("debugCollision"),
   activePhysicsBackend: undefined,
+  // Each loaded character owns one backend. A WeakMap keeps model disposal
+  // independent while the Set lets the motion gate prepare every backend.
+  physicsBackends: new Set(),
+  physicsBackendByModel: new WeakMap(),
+  physicsBackendByLoader: new WeakMap(),
+  workerRuntimeFallback: undefined,
+  workerRuntimeFallbackCount: 0,
+  requestedRuntimeMode: viewerConfig.runtime,
+  activeRuntimeMode: viewerConfig.runtime,
+  runtimeTransport: viewerConfig.runtime === "worker" ? "pending" : "inline",
+  runtimeReadiness: viewerConfig.runtime === "worker" ? "pending" : "ready",
+  runtimePoseAgeFrames: 0,
+  runtimeFallbackReason: undefined,
+  runtimeFailureStage: undefined,
   customBulletMmdModule: undefined,
   customBulletMmdLoadPromise: undefined,
   animationLoader: new ThreeMmdLoader({ runtime: createViewerRuntimeOptions() }),
@@ -59,8 +57,14 @@ export const state = {
   controls: undefined,
   keyLight: undefined,
   currentModel: undefined,
+  secondaryModel: undefined,
+  secondaryModelSource: undefined,
+  // Reused by the playback loop so multi-character playback does not create
+  // a temporary collection on every frame. Index 0 is always the primary.
+  characterModels: [],
   currentBackground: undefined,
   currentMotion: undefined,
+  secondaryMotion: undefined,
   currentPoseSource: undefined,
   currentPoseLabel: undefined,
   currentCameraMotion: undefined,
@@ -104,6 +108,7 @@ export const state = {
   cameraUpScratch: new THREE.Vector3(),
   lightDirectionScratch: new THREE.Vector3(),
   selfShadowBoundsScratch: new THREE.Box3(),
+  selfShadowModelBoundsScratch: new THREE.Box3(),
   selfShadowBoundsRefreshCountdown: 0,
   selfShadowStateScratch: {
     mode: 1,
@@ -214,14 +219,6 @@ function parseDebugInteger(value, fallback) {
   return Number.isFinite(parsed) ? Math.max(Math.trunc(parsed), 0) : fallback;
 }
 
-function parseDebugNumber(value, fallback) {
-  if (value === null) {
-    return fallback;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function resolveInitialViewerPipeline(params) {
   const backend = params.get("backend")?.toLowerCase();
   if (backend === "baseline" || backend === "webgl") {
@@ -265,12 +262,18 @@ export const kurokoModelUrl = "assets/yw_test_model.pmx";
 state.kurokoModelLoadPromise = undefined;
 
 export function hasCurrentMotion() {
-  return state.currentMotion?.animation !== undefined;
+  return state.currentMotion?.animation !== undefined || state.secondaryMotion?.animation !== undefined;
 }
 
 export function currentMotionDurationSeconds() {
   const motionDuration = state.currentMotion?.durationSeconds ?? (state.currentMotion ? animationDurationSeconds(state.currentMotion.animation) : 0);
-  return Math.max(motionDuration, state.currentCameraMotion?.durationSeconds ?? 0);
+  const secondaryMotionDuration = state.secondaryMotion?.durationSeconds
+    ?? (state.secondaryMotion ? animationDurationSeconds(state.secondaryMotion.animation) : 0);
+  return Math.max(
+    motionDuration,
+    secondaryMotionDuration,
+    state.currentCameraMotion?.durationSeconds ?? 0
+  );
 }
 
 export function animationDurationSeconds(animation) {

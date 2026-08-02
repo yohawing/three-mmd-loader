@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Load and play MikuMikuDance (MMD) models (PMX/PMD) and motions (VMD) with physics, right in your browser. Files stay on your device — nothing is uploaded." />
-    <meta name="mmd-viewer-version" content="0.7.0" />
+    <meta name="mmd-viewer-version" content="0.8.0" />
     <title>MMD Loader for Three.js · three-mmd-loader</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" />
@@ -131,6 +131,8 @@
                   <button id="load-asset-camera" type="button" role="menuitem" data-i18n="action.load" hidden>Load</button>
                 </div>
               </details>
+              <button id="viewer-performance-snapshot" type="button" role="menuitem" hidden>Performance snapshot</button>
+              <output id="viewer-performance-report" hidden></output>
             </div>
           </details>
         </nav>
@@ -279,6 +281,7 @@
           <span data-i18n="drop.sub">Model textures are resolved when a folder is selected.</span>
         </div>
         <div class="physics-error" id="physics-error" role="status" hidden></div>
+        <div class="physics-error" id="runtime-error" role="alert" aria-live="assertive" hidden></div>
         <div class="loading-indicator" id="loading-indicator" role="status" aria-live="polite" hidden>
           <span class="loading-spinner" aria-hidden="true"></span>
           <span id="loading-message">Loading</span>
