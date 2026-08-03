@@ -31,17 +31,32 @@ export interface MmdAnimBulletModule {
   refreshMemoryViews?(): void;
 }
 
+export interface MmdAnimBulletContactPoint {
+  readonly rigidBodyIndexA: number;
+  readonly rigidBodyIndexB: number;
+  readonly distance: number;
+  readonly positionWorldOnA: readonly [number, number, number];
+  readonly positionWorldOnB: readonly [number, number, number];
+  readonly normalWorldOnB: readonly [number, number, number];
+}
+
+export interface MmdAnimBulletPhysicsBackend extends MmdPhysicsBackend {
+  debugContactCount(): number;
+  debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[];
+}
+
 export function createMmdAnimBulletPhysicsBackend(
   module: MmdAnimBulletModule,
   options: { fixedTimeStep?: number; maxSubSteps?: number } = {}
-): MmdPhysicsBackend {
-  return new MmdAnimBulletPhysicsBackend(module, options);
+): MmdAnimBulletPhysicsBackend {
+  return new MmdAnimBulletPhysicsBackendImpl(module, options);
 }
 
 const RIGID_BODY_DESC_BYTES = 64;
 const JOINT_DESC_BYTES = 104;
+const CONTACT_POINT_BYTES = 48;
 
-class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
+class MmdAnimBulletPhysicsBackendImpl implements MmdAnimBulletPhysicsBackend {
   readonly name = "mmd-anim-bullet";
   readonly disabled = false;
   private world = 0;
@@ -68,17 +83,22 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
   private readonly outIndexPointer: number;
   private readonly transformPositionPointer: number;
   private readonly transformRotationPointer: number;
+  private readonly contactCountPointer: number;
+  private contactBufferPointer = 0;
+  private contactBufferCapacity = 0;
 
   constructor(private readonly module: MmdAnimBulletModule, private readonly options: { fixedTimeStep?: number; maxSubSteps?: number }) {
     this.outWorldPointer = module._malloc(4);
     this.outIndexPointer = module._malloc(4);
     this.transformPositionPointer = module._malloc(12);
     this.transformRotationPointer = module._malloc(16);
+    this.contactCountPointer = module._malloc(4);
     if (module._mmd_anim_bullet_world_create(this.outWorldPointer) !== 0) {
       module._free(this.outWorldPointer);
       module._free(this.outIndexPointer);
       module._free(this.transformPositionPointer);
       module._free(this.transformRotationPointer);
+      module._free(this.contactCountPointer);
       throw new Error("Failed to create mmd-anim Bullet world.");
     }
     this.module.refreshMemoryViews?.();
@@ -129,6 +149,8 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
     this.module._free(this.outIndexPointer);
     this.module._free(this.transformPositionPointer);
     this.module._free(this.transformRotationPointer);
+    this.module._free(this.contactCountPointer);
+    if (this.contactBufferPointer !== 0) this.module._free(this.contactBufferPointer);
     this.world = 0;
     this.disposedState = true;
   }
@@ -137,6 +159,47 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
     return this.disposedState
       ? [{ level: "warning", code: "PHYSICS_BACKEND_DISPOSED", message: "mmd-anim Bullet physics backend has been disposed." }]
       : [];
+  }
+
+  debugContactCount(): number {
+    const collect = this.module._mmd_anim_bullet_world_collect_contacts;
+    if (this.disposedState || !collect) return 0;
+    if (collect(this.world, 0, 0, this.contactCountPointer) !== 0) return 0;
+    this.module.refreshMemoryViews?.();
+    return this.module.HEAPU32?.[this.contactCountPointer >>> 2] ?? 0;
+  }
+
+  debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[] {
+    const collect = this.module._mmd_anim_bullet_world_collect_contacts;
+    const count = this.debugContactCount();
+    if (!collect || count <= 0) return [];
+    if (count > this.contactBufferCapacity) {
+      if (this.contactBufferPointer !== 0) this.module._free(this.contactBufferPointer);
+      this.contactBufferPointer = this.module._malloc(count * CONTACT_POINT_BYTES);
+      this.contactBufferCapacity = count;
+    }
+    if (collect(this.world, this.contactBufferPointer, this.contactBufferCapacity, this.contactCountPointer) !== 0) return [];
+    this.module.refreshMemoryViews?.();
+    const heap = this.module.HEAPF32;
+    if (!heap) return [];
+    const heapI32 = new Int32Array(heap.buffer);
+    const written = Math.min(
+      this.module.HEAPU32?.[this.contactCountPointer >>> 2] ?? 0,
+      this.contactBufferCapacity
+    );
+    const contacts: MmdAnimBulletContactPoint[] = [];
+    for (let index = 0; index < written; index += 1) {
+      const base = (this.contactBufferPointer + index * CONTACT_POINT_BYTES) >>> 2;
+      contacts.push({
+        rigidBodyIndexA: heapI32[base] ?? -1,
+        rigidBodyIndexB: heapI32[base + 1] ?? -1,
+        distance: heap[base + 2] ?? 0,
+        positionWorldOnA: [heap[base + 3] ?? 0, heap[base + 4] ?? 0, heap[base + 5] ?? 0],
+        positionWorldOnB: [heap[base + 6] ?? 0, heap[base + 7] ?? 0, heap[base + 8] ?? 0],
+        normalWorldOnB: [heap[base + 9] ?? 0, heap[base + 10] ?? 0, heap[base + 11] ?? 0]
+      });
+    }
+    return contacts;
   }
 
   private ensureModel(context: MmdPhysicsStepContext): boolean {

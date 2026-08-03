@@ -4,9 +4,11 @@ export {
   loadCustomBulletMmdModule,
   resolveCustomBulletMmdScriptUrl,
   type CustomBulletMmdLoaderOptions,
+  type CustomBulletMmdPhysicsBackend,
   type CustomBulletMmdPhysicsBackendOptions,
   type CustomBulletMmdModule
 } from "./customBulletMmd.js";
+export type { MmdAnimBulletContactPoint } from "./mmdAnimBullet.js";
 export type MmdPhysicsDiagnosticLevel = "warning" | "error";
 
 export interface MmdPhysicsDiagnostic {
