@@ -229,6 +229,8 @@ export function submitViewerRender(skipIfCompiling = false) {
 
 let viewerRenderToken = 0;
 let viewerRenderCompileToken = 0;
+let viewerRenderCompilePromise;
+let viewerRenderCompileRequest = 0;
 
 // Debug-panel view toggles (selfShadow, normals) flip a renderer/material
 // parameter that changes every currently-visible material's compiled shader
@@ -252,7 +254,7 @@ export async function submitViewerRenderAsync() {
     setStatus("Compiling shaders…", "loading");
   }
   try {
-    await state.renderer.compileAsync(state.scene, state.camera);
+    await compileViewerShaders();
   } catch (error) {
     window.console?.warn?.(
       "[mmd-viewer] async shader precompile failed, falling back to a synchronous render",
@@ -272,6 +274,54 @@ export async function submitViewerRenderAsync() {
     return false;
   }
   return submitViewerRender();
+}
+
+function compileViewerShaders() {
+  viewerRenderCompileRequest += 1;
+  if (!viewerRenderCompilePromise) {
+    viewerRenderCompilePromise = (async () => {
+      while (true) {
+        const request = viewerRenderCompileRequest;
+        await compileViewerColorShaders();
+        await compileViewerSelfShadowShaders();
+        if (request === viewerRenderCompileRequest) {
+          return;
+        }
+      }
+    })().finally(() => {
+      viewerRenderCompilePromise = undefined;
+    });
+  }
+  return viewerRenderCompilePromise;
+}
+
+async function compileViewerColorShaders() {
+  const shadowMapEnabled = state.renderer.shadowMap.enabled;
+  const dedicatedSelfShadowActive =
+    isTslViewerPipeline() &&
+    state.debugSelfShadowEnabled &&
+    state.keyLight?.castShadow === true;
+  if (dedicatedSelfShadowActive) {
+    state.renderer.shadowMap.enabled = false;
+  }
+  try {
+    await state.renderer.compileAsync(state.scene, state.camera);
+  } finally {
+    state.renderer.shadowMap.enabled = shadowMapEnabled;
+  }
+}
+
+async function compileViewerSelfShadowShaders() {
+  if (!state.debugSelfShadowEnabled || state.keyLight?.castShadow !== true) {
+    return;
+  }
+  if (isNativeTslWebGpuPipeline()) {
+    await mmdTslPipeline?.compileAsync?.(state.scene);
+    return;
+  }
+  if (mmdTslSelfShadowPass) {
+    await mmdTslSelfShadowPass.compileAsync(state.renderer, state.scene, state.keyLight);
+  }
 }
 
 export function disposeViewerPipelineModel(model) {
