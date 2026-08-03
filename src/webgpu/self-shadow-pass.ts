@@ -13,6 +13,7 @@ export interface MmdTslSelfShadowPass {
    * every other value (including disabled/missing state) safely uses mode 1.
    */
   setMode(mode: number): boolean;
+  compileAsync(renderer: THREE.WebGPURenderer, scene: THREE.Scene, light: THREE.DirectionalLight): Promise<boolean>;
   render(renderer: THREE.WebGPURenderer, scene: THREE.Scene, light: THREE.DirectionalLight): boolean;
   setReceiverVisibilityDebug(root: THREE.Object3D, enabled: boolean, sampleTarget?: boolean): boolean;
   dispose(): void;
@@ -70,6 +71,68 @@ export function createMmdTslSelfShadowPass(
   ) => void;
   let disposed = false;
 
+  function prepareShadowRender(
+    currentRenderer: THREE.WebGPURenderer,
+    scene: THREE.Scene,
+    currentLight: THREE.DirectionalLight
+  ): { shadowCamera: THREE.Camera; restore: () => void } | undefined {
+    if (
+      disposed ||
+      currentRenderer !== renderer ||
+      currentLight !== light ||
+      currentLight.castShadow !== true
+    ) {
+      return undefined;
+    }
+
+    const shadowCamera = currentLight.shadow.camera;
+    const originalLayerMask = shadowCamera.layers.mask;
+    const originalShadowMapEnabled = currentRenderer.shadowMap.enabled;
+    if (shadowCamera.coordinateSystem !== currentRenderer.coordinateSystem) {
+      shadowCamera.coordinateSystem = currentRenderer.coordinateSystem;
+      shadowCamera.updateProjectionMatrix();
+    }
+    // Three's common Renderer only flips a camera's projection matrix to the
+    // reversed-depth form lazily, the first time that camera is passed to
+    // renderer.render() (node_modules/three/src/renderers/common/
+    // Renderer.js ~line 1516). Update the flag before LightShadow bakes its
+    // matrix so the first async compile and the first real pass agree.
+    const wantsReversedDepth = currentRenderer.reversedDepthBuffer === true;
+    if (shadowCamera.reversedDepth !== wantsReversedDepth) {
+      (shadowCamera as unknown as { _reversedDepth: boolean })._reversedDepth = wantsReversedDepth;
+      shadowCamera.updateProjectionMatrix();
+    }
+    currentLight.shadow.updateMatrices(currentLight);
+
+    resetRendererAndSceneState(currentRenderer, scene, rendererState);
+    try {
+      currentRenderer.shadowMap.enabled = false;
+      shadowCamera.layers.mask = 1 << MMD_SELF_SHADOW_LAYER;
+      scene.overrideMaterial = shadowMaterial;
+      currentRenderer.setRenderTarget(renderTarget);
+      currentRenderer.setClearColor(0x000000, 0);
+      currentRenderer.setRenderObjectFunction(shadowRenderObjectFunction);
+      let restored = false;
+      return {
+        shadowCamera,
+        restore() {
+          if (restored) {
+            return;
+          }
+          restored = true;
+          shadowCamera.layers.mask = originalLayerMask;
+          currentRenderer.shadowMap.enabled = originalShadowMapEnabled;
+          restoreRendererAndSceneState(currentRenderer, scene, rendererState);
+        }
+      };
+    } catch (error) {
+      shadowCamera.layers.mask = originalLayerMask;
+      currentRenderer.shadowMap.enabled = originalShadowMapEnabled;
+      restoreRendererAndSceneState(currentRenderer, scene, rendererState);
+      throw error;
+    }
+  }
+
   return {
     renderTarget,
     depthTexture,
@@ -82,60 +145,31 @@ export function createMmdTslSelfShadowPass(
       shadowModeUniform.value = nextMode;
       return true;
     },
-    render(currentRenderer, scene, currentLight) {
-      if (
-        disposed ||
-        currentRenderer !== renderer ||
-        currentLight !== light ||
-        currentLight.castShadow !== true
-      ) {
+    async compileAsync(currentRenderer, scene, currentLight) {
+      if (typeof currentRenderer.compileAsync !== "function") {
         return false;
       }
-
-      const shadowCamera = currentLight.shadow.camera;
-      const originalLayerMask = shadowCamera.layers.mask;
-      const originalShadowMapEnabled = currentRenderer.shadowMap.enabled;
-      if (shadowCamera.coordinateSystem !== currentRenderer.coordinateSystem) {
-        shadowCamera.coordinateSystem = currentRenderer.coordinateSystem;
-        shadowCamera.updateProjectionMatrix();
+      const prepared = prepareShadowRender(currentRenderer, scene, currentLight);
+      if (!prepared) {
+        return false;
       }
-      // Three's common Renderer only flips a camera's projection matrix to
-      // the reversed-depth form lazily, the first time that camera is passed
-      // to renderer.render() (node_modules/three/src/renderers/common/
-      // Renderer.js ~line 1516: `if (this.reversedDepthBuffer === true &&
-      // camera.reversedDepth !== true) { camera._reversedDepth = true; ...
-      // camera.updateProjectionMatrix(); }`). DirectionalLightShadow.
-      // updateMatrices() below (node_modules/three/src/lights/LightShadow.js
-      // ~line 213) bakes `shadowCamera.projectionMatrix` into `shadow.matrix`
-      // immediately, using whatever matrix is on the camera *right now* --
-      // it does not defer. Left to the lazy path, the very first frame would
-      // bake a non-reversed shadow.matrix while the actual render call flips
-      // the camera to reversed afterward, producing one frame of mismatched
-      // depth comparisons. Sync the flag proactively (mirroring the
-      // renderer's own `_reversedDepth` field, which has no public setter)
-      // so updateMatrices always sees the projection that will actually be
-      // used to render the depth target.
-      const wantsReversedDepth = currentRenderer.reversedDepthBuffer === true;
-      if (shadowCamera.reversedDepth !== wantsReversedDepth) {
-        (shadowCamera as unknown as { _reversedDepth: boolean })._reversedDepth = wantsReversedDepth;
-        shadowCamera.updateProjectionMatrix();
-      }
-      currentLight.shadow.updateMatrices(currentLight);
-
-      resetRendererAndSceneState(currentRenderer, scene, rendererState);
       try {
-        currentRenderer.shadowMap.enabled = false;
-        shadowCamera.layers.mask = 1 << MMD_SELF_SHADOW_LAYER;
-        scene.overrideMaterial = shadowMaterial;
-        currentRenderer.setRenderTarget(renderTarget);
-        currentRenderer.setClearColor(0x000000, 0);
-        currentRenderer.setRenderObjectFunction(shadowRenderObjectFunction);
-        currentRenderer.render(scene, shadowCamera);
+        await currentRenderer.compileAsync(scene, prepared.shadowCamera);
         return true;
       } finally {
-        shadowCamera.layers.mask = originalLayerMask;
-        currentRenderer.shadowMap.enabled = originalShadowMapEnabled;
-        restoreRendererAndSceneState(currentRenderer, scene, rendererState);
+        prepared.restore();
+      }
+    },
+    render(currentRenderer, scene, currentLight) {
+      const prepared = prepareShadowRender(currentRenderer, scene, currentLight);
+      if (!prepared) {
+        return false;
+      }
+      try {
+        currentRenderer.render(scene, prepared.shadowCamera);
+        return true;
+      } finally {
+        prepared.restore();
       }
     },
     setReceiverVisibilityDebug(root, enabled, sampleTarget = true) {

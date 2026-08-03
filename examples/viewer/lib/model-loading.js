@@ -244,7 +244,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     if (state.showDebugColliders) {
       showColliderHelpers();
     }
-    await renderStillFrame();
+    await renderStillFrame({ compileShaders: isTslViewerPipeline() });
     if (!isCurrentLoad()) {
       loadProfile?.mark("cancelled");
       return false;
@@ -383,7 +383,7 @@ export async function loadModelFolder(files, loadOptions = {}) {
     if (state.showDebugColliders) {
       showColliderHelpers();
     }
-    await renderStillFrame();
+    await renderStillFrame({ compileShaders: isTslViewerPipeline() });
     if (!isCurrentLoad()) {
       profile?.mark("cancelled");
       return;
@@ -490,7 +490,7 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     if (state.showDebugColliders) {
       showColliderHelpers();
     }
-    await renderStillFrame();
+    await renderStillFrame({ compileShaders: isTslViewerPipeline() });
     if (!isCurrentLoad()) {
       profile?.mark("cancelled");
       return;

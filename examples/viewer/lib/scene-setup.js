@@ -129,7 +129,6 @@ export function setViewportGridVisible(visible) {
     state.gridHelper.visible = state.viewportGridVisible;
   }
   persistViewportSettings();
-  state.renderer?.render(state.scene, state.camera);
   return state.viewportGridVisible;
 }
 
@@ -139,7 +138,6 @@ export function setViewportAxesVisible(visible) {
     state.axesHelper.visible = state.viewportAxesVisible;
   }
   persistViewportSettings();
-  state.renderer?.render(state.scene, state.camera);
   return state.viewportAxesVisible;
 }
 

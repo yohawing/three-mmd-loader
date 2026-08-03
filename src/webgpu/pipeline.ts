@@ -96,6 +96,10 @@ interface MmdTslAttachedModel {
   readonly sparseMorphs: boolean;
 }
 
+interface MmdTslPipelineInternal extends MmdTslPipeline {
+  compileAsync(scene: THREE.Scene): Promise<boolean>;
+}
+
 interface TslOutlineMetadata {
   readonly sourceMaterialIndex?: number;
   readonly fallback?: boolean;
@@ -181,7 +185,7 @@ function createInitializedPipeline(
   let selfShadowMode: 0 | 1 | 2 = options.selfShadowMode ?? 1;
   let disposed = false;
 
-  const pipeline: MmdTslPipeline = {
+  const pipeline: MmdTslPipelineInternal = {
     renderer,
     get light() {
       return light;
@@ -320,6 +324,12 @@ function createInitializedPipeline(
         syncReceiverVisibility(state);
       }
       return true;
+    },
+    async compileAsync(scene) {
+      if (!selfShadowPass || !light || !selfShadowEnabled || light.castShadow !== true) {
+        return false;
+      }
+      return selfShadowPass.compileAsync(renderer, scene, light);
     },
     render(scene, camera) {
       if (disposed) {

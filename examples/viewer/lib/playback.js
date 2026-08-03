@@ -22,6 +22,7 @@ import { updateSelfShadowDepthBias, updateShadowCameraForFrame } from "./scene-s
 import {
   isTslViewerPipeline,
   submitViewerRender,
+  submitViewerRenderAsync,
   syncMmdTslDedicatedShadowMode,
   syncMmdTslDedicatedShadowVisibility,
   syncViewerTslLight,
@@ -32,6 +33,7 @@ let settledRenderPromise;
 let settledRenderPending = false;
 let settledRenderPhysics;
 let settledRenderIk;
+let settledRenderCompileShaders = false;
 let settledEvaluationInFlight = 0;
 
 export function render() {
@@ -72,6 +74,7 @@ export function renderStillFrame(options) {
   settledRenderPending = true;
   settledRenderPhysics = options?.physics;
   settledRenderIk = options?.ik;
+  settledRenderCompileShaders ||= options?.compileShaders === true;
   if (!settledRenderPromise) {
     settledRenderPromise = drainSettledRenders();
     void settledRenderPromise.catch(reportSettledRenderError);
@@ -98,8 +101,10 @@ async function drainSettledRenders() {
       settledRenderPending = false;
       const options = {
         physics: settledRenderPhysics,
-        ik: settledRenderIk
+        ik: settledRenderIk,
+        compileShaders: settledRenderCompileShaders
       };
+      settledRenderCompileShaders = false;
       try {
         await renderSettledFrame(options);
       } catch (error) {
@@ -115,6 +120,7 @@ async function drainSettledRenders() {
     settledRenderPending = false;
     settledRenderPhysics = undefined;
     settledRenderIk = undefined;
+    settledRenderCompileShaders = false;
     settledRenderPromise = undefined;
   }
 }
@@ -142,7 +148,11 @@ async function renderSettledFrame(options) {
       updateColliderHelpers();
       state.controls.update();
       applyCameraMotion();
-      submitViewerRender();
+      if (options.compileShaders && isTslViewerPipeline()) {
+        await submitViewerRenderAsync();
+      } else {
+        submitViewerRender();
+      }
     } finally {
       state.elapsedSeconds = resumeSeconds;
     }

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.8.1] - 2026-08-03
+
+### Fixed
+
+- Prevent TSL Viewer Grid and Axis visibility toggles from synchronously
+  re-entering the renderer and stalling the main thread.
+- Precompile TSL color and dedicated self-shadow shader variants
+  asynchronously, coalescing overlapping requests during model and
+  background loading and view toggles.
+
 ## [0.8.0] - 2026-07-30
 
 ### Added

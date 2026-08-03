@@ -15,6 +15,8 @@ describe("TSL dedicated self-shadow pass scaffold", () => {
     expect(source).toContain("const reversedDepth = renderer.reversedDepthBuffer === true;");
     expect(source).toContain("createMmdTslShadowVisibilityNode(light, depthTexture, { reversedDepth });");
     expect(source).toContain("setMode(mode: number): boolean;");
+    expect(source).toContain("compileAsync(renderer: THREE.WebGPURenderer, scene: THREE.Scene, light: THREE.DirectionalLight)");
+    expect(source).toContain("await currentRenderer.compileAsync(scene, prepared.shadowCamera);");
     expect(source).toContain("const nextMode = mode === 2 ? 2 : 1;");
     expect(source).toContain("shadowModeUniform.value = nextMode;");
     // T070-18: the pass used to bail out entirely under a reversed depth
@@ -39,7 +41,7 @@ describe("TSL dedicated self-shadow pass scaffold", () => {
     expect(source).toContain("THREE.RendererUtils.resetRendererAndSceneState");
     expect(source).toContain("THREE.RendererUtils.restoreRendererAndSceneState");
     expect(source).toContain("shadowCamera.layers.mask = 1 << MMD_SELF_SHADOW_LAYER;");
-    expect(source).toContain("currentRenderer.render(scene, shadowCamera);");
+    expect(source).toContain("currentRenderer.render(scene, prepared.shadowCamera);");
     expect(source).toContain("renderTarget.dispose();");
   });
 

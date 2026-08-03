@@ -97,7 +97,7 @@ async function loadBackground(source, label, loaderFactory, entry) {
     });
     updateStageState();
     setStatus("", "ready");
-    await renderStillFrame();
+    await renderStillFrame({ compileShaders: isTslViewerPipeline() });
     if (generation !== backgroundLoadGeneration || state.currentBackground !== background) {
       return false;
     }

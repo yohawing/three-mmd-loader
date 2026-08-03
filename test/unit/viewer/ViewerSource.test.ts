@@ -153,12 +153,21 @@ describe("example viewer source", () => {
     const pipelineSource = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
     const modelSource = await readFile("examples/viewer/lib/model-loading.js", "utf8");
     const backgroundSource = await readFile("examples/viewer/lib/background-loading.js", "utf8");
+    const sceneSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
 
     expect(pipelineSource).toContain("export async function submitViewerRenderAsync()");
     expect(pipelineSource).toContain("typeof state.renderer?.compileAsync === \"function\"");
     expect(pipelineSource).toContain("await state.renderer.compileAsync(state.scene, state.camera)");
     expect(pipelineSource).toContain("if (!canCompileAsync) {\n    return submitViewerRender();\n  }");
     expect(pipelineSource).toContain("let viewerRenderCompileToken = 0;");
+    expect(pipelineSource).toContain("let viewerRenderCompilePromise;");
+    expect(pipelineSource).toContain("let viewerRenderCompileRequest = 0;");
+    expect(pipelineSource).toContain("function compileViewerShaders()");
+    expect(pipelineSource).toContain("function compileViewerColorShaders()");
+    expect(pipelineSource).toContain("function compileViewerSelfShadowShaders()");
+    expect(pipelineSource).toContain("const dedicatedSelfShadowActive");
+    expect(pipelineSource).toContain("await compileViewerSelfShadowShaders();");
+    expect(pipelineSource).toContain("while (true)");
     expect(pipelineSource).toContain("if (skipIfCompiling && viewerRenderCompileToken !== 0) {");
     expect(pipelineSource).toContain("viewerRenderCompileToken = token;");
     expect(pipelineSource).toContain("if (viewerRenderCompileToken === token) {");
@@ -192,6 +201,10 @@ describe("example viewer source", () => {
     expect(modelSource).toContain(
       "import { hideColliderHelpers, refreshDebugPanelState, restoreDebugMaterials, setOutlineHidden, showColliderHelpers } from \"./debug.js\";"
     );
+    expect(modelSource).toContain("await renderStillFrame({ compileShaders: isTslViewerPipeline() });");
+    expect(backgroundSource).toContain("await renderStillFrame({ compileShaders: isTslViewerPipeline() });");
+    expect(sceneSource).not.toContain("state.renderer?.render(state.scene, state.camera);");
+    expect(sceneSource).not.toContain("submitViewerRenderAsync");
     expect(modelSource).not.toContain("scheduleViewerShaderPrewarm");
     expect(backgroundSource).not.toContain("scheduleViewerShaderPrewarm");
     expect(modelSource).toContain(
@@ -1261,10 +1274,10 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("export function render() {");
     expect(playbackSource).toContain("evaluateRuntime();");
     expect(playbackSource).not.toContain("export async function render()");
-    expect(modelSource).toContain("await renderStillFrame();");
+    expect(modelSource).toContain("await renderStillFrame({ compileShaders: isTslViewerPipeline() });");
     expect(motionSource).toContain("await renderStillFrame();");
     expect(playbackSource).toContain("state.elapsedSeconds > 0 || hasCurrentMotion()");
-    expect(backgroundSource).toContain("await renderStillFrame();");
+    expect(backgroundSource).toContain("await renderStillFrame({ compileShaders: isTslViewerPipeline() });");
     expect(debugSource).toContain("async evaluateAt(seconds, options = {})");
     expect(debugSource).toContain("await renderStillFrame(options)");
     expect(debugSource).toContain("characters: state.characterModels.map(");
