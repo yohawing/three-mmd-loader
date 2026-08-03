@@ -246,6 +246,78 @@ describe("mmd-anim Bullet physics backend", () => {
     expect(result).toEqual({ simulated: false, updatedBoneCount: 2 });
   });
 
+  it("preserves dynamic-with-bone translation while applying simulated rotation", () => {
+    const fake = makeFakeModule();
+    const backend = createMmdAnimBulletPhysicsBackend(fake.module);
+    const inputWorld = new Float32Array(32);
+    for (let boneIndex = 0; boneIndex < 2; boneIndex += 1) {
+      const base = boneIndex * 16;
+      inputWorld[base] = inputWorld[base + 5] = inputWorld[base + 10] = inputWorld[base + 15] = 1;
+    }
+    inputWorld[12] = 1;
+    inputWorld[28] = 4;
+    const outputTranslations = new Float32Array([1, 2, 3, 4, 5, 6]);
+    const outputRotations = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1]);
+    const updatedBoneIndices: number[] = [];
+    const simulatedRotation: [number, number, number, number] = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
+    fake.setStepHook(() => {
+      const dynamic = fake.bodies[0];
+      const dynamicWithBone = fake.bodies[1];
+      if (dynamic) {
+        dynamic.position = [10, 20, 30];
+        dynamic.rotation = simulatedRotation;
+      }
+      if (dynamicWithBone) {
+        dynamicWithBone.position = [40, 50, 60];
+        dynamicWithBone.rotation = simulatedRotation;
+      }
+    });
+    const context = {
+      seconds: 0,
+      deltaSeconds: 1 / 60,
+      frame: 0,
+      frameRate: 30,
+      skeleton: {
+        bones: [
+          { index: 0, parentIndex: -1, restTranslation: [0, 0, 0] as const },
+          { index: 1, parentIndex: -1, restTranslation: [0, 0, 0] as const }
+        ]
+      },
+      rigidBodies: [
+        {
+          index: 0,
+          boneIndex: 0,
+          motionType: "dynamic" as const,
+          shape: { type: "sphere" as const, size: [0.5, 0.5, 0.5] as const },
+          localTranslation: [0, 0, 0] as const,
+          localRotation: [0, 0, 0, 1] as const,
+          mass: 1
+        },
+        {
+          index: 1,
+          boneIndex: 1,
+          motionType: "dynamicWithBone" as const,
+          shape: { type: "sphere" as const, size: [0.5, 0.5, 0.5] as const },
+          localTranslation: [0, 0, 0] as const,
+          localRotation: [0, 0, 0, 1] as const,
+          mass: 1
+        }
+      ],
+      joints: [],
+      inputWorldMatricesColumnMajor: inputWorld,
+      output: { translations: outputTranslations, rotations: outputRotations, updatedBoneIndices }
+    };
+
+    backend.step(context);
+    const result = backend.step({ ...context, seconds: 1 / 60, frame: 0.5 });
+
+    expect(Array.from(outputTranslations)).toEqual([10, 20, 30, 4, 5, 6]);
+    expect(Array.from(outputRotations.slice(0, 4))).toEqual(expectQuatCloseTo(simulatedRotation));
+    expect(Array.from(outputRotations.slice(4, 8))).toEqual(expectQuatCloseTo(simulatedRotation));
+    expect(updatedBoneIndices).toEqual([0, 1]);
+    expect(result).toEqual({ simulated: true, updatedBoneCount: 2 });
+  });
+
   it("re-seeds all bodies, re-pins static bodies, and reads dynamic outputs on reset", () => {
     const fake = makeFakeModule();
     const backend = createMmdAnimBulletPhysicsBackend(fake.module);
@@ -303,6 +375,7 @@ describe("mmd-anim Bullet physics backend", () => {
       14, 15, 16,
       17, 18, 19
     ]);
+    outputTranslations.set(inputTranslations);
     for (let boneIndex = 0; boneIndex < 3; boneIndex += 1) {
       const base = boneIndex * 16;
       inputWorld[base + 12] = inputTranslations[boneIndex * 3] ?? 0;
