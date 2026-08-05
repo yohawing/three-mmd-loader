@@ -24,6 +24,7 @@ test-results/visual/real-models/
 .cache/
 tmp/
 .blume/
+.blume-verify/
 docs-site/.blume/
 examples/viewer/.mmd-anim-wasm/
 *.tsbuildinfo
