@@ -61,9 +61,10 @@
   },
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-mmd-anim-wasm.mjs && node scripts/copy-bullet-mmd.mjs",
-    "docs:build": "cd docs-site && blume build",
+    "docs:api": "typedoc",
+    "docs:build": "npm run docs:api && cd docs-site && blume build",
     "docs:check": "cd docs-site && blume check",
-    "docs:dev": "cd docs-site && blume dev",
+    "docs:dev": "npm run docs:api && cd docs-site && blume dev",
     "build:mmd-anim": "node scripts/build-mmd-anim-wasm.mjs",
     "build:bullet": "npm run build:bullet:mmd",
     "build:bullet:mmd": "node scripts/build-bullet-mmd-wasm.mjs",
@@ -131,6 +132,8 @@
     "eslint": "^9.26.0",
     "pngjs": "^7.0.0",
     "three": "^0.184.0",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.12.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.32.0",
     "vitest": "^4.1.8"

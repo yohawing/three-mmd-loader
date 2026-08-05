@@ -26,6 +26,7 @@ tmp/
 .blume/
 .blume-verify/
 docs-site/.blume/
+docs/api/reference/
 examples/viewer/.mmd-anim-wasm/
 *.tsbuildinfo
 *.log
