@@ -23,6 +23,8 @@ test-results/visual/report.json
 test-results/visual/real-models/
 .cache/
 tmp/
+.blume/
+docs-site/.blume/
 examples/viewer/.mmd-anim-wasm/
 *.tsbuildinfo
 *.log
