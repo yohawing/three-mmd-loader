@@ -55,6 +55,7 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
   private readonly boneFromBody: Matrix4[] = [];
   private targetWorldMatrices = new Float32Array(0);
   private targetWorldUpdated = new Uint8Array(0);
+  private targetTranslationUpdated = new Uint8Array(0);
   private readonly scratchBone = new Matrix4();
   private readonly scratchBody = new Matrix4();
   private readonly scratchParent = new Matrix4();
@@ -158,6 +159,7 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
     const boneCount = Math.max(context.skeleton?.bones.length ?? 0, maxBoneIndex + 1);
     this.targetWorldMatrices = new Float32Array(boneCount * 16);
     this.targetWorldUpdated = new Uint8Array(boneCount);
+    this.targetTranslationUpdated = new Uint8Array(boneCount);
     const bodyPtr = this.module._malloc(RIGID_BODY_DESC_BYTES);
     this.module.refreshMemoryViews?.();
     try {
@@ -282,6 +284,7 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
     const output = context.output;
     if (!output) return 0;
     this.targetWorldUpdated.fill(0);
+    this.targetTranslationUpdated.fill(0);
 
     // Pass 1: read every dynamic body once and cache its target bone world pose.
     // Keeping this separate from local conversion makes parent lookup independent
@@ -308,6 +311,9 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
       writeNumeric16(this.targetWorldMatrices, worldOffset, this.scratchBone.elements);
       if (output.worldMatricesColumnMajor) writeNumeric16(output.worldMatricesColumnMajor, worldOffset, this.scratchBone.elements);
       this.targetWorldUpdated[boneIndex] = 1;
+      // Physics-with-bone keeps the animated local translation and only feeds
+      // the simulated rotation back to the bone.
+      this.targetTranslationUpdated[boneIndex] = this.bodyModes[i] === "dynamic" ? 1 : 0;
     }
 
     // Pass 2: convert each target world pose to the bone's local pose using the
@@ -329,7 +335,7 @@ class MmdAnimBulletPhysicsBackend implements MmdPhysicsBackend {
       }
       this.scratchParent.invert();
       this.scratchLocal.multiplyMatrices(this.scratchParent, this.scratchBone);
-      if (output.translations) {
+      if (output.translations && this.targetTranslationUpdated[boneIndex] !== 0) {
         const p = this.scratchLocal.elements;
         writeNumeric3(output.translations, boneIndex * 3, p[12] ?? 0, p[13] ?? 0, p[14] ?? 0);
       }
