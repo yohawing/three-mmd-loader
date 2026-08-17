@@ -8,7 +8,7 @@ const root = resolve(scriptDir, "..");
 const physicsRoot = join(root, "native", "third_party", "mmd-anim", "crates", "mmd-anim-physics-bullet");
 const bulletRoot = join(physicsRoot, "vendor", "bullet3");
 const bindings = join(physicsRoot, "native", "mmd_bullet_api.cpp");
-const outDir = join(root, "native", "mmd-anim-bullet", "dist");
+const outDir = join(root, "artifacts", "mmd-anim", "bullet");
 const buildDir = join(outDir, ".tmp", `mmd-anim-${process.pid}-${Date.now().toString(36)}`);
 
 const builds = [
@@ -200,6 +200,8 @@ async function main() {
   const exportedFunctions = [
     "_malloc",
     "_free",
+    "_mmd_anim_bullet_get_version",
+    "_mmd_anim_bullet_get_last_error",
     "_mmd_anim_bullet_world_create",
     "_mmd_anim_bullet_world_destroy",
     "_mmd_anim_bullet_world_reset",
@@ -219,6 +221,7 @@ async function main() {
   console.log(`Using ${commandInfo.kind === "emsdk" ? "emsdk" : "PATH"} Emscripten: ${commandInfo.command}`);
   console.log(`Compiling mmd-anim Bullet classic and module-worker builds with ${sources.length} sources.`);
 
+  await rm(outDir, { recursive: true, force: true });
   await mkdir(buildDir, { recursive: true });
   try {
     await mkdir(outDir, { recursive: true });

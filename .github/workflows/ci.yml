@@ -30,8 +30,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Checkout mmd-anim fixtures
+      - name: Checkout pinned mmd-anim source
         run: git submodule update --init native/third_party/mmd-anim
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@1.87.0
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 5.0.7
+          actions-cache-folder: emsdk-cache
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -40,6 +49,18 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install pinned wasm-pack
+        run: cargo install wasm-pack --version 0.13.1 --locked
+
+      - name: Reject tracked generated web outputs
+        run: node scripts/check-mmd-anim-artifacts.mjs --tracked-only
+
+      - name: Build mmd-anim runtime artifact
+        run: npm run build:mmd-anim
+
+      - name: Build mmd-anim Bullet artifacts
+        run: npm run build:bullet:mmd
 
       - name: Lint
         run: npm run lint
@@ -58,3 +79,11 @@ jobs:
 
       - name: Smoke TypeScript consumer
         run: npm run smoke:types
+
+      - name: Verify mmd-anim ABI and artifact identity
+        run: |
+          npm run check:mmd-anim:artifacts
+          node scripts/check-mmd-anim-artifacts.mjs --abi --verify-manifest artifacts/mmd-anim/manifest.json --strict-tools
+
+      - name: Smoke mmd-anim Bullet ABI
+        run: npm run smoke:bullet:mmd

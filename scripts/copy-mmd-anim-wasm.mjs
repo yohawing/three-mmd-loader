@@ -5,14 +5,14 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, "..");
-const srcDir = join(root, "src", "parser", "wasm", "generated");
+const srcDir = join(root, "artifacts", "mmd-anim", "runtime");
 const dstDir = join(root, "dist", "parser", "wasm", "generated");
 
 async function main() {
   if (!existsSync(srcDir)) {
     throw new Error(
-      `mmd-anim-wasm pkg not found at ${srcDir}.\n` +
-      "Run: npm run build:mmd-anim to build and sync the wasm package first."
+      `mmd-anim-wasm artifacts not found at ${srcDir}.\n` +
+      "Run: npm run build:mmd-anim before npm run build."
     );
   }
 

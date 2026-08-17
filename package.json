@@ -60,7 +60,7 @@
     }
   },
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-mmd-anim-wasm.mjs && node scripts/copy-bullet-mmd.mjs",
+    "build": "node scripts/clean-dist.mjs && node scripts/prepare-mmd-anim-wasm-source.mjs && tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-mmd-anim-wasm.mjs && node scripts/copy-bullet-mmd.mjs",
     "build:mmd-anim": "node scripts/build-mmd-anim-wasm.mjs",
     "build:bullet": "npm run build:bullet:mmd",
     "build:bullet:mmd": "node scripts/build-bullet-mmd-wasm.mjs",
@@ -68,6 +68,7 @@
     "bench:runtime:worker": "node scripts/bench-runtime-worker.mjs",
     "bench:runtime:worker:browser": "node scripts/bench-runtime-worker-browser.mjs",
     "smoke:bullet:mmd": "node scripts/smoke-bullet-mmd.mjs",
+    "check:mmd-anim:artifacts": "node scripts/check-mmd-anim-artifacts.mjs --abi --manifest",
     "bench:runtime:js": "node scripts/bench-runtime-js.mjs",
     "bench:wasm:perf": "node scripts/bench_wasm_perf.mjs",
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",
@@ -111,7 +112,7 @@
     "smoke:deploy": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-self-shadow-receiver --output test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx && node scripts/build-deploy.mjs && node scripts/smoke-deploy-viewer.mjs",
     "smoke:types": "node scripts/type-consumer-smoke.mjs",
     "test": "vitest run",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint . --ignore-pattern artifacts/mmd-anim/** --max-warnings 0",
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {

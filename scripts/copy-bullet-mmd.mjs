@@ -5,16 +5,16 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, "..");
 const outDir = join(root, "dist", "physics", "mmd");
-const trackedMmdAnimBulletDist = join(root, "native", "mmd-anim-bullet", "dist");
+const mmdAnimBulletArtifacts = join(root, "artifacts", "mmd-anim", "bullet");
 
 const candidates = [
   process.env.THREE_MMD_LOADER_BULLET_MMD_JS,
-  join(trackedMmdAnimBulletDist, "mmd_bullet.js")
+  join(mmdAnimBulletArtifacts, "mmd_bullet.js")
 ].filter(Boolean);
 
 const workerCandidates = [
   process.env.THREE_MMD_LOADER_BULLET_MMD_WORKER_MJS,
-  join(trackedMmdAnimBulletDist, "mmd_bullet.worker.mjs")
+  join(mmdAnimBulletArtifacts, "mmd_bullet.worker.mjs")
 ].filter(Boolean);
 
 async function pathExists(path) {

@@ -10,12 +10,24 @@ import type {
   MmdPhysicsStepResult
 } from "./index.js";
 
+/**
+ * Raw Emscripten bindings for the pinned mmd-anim Bullet C ABI.
+ *
+ * Every pointer is a byte offset into the module heap. Descriptor layouts are
+ * the packed C layouts from mmd_bullet_api.h: rigidbody (64 bytes), 6DoF
+ * spring joint (104 bytes), and contact point (48 bytes). The caller owns all
+ * allocated buffers and must release them with _free; the world handle is
+ * released with _mmd_anim_bullet_world_destroy. get_last_error returns a
+ * pointer to a NUL-terminated, thread-local UTF-8 string in HEAPU8.
+ */
 export interface MmdAnimBulletModule {
   readonly HEAPF32?: Float32Array;
   readonly HEAPU8?: Uint8Array;
   readonly HEAPU32?: Uint32Array;
   _malloc(size: number): number;
   _free(pointer: number): void;
+  _mmd_anim_bullet_get_version(): number;
+  _mmd_anim_bullet_get_last_error(): number;
   _mmd_anim_bullet_world_create(outWorld: number): number;
   _mmd_anim_bullet_world_destroy(world: number): void;
   _mmd_anim_bullet_world_reset(world: number): number;
@@ -28,6 +40,8 @@ export interface MmdAnimBulletModule {
   _mmd_anim_bullet_world_collect_contacts?(world: number, outContacts: number, capacity: number, outCount: number): number;
   _mmd_anim_bullet_world_get_rigidbody_count?(world: number): number;
   _mmd_anim_bullet_world_get_constraint_count?(world: number): number;
+  _mmd_anim_bullet_world_get_gravity(world: number, outGravity: number): number;
+  _mmd_anim_bullet_world_set_gravity(world: number, gravity: number): number;
   refreshMemoryViews?(): void;
 }
 
