@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.8.2] - 2026-08-17
+
+### Added
+
+- Expose count-only and detailed Bullet contact queries through the stable
+  Custom Bullet backend, with lazily allocated reusable contact storage.
+
+### Changed
+
+- Update the bundled mmd-anim runtime from v0.3.3 to v0.4.1, including
+  improved one-sided MMD knee IK parity.
+
+### Fixed
+
+- Preserve animated local translation for `dynamicWithBone` rigid bodies
+  while continuing to apply simulated rotation and report updated bones.
+
 ## [0.8.1] - 2026-08-03
 
 ### Fixed
