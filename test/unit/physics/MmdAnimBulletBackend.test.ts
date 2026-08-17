@@ -20,18 +20,21 @@ function makeFakeModule() {
   let destroyed = 0;
   let resetCount = 0;
   let settleCount = 0;
+  let contactCount = 0;
   let stepHook: (() => void) | undefined;
   const stepCalls: Array<[number, number, number]> = [];
   const setBodyCalls: Array<{ index: number; position: [number, number, number] }> = [];
   const bodies: Array<{ position: [number, number, number]; rotation: [number, number, number, number] }> = [];
   const rigidBodyRotations: Array<[number, number, number]> = [];
   const jointRotations: Array<[number, number, number]> = [];
+  const freedPointers: number[] = [];
+  const contactCalls: Array<{ outContacts: number; capacity: number }> = [];
   const module: MmdAnimBulletModule = {
     HEAPF32: heap,
     HEAPU8: heapU8,
     HEAPU32: heapU32,
     _malloc(size) { const pointer = next; next += Math.max(8, size); return pointer; },
-    _free() {},
+    _free(pointer) { freedPointers.push(pointer); },
     refreshMemoryViews() {},
     _mmd_anim_bullet_world_create(out) { heapU32[out >>> 2] = 64; created += 1; return 0; },
     _mmd_anim_bullet_world_destroy() { destroyed += 1; },
@@ -71,6 +74,21 @@ function makeFakeModule() {
       jointRotations.push([heap[index + 5] ?? 0, heap[index + 6] ?? 0, heap[index + 7] ?? 0]);
       heapU32[out >>> 2] = jointRotations.length - 1;
       return 0;
+    },
+    _mmd_anim_bullet_world_collect_contacts(_world, outContacts, capacity, outCount) {
+      contactCalls.push({ outContacts, capacity });
+      heapU32[outCount >>> 2] = contactCount;
+      if (outContacts !== 0 && capacity > 0) {
+        const heapI32 = new Int32Array(buffer);
+        const base = outContacts >>> 2;
+        heapI32[base] = 3;
+        heapI32[base + 1] = 7;
+        heap[base + 2] = -0.25;
+        heap.set([1, 2, 3], base + 3);
+        heap.set([4, 5, 6], base + 6);
+        heap.set([0, 1, 0], base + 9);
+      }
+      return 0;
     }
   };
   return {
@@ -80,15 +98,57 @@ function makeFakeModule() {
     jointRotations,
     stepCalls,
     setBodyCalls,
+    contactCalls,
+    freedPointers,
     get created() { return created; },
     get destroyed() { return destroyed; },
     get resetCount() { return resetCount; },
     get settleCount() { return settleCount; },
+    setContactCount(count: number) { contactCount = count; },
     setStepHook(hook: (() => void) | undefined) { stepHook = hook; }
   };
 }
 
 describe("mmd-anim Bullet physics backend", () => {
+  it("collects native Bullet contacts and forwards them through the compatibility backend", () => {
+    const fake = makeFakeModule();
+    const backend = createCustomBulletMmdPhysicsBackend(fake.module);
+    fake.setContactCount(1);
+
+    expect(backend.debugContactCount?.()).toBe(1);
+    expect(backend.debugPhysicsContacts?.()).toEqual([{
+      rigidBodyIndexA: 3,
+      rigidBodyIndexB: 7,
+      distance: -0.25,
+      positionWorldOnA: [1, 2, 3],
+      positionWorldOnB: [4, 5, 6],
+      normalWorldOnB: [0, 1, 0]
+    }]);
+    expect(backend.debugPhysicsContacts?.()).toHaveLength(1);
+    expect(fake.contactCalls).toEqual([
+      { outContacts: 0, capacity: 0 },
+      { outContacts: 0, capacity: 0 },
+      expect.objectContaining({ capacity: 1 }),
+      { outContacts: 0, capacity: 0 },
+      expect.objectContaining({ capacity: 1 })
+    ]);
+
+    const contactBufferPointer = fake.contactCalls[2]?.outContacts;
+    backend.dispose?.();
+    expect(fake.freedPointers).toContain(contactBufferPointer);
+    expect(backend.debugContactCount?.()).toBe(0);
+    expect(backend.debugPhysicsContacts?.()).toEqual([]);
+  });
+
+  it("returns no contacts when the native module does not expose contact collection", () => {
+    const fake = makeFakeModule();
+    delete fake.module._mmd_anim_bullet_world_collect_contacts;
+    const backend = createMmdAnimBulletPhysicsBackend(fake.module);
+
+    expect(backend.debugContactCount?.()).toBe(0);
+    expect(backend.debugPhysicsContacts?.()).toEqual([]);
+  });
+
   it("uploads rotations in the native Bullet ZYX encoding", () => {
     const fake = makeFakeModule();
     const backend = createMmdAnimBulletPhysicsBackend(fake.module);
@@ -246,6 +306,78 @@ describe("mmd-anim Bullet physics backend", () => {
     expect(result).toEqual({ simulated: false, updatedBoneCount: 2 });
   });
 
+  it("preserves dynamic-with-bone translation while applying simulated rotation", () => {
+    const fake = makeFakeModule();
+    const backend = createMmdAnimBulletPhysicsBackend(fake.module);
+    const inputWorld = new Float32Array(32);
+    for (let boneIndex = 0; boneIndex < 2; boneIndex += 1) {
+      const base = boneIndex * 16;
+      inputWorld[base] = inputWorld[base + 5] = inputWorld[base + 10] = inputWorld[base + 15] = 1;
+    }
+    inputWorld[12] = 1;
+    inputWorld[28] = 4;
+    const outputTranslations = new Float32Array([1, 2, 3, 4, 5, 6]);
+    const outputRotations = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1]);
+    const updatedBoneIndices: number[] = [];
+    const simulatedRotation: [number, number, number, number] = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
+    fake.setStepHook(() => {
+      const dynamic = fake.bodies[0];
+      const dynamicWithBone = fake.bodies[1];
+      if (dynamic) {
+        dynamic.position = [10, 20, 30];
+        dynamic.rotation = simulatedRotation;
+      }
+      if (dynamicWithBone) {
+        dynamicWithBone.position = [40, 50, 60];
+        dynamicWithBone.rotation = simulatedRotation;
+      }
+    });
+    const context = {
+      seconds: 0,
+      deltaSeconds: 1 / 60,
+      frame: 0,
+      frameRate: 30,
+      skeleton: {
+        bones: [
+          { index: 0, parentIndex: -1, restTranslation: [0, 0, 0] as const },
+          { index: 1, parentIndex: -1, restTranslation: [0, 0, 0] as const }
+        ]
+      },
+      rigidBodies: [
+        {
+          index: 0,
+          boneIndex: 0,
+          motionType: "dynamic" as const,
+          shape: { type: "sphere" as const, size: [0.5, 0.5, 0.5] as const },
+          localTranslation: [0, 0, 0] as const,
+          localRotation: [0, 0, 0, 1] as const,
+          mass: 1
+        },
+        {
+          index: 1,
+          boneIndex: 1,
+          motionType: "dynamicWithBone" as const,
+          shape: { type: "sphere" as const, size: [0.5, 0.5, 0.5] as const },
+          localTranslation: [0, 0, 0] as const,
+          localRotation: [0, 0, 0, 1] as const,
+          mass: 1
+        }
+      ],
+      joints: [],
+      inputWorldMatricesColumnMajor: inputWorld,
+      output: { translations: outputTranslations, rotations: outputRotations, updatedBoneIndices }
+    };
+
+    backend.step(context);
+    const result = backend.step({ ...context, seconds: 1 / 60, frame: 0.5 });
+
+    expect(Array.from(outputTranslations)).toEqual([10, 20, 30, 4, 5, 6]);
+    expect(Array.from(outputRotations.slice(0, 4))).toEqual(expectQuatCloseTo(simulatedRotation));
+    expect(Array.from(outputRotations.slice(4, 8))).toEqual(expectQuatCloseTo(simulatedRotation));
+    expect(updatedBoneIndices).toEqual([0, 1]);
+    expect(result).toEqual({ simulated: true, updatedBoneCount: 2 });
+  });
+
   it("re-seeds all bodies, re-pins static bodies, and reads dynamic outputs on reset", () => {
     const fake = makeFakeModule();
     const backend = createMmdAnimBulletPhysicsBackend(fake.module);
@@ -303,6 +435,7 @@ describe("mmd-anim Bullet physics backend", () => {
       14, 15, 16,
       17, 18, 19
     ]);
+    outputTranslations.set(inputTranslations);
     for (let boneIndex = 0; boneIndex < 3; boneIndex += 1) {
       const base = boneIndex * 16;
       inputWorld[base + 12] = inputTranslations[boneIndex * 3] ?? 0;

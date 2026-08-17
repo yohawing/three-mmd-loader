@@ -9,6 +9,8 @@ import type {
 } from "./index.js";
 import {
   createMmdAnimBulletPhysicsBackend,
+  type MmdAnimBulletContactPoint,
+  type MmdAnimBulletPhysicsBackend,
   type MmdAnimBulletModule
 } from "./mmdAnimBullet.js";
 
@@ -27,6 +29,11 @@ export interface CustomBulletMmdPhysicsBackendOptions {
 
 /** mmd-anim Bullet module exposed through the stable Custom Bullet API name. */
 export type CustomBulletMmdModule = MmdAnimBulletModule;
+
+export interface CustomBulletMmdPhysicsBackend extends MmdDirectBufferPhysicsBackend {
+  debugContactCount(): number;
+  debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[];
+}
 
 type CustomBulletMmdFactory = (
   options?: { locateFile?: (path: string, prefix: string) => string }
@@ -71,14 +78,14 @@ export async function loadCustomBulletMmdModule(
 export function createCustomBulletMmdPhysicsBackend(
   module: CustomBulletMmdModule,
   options: CustomBulletMmdPhysicsBackendOptions = {}
-): MmdDirectBufferPhysicsBackend {
+): CustomBulletMmdPhysicsBackend {
   return new CustomBulletMmdCompatibilityBackend(module, options);
 }
 
-class CustomBulletMmdCompatibilityBackend implements MmdDirectBufferPhysicsBackend {
+class CustomBulletMmdCompatibilityBackend implements CustomBulletMmdPhysicsBackend {
   readonly name = "custom-bullet-mmd";
   readonly disabled = false;
-  private readonly backend;
+  private readonly backend: MmdAnimBulletPhysicsBackend;
   private stepBuffers: MmdPhysicsStepBuffers | undefined;
   private stepBufferBoneCount = -1;
 
@@ -126,5 +133,13 @@ class CustomBulletMmdCompatibilityBackend implements MmdDirectBufferPhysicsBacke
 
   diagnostics(): readonly MmdPhysicsDiagnostic[] {
     return this.backend.diagnostics?.() ?? [];
+  }
+
+  debugContactCount(): number {
+    return this.backend.debugContactCount();
+  }
+
+  debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[] {
+    return this.backend.debugPhysicsContacts();
   }
 }
