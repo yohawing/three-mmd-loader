@@ -61,7 +61,7 @@
   },
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-mmd-anim-wasm.mjs && node scripts/copy-bullet-mmd.mjs",
-    "docs:api": "typedoc",
+    "docs:api": "typedoc && node scripts/prepare-api-docs.mjs",
     "docs:build": "npm run docs:api && cd docs-site && blume build",
     "docs:check": "cd docs-site && blume check",
     "docs:dev": "npm run docs:api && cd docs-site && blume dev",

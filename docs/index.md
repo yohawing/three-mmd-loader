@@ -1,8 +1,10 @@
-# @yohawing/three-mmd-loader
+---
+title: "@yohawing/three-mmd-loader"
+---
 
 Three.js 上で MMD モデルとモーションを読み込み・再生するためのライブラリです。
 
-[English](../README.md) / [デモサイト](https://three.mmd.yohawing.com/)
+[English](https://github.com/yohawing/three-mmd-loader#readme) / [デモサイト](https://three.mmd.yohawing.com/)
 
 ![three-mmd-loader viewer screenshot](./assets/screenshots.png)
 
@@ -139,4 +141,4 @@ renderer.setAnimationLoop(() => {
 
 ## Development
 
-[開発ガイド](./archive/development.md) を参照してください。
+[開発ガイド](./archive/development) を参照してください。
