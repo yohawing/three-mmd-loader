@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.8.3] - 2026-09-12
+
+### Added
+
+- Accept retargeted host poses through `MmdAnimRuntime.setHostRig` and
+  `setHostPose`, with protected bones and explicit IK goals.
+- Connect external world-matrix physics callbacks through before/after-physics
+  evaluation while preserving host-driven bones and PMX mode 2 positions.
+
+### Fixed
+
+- Keep external physics bound to the current mesh after clearing a host rig,
+  and reseed physics when returning to ordinary evaluation, including runtimes
+  that have never been assigned a VMD clip.
+
+### Changed
+
+- Update the bundled mmd-anim source to the backend-neutral host-rig callback
+  implementation (`7bb2c12`, after v0.5.0).
+
 ## [0.8.2] - 2026-08-17
 
 ### Added

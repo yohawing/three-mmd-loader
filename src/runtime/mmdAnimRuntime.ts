@@ -7,6 +7,8 @@ import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./animation.j
 import { DefaultMmdRuntime } from "./core.js";
 import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
+import type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig, MmdAnimRuntimeWasmHostRigConstructor } from "./hostRig.js";
+import { HostRigPhysics } from "./hostRigPhysics.js";
 import { applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics } from "./physics.js";
 import type { PrePhysicsScratch } from "./physics.js";
 import type {
@@ -75,6 +77,7 @@ export interface MmdAnimRuntimeWasmRuntimeInstance {
 }
 
 export interface MmdAnimRuntimeWasmModule {
+  readonly WasmMmdHostRig?: MmdAnimRuntimeWasmHostRigConstructor;
   parseMmdFormatJson?(data: Uint8Array, fileName?: string | null): string;
   exportMmdFormatBytes?(data: Uint8Array, fileName?: string | null): Uint8Array;
   exportVmdAnimationJsonBytes?(json: string): Uint8Array;
@@ -229,6 +232,10 @@ export function sampleMmdAnimWasmLightTrackInto(
  * tested without changing this package's dependency graph.
  */
 export class MmdAnimRuntime implements MmdRuntime {
+  private hostRig: MmdAnimRuntimeWasmHostRig | undefined;
+  private hostRigPhysics: HostRigPhysics | undefined;
+  private hostPose: MmdHostRigPose | undefined;
+  private hostIkDisabled = new Uint8Array(0);
   private readonly frameRate: number;
   private readonly wasm: MmdAnimRuntimeWasmModule | undefined;
   private readonly wasmModel: MmdAnimRuntimeWasmModel;
@@ -331,6 +338,9 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState {
+    if (this.hostRig) {
+      return this.evaluateHostPose(seconds, options);
+    }
     const previousSeconds = this.state.seconds;
     writeFrameState(this.state, seconds, this.frameRate);
     if (this.parsedTrackRuntime) {
@@ -367,6 +377,106 @@ export class MmdAnimRuntime implements MmdRuntime {
     return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
 
+  /** Configure host evaluation and bind its display skeleton without a VMD clip. */
+  setHostRig(definition: MmdHostRigDefinition, mesh: THREE.SkinnedMesh): void {
+    if (this.physicsMode === "external" && !this.physicsBackend) {
+      throw new TypeError("MmdAnimRuntime host rigs require a physicsBackend for external physics");
+    }
+    if (!isSkinnedMesh(mesh) || mesh.skeleton.bones.length !== this.wasmModel.boneCount()) {
+      throw new TypeError("MmdAnimRuntime host rig mesh must match the model bone count and order");
+    }
+    const Rig = this.wasm?.WasmMmdHostRig;
+    if (!Rig) {
+      throw new TypeError("mmd-anim wasm module does not expose WasmMmdHostRig");
+    }
+    const rig = new Rig(this.wasmModel, definition.drivenBoneIndices, definition.goalBoneIndices);
+    if (this.physicsMode === "external" && !rig.evaluateWithExternalPhysics) {
+      rig.free();
+      throw new TypeError("mmd-anim wasm host rig does not expose evaluateWithExternalPhysics");
+    }
+    this.clearHostRig();
+    this.clearAnimation();
+    this.hostRig = rig;
+    // Keep the ordinary path bound to the same mesh when the rig is cleared.
+    this.externalPhysicsData = this.physicsMode === "external" && this.physicsBackend
+      ? readRuntimeExternalPhysics(mesh)
+      : undefined;
+    if (this.externalPhysicsData && this.physicsBackend) {
+      this.hostRigPhysics = new HostRigPhysics(this.physicsBackend, this.externalPhysicsData, definition.drivenBoneIndices);
+      this.hostRigPhysics.reset();
+    }
+    this.hostIkDisabled = new Uint8Array(this.wasmModel.ikCount?.() ?? 0);
+    this.mesh = mesh;
+    writeParentBoneIndices(mesh.skeleton.bones, this.scratchParentBoneIndices);
+    ensureScratchMatrixArrayLength(this.scratchWorldMatrices, mesh.skeleton.bones.length);
+  }
+
+  /** Retains caller-owned buffers; populate them before every evaluate/tick call. */
+  setHostPose(pose: MmdHostRigPose): void {
+    if (!this.hostRig) {
+      throw new TypeError("MmdAnimRuntime setHostRig must precede setHostPose");
+    }
+    this.hostPose = pose;
+  }
+
+  /** Release the configured rig and return to ordinary rest/VMD evaluation. */
+  clearHostRig(): void {
+    if (this.hostRig) {
+      this.previousEvaluateSeconds = undefined;
+      this.physicsDisabled = false;
+    }
+    this.hostRigPhysics?.reset();
+    this.hostRigPhysics = undefined;
+    this.hostRig?.free();
+    this.hostRig = undefined;
+    this.hostPose = undefined;
+    this._restPoseDirty = true;
+  }
+
+  private evaluateHostPose(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState {
+    if (!Number.isFinite(seconds)) {
+      throw new RangeError("MmdAnimRuntime seconds must be finite");
+    }
+    const rig = this.hostRig;
+    const pose = this.hostPose;
+    if (!rig || !pose) {
+      throw new TypeError("MmdAnimRuntime host rig requires a fresh base pose");
+    }
+    const physics = options?.physics === false ? undefined : this.hostRigPhysics;
+    if (physics && rig.evaluateWithExternalPhysics) {
+      physics.prepare(seconds, this.frameRate);
+      try {
+        rig.evaluateWithExternalPhysics(
+          this.wasmRuntime, pose.positions, pose.rotations, pose.scales,
+          pose.morphWeights, options?.ik === false ? this.hostIkDisabled : pose.ikEnabled,
+          this.ikTolerance ?? defaultMmdAnimIkTolerance, this.ikMaxIterationsCap ?? 0,
+          physics.step
+        );
+        physics.commit();
+      } catch (error) {
+        // A failed callback may have advanced the solver. Recover by reseeding
+        // on the next frame; the display remains at its last successful pose.
+        physics.reset();
+        throw error;
+      }
+    } else {
+      this.hostRigPhysics?.reset();
+      rig.evaluate(
+        this.wasmRuntime, pose.positions, pose.rotations, pose.scales,
+        pose.morphWeights, options?.ik === false ? this.hostIkDisabled : pose.ikEnabled,
+        this.ikTolerance ?? defaultMmdAnimIkTolerance, this.ikMaxIterationsCap ?? 0
+      );
+    }
+    writeFrameState(this.state, seconds, this.frameRate);
+    this.copyWasmOutput();
+    this.syncBoundMesh();
+    this.captureDebugStage("vmdInterpolation");
+    this.captureDebugStage("appendTransform");
+    this.captureDebugStage("ik");
+    this.capturePhysicsDebugStage();
+    return copyFrameStateInto(this.evaluateReturnState, this.state);
+  }
+
   tick(seconds: number, options?: MmdRuntimeTickOptions): MmdFrameState;
   /**
    * @deprecated Use tick(seconds, { mesh, ...options }) instead.
@@ -399,12 +509,15 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   seek(seconds: number): MmdFrameState {
+    this.hostRigPhysics?.reset();
     writeFrameState(this.state, seconds, this.frameRate);
     this.parsedTrackRuntime?.seek(seconds);
     return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
 
   resetPose(): void {
+    this.hostRigPhysics?.reset();
+    this.hostPose = undefined;
     if (this.parsedTrackRuntime) {
       this.parsedTrackRuntime.resetPose();
       return;
@@ -485,6 +598,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     if (animation.kind !== "vmd") {
       throw new TypeError("MmdAnimRuntime animation must be an MmdAnimation");
     }
+    this.clearHostRig();
     this._restPoseDirty = true;
     this.mesh = mesh;
     this.mmdAnimation = animation;
@@ -566,6 +680,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   dispose(): void {
+    this.clearHostRig();
     this.releaseOwnedClip();
     this.releaseCameraTrack();
     this.releaseLightTrack();

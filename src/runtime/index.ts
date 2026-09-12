@@ -1,4 +1,5 @@
 export { DefaultMmdRuntime } from "./core.js";
+export type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig, MmdAnimRuntimeWasmHostRigConstructor } from "./hostRig.js";
 export {
   MmdAnimRuntime,
   createMmdAnimWasmCameraTrack,
