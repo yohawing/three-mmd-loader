@@ -21,8 +21,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Update the bundled mmd-anim source to the backend-neutral host-rig callback
-  implementation (`7bb2c12`, after v0.5.0).
+- Update the bundled mmd-anim source to v0.5.1, including backend-neutral
+  host-rig callbacks and recovery after callback output-buffer transfer.
+- Build runtime WASM with Rust 1.88.0 in CI and release jobs to support the
+  syntax used by the pinned mmd-anim source.
 
 ## [0.8.2] - 2026-08-17
 

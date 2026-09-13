@@ -34,7 +34,7 @@ jobs:
         run: git submodule update --init native/third_party/mmd-anim
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@1.87.0
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
