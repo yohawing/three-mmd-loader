@@ -6,6 +6,7 @@ export default tseslint.config(
     ignores: [
       "dist/**",
       "artifacts/mmd-anim/**",
+      "emsdk-cache/**",
       "deploy/**",
       "examples/viewer/.mmd-anim-wasm/**",
       "native/mmd-anim-bullet/dist/**",
