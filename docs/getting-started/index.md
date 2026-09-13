@@ -1,18 +1,12 @@
 ---
 title: はじめに
-description: three-mmd-loader を使い始めるための最短コースです。
+description: モデル表示からVMDの再生までを順番に進めます。
 ---
 
-まずモデルを表示し、次に VMD アニメーションを再生します。
+Three.jsのシーンにMMDモデルを表示し、VMDで動かします。JavaScriptのモジュールと`async` / `await`の基本を前提にします。
 
-## このガイドで行うこと
+1. [インストール](/getting-started/installation)：パッケージを追加し、アセットをHTTPで配信します。
+2. [最初のモデルを表示する](/getting-started/first-model)：カメラとライトを用意し、PMXまたはPMDを表示します。
+3. [最初のアニメーションを再生する](/getting-started/first-animation)：VMDを設定し、再生位置を更新します。
 
-Three.js の基本的なシーンに MMD モデルを追加し、必要な更新処理を理解します。
-
-## 前提知識
-
-JavaScript または TypeScript と、Three.js の Scene・Camera・Renderer の基本を前提にします。
-
-## 次のステップ
-
-インストール後、最初のモデル表示へ進んでください。
+モデルとモーションは利用条件を確認したものを用意してください。このチュートリアルでは物理を有効にせず、ボーンとモーフの再生までを扱います。髪や衣装の物理演算は[物理](/guides/physics)で追加します。

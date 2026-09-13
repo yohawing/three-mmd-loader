@@ -7,7 +7,7 @@ VMDモーションを前ページで表示したモデルへ設定し、ボー�
 
 ## 前提条件
 
-[最初のモデルを表示する](./first-model)を完了し、`loader`と`model`を作成しておきます。再生するVMDファイルは、開発サーバーから取得できる場所に配置します。このページでは`/motions/dance.vmd`から読み込みます。
+[最初のモデルを表示する](/getting-started/first-model)を完了し、`loader`と`model`を作成しておきます。再生するVMDファイルは、開発サーバーから取得できる場所に配置します。このページでは`/motions/dance.vmd`から読み込みます。
 
 ## VMDを読み込む
 
@@ -23,13 +23,13 @@ VMDのボーン名とモーフ名は、モデル内の名前と対応付けら�
 
 ## レンダーループでモデルを更新する
 
-Three.jsの`Clock`で、再生開始からの経過秒数を取得します。モデルを更新してからシーンを描画してください。
+再生開始時刻を保存し、そこからの経過秒数を渡します。`model.update()`の引数は前フレームからの差分ではなく、モーション先頭からの再生位置です。モデルを更新してからシーンを描画します。
 
 ```ts
-const clock = new THREE.Clock();
+const startedAt = performance.now();
 
 renderer.setAnimationLoop(() => {
-  model.update(clock.getElapsedTime());
+  model.update((performance.now() - startedAt) / 1000);
   renderer.render(scene, camera);
 });
 ```
@@ -40,4 +40,4 @@ renderer.setAnimationLoop(() => {
 
 モデルのボーンやモーフが時間に合わせて動けば、VMDの設定は完了です。モデルが動かない場合は、VMDにモデル用のモーションが含まれていることと、モデルのボーン名に対応していることを確認します。
 
-VMDのカメラやライトも再生する場合は、[アニメーション、カメラ、ライト](../guides/animation-camera-light)へ進みます。
+VMDのカメラやライトも再生する場合は、[アニメーション、カメラ、ライト](/guides/animation-camera-light)へ進みます。

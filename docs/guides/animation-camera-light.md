@@ -1,18 +1,53 @@
 ---
 title: アニメーション、カメラ、ライト
-description: VMD のモーション・カメラ・ライトを Three.js の描画へ反映します。
+description: 再生位置を管理し、VMDのカメラとライトを描画へ反映します。
 ---
 
-モデル更新と VMD カメラ・ライトの適用を、ひとつのレンダーループとして組み立てます。
+`model.update(seconds)`へモーション先頭からの秒数を渡します。停止中は同じ再生位置を保持し、再開時に停止時間を加算しないよう、アプリケーション側で時計を管理します。既定のMMDフレームレートは30です。
 
-## モーションを切り替える
+## モーションとポーズを切り替える
 
-再生する VMD の変更、再生時間、停止の扱いを説明します。
+新しいVMDを`loader.loadAnimation()`で読み込み、`model.setAnimation(animation)`で置き換えます。先頭から再生する場合はアプリケーション側の時計も戻します。`setAnimation()`はモーションの追加合成ではありません。
 
-## カメラを適用する
+VPDは静止ポーズとして設定できます。ここでは導入ガイドの`loader`と`model`を使います。
 
-VMD のカメラ状態を Three.js の Camera へ変換して利用します。
+```ts
+const poseAnimation = await loader.loadPoseAnimation("/poses/stand.vpd");
+model.setAnimation(poseAnimation);
+model.update(0);
+```
 
-## ライトを適用する
+## カメラとライトを反映する
 
-VMD のライト状態を DirectionalLight へ反映します。
+設定したアニメーションにカメラ・ライトのキーがある場合は、モデル更新後のランタイムから状態を取得します。以下は[導入ガイド](/getting-started/first-animation)のレンダーループを置き換える例です。`THREE`、`scene`、`camera`、`light`、`renderer`を引き続き使います。
+
+```ts
+import {
+  applyMmdCameraStateToThreeCamera,
+  applyMmdLightStateToThreeDirectionalLight
+} from "@yohawing/three-mmd-loader";
+
+const orthographicCamera = new THREE.OrthographicCamera();
+const cameraOptions = { aspect: camera.aspect, orthographicCamera };
+scene.add(light.target);
+const startedAt = performance.now();
+
+renderer.setAnimationLoop(() => {
+  model.update((performance.now() - startedAt) / 1000);
+  cameraOptions.aspect = camera.aspect;
+  const cameraState = model.runtime.cameraState();
+  const activeCamera = cameraState
+    ? applyMmdCameraStateToThreeCamera(camera, cameraState, cameraOptions)
+    : camera;
+  applyMmdLightStateToThreeDirectionalLight(light, model.runtime.lightState());
+  renderer.render(scene, activeCamera);
+});
+```
+
+VMDの平行投影を反映するには`orthographicCamera`を渡し、ヘルパーが返したカメラで描画します。ライトの方向は`light.target`との関係で決まるため、ターゲットもシーンに追加します。座標系の変換はヘルパーが行います。
+
+## カメラ用VMDが別ファイルにある場合
+
+カメラ用VMDをモデルへ`setAnimation()`すると、設定済みのモデルモーションを置き換えてしまいます。別のVMDを`loadAnimation()`で読み込み、`loader.createCameraTrack()`または`loader.createLightTrack()`で独立したトラックを作成して、同じ再生位置で評価します。これらはWASMトラックを作れない場合に`undefined`を返します。引数と評価メソッドは[ローダーAPI](/api/loader)を参照してください。
+
+Worker使用中に指定時刻の適用完了を待つ必要がある場合は、通常更新の代わりに`await model.updateAsync(seconds)`を使います。詳細は[Worker API](/api/worker)を参照してください。

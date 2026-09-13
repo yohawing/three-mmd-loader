@@ -1,18 +1,37 @@
 ---
 title: インストール
-description: three-mmd-loader と Three.js をプロジェクトへ追加します。
+description: パッケージを追加し、モデルをHTTPで配信する準備をします。
 ---
 
-パッケージマネージャーでライブラリと peer dependency の Three.js をインストールします。
+ESMを扱えるブラウザー向けプロジェクトに、ライブラリとThree.jsを追加します。モデル表示にはDOMとWebGLを使うため、ブラウザー側で初期化します。
 
-## 必要な環境
+## パッケージを追加する
 
-ESM を扱えるブラウザ向けの JavaScript または TypeScript プロジェクトを用意します。
+プロジェクトのディレクトリで実行します。
 
-## インストール
+```sh
+npm install @yohawing/three-mmd-loader three
+```
 
-インストールコマンドと、利用する Three.js のバージョン範囲をここに記載します。
+TypeScriptの型定義はパッケージに含まれています。現在の`peerDependencies`はThree.jsの`>=0.176.0 <1.0.0`です。リポジトリの開発依存は`0.184.0`を基準にしており、この範囲内の全バージョンで同じ描画結果を保証するものではありません。特にTSLを使う場合は、[互換性](/reference/compatibility)を確認します。
 
-## 動作確認
+## アセットをHTTPで配信する
 
-型定義と基本的な import が解決できることを確認します。
+モデル、モーション、テクスチャは開発サーバーの公開ディレクトリへ配置します。HTMLを`file://`で開くと、`fetch()`やWASMの読み込みが制限されます。
+
+このガイドでは`/models/character/model.pmx`をモデルのURLとして使います。公開ディレクトリが`public`の環境では、`public/models/character/model.pmx`に配置します。
+
+パッケージにはランタイムとBulletのJS・WASMが含まれます。バンドラーで配布ファイルの配置を変える場合は、JSが参照するWASMも配信されることを確認します。物理の配信設定は[物理](/guides/physics)を参照してください。
+
+## importを確認する
+
+ブラウザーで実行するモジュールから読み込みます。
+
+```ts
+import * as THREE from "three";
+import { ThreeMmdLoader } from "@yohawing/three-mmd-loader";
+
+console.log(THREE.REVISION, new ThreeMmdLoader());
+```
+
+コンソールにThree.jsのリビジョンとローダーが表示されたら、[最初のモデルを表示する](/getting-started/first-model)へ進みます。

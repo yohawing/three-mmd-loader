@@ -10,7 +10,8 @@ export default defineConfig({
     branch: "main"
   },
   content: {
-    root: "../docs"
+    root: "../docs",
+    exclude: ["**/_*", "**/.*", "RELEASE.md", "DEPLOY.md", "plans/**", "TODO.md", "ROADMAP.md", "roadmap.md", "PLAN.md"]
   },
   navigation: {
     repo: true,
