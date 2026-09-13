@@ -35,6 +35,8 @@ function makeFakeModule() {
     HEAPU32: heapU32,
     _malloc(size) { const pointer = next; next += Math.max(8, size); return pointer; },
     _free(pointer) { freedPointers.push(pointer); },
+    _mmd_anim_bullet_get_version() { return 1; },
+    _mmd_anim_bullet_get_last_error() { return 0; },
     refreshMemoryViews() {},
     _mmd_anim_bullet_world_create(out) { heapU32[out >>> 2] = 64; created += 1; return 0; },
     _mmd_anim_bullet_world_destroy() { destroyed += 1; },
@@ -89,7 +91,12 @@ function makeFakeModule() {
         heap.set([0, 1, 0], base + 9);
       }
       return 0;
-    }
+    },
+    _mmd_anim_bullet_world_get_gravity(_world, outGravity) {
+      heap.set([0, -98, 0], outGravity >>> 2);
+      return 0;
+    },
+    _mmd_anim_bullet_world_set_gravity() { return 0; }
   };
   return {
     module,

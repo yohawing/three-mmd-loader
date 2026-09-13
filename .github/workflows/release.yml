@@ -28,8 +28,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Checkout mmd-anim fixtures
+      - name: Checkout pinned mmd-anim source
         run: git submodule update --init native/third_party/mmd-anim
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 5.0.7
+          actions-cache-folder: emsdk-cache
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -39,6 +48,18 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install pinned wasm-pack
+        run: cargo install wasm-pack --version 0.13.1 --locked
+
+      - name: Reject tracked generated web outputs
+        run: node scripts/check-mmd-anim-artifacts.mjs --tracked-only
+
+      - name: Build mmd-anim runtime artifact
+        run: npm run build:mmd-anim
+
+      - name: Build mmd-anim Bullet artifacts
+        run: npm run build:bullet:mmd
 
       - name: Lint
         run: npm run lint
@@ -57,6 +78,14 @@ jobs:
 
       - name: Smoke TypeScript consumer
         run: npm run smoke:types
+
+      - name: Verify mmd-anim ABI and artifact identity
+        run: |
+          npm run check:mmd-anim:artifacts
+          node scripts/check-mmd-anim-artifacts.mjs --abi --verify-manifest artifacts/mmd-anim/manifest.json --strict-tools
+
+      - name: Smoke mmd-anim Bullet ABI
+        run: npm run smoke:bullet:mmd
 
       - name: Check package publishability
         if: startsWith(github.ref, 'refs/tags/') || inputs.publish
@@ -86,8 +115,16 @@ jobs:
           }
           NODE
 
-      - name: Create npm package
-        run: npm pack --json > npm-pack.json
+      - name: Inspect npm package contents
+        run: |
+          npm pack --dry-run --json > npm-pack-dry-run.json
+          node scripts/check-package-tarball.mjs --dry-run npm-pack-dry-run.json
+
+      - name: Create and hash npm package
+        run: |
+          npm pack --json > npm-pack.json
+          package_file="$(ls ./*.tgz | head -n 1)"
+          node scripts/check-package-tarball.mjs --package "$package_file" --write-hash npm-package.sha256
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
@@ -96,6 +133,9 @@ jobs:
           path: |
             *.tgz
             npm-pack.json
+            npm-pack-dry-run.json
+            npm-package.sha256
+            artifacts/mmd-anim/manifest.json
           if-no-files-found: error
 
   publish:
@@ -127,8 +167,13 @@ jobs:
         with:
           name: npm-package
 
+      - name: Verify exact package artifact
+        run: |
+          package_file="$(ls ./*.tgz | head -n 1)"
+          node scripts/check-package-tarball.mjs --package "$package_file" --expected-hash npm-package.sha256
+
       - name: Publish to npm
-        run: npm publish ./*.tgz --access public
+        run: npm publish "$(ls ./*.tgz | head -n 1)" --access public
 
       - name: Extract release notes from CHANGELOG
         if: startsWith(github.ref, 'refs/tags/')

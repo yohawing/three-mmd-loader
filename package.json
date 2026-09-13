@@ -1,6 +1,6 @@
 {
   "name": "@yohawing/three-mmd-loader",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "TypeScript-first ESM library for Three.js MMD loading and playback.",
   "type": "module",
   "license": "MIT",
@@ -60,7 +60,7 @@
     }
   },
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-mmd-anim-wasm.mjs && node scripts/copy-bullet-mmd.mjs",
+    "build": "node scripts/clean-dist.mjs && node scripts/prepare-mmd-anim-wasm-source.mjs && tsc -p tsconfig.json && node scripts/copy-mmd-assets.mjs && node scripts/copy-mmd-anim-wasm.mjs && node scripts/copy-bullet-mmd.mjs",
     "build:mmd-anim": "node scripts/build-mmd-anim-wasm.mjs",
     "build:bullet": "npm run build:bullet:mmd",
     "build:bullet:mmd": "node scripts/build-bullet-mmd-wasm.mjs",
@@ -68,6 +68,7 @@
     "bench:runtime:worker": "node scripts/bench-runtime-worker.mjs",
     "bench:runtime:worker:browser": "node scripts/bench-runtime-worker-browser.mjs",
     "smoke:bullet:mmd": "node scripts/smoke-bullet-mmd.mjs",
+    "check:mmd-anim:artifacts": "node scripts/check-mmd-anim-artifacts.mjs --abi --manifest",
     "bench:runtime:js": "node scripts/bench-runtime-js.mjs",
     "bench:wasm:perf": "node scripts/bench_wasm_perf.mjs",
     "dev": "npm run build && node scripts/serve-example-viewer.mjs",

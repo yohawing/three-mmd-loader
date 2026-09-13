@@ -60,7 +60,7 @@ try {
     join(workDir, "consumer.ts"),
     `import { ThreeMmdLoader, type ThreeMmdAnimation, type ThreeMmdModel } from "@yohawing/three-mmd-loader";
 import { parsePmxMetadata } from "@yohawing/three-mmd-loader/parser";
-import { DefaultMmdRuntime, exportMmdAnimWasmVmdAnimationJsonBytes, loadMmdAnimWasmVmd, parseMmdAnimWasmFormatJson, type MmdRuntimeAsyncEvaluateOptions } from "@yohawing/three-mmd-loader/runtime";
+import { DefaultMmdRuntime, MmdAnimRuntime, exportMmdAnimWasmVmdAnimationJsonBytes, loadMmdAnimWasmVmd, parseMmdAnimWasmFormatJson, type MmdRuntimeAsyncEvaluateOptions, type MmdHostRigPose, type MmdHostRigDefinition } from "@yohawing/three-mmd-loader/runtime";
 import {
   applyMmdCameraStateToThreeCamera,
   applyMmdLightStateToThreeDirectionalLight,
@@ -101,6 +101,14 @@ const unsupportedPhysicsOptions: CustomBulletMmdPhysicsBackendOptions = {
 };
 declare const model: ThreeMmdModel;
 declare const animation: ThreeMmdAnimation;
+declare const hostRuntime: MmdAnimRuntime;
+declare const hostModel: ThreeMmdModel;
+declare const hostPose: MmdHostRigPose;
+declare const hostRig: MmdHostRigDefinition;
+hostRuntime.setHostRig(hostRig, hostModel.mesh);
+hostRuntime.setHostPose(hostPose);
+hostRuntime.tick(0, { ik: false });
+hostRuntime.clearHostRig();
 declare const parserWasm: { parseMmdFormatJson(data: Uint8Array, fileName?: string | null): string };
 declare const exporterWasm: { exportVmdAnimationJsonBytes(json: string): Uint8Array };
 declare const webgpuCoreOptions: MmdTslMaterialCoreOptions;
