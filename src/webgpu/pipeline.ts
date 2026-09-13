@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { validateMmdTslSkinningCapacity } from "./skinning-capacity.js";
 
 import type { MaterialRuntimeState } from "../parser/model/modelTypes.js";
 import {
@@ -202,6 +203,7 @@ function createInitializedPipeline(
       if (existing) {
         return false;
       }
+      validateMmdTslSkinningCapacity(model.mesh, renderer);
       if (attachOptions.light) {
         if (light && light !== attachOptions.light) {
           throw new Error("MMD_TSL_PIPELINE_LIGHT_MISMATCH");

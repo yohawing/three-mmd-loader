@@ -9,7 +9,7 @@ import {
 function createRenderer(): THREE.WebGPURenderer {
   return {
     isWebGPURenderer: true,
-    backend: { isWebGPUBackend: true },
+    backend: { isWebGPUBackend: true, device: { limits: { maxUniformBufferBindingSize: 65536 } } },
     reversedDepthBuffer: false,
     init: vi.fn(async () => undefined),
     render: vi.fn()
@@ -17,6 +17,22 @@ function createRenderer(): THREE.WebGPURenderer {
 }
 
 describe("MMD TSL pipeline facade", () => {
+  it("rejects an oversized skeleton before changing model or pipeline resources", async () => {
+    const pipeline = await createMmdTslPipeline(createRenderer());
+    const geometry = new THREE.BufferGeometry();
+    const material = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    mesh.skeleton = new THREE.Skeleton(Array.from({ length: 1025 }, () => new THREE.Bone()));
+    const model = { root: new THREE.Group(), mesh };
+    expect(() => pipeline.attach(model)).toThrow(/1025 bones.*1024/);
+    expect(mesh.geometry).toBe(geometry);
+    expect(mesh.material).toBe(material);
+    expect(mesh.children).toHaveLength(0);
+    expect(mesh.userData.mmdTslSparsePositionMorphs).toBeUndefined();
+    expect(pipeline.detach(model)).toBe(false);
+    pipeline.dispose();
+  });
+
   it("centralizes native WebGPU model load flags", () => {
     expect(createModelLoadOptions()).toMatchObject({
       frustumCulled: false,

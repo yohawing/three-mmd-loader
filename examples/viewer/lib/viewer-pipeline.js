@@ -12,6 +12,7 @@ let createMmdTslPipeline;
 let mmdTslPipeline;
 let mmdTslPipelineRenderer;
 let replaceMmdModelMaterialsWithTsl;
+let validateMmdTslSkinningCapacity;
 let createMmdTslShadowCaster;
 let disposeMmdTslShadowCaster;
 let syncMmdTslMaterialState;
@@ -68,6 +69,16 @@ export async function applyViewerPipelineToModel(model, label, { role = "charact
   }
   if (shouldCommit && !shouldCommit()) {
     return false;
+  }
+  if (tslPipeline) {
+    try {
+      validateMmdTslSkinningCapacity(model.mesh, state.renderer);
+    } catch (error) {
+      if (error instanceof Error && error.name === "MmdTslSkinningCapacityError") {
+        error.message += " In Debug > Backend, select Baseline, then reload the model.";
+      }
+      throw error;
+    }
   }
   if (role === "character") {
     state.pipelineModelName = label || model.mesh.name || "model";
@@ -678,8 +689,10 @@ async function loadWebgpuPipelineModule() {
   if (!webgpuPipelineModulePromise) {
     webgpuPipelineModulePromise = Promise.all([
       import("../../../dist/webgpu/index.js"),
-      import("../../../dist/webgpu/self-shadow-pass.js")
-    ]).then(([module, selfShadowModule]) => {
+      import("../../../dist/webgpu/self-shadow-pass.js"),
+      import("../../../dist/webgpu/skinning-capacity.js")
+    ]).then(([module, selfShadowModule, skinningModule]) => {
+      validateMmdTslSkinningCapacity = skinningModule.validateMmdTslSkinningCapacity;
       createMmdTslPipeline = module.createMmdTslPipeline;
       replaceMmdModelMaterialsWithTsl = module.replaceMmdModelMaterialsWithTsl;
       createMmdTslShadowCaster = module.createMmdTslShadowCaster;

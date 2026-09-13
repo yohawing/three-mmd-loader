@@ -152,7 +152,19 @@ select:focus-visible {
 }
 
 .top-bar.is-error .status {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    display: block;
+    width: calc(100vw - 2 * var(--chrome-gap));
+    max-width: 480px;
+    padding: 10px 12px;
+    border: 1px solid var(--surface-border);
+    border-radius: 6px;
+    background: var(--bg);
     color: var(--danger);
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .top-bar.is-warning .status {
