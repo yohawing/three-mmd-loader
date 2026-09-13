@@ -1,0 +1,22 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "src/parser/index.ts",
+    "src/runtime/index.ts",
+    "src/three/index.ts",
+    "src/physics/index.ts",
+    "src/webgpu/index.ts",
+    "src/worker/index.ts"
+  ],
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": "docs/api/reference",
+  "entryFileName": "index.md",
+  "readme": "none",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "validation": {
+    "notExported": false
+  },
+  "sort": ["source-order"]
+}

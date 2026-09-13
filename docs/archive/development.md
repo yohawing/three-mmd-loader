@@ -1,4 +1,6 @@
-# Development
+---
+title: Development
+---
 
 This document is the public development guide for
 `@yohawing/three-mmd-loader`. It covers the checks, generated assets, local
