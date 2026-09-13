@@ -112,7 +112,7 @@
     "smoke:deploy": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-self-shadow-receiver --output test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx && node scripts/build-deploy.mjs && node scripts/smoke-deploy-viewer.mjs",
     "smoke:types": "node scripts/type-consumer-smoke.mjs",
     "test": "vitest run",
-    "lint": "eslint . --ignore-pattern artifacts/mmd-anim/** --max-warnings 0",
+    "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
