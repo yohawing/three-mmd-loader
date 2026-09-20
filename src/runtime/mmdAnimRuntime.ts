@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyMorphOverrides, validateMorphOverrides } from "./morphOverrides.js";
 
 import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
 import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
@@ -59,6 +60,14 @@ export interface MmdAnimRuntimeWasmLightTrack {
 }
 
 export interface MmdAnimRuntimeWasmRuntimeInstance {
+  evaluateClipFrameWithMorphOverrides?(
+    clip: MmdAnimRuntimeWasmClip, frame: number, indices: Uint32Array, weights: Float32Array,
+    ikTolerance: number | undefined, ikMaxIterationsCap: number, ikEnabled: boolean
+  ): void;
+  evaluateRestPoseWithMorphOverrides?(
+    indices: Uint32Array, weights: Float32Array,
+    ikTolerance: number | undefined, ikMaxIterationsCap: number, ikEnabled: boolean
+  ): void;
   evaluateRestPose(): void;
   evaluateClipFrame(clip: MmdAnimRuntimeWasmClip, frame: number): void;
   evaluateClipFrameWithIkOptions?(
@@ -253,6 +262,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   };
   private worldMatrices: Float32Array;
   private morphWeights: Float32Array;
+  private readonly hostMorphWeights: Float32Array;
   private readonly debugStages: MutableDebugStages = createEmptyDebugStages();
   private readonly scratchWorldMatrices: THREE.Matrix4[] = [];
   private readonly scratchThreeWorldMatrix = new THREE.Matrix4();
@@ -326,6 +336,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.wasmClip = options.clip;
     this.worldMatrices = new Float32Array(this.wasmRuntime.worldMatrixF32Len());
     this.morphWeights = new Float32Array(this.wasmRuntime.morphWeightLen?.() ?? this.wasmModel.morphCount?.() ?? 0);
+    this.hostMorphWeights = new Float32Array(this.morphWeights.length);
     this.state = createFrameState(options.initialSeconds ?? 0, this.frameRate);
   }
 
@@ -338,6 +349,14 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState {
+    const overrides = options?.morphOverrides;
+    validateMorphOverrides(overrides, this.hostMorphWeights.length);
+    if (!this.hostRig && !this.parsedTrackRuntime && overrides?.indices.length) {
+      const supported = this.wasmClip
+        ? this.wasmRuntime.evaluateClipFrameWithMorphOverrides
+        : this.wasmRuntime.evaluateRestPoseWithMorphOverrides;
+      if (!supported) throw new Error("mmd-anim WASM must be rebuilt to support morph overrides");
+    }
     if (this.hostRig) {
       return this.evaluateHostPose(seconds, options);
     }
@@ -348,7 +367,23 @@ export class MmdAnimRuntime implements MmdRuntime {
       return copyFrameStateInto(this.evaluateReturnState, state);
     }
     let poseEvaluated = false;
-    if (this.wasmClip) {
+    if (overrides?.indices.length) {
+      // Match ordinary clip/rest evaluation, including its default IK policy.
+      const configuredIk = this.wasmClip && (this.ikTolerance !== undefined || this.ikMaxIterationsCap !== undefined);
+      const tolerance = configuredIk ? this.ikTolerance ?? defaultMmdAnimIkTolerance : undefined;
+      const cap = configuredIk ? this.ikMaxIterationsCap ?? 0 : 0;
+      if (this.wasmClip) {
+        this.wasmRuntime.evaluateClipFrameWithMorphOverrides?.(
+          this.wasmClip, this.state.frame, overrides.indices, overrides.weights, tolerance, cap, options?.ik !== false
+        );
+      } else {
+        this.wasmRuntime.evaluateRestPoseWithMorphOverrides?.(
+          overrides.indices, overrides.weights, tolerance, cap, options?.ik !== false
+        );
+      }
+      this._restPoseDirty = true;
+      poseEvaluated = true;
+    } else if (this.wasmClip) {
       this.evaluateWasmClipFrame(this.wasmClip, this.state.frame);
       poseEvaluated = true;
     } else if (this._restPoseDirty) {
@@ -442,13 +477,22 @@ export class MmdAnimRuntime implements MmdRuntime {
     if (!rig || !pose) {
       throw new TypeError("MmdAnimRuntime host rig requires a fresh base pose");
     }
+    let morphWeights = pose.morphWeights;
+    if (options?.morphOverrides?.indices.length) {
+      if (morphWeights.length !== this.hostMorphWeights.length) {
+        throw new RangeError("Host pose morph count must match the model");
+      }
+      this.hostMorphWeights.set(morphWeights);
+      applyMorphOverrides(this.hostMorphWeights, options.morphOverrides);
+      morphWeights = this.hostMorphWeights;
+    }
     const physics = options?.physics === false ? undefined : this.hostRigPhysics;
     if (physics && rig.evaluateWithExternalPhysics) {
       physics.prepare(seconds, this.frameRate);
       try {
         rig.evaluateWithExternalPhysics(
           this.wasmRuntime, pose.positions, pose.rotations, pose.scales,
-          pose.morphWeights, options?.ik === false ? this.hostIkDisabled : pose.ikEnabled,
+          morphWeights, options?.ik === false ? this.hostIkDisabled : pose.ikEnabled,
           this.ikTolerance ?? defaultMmdAnimIkTolerance, this.ikMaxIterationsCap ?? 0,
           physics.step
         );
@@ -463,7 +507,7 @@ export class MmdAnimRuntime implements MmdRuntime {
       this.hostRigPhysics?.reset();
       rig.evaluate(
         this.wasmRuntime, pose.positions, pose.rotations, pose.scales,
-        pose.morphWeights, options?.ik === false ? this.hostIkDisabled : pose.ikEnabled,
+        morphWeights, options?.ik === false ? this.hostIkDisabled : pose.ikEnabled,
         this.ikTolerance ?? defaultMmdAnimIkTolerance, this.ikMaxIterationsCap ?? 0
       );
     }

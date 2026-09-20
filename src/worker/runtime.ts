@@ -298,6 +298,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     if (this.fallbackRuntime) {
       this.fallbackTickOptions.physics = options?.physics;
       this.fallbackTickOptions.ik = options?.ik;
+      this.fallbackTickOptions.morphOverrides = options?.morphOverrides;
       const state = this.fallbackRuntime.tick(seconds, this.fallbackTickOptions);
       this.copyFrameState(state);
       this.lastPoseAgeSeconds = 0;
@@ -313,6 +314,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     this.tickCommand.seconds = seconds;
     this.workerEvaluateOptions.physics = options?.physics;
     this.workerEvaluateOptions.ik = options?.ik;
+    this.workerEvaluateOptions.morphOverrides = options?.morphOverrides;
     this.tickCommand.options = this.workerEvaluateOptions;
     this.post(this.tickCommand as MmdRuntimeWorkerCommand);
     return this.frameStateScratch;
@@ -326,6 +328,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     if (this.fallbackRuntime) {
       this.fallbackTickOptions.physics = options?.physics;
       this.fallbackTickOptions.ik = options?.ik;
+      this.fallbackTickOptions.morphOverrides = options?.morphOverrides;
       const state = this.fallbackRuntime.tick(seconds, this.fallbackTickOptions);
       this.copyFrameState(state);
       this.lastPoseAgeSeconds = 0;
@@ -355,7 +358,8 @@ export class WorkerMmdRuntime implements MmdRuntime {
         seconds,
         options: {
           physics: options?.physics,
-          ik: options?.ik
+          ik: options?.ik,
+          morphOverrides: options?.morphOverrides
         },
         requestId
       });
@@ -790,6 +794,7 @@ interface MutableFrameState {
 interface MutableEvaluateOptions {
   physics?: boolean;
   ik?: boolean;
+  morphOverrides?: MmdRuntimeEvaluateOptions["morphOverrides"];
 }
 
 interface MutableFallbackTickOptions extends MutableEvaluateOptions {

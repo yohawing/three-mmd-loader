@@ -23,5 +23,5 @@ export type {
   MmdAnimRuntimeWasmModule,
   MmdAnimRuntimeWasmRuntimeInstance
 } from "./mmdAnimRuntime.js";
-export type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeAsyncEvaluateOptions, MmdRuntimeAsyncTickOptions, MmdRuntimeDebugStageState, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions } from "./types.js";
+export type { MmdMorphOverrides, DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeAsyncEvaluateOptions, MmdRuntimeAsyncTickOptions, MmdRuntimeDebugStageState, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions } from "./types.js";
 export * from "./ik/index.js";
