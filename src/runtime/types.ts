@@ -103,9 +103,19 @@ export interface MmdRuntime {
   debugRigidBodyWorldTransformsColumnMajor?(): readonly (readonly number[])[];
 }
 
+/** Sparse overrides of direct PMX morph weights, before group/flip expansion.
+ * Buffers have equal lengths; duplicate indices use the last value. Weights
+ * must be finite and are not clamped. Omit on the next evaluation to release.
+ */
+export interface MmdMorphOverrides {
+  readonly indices: Uint32Array;
+  readonly weights: Float32Array;
+}
+
 export interface MmdRuntimeEvaluateOptions {
   readonly physics?: boolean;
   readonly ik?: boolean;
+  readonly morphOverrides?: MmdMorphOverrides;
 }
 
 export interface MmdRuntimeTickOptions extends MmdRuntimeEvaluateOptions {

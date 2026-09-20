@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.8.4] - 2026-09-20
+
+### Added
+
+- Accept per-evaluation `morphOverrides` in model and runtime updates, including
+  asynchronous Worker updates and host poses. Manual weights replace VMD/rest
+  inputs before group expansion, bone morphs, Append transforms, and IK.
+- Release overrides by omitting them on the next update; zero explicitly disables
+  a direct weight, and repeated updates do not accumulate bone offsets.
+
+### Changed
+
+- Update the bundled mmd-anim source to v0.5.2 for Rust/WASM manual morph input.
+
 ## [0.8.3] - 2026-09-12
 
 ### Added

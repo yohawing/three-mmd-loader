@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import type { CameraState, LightState, MmdAnimation, SelfShadowState, VmdBoneFrame, VmdBoneTrack, VmdCameraFrame, VmdLightFrame, VmdMorphTrack, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
 import { interpolateBezier, lerp, slerp, weightedThreeQuaternion } from "./math.js";
-import type { RuntimeMorph, RuntimeRestTransform } from "./types.js";
+import type { MmdMorphOverrides, RuntimeMorph, RuntimeRestTransform } from "./types.js";
+import { applyMorphOverrides } from "./morphOverrides.js";
 import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
 export interface ApplyMmdAnimationScratch {
   readonly boneMorphQuaternion: THREE.Quaternion;
@@ -30,9 +31,10 @@ export function applyMmdAnimation(
   restTransforms: readonly RuntimeRestTransform[],
   preAppendTransforms: RuntimeRestTransform[],
   scratch: ApplyMmdAnimationScratch,
-  frame: number
+  frame: number,
+  morphOverrides?: MmdMorphOverrides
 ): Record<string, number> | undefined {
-    if (!mesh || !animation) {
+    if (!mesh) {
       return;
     }
 
@@ -46,7 +48,7 @@ export function applyMmdAnimation(
         bone.position.copy(rest.position);
         bone.quaternion.copy(rest.quaternion);
       }
-      const track = findBoneTrack(animation, bone);
+      const track = animation ? findBoneTrack(animation, bone) : undefined;
       const sampled = sampleBoneTrackInto(track, frame, scratch.boneSample);
       if (!sampled) {
         continue;
@@ -80,11 +82,12 @@ export function applyMmdAnimation(
       morphTargetInfluences.fill(0);
       for (const morphName in morphTargetDictionary) {
         const morphIndex = morphTargetDictionary[morphName];
-        const track = animation.morphTracks[morphName];
+        const track = animation?.morphTracks[morphName];
         if (track) {
           morphTargetInfluences[morphIndex] = sampleMorphTrack(track, frame);
         }
       }
+      applyMorphOverrides(morphTargetInfluences, morphOverrides);
       const runtimeMorphs = readRuntimeMorphs(mesh);
       expandGroupMorphWeights(runtimeMorphs, morphTargetInfluences, scratch);
       applyBoneMorphs(mesh, runtimeMorphs, morphTargetInfluences, scratch.boneMorphQuaternion);
