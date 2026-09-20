@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { validateMorphOverrides } from "./morphOverrides.js";
 import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
 import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
 import type { MmdDirectBufferPhysicsBackend, MmdPhysicsBackend, MmdPhysicsStepBuffers, MmdPhysicsStepContext } from "../physics/index.js";
@@ -32,7 +33,7 @@ import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
 import { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
 import type { PrePhysicsScratch } from "./physics.js";
 import type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeExternalPhysicsData, RuntimeRestTransform } from "./types.js";
-import { readMmdBoneUserData } from "./userData.js";
+import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
 type MutableDebugStages = {
   -readonly [K in keyof MmdRuntimeDebugState["stages"]]: MmdRuntimeDebugState["stages"][K];
 };
@@ -149,13 +150,19 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions): MmdFrameState {
+    if (options?.morphOverrides) {
+      const morphs = this.mesh ? readMmdMeshRuntimeData(this.mesh).mmdMorphs : undefined;
+      validateMorphOverrides(options.morphOverrides,
+        Array.isArray(morphs) ? morphs.length : this.mesh?.morphTargetInfluences?.length ?? 0);
+    }
     const previousSeconds = this.state.seconds;
     writeFrameState(this.state, seconds, this.frameRate);
-    if (this.mmdAnimation && this.mesh) {
-      this.applyCurrentMmdAnimation(this.state.frame);
+    if (this.mesh && (this.mmdAnimation || options?.morphOverrides || this.hadMorphOverrides)) {
+      this.applyCurrentMmdAnimation(this.state.frame, options?.morphOverrides);
       this.updateCurrentIkStates(this.state.frame);
       this.captureDebugStage("vmdInterpolation");
     }
+    this.hadMorphOverrides = (options?.morphOverrides?.indices.length ?? 0) > 0;
     this.applyCurrentAppendTransforms();
     this.captureDebugStage("appendTransform");
     if (options?.ik !== false) {
@@ -471,7 +478,9 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 
 
-  private applyCurrentMmdAnimation(frame: number): void {
+  private hadMorphOverrides = false;
+
+  private applyCurrentMmdAnimation(frame: number, overrides?: MmdRuntimeEvaluateOptions["morphOverrides"]): void {
     const mesh = this.mesh;
     if (!mesh) {
       return;
@@ -482,7 +491,8 @@ export class DefaultMmdRuntime implements MmdRuntime {
       this.restTransforms,
       this.preAppendTransforms,
       this.scratchAnimation,
-      frame
+      frame,
+      overrides
     );
     if (!bonePhysicsToggles) return;
     syncMorphSplitTargetInfluences(mesh);

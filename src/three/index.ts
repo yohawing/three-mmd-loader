@@ -750,11 +750,13 @@ function createThreeMmdModel(options: {
     update(seconds, updateOptions) {
       runtimeTickOptions.physics = updateOptions?.physics;
       runtimeTickOptions.ik = updateOptions?.ik;
+      runtimeTickOptions.morphOverrides = updateOptions?.morphOverrides;
       return options.runtime.tick(seconds, runtimeTickOptions);
     },
     updateAsync(seconds, updateOptions) {
       runtimeTickOptions.physics = updateOptions?.physics;
       runtimeTickOptions.ik = updateOptions?.ik;
+      runtimeTickOptions.morphOverrides = updateOptions?.morphOverrides;
       const tickAsync = options.runtime.tickAsync;
       if (tickAsync) {
         return tickAsync.call(options.runtime, seconds, {
