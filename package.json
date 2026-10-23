@@ -1,6 +1,6 @@
 {
   "name": "@yohawing/three-mmd-loader",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "TypeScript-first ESM library for Three.js MMD loading and playback.",
   "type": "module",
   "license": "MIT",

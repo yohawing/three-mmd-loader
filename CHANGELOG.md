@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.8.5] - 2026-10-23
+
+### Changed
+
+- Update the bundled mmd-anim runtime to v0.5.3 with improved MMD IK and
+  append rotation evaluation, including consistent Euler rounding on Linux.
+
+### Fixed
+
+- Reset retained IK history when seeking, resetting a pose, or changing motions.
+  Invalid seek values leave the current playback history intact.
+- Serve the local checkout's generated runtime WASM in the development Viewer.
+- Exclude generated test results from lint checks.
+
 ## [0.8.4] - 2026-09-20
 
 ### Added
