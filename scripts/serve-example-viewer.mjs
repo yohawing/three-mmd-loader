@@ -204,7 +204,7 @@ function resolveMmdAnimWasmRoot() {
   if (process.env.MMD_ANIM_WASM_ROOT !== undefined) {
     return resolve(process.env.MMD_ANIM_WASM_ROOT);
   }
-  const localMmdAnimPkg = resolve(root, "..", "mmd-anim", "crates", "mmd-anim-wasm", "pkg");
+  const localMmdAnimPkg = resolve(root, "artifacts", "mmd-anim", "runtime");
   return existsSync(join(localMmdAnimPkg, "mmd_anim_wasm.js")) ? localMmdAnimPkg : undefined;
 }
 

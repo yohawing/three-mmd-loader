@@ -69,6 +69,7 @@ export interface MmdAnimRuntimeWasmRuntimeInstance {
     ikTolerance: number | undefined, ikMaxIterationsCap: number, ikEnabled: boolean
   ): void;
   evaluateRestPose(): void;
+  resetIkHistory?(): void;
   evaluateClipFrame(clip: MmdAnimRuntimeWasmClip, frame: number): void;
   evaluateClipFrameWithIkOptions?(
     clip: MmdAnimRuntimeWasmClip,
@@ -553,13 +554,15 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 
   seek(seconds: number): MmdFrameState {
-    this.hostRigPhysics?.reset();
     writeFrameState(this.state, seconds, this.frameRate);
+    this.wasmRuntime.resetIkHistory?.();
+    this.hostRigPhysics?.reset();
     this.parsedTrackRuntime?.seek(seconds);
     return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
 
   resetPose(): void {
+    this.wasmRuntime.resetIkHistory?.();
     this.hostRigPhysics?.reset();
     this.hostPose = undefined;
     if (this.parsedTrackRuntime) {
@@ -642,6 +645,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     if (animation.kind !== "vmd") {
       throw new TypeError("MmdAnimRuntime animation must be an MmdAnimation");
     }
+    this.wasmRuntime.resetIkHistory?.();
     this.clearHostRig();
     this._restPoseDirty = true;
     this.mesh = mesh;
