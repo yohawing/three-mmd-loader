@@ -17,12 +17,6 @@ describe("example viewer source", () => {
     expect(source).toContain("state.keyLight.position.set(0.5, 1.9, 0.5);");
     expect(source).toContain("state.keyLight.target.position.set(0, 0.9, 0);");
   });
-  it("captures character bounds before GPU morph attributes replace CPU positions", async () => {
-    const source = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
-    const capture = source.indexOf('if (role === "character") characterFramingBounds(model.mesh)');
-    expect(capture).toBeGreaterThan(0);
-    expect(capture).toBeLessThan(source.indexOf("enableMmdTslSparsePositionMorphs(model.mesh)"));
-  });
   it("keeps viewer version metadata aligned with the package version", async () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
@@ -90,7 +84,7 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("updateShadowCameraForFrame(state.currentModel.mesh)");
     expect(playbackSource).not.toContain("updateShadowCameraForFrame(model.mesh)");
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
-    expect(sceneSetupSource).toContain("copyCharacterBounds(mesh, state.selfShadowModelBoundsScratch)");
+    expect(sceneSetupSource).toContain("state.selfShadowModelBoundsScratch.setFromObject(mesh)");
     expect(sceneSetupSource).toContain("bounds.union(state.selfShadowModelBoundsScratch)");
     expect(pipelineSource).toContain("for (let index = 0; index < models.length; index += 1)");
     expect(pipelineSource).toContain("setTslOutlineHidden(material, hidden)");
@@ -989,7 +983,7 @@ describe("example viewer source", () => {
     expect(sceneSource).toContain("state.keyLight.shadow.bias = 0");
     expect(playbackSource).toContain("updateSelfShadowDepthBias();");
     expect(sceneSource).toContain("export function fitShadowCameraToObject(object)");
-    expect(sceneSource).toContain("copyCharacterBounds(object, state.selfShadowBoundsScratch)");
+    expect(sceneSource).toContain("state.selfShadowBoundsScratch.setFromObject(object)");
     expect(sceneSource).toContain("const viewerTslShadowBoundsRefreshFrames = 6");
     expect(sceneSource).toContain("export function updateShadowCameraForFrame(object)");
     expect(sceneSource).toContain("state.selfShadowBoundsRefreshCountdown -= 1");

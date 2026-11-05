@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { attachMmdMaterialFactors, attachMmdSphereTexture, syncMmdSpecularDirection } from "../../dist/three/index.js";
-import { characterFramingBounds, copyCharacterBounds } from "../../examples/viewer/lib/character-framing.js";
 
 // Independent pixel oracles from MikuDanceStudio 0e969951, skin_effect_sm3.fx:
 // BShadowSphiaTexture_VS/PS: interpolate normal XY, v = .5 - y*.5,
@@ -114,29 +113,7 @@ export function runMaterialShadingProbe() {
   check("BDEF2 keeps blended normal length", { sphere: stripes }, [56, 40, 60],
     shader => shader.replaceAll("vMmdNormal.x", "vNormal.x").replaceAll("vMmdNormal.y", "vNormal.y"));
 
-  // Reproduce the remote hidden geometry that previously expanded the shadow
-  // camera to ~3600 units and removed the face shadow. No geometry is rewritten.
-  const positions = [];
-  for (let i = 0; i < 300; i++) positions.push(i % 3 - 1, i % 21, i % 5 - 2);
-  positions.push(0, -30000, 0);
-  const bodyGeometry = new THREE.BufferGeometry();
-  bodyGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  bodyGeometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(new Uint16Array(301 * 4), 4));
-  const bodyWeights = new Float32Array(301 * 4);
-  for (let i = 0; i < 301; i++) bodyWeights[i * 4] = 1;
-  bodyGeometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(bodyWeights, 4));
-  const body = new THREE.SkinnedMesh(bodyGeometry);
-  const bodyBone = new THREE.Bone();
-  body.add(bodyBone);
-  body.bind(new THREE.Skeleton([bodyBone]));
-  characterFramingBounds(body);
-  const shadowBounds = copyCharacterBounds(body, new THREE.Box3());
-  const actual = [shadowBounds.min.y, shadowBounds.max.y];
-  cases.push({ name: "shadow bounds exclude distant hidden vertices", expected: [0, 20], actual });
-  if (actual[0] !== 0 || actual[1] !== 20 || bodyGeometry.getAttribute("position").getY(300) !== -30000) {
-    failures.push("shadow bounds exclude distant hidden vertices");
-  }
-  bodyGeometry.dispose(); body.skeleton.dispose(); mesh.skeleton.dispose();
+  mesh.skeleton.dispose();
   scene.remove(mesh);
   mesh = new THREE.Mesh(geometry);
   mesh.receiveShadow = true;

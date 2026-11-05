@@ -7,7 +7,6 @@ import {
 import { getMmdShadowProjection } from "../../../dist/three/mmd-shadow-projection.js";
 
 import { dom, updateChromeHeights } from "./dom.js";
-import { characterFramingBounds, copyCharacterBounds } from "./character-framing.js";
 import { viewerPerformanceEnabled } from "./performance.js";
 import { persistViewportSettings, state } from "./state.js";
 import { updateViewerPipelineStatus } from "./viewer-pipeline.js";
@@ -144,7 +143,7 @@ export function setViewportAxesVisible(visible) {
 }
 
 export function fitCameraToObject(object) {
-  const bounds = characterFramingBounds(object);
+  const bounds = new THREE.Box3().setFromObject(object);
   if (bounds.isEmpty()) {
     setDefaultCameraView();
     return;
@@ -187,9 +186,7 @@ export function adaptCameraDepthRange() {
   for (let index = 0; index < models.length; index += 1) {
     const mesh = models[index]?.mesh;
     if (mesh) {
-      // Match framing/shadow bounds: remote hidden PMX pieces must not push
-      // the near plane through a close-up when models or backgrounds change.
-      const modelBounds = copyCharacterBounds(mesh, new THREE.Box3());
+      const modelBounds = new THREE.Box3().setFromObject(mesh);
       if (!modelBounds.isEmpty()) {
         bounds.union(modelBounds);
       }
@@ -250,7 +247,7 @@ export function fitShadowCameraToObject(object) {
   if (!state.keyLight) {
     return;
   }
-  copyCharacterBounds(object, state.selfShadowBoundsScratch);
+  state.selfShadowBoundsScratch.setFromObject(object);
   if (state.selfShadowBoundsScratch.isEmpty()) {
     return;
   }
@@ -271,13 +268,13 @@ export function updateShadowCameraForFrame(object) {
         if (!mesh) {
           continue;
         }
-        copyCharacterBounds(mesh, state.selfShadowModelBoundsScratch);
+        state.selfShadowModelBoundsScratch.setFromObject(mesh);
         if (!state.selfShadowModelBoundsScratch.isEmpty()) {
           bounds.union(state.selfShadowModelBoundsScratch);
         }
       }
     } else {
-      copyCharacterBounds(object, bounds);
+      bounds.setFromObject(object);
     }
     state.selfShadowBoundsRefreshCountdown = shadowBoundsRefreshFrames() - 1;
   } else {

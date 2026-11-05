@@ -288,8 +288,8 @@ function createMaterialRuntimeStateForSource(
     specular: readVec3(metadata.specular, [0, 0, 0]),
     specularPower: readFiniteNumber(metadata.specularPower, 0),
     ambient: readVec3(metadata.ambient, [0, 0, 0]),
-    edgeColor: [0, 0, 0, 1],
-    edgeSize: 1,
+    edgeColor: readVec4(metadata.edgeColor, [0, 0, 0, 1]),
+    edgeSize: readFiniteNumber(metadata.edgeSize, 1),
     textureFactor: [1, 1, 1, 1],
     sphereTextureFactor: sphereTexture ? [1, 1, 1, 1] : [0, 0, 0, 0],
     toonTextureFactor: [1, 1, 1, 1]
