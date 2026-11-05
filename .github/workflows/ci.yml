@@ -71,6 +71,20 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Install Chromium for shading regression
+        run: npx playwright install --with-deps chromium
+
+      - name: Check rendered material shading
+        run: npm run test:shading
+
+      - name: Upload shading regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: material-shading-node-${{ matrix.node-version }}
+          path: test-results/visual/material-shading
+          if-no-files-found: ignore
+
       - name: Check fixtures
         run: npm run check:fixtures
 

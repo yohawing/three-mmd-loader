@@ -2,6 +2,7 @@ import { currentMmdFrame, currentMotionDurationSeconds, hasCurrentMotion, state 
 
 let lastPlaybackCurrentFrameText = "";
 let lastPlaybackTotalFrameText = "";
+const loadedFileValues = new WeakMap();
 
 export const dom = {
   canvas: document.querySelector("#viewer-canvas"),
@@ -107,7 +108,8 @@ export function setDisplayedText(element, text) {
 
 export function loadedFileSwitcherValue(switcher) {
   const value = typeof switcher?.value === "string" ? switcher.value : "";
-  return value || switcher?.getAttribute?.("value") || "";
+  const selected = value || switcher?.getAttribute?.("value") || "";
+  return loadedFileValues.get(switcher)?.get(selected) ?? selected;
 }
 
 export function setLoadedFileSwitcherOptions(switcher, entries, selectedValue) {
@@ -117,15 +119,20 @@ export function setLoadedFileSwitcherOptions(switcher, entries, selectedValue) {
   for (const option of Array.from(switcher.querySelectorAll("sl-option, option"))) {
     option.remove();
   }
+  // Shoelace replaces spaces in option values. Keep file paths outside the control.
+  const values = new Map();
+  loadedFileValues.set(switcher, values);
   switcher.prepend(
-    ...entries.map((entry) => {
+    ...entries.map((entry, index) => {
       const option = document.createElement("sl-option");
-      option.value = entry.value;
+      option.value = String(index);
+      values.set(option.value, entry.value);
       option.textContent = entry.label;
       return option;
     })
   );
-  const value = selectedValue ?? entries[0]?.value ?? "";
+  const selectedIndex = selectedValue == null ? 0 : entries.findIndex((entry) => entry.value === selectedValue);
+  const value = entries[selectedIndex] ? String(selectedIndex) : "";
   const isSingleEntry = entries.length <= 1;
   switcher.classList.toggle("is-single-loaded-file", isSingleEntry);
   switcher.querySelector(".clear-loaded-file")?.setAttribute("slot", isSingleEntry ? "prefix" : "suffix");
@@ -138,6 +145,7 @@ export function clearLoadedFileSwitcher(switcher) {
   if (!switcher) {
     return;
   }
+  loadedFileValues.delete(switcher);
   for (const option of Array.from(switcher.querySelectorAll("sl-option, option"))) {
     option.remove();
   }

@@ -51,6 +51,8 @@ describe("TSL material core", () => {
       ambient: [0.1, 0.2, 0.3],
       specular: [0.4, 0.5, 0.6],
       specularPower: 16,
+      edgeColor: [0, 0, 0, 0.25],
+      edgeSize: 1,
       textureFactor: [0.7, 0.8, 0.9, 1],
       sphereTextureFactor: [0.2, 0.3, 0.4, 0.5],
       toonTextureFactor: [0.6, 0.7, 0.8, 0.9]
@@ -72,6 +74,7 @@ describe("TSL material core", () => {
     expect(uniforms.sphereTextureFactor.toArray()).toEqual([0.2, 0.3, 0.4, 0.5]);
     expect(uniforms.toonTextureFactor.toArray()).toEqual([0.6, 0.7, 0.8, 0.9]);
     expect(material.opacity).toBe(0.5);
+    expect(material.userData.mmdReferenceEdgeAlpha).toBe(0.25);
     expect(material.transparent).toBe(true);
   });
 
@@ -88,6 +91,8 @@ describe("TSL material core", () => {
       ambient: [0, 0, 0],
       specular: [0, 0, 0],
       specularPower: 0,
+      edgeColor: [0, 0, 0, 1],
+      edgeSize: 1,
       textureFactor: [1, 1, 1, 1],
       sphereTextureFactor: [0, 0, 0, 0],
       toonTextureFactor: [1, 1, 1, 1]
@@ -105,6 +110,8 @@ describe("TSL material core", () => {
       ambient: [0, 0, 0],
       specular: [0, 0, 0],
       specularPower: 0,
+      edgeColor: [0, 0, 0, 1],
+      edgeSize: 1,
       textureFactor: [1, 1, 1, 1],
       sphereTextureFactor: [0, 0, 0, 0],
       toonTextureFactor: [1, 1, 1, 1]
@@ -115,7 +122,7 @@ describe("TSL material core", () => {
   it("transforms the ToonRamp light direction into view space with matrix-first order", async () => {
     const source = await readFile("src/webgpu/material-core.ts", "utf8");
 
-    expect(source).toContain("const normalView = TSL.normalize(TSL.normalView);");
+    expect(source).toContain("const normalView = TSL.normalize(mmdNormal);");
     expect(source).toContain('transformDirection(direction: THREE.Node<"vec3">): THREE.Node<"vec3">;');
     expect(source).toContain('cameraViewMatrix.transformDirection(lightDirectionNode as unknown as THREE.Node<"vec3">)');
     expect(source).toContain("const signedDot = TSL.dot(normalView, lightDirectionView);");
@@ -173,7 +180,8 @@ describe("TSL material core", () => {
     expect(source).toContain(
       "options.toonMap ? TSL.min(dedicatedNLGrade, dedicatedShadowFactor) : dedicatedShadowFactor"
     );
-    expect(source).toContain("const dedicatedShadowColor = dedicatedLitNoSpec.mul(dedicatedSelfShadowToon);");
+    // Pixel coverage of both toon and ambient-only receivers lives in test:shading.
+    expect(source).toContain("const dedicatedShadowColor = options.toonMap");
     // Specular is added AFTER the vis lerp (apitrace: base lerp by vis, then a single
     // `+ specular * vis` mad), not folded into the "fully lit" chain before the lerp --
     // that would attenuate specular by vis twice, since dedicatedSpecularComposite is
@@ -191,6 +199,11 @@ describe("TSL material core", () => {
     const uniforms = material.userData.mmdTslMaterialUniforms;
     expect(uniforms.dedicatedShadowEnabled.value).toBe(0);
     expect(material.colorNode).toBeDefined();
+  });
+
+  it("uses the same top-down sphere image coordinates as WebGL", async () => {
+    const source = await readFile("src/webgpu/material-core.ts", "utf8");
+    expect(source).toContain('mmdNormal.xy.mul(TSL.vec2(0.5, -0.5)).add(TSL.vec2(0.5, 0.5))');
   });
 
   it("adds the additive sphere sample once for GoldenOracle parity", async () => {

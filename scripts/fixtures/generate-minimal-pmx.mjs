@@ -257,8 +257,8 @@ const VISUAL_CASES = {
       }),
       material("mat_self_shadow_caster", "SelfShadowCaster", {
         diffuse: [0.22, 0.48, 0.88, 1], specular: [0.02, 0.04, 0.08], ambient: [0.04, 0.08, 0.16],
-        edgeColor: [0, 0, 0, 0], edgeSize: 0, toonShared: 0, toonTextureIndex: 0, flags: 0x05, faceVertexCount: 36,
-        comment: "floating opaque caster with PMX self-shadow map flag"
+        edgeColor: [0, 0, 0, 1], edgeSize: 0, toonShared: 0, toonTextureIndex: 0, flags: 0x05, faceVertexCount: 36,
+        comment: "floating opaque caster with PMX self-shadow map flag and nonzero edge alpha required by MMD caster eligibility"
       })
     ]
   },

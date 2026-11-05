@@ -10,6 +10,16 @@ import {
 } from "../../../src/webgpu/material-assembly.js";
 
 describe("TSL material assembly", () => {
+  it.each([0, 0.25, 1])("preserves PMX caster edge alpha %s before runtime evaluation", (alpha) => {
+    const source = createSourceMaterial({ edgeSize: 0 });
+    source.userData.mmdMaterial.edgeColor = [0, 0, 0, alpha];
+    source.userData.mmdMaterial.flags.selfShadowMap = true;
+    const material = createMmdTslMaterialFromSource(source);
+    expect(material.userData.mmdReferenceEdgeAlpha).toBe(alpha);
+    material.dispose();
+    source.dispose();
+  });
+
   it("forwards legacySrgbFramebuffer into the material-core options", async () => {
     const source = await readFile("src/webgpu/material-assembly.ts", "utf8");
     const fromSourceStart = source.indexOf("export function createMmdTslMaterialFromSource");

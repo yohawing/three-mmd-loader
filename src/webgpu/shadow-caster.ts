@@ -32,6 +32,8 @@ export interface CreateMmdTslShadowCasterOptions {
   readonly shadowLayer?: number;
   /** Set false to merge texture cutouts into opaque caster buckets for lower shadow cost. */
   readonly alphaTest?: boolean;
+  /** Preserve per-material state for MMD's dynamic self-shadow caster rules. */
+  readonly referenceShadow?: boolean;
 }
 
 const shadowCasterStates = new WeakMap<THREE.SkinnedMesh, MmdTslShadowCasterState>();
@@ -56,15 +58,17 @@ export function createMmdTslShadowCaster(
   const sourceGroups = readSourceGroups(mesh.geometry);
   for (const group of sourceGroups) {
     const material = sourceMaterials[group.materialIndex ?? 0];
-    if (!material || material.userData.mmdTslOutlineMaterial || !materialCastsShadow(material)) {
+    if (!material || material.userData.mmdTslOutlineMaterial ||
+      (options.referenceShadow ? material.userData.mmdMaterial?.flags?.selfShadowMap !== true : !materialCastsShadow(material))) {
       continue;
     }
     const diffuseMap = readDiffuseMap(material);
     if (options.alphaTest === false || !(material.alphaTest > 0) || !diffuseMap) {
-      const key = shadowSideKey(material);
+      const key = options.referenceShadow ? material.uuid : shadowSideKey(material);
       let bucket = opaqueBuckets.get(key);
       if (!bucket) {
         bucket = { material: createOpaqueShadowMaterial(material), groups: [] };
+        if (options.referenceShadow) bucket.material.userData.mmdReferenceShadowSource = material;
         opaqueBuckets.set(key, bucket);
       }
       bucket.groups.push(group);
@@ -211,7 +215,7 @@ function readSourceGroups(geometry: THREE.BufferGeometry): ShadowGeometryGroup[]
 
 function createOpaqueShadowMaterial(source: THREE.Material): THREE.MeshBasicNodeMaterial {
   const material = new THREE.MeshBasicNodeMaterial({ side: source.side });
-  material.shadowSide = source.shadowSide;
+  material.shadowSide = source.shadowSide ?? source.side;
   material.name = "MMD TSL opaque shadow caster";
   material.userData.mmdTslShadowCasterMaterial = { alphaTest: false };
   return material;
@@ -226,7 +230,7 @@ function createAlphaTestShadowMaterial(
     alphaTest: source.alphaTest,
     side: source.side
   });
-  material.shadowSide = source.shadowSide;
+  material.shadowSide = source.shadowSide ?? source.side;
   material.name = "MMD TSL alpha-test shadow caster";
   material.userData.mmdTslShadowCasterMaterial = {
     alphaTest: true,

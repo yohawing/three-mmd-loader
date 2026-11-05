@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import {
-  configureMmdSelfShadowDirectionalLight,
-  fitMmdSelfShadowDirectionalLightToBox
+  configureMmdSelfShadowDirectionalLight
 } from "../../../dist/three/index.js";
+
+import { getMmdShadowProjection } from "../../../dist/three/mmd-shadow-projection.js";
 
 import { dom, updateChromeHeights } from "./dom.js";
 import { viewerPerformanceEnabled } from "./performance.js";
@@ -18,13 +19,11 @@ const viewerBaselineSelfShadowQuality = {
 };
 const viewerTslSelfShadowQuality = {
   ...viewerBaselineSelfShadowQuality,
-  mapSize: 2048
+  mapSize: 4096
 };
 const viewerTslShadowBoundsRefreshFrames = 6;
 // Unity's 0.02 m default is roughly 1% of a two-meter character. The three.js
 // loader keeps PMX coordinates unscaled, so retain that ratio across model scales.
-const viewerTslSelfShadowWorldDepthBiasScale = 0.01;
-let viewerTslSelfShadowWorldDepthBias = 0;
 
 // Supersampling (SSAA): render at a higher internal resolution then downsample.
 // MSAA (antialias: true) alone leaves the hard inverted-hull edge aliased on fine
@@ -109,7 +108,9 @@ export async function setupScene() {
   state.axesHelper.visible = state.viewportAxesVisible;
   state.scene.add(state.axesHelper);
   state.keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
-  state.keyLight.position.set(3, 4, 5);
+  // MMD ResetSceneLight travels along (-0.5, -1, +0.5) in left-handed
+  // coordinates. Three's direction toward the light is (+0.5, +1, +0.5).
+  state.keyLight.position.set(0.5, 1.9, 0.5);
   state.keyLight.castShadow = state.debugSelfShadowEnabled;
   configureMmdSelfShadowDirectionalLight(
     state.keyLight,
@@ -285,14 +286,10 @@ export function updateShadowCameraForFrame(object) {
 }
 
 export function updateSelfShadowDepthBias() {
-  if (!state.keyLight || state.viewerPipeline !== "tsl-webgpu") {
-    return;
-  }
-  const shadowCamera = state.keyLight.shadow.camera;
-  const depthRange = shadowCamera.far - shadowCamera.near;
-  state.keyLight.shadow.bias = depthRange > 0
-    ? -viewerTslSelfShadowWorldDepthBias / depthRange
-    : 0;
+  if (!state.keyLight) return;
+  // Receiver bias belongs to the selected raw-depth sampling strategy.
+  state.keyLight.shadow.bias = 0;
+  state.keyLight.shadow.normalBias = 0;
 }
 
 function shadowBoundsRefreshFrames() {
@@ -302,20 +299,9 @@ function shadowBoundsRefreshFrames() {
 }
 
 function fitShadowCameraToBounds(bounds) {
-  if (!state.keyLight) {
-    return;
-  }
-  fitMmdSelfShadowDirectionalLightToBox(state.keyLight, bounds, {
-    marginScale: 0.06,
-    minNear: 0.02,
-    minFarSpan: 2,
-    maxFar: 80
-  });
-  viewerTslSelfShadowWorldDepthBias = Math.max(
-    bounds.max.x - bounds.min.x,
-    bounds.max.y - bounds.min.y,
-    bounds.max.z - bounds.min.z
-  ) * viewerTslSelfShadowWorldDepthBiasScale;
+  if (!state.keyLight) return;
+  // Install before the first fit, even if the render pass is still initializing.
+  // Fitting the real light here made load order change its position and camera.
+  getMmdShadowProjection(state.keyLight).bounds.copy(bounds);
   updateSelfShadowDepthBias();
-  state.keyLight.target.updateMatrixWorld();
 }

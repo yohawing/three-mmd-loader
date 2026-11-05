@@ -2,6 +2,8 @@ import * as THREE from "three";
 
 import { dom, setStatus } from "./dom.js";
 import { state } from "./state.js";
+import { MmdWebGlReferenceShadowPass } from "../../../dist/three/reference-shadow-pass.js";
+import { getMmdShadowProjection } from "../../../dist/three/mmd-shadow-projection.js";
 
 const lightPositionScratch = new THREE.Vector3();
 const lightTargetScratch = new THREE.Vector3();
@@ -21,6 +23,7 @@ let enableMmdTslSparsePositionMorphs;
 let createMmdTslSelfShadowPass;
 let mmdTslSelfShadowPass;
 let mmdTslSelfShadowPassRenderer;
+let mmdBaselineShadowPass;
 let mmdTslDedicatedRawVisibilityDebugActive = false;
 const mmdTslSelfShadowModelRoots = new Set();
 const mmdTslDedicatedShadowUniforms = new Set();
@@ -102,7 +105,7 @@ export async function applyViewerPipelineToModel(model, label, { role = "charact
         dedicatedShadowVisibilityNode: mmdTslSelfShadowPass?.visibilityNode,
         reversedDepth: state.renderer?.reversedDepthBuffer === true
       });
-      createMmdTslShadowCaster(model.mesh, { alphaTest: false });
+      createMmdTslShadowCaster(model.mesh, { alphaTest: false, referenceShadow: true });
       model.root.userData.mmdTslSelfShadowRole = role;
       mmdTslSelfShadowModelRoots.add(model.root);
       registerTslDedicatedShadowUniforms(model.root, model.mesh, true);
@@ -118,6 +121,10 @@ export async function applyViewerPipelineToModel(model, label, { role = "charact
       disposeMmdTslSelfShadowPassIfUnused();
       throw error;
     }
+  }
+  if (!tslPipeline) {
+    mmdBaselineShadowPass ??= new MmdWebGlReferenceShadowPass(state.renderer, state.keyLight);
+    mmdBaselineShadowPass.add(model.root);
   }
   updateViewerPipelineStatus();
   return true;
@@ -194,6 +201,18 @@ export function submitViewerRender(skipIfCompiling = false) {
   }
   if (!state.renderer || !state.scene || !state.camera) {
     return false;
+  }
+  const shadowState = state.currentMotion?.animation?.selfShadowFrames?.length
+    ? state.selfShadowStateScratch : undefined;
+  const shadowMode = shadowState?.mode ?? 1;
+  if (state.keyLight?.userData.mmdShadowProjection) {
+    const projection = getMmdShadowProjection(state.keyLight);
+    projection.update(shadowMode);
+  }
+  if (!isTslViewerPipeline() && mmdBaselineShadowPass) {
+    mmdBaselineShadowPass.render(state.scene, state.camera,
+      state.debugSelfShadowEnabled && state.keyLight.castShadow, shadowMode);
+    return true;
   }
   if (isNativeTslWebGpuPipeline() && mmdTslPipeline) {
     mmdTslPipeline.setSelfShadowEnabled(
@@ -327,6 +346,14 @@ async function compileViewerSelfShadowShaders() {
 export function disposeViewerPipelineModel(model) {
   if (!model?.mesh) {
     return false;
+  }
+  if (!isTslViewerPipeline()) {
+    mmdBaselineShadowPass?.remove(model.root);
+    if (mmdBaselineShadowPass?.empty) {
+      mmdBaselineShadowPass.dispose();
+      mmdBaselineShadowPass = undefined;
+    }
+    return true;
   }
   if (isNativeTslWebGpuPipeline() && mmdTslPipeline) {
     return mmdTslPipeline.detach(model);

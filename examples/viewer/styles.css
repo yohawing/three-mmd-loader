@@ -1094,9 +1094,12 @@ select:focus-visible {
     right: var(--chrome-gap);
     bottom: calc(var(--chrome-gap) + var(--transport-height) + 12px);
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     gap: 8px;
     width: min(420px, calc(100vw - 20px));
     max-height: min(44vh, 360px);
+    overflow: hidden;
     padding: 10px 12px;
     border: 1px solid var(--surface-border);
     border-radius: var(--radius);
@@ -1145,9 +1148,12 @@ select:focus-visible {
 }
 
 .credit-comment {
+    min-width: 0;
     min-height: 0;
     margin: 0;
     overflow: auto;
+    overflow-wrap: anywhere;
+    overscroll-behavior: contain;
     color: var(--text-muted);
     font-size: 12px;
     line-height: 1.45;
