@@ -2,7 +2,6 @@ import * as THREE from "three";
 
 import { dom, setStatus } from "./dom.js";
 import { state } from "./state.js";
-import { characterFramingBounds } from "./character-framing.js";
 import { MmdWebGlReferenceShadowPass } from "../../../dist/three/reference-shadow-pass.js";
 import { getMmdShadowProjection } from "../../../dist/three/mmd-shadow-projection.js";
 
@@ -66,9 +65,6 @@ export function createViewerBackgroundLoadOptions() {
 }
 
 export async function applyViewerPipelineToModel(model, label, { role = "character", shouldCommit } = {}) {
-  // Capture CPU positions before native WebGPU replaces them with GPU-only morph output.
-  // This also initializes shadow bounds when camera auto-fit is disabled.
-  if (role === "character") characterFramingBounds(model.mesh);
   const tslPipeline = isTslViewerPipeline();
   if (tslPipeline) {
     await loadWebgpuPipelineModule();
