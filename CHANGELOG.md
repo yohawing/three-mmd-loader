@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.8.6] - 2026-11-05
+
+### Changed
+
+- Default the Viewer to stable, camera-independent 4096px self shadows with
+  interpolated depth sampling. Retain selectable MMD-compatible projection.
+- Update the bundled mmd-anim runtime to v0.5.4.
+
+### Fixed
+
+- Correct sphere-map orientation and additive intensity, normal interpolation,
+  lighting direction, and toon/specular shading across WebGL and TSL backends.
+- Align self-shadow caster eligibility, raw-depth comparison, and MMD-compatible
+  raster sampling across Baseline, native WebGPU, and TSL WebGL rendering.
+- Resolve nested model-folder textures and trailing whitespace in texture paths,
+  and allow model filenames containing spaces in the Viewer switcher.
+- Exclude hidden distant vertices from Viewer framing and shadow bounds, retaining
+  a usable camera depth range and shadow coverage.
+
+### Tests
+
+- Add GPU shading checks with deliberate fault injection and real-model camera
+  motion comparisons that separate projection from sampling changes.
+
 ## [0.8.5] - 2026-10-23
 
 ### Changed

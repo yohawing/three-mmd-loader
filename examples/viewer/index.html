@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Load and play MikuMikuDance (MMD) models (PMX/PMD) and motions (VMD) with physics, right in your browser. Files stay on your device — nothing is uploaded." />
-    <meta name="mmd-viewer-version" content="0.8.5" />
+    <meta name="mmd-viewer-version" content="0.8.6" />
     <title>MMD Loader for Three.js · three-mmd-loader</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" />
@@ -66,6 +66,14 @@
               <details class="load-category" id="viewport-settings-category">
                 <summary data-i18n="menu.viewport">Viewport</summary>
                 <div class="viewport-settings">
+                  <label class="debug-backend-control">
+                    <span data-i18n="viewport.shadow">Self shadow</span>
+                    <select id="shadow-method">
+                      <option value="stable" data-i18n="shadow.stable">Stable (4K)</option>
+                      <option value="mmd" data-i18n="shadow.mmd">MMD compatible (4K)</option>
+                      <option value="custom" disabled data-i18n="shadow.custom">Comparison settings</option>
+                    </select>
+                  </label>
                   <label class="switch-toggle">
                     <span data-i18n="viewport.grid">Grid</span>
                     <input id="viewport-grid-toggle" type="checkbox" role="switch" checked />

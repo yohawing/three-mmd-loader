@@ -8,7 +8,7 @@ import { clampColor } from "../three/utils.js";
 export const MMD_TSL_DEFAULT_LIGHT_COLOR = 154 / 255;
 export const MMD_TSL_DEFAULT_TOON_COORD_OFFSET = 0.45;
 
-const defaultLightDirection = new THREE.Vector3(0.5, 1.0, 1.0).normalize();
+const defaultLightDirection = new THREE.Vector3(0.5, 1.0, 0.5).normalize();
 
 interface MmdTslSourceRenderFlags {
   readonly transparent: boolean;
@@ -116,7 +116,7 @@ export function createMmdTslToonMaterial(options: MmdTslMaterialCoreOptions = {}
  * `base` lit-color node. Contract per mode (mmd-shading-notes.md):
  * - "multiply": base scaled by a texture-factor-weighted mix toward the sampled sphere.
  * - "add": GoldenOracle full.fx and the MMD-generated baseline add the sampled sphere
- *   once. The WebGL injection keeps its separate apitrace SphC weight contract.
+ *   once, matching the WebGL injection's aggregated sphere weight.
  * - "subTexture": sphere replaces base, weighted by the sphere texture factor alpha.
  * - anything else (including "none"): base is returned unchanged.
  */
@@ -152,7 +152,10 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   const cameraViewMatrix = TSL.cameraViewMatrix as unknown as {
     transformDirection(direction: THREE.Node<"vec3">): THREE.Node<"vec3">;
   };
-  const normalView = TSL.normalize(TSL.normalView);
+  const transformedNormal = TSL.cameraViewMatrix.mul(TSL.vec4(TSL.modelNormalMatrix.mul(TSL.normalLocal), 0)).xyz;
+  const normalLengthScale = TSL.length(TSL.normalLocal).div(TSL.max(TSL.length(transformedNormal), 1e-8));
+  const mmdNormal = TSL.varying(transformedNormal.mul(normalLengthScale), "vMmdNormal");
+  const normalView = TSL.normalize(mmdNormal);
   const lightDirectionView = TSL.normalize(
     cameraViewMatrix.transformDirection(lightDirectionNode as unknown as THREE.Node<"vec3">)
   );
@@ -169,7 +172,8 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
     ? TSL.texture(options.toonMap).sample(TSL.vec2(0, toonCoordinate)).rgb
     : TSL.vec3(1, 1, 1);
   const toonMul = TSL.mix(TSL.vec3(1, 1, 1), sampledToon.mul(toonTextureFactor.rgb), toonTextureFactor.a);
-  const sphereUv = TSL.normalView.xy.mul(0.5).add(TSL.vec2(0.5, 0.5));
+  // Match MMD's top-down image coordinates and the WebGL sphere-map path.
+  const sphereUv = mmdNormal.xy.mul(TSL.vec2(0.5, -0.5)).add(TSL.vec2(0.5, 0.5));
   const sampledSphere = options.sphereMap
     ? TSL.texture(options.sphereMap).sample(sphereUv).rgb
     : TSL.vec3(1, 1, 1);
@@ -191,10 +195,14 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   const litBase = options.toonMap
     ? TSL.clamp(diffuse.mul(lightColor).add(ambient), 0, 1)
     : TSL.clamp(ambient.add(lambert.mul(diffuse).mul(lightColor)), 0, 1);
-  const baseComposite = litBase.mul(compositeDiffuseTexture).mul(textureMul).mul(toonMul);
-  const sphereComposite = applySphereComposite(baseComposite, options.sphereMode, compositeSphere, sphereTextureFactor);
+  const baseComposite = litBase.mul(compositeDiffuseTexture).mul(textureMul);
+  // MMD grades the complete base + sphere contribution with the toon ramp.
+  const sphereComposite = applySphereComposite(baseComposite, options.sphereMode, compositeSphere, sphereTextureFactor).mul(toonMul);
   const specularGate = specularPower.greaterThan(0).select(1, 0);
-  const specularComposite = TSL.pow(TSL.max(0, TSL.dot(halfDirection, normalView)), specularPower)
+  // pow(0, 0) is undefined on GPU backends; multiplying NaN by a zero gate
+  // still poisons the color of materials with specular disabled.
+  const safeSpecularPower = specularPower.greaterThan(0).select(specularPower, 1);
+  const specularComposite = TSL.pow(TSL.max(0, TSL.dot(halfDirection, normalView)), safeSpecularPower)
     .mul(specular)
     .mul(lightColor)
     .mul(specularGate);
@@ -237,10 +245,7 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   // v=0 -- verified against the identical (0, 0) sample already used by the
   // baseline WebGL path (material-shader-hooks.ts MMD_SELF_SHADOW_TOON_V). No fix
   // needed here; (0, 0) is already correct.
-  // TODO(§10.3): materials without a toon map fall back to the white `shadowTint`
-  // uniform default (baseline parity, docs/plans/t070-16-mmd-self-shadow-pass.md
-  // Phase 3). Real-device traces show black (0,0,0) for toon index -1 in at least
-  // one observed case; left as-is pending broader real-device verification.
+  // Non-toon receivers use the ambient chain below instead of a toon tint.
   const dedicatedSelfShadowToon = options.toonMap
     ? TSL.mix(
         TSL.vec3(1, 1, 1),
@@ -256,13 +261,15 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   // `< 0.999` ternary): §10.2 "スペキュラは影とN.L勾配の両方で減衰する".
   const dedicatedSpecularComposite = TSL.pow(
     TSL.max(0, TSL.dot(halfDirection, normalView)),
-    specularPower
+    safeSpecularPower
   )
     .mul(specular)
     .mul(lightColor)
     .mul(dedicatedVis)
     .mul(specularGate);
-  const dedicatedShadowColor = dedicatedLitNoSpec.mul(dedicatedSelfShadowToon);
+  const dedicatedShadowColor = options.toonMap
+    ? dedicatedLitNoSpec.mul(dedicatedSelfShadowToon)
+    : applySphereComposite(TSL.clamp(ambient, 0, 1).mul(compositeDiffuseTexture).mul(textureMul), options.sphereMode, compositeSphere, sphereTextureFactor);
   // Specular is added AFTER the lerp, not folded into the "fully lit" chain before it:
   // apitrace's else-branch does `mul r1.xyz, r1, r3.x` (the base lerp by vis) then
   // `mad r0.xyz, r4, r2, r1` (add specular*vis once). Multiplying specular into
@@ -314,6 +321,7 @@ export function syncMmdTslMaterialState(
   const previousTransparent = material.transparent;
   const previousDepthWrite = material.depthWrite;
   material.opacity = clampColor(state.diffuse[3]);
+  material.userData.mmdReferenceEdgeAlpha = state.edgeColor[3];
   const materialUserData = material.userData as {
     mmdMaterial?: {
       readonly flags?: Parameters<typeof mmdMaterialSuppressesColorAtAlpha>[1];

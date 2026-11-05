@@ -8,6 +8,24 @@ import {
 } from "../../../src/webgpu/shadow-caster.js";
 
 describe("TSL shadow caster", () => {
+  it("keeps reference casters per source material so later morphs can change eligibility", () => {
+    const geometry = createGeometry();
+    const a = createMaterial("opaque", true);
+    const b = createMaterial("opaque", true);
+    const ground = createMaterial("opaque", true);
+    ground.userData.mmdMaterial.flags = {groundShadow: true, selfShadowMap: false};
+    a.opacity = 0.98;
+    b.userData.mmdMaterial.edgeColor = [0, 0, 0, 0];
+    const mesh = createSkinnedMesh(geometry, [a, ground, b, ground]);
+    const proxy = createMmdTslShadowCaster(mesh, {alphaTest:false, referenceShadow:true});
+    if (!proxy) throw new Error("Expected a reference caster");
+    const materials = proxy.material as THREE.Material[];
+    expect(materials).toHaveLength(2);
+    expect(materials[0].userData.mmdReferenceShadowSource).toBe(a);
+    expect(materials[1].userData.mmdReferenceShadowSource).toBe(b);
+    expect(proxy.geometry.groups).toHaveLength(2);
+    disposeMmdTslShadowCaster(mesh);
+  });
   it("combines opaque caster groups into one shadow-only draw", () => {
     const geometry = createGeometry();
     const casterA = createMaterial("opaque", true);

@@ -679,15 +679,15 @@ export function decodeMmdTgaTexture(
 }
 
 export function isMmdBmpLikeTexturePath(texturePath: string): boolean {
-  return /\.(?:bmp|spa|sph)$/i.test(texturePath);
+  return /\.(?:bmp|spa|sph)$/i.test(texturePath.trimEnd());
 }
 
 export function isMmdTgaLikeTexturePath(texturePath: string): boolean {
-  return /\.tga$/i.test(texturePath);
+  return /\.tga$/i.test(texturePath.trimEnd());
 }
 
 export function isMmdDdsTexturePath(texturePath: string): boolean {
-  return /\.dds(?:[?#].*)?$/i.test(texturePath);
+  return /\.dds(?:[?#].*)?$/i.test(texturePath.trimEnd());
 }
 
 export function createTextureResolver(
@@ -777,7 +777,8 @@ export function resolveMmdToonTextureReference(
 }
 
 export function normalizeMmdTexturePath(texturePath: string): string {
-  return texturePath.replaceAll("\\", "/").replace(/^\.\/+/, "");
+  // PMX authored on Windows can retain trailing spaces absent from the actual file name.
+  return texturePath.trimEnd().replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
 
 export function createFallbackMmdMaterial(): THREE.MeshToonMaterial {
@@ -1195,8 +1196,9 @@ function toonGradient(): THREE.DataTexture {
   if (cachedToonGradient) {
     return cachedToonGradient;
   }
-  const data = new Uint8Array([255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]);
-  const texture = new THREE.DataTexture(data, 4, 1, THREE.RGBFormat);
+  // WebGPU does not support RGB8 texture uploads; opaque RGBA works on both backends.
+  const data = new Uint8Array(16).fill(255);
+  const texture = new THREE.DataTexture(data, 4, 1, THREE.RGBAFormat);
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
   texture.colorSpace = THREE.NoColorSpace;

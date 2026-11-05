@@ -12,7 +12,10 @@ import {
   resolveMmdToonTextureReference
 } from "../../../src/three/index.js";
 import {
+  createFallbackMmdMaterial,
   configureMmdTexture,
+  isMmdBmpLikeTexturePath,
+  isMmdTgaLikeTexturePath,
   evaluateMmdTextureAlphaGeometry,
   evaluateMmdTextureAlphaRgba,
   evaluateMmdTextureTransparencySamples,
@@ -48,6 +51,13 @@ function createRgbaTexture(data: Uint8Array, width: number, height: number): THR
 }
 
 describe("MMD texture path utilities", () => {
+  it("uses opaque RGBA for the fallback toon on both GPU backends", () => {
+    const material = createFallbackMmdMaterial();
+    const texture = material.gradientMap as THREE.DataTexture;
+    expect(texture.format).toBe(THREE.RGBAFormat);
+    expect(Array.from(texture.image.data)).toEqual(new Array(16).fill(255));
+    material.dispose();
+  });
   it("normalizes Windows separators and leading current-directory segments", () => {
     expect(normalizeMmdTexturePath("textures\\body.bmp")).toBe("textures/body.bmp");
     expect(normalizeMmdTexturePath("./textures\\face.bmp")).toBe("textures/face.bmp");
@@ -58,6 +68,22 @@ describe("MMD texture path utilities", () => {
     expect(isMmdDdsTexturePath("skin.DDS")).toBe(true);
     expect(isMmdDdsTexturePath("skin.dds")).toBe(true);
     expect(isMmdDdsTexturePath("skin.png")).toBe(false);
+  });
+
+  it("resolves Windows-authored trailing spaces without losing exact map overrides", async () => {
+    const path = "spa\\spa-2.bmp  ";
+    const textureMap = { "spa/spa-2.bmp": "hair-sphere" };
+    expect(normalizeMmdTexturePath(path)).toBe("spa/spa-2.bmp");
+    expect(isMmdBmpLikeTexturePath(path)).toBe(true);
+    expect(isMmdTgaLikeTexturePath("tex/hair.tga  ")).toBe(true);
+    expect(isMmdDdsTexturePath("tex/hair.dds  ")).toBe(true);
+    expect(resolveMappedTexture(path, textureMap)).toBe("hair-sphere");
+    expect(resolveMappedTexture("SPA\\SPA-2.BMP  ", textureMap)).toBe("hair-sphere");
+    expect(resolveMappedTexture(path, { ...textureMap, [path]: "explicit" })).toBe("explicit");
+    expect(normalizeMmdTexturePath("tex/ hair color.png  ")).toBe("tex/ hair color.png");
+    await expect(createTextureResolver(undefined, textureMap)?.resolve(path)).resolves.toBe("hair-sphere");
+    await expect(createTextureResolver(undefined, {})?.resolve(path, "models/model.pmx"))
+      .resolves.toBe("models/spa/spa-2.bmp");
   });
 
   it("resolves texture maps with normalized case-insensitive paths", () => {

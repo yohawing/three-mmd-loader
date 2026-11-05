@@ -994,7 +994,7 @@ describe("Three.js MMD materials", () => {
       "vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );"
     );
     expect(shader.fragmentShader).toContain(
-      "vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
+      "ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
     );
     expect(shader.fragmentShader).toContain("vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;");
     // The composite must be gamma-decoded back to linear so Three's sRGB output encode
@@ -1027,10 +1027,10 @@ describe("Three.js MMD materials", () => {
       "vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( 0.0, 0.0 ) ).rgb;"
     );
     expect(shader.fragmentShader).toContain(
-      "vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
+      "ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );"
     );
     expect(shader.fragmentShader).toContain("vec3 ywMmdToon = texture2D( gradientMap, vec2( 0.0, ywMmdLn ) ).rgb;");
-    expect(shader.fragmentShader).toContain("vec3 ywMmdToonLight = ywMmdToon;");
+    expect(shader.fragmentShader).toContain("ywMmdToonLight = ywMmdToon;");
     expect(shader.fragmentShader).toContain("vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;");
     expect(shader.fragmentShader).not.toContain("if ( ywMmdToonShadowFactor < 0.999 ) {");
     expect(shader.fragmentShader).not.toContain("ywMmdColor = mix( ywMmdSelfShadowColor, ywMmdColor");
@@ -1051,7 +1051,7 @@ describe("Three.js MMD materials", () => {
     // Specular is always gated by vis when self-shadow is scene-enabled (no per-pixel
     // threshold ternary): §10.2 "スペキュラは影とN.L勾配の両方で減衰する".
     expect(shader.fragmentShader).toContain("#ifdef USE_SHADOWMAP");
-    expect(shader.fragmentShader).toContain("float ywMmdSpecGate = ywMmdVis;");
+    expect(shader.fragmentShader).toContain("float ywMmdSpecGate = ywMmdShadowEnabled ? ywMmdVis : 1.0;");
     expect(shader.fragmentShader).not.toContain(
       "float ywMmdSpecGate = ywMmdToonShadowFactor < 0.999 ? ywMmdToonVisibility : 1.0;"
     );
@@ -1141,7 +1141,7 @@ describe("Three.js MMD materials", () => {
     expect(shader.uniforms.mmdToonCoordinateOffset?.value).toBe(0.5);
   });
 
-  it("uses view-space normal (vNormal) for sphere texture UV", () => {
+  it("uses top-down image coordinates for view-space sphere texture UV", () => {
     const material = new THREE.MeshToonMaterial();
     attachMmdMaterialFactors(material);
     const texture = new THREE.Texture();
@@ -1153,10 +1153,11 @@ describe("Three.js MMD materials", () => {
     expect(shader.fragmentShader).toContain("#define USE_MMD_SPHERE");
     expect(shader.fragmentShader).toContain("#define MMD_SPHERE_MODE 2");
     expect(shader.fragmentShader).not.toContain("uniform int mmdSphereMode;");
-    expect(shader.vertexShader).not.toContain("vMmdSphereNormal");
+    expect(shader.fragmentShader).toContain("varying vec3 vMmdNormal;");
     expect(shader.fragmentShader).toContain(
-      "vec2 ywMmdSphereUv = vec2( ywMmdNormal.x * 0.5 + 0.5, ywMmdNormal.y * 0.5 + 0.5 );"
+      "vec2 ywMmdSphereUv = vec2( vMmdNormal.x * 0.5 + 0.5, 0.5 - vMmdNormal.y * 0.5 );"
     );
+    expect(texture.flipY).toBe(false);
   });
 
   it("composites sphere textures into diffuse base before toon and self-shadow grading", () => {
@@ -1172,12 +1173,13 @@ describe("Three.js MMD materials", () => {
       "vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );"
     );
     expect(source).toContain("ywMmdBase *= ywMmdTex;");
+    expect(source).toContain("vec3 ywMmdEyeDir = normalize( vViewPosition );");
     expect(source).toContain("#define MMD_SPHERE_MODE 2");
     expect(source).toContain(
       "ywMmdBase *= ywMmdApplyMul( ywMmdSphere, mmdSphereFactor );"
     );
     expect(source).toContain(
-      "ywMmdBase += ywMmdApplyAdd( ywMmdSphere, mmdSphereFactor ) * 2.0;"
+      "ywMmdBase += ywMmdApplyAdd( ywMmdSphere, mmdSphereFactor );"
     );
     expect(source.indexOf("ywMmdBase *= ywMmdTex;")).toBeLessThan(
       source.indexOf("#elif MMD_SPHERE_MODE == 2")

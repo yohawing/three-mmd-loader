@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { getMmdShadowProjection } from "../three/mmd-shadow-projection.js";
 
 import type { MaterialRuntimeState } from "../parser/model/modelTypes.js";
 import {
@@ -240,7 +241,7 @@ function createInitializedPipeline(
       };
       try {
         replaceMmdModelMaterialsWithTsl(model.mesh, assemblyOptions);
-        createMmdTslShadowCaster(model.mesh, { alphaTest: false });
+        createMmdTslShadowCaster(model.mesh, { alphaTest: false, referenceShadow: true });
       } catch (error) {
         if (sparseMorphs) {
           disposeMmdTslSparsePositionMorphs(model.mesh);
@@ -336,6 +337,10 @@ function createInitializedPipeline(
         return false;
       }
       pipeline.prepareRender(scene);
+      if (light && selfShadowPass) {
+        const projection = getMmdShadowProjection(light);
+        projection.update(camera, selfShadowMode, projection.distance);
+      }
       const selfShadowPassForRender = selfShadowPass;
       const selfShadowLight = light;
       if (

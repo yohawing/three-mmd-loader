@@ -1,6 +1,6 @@
 {
   "name": "@yohawing/three-mmd-loader",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "TypeScript-first ESM library for Three.js MMD loading and playback.",
   "type": "module",
   "license": "MIT",
@@ -112,6 +112,7 @@
     "smoke:deploy": "npm run build && node scripts/fixtures/generate-minimal-pmx.mjs --visual-case mmd-viewer-self-shadow-receiver --output test/fixtures/generated/visual/mmd-viewer-self-shadow-receiver.pmx && node scripts/build-deploy.mjs && node scripts/smoke-deploy-viewer.mjs",
     "smoke:types": "node scripts/type-consumer-smoke.mjs",
     "test": "vitest run",
+    "test:shading": "node scripts/visual-regression/check-material-shading.mjs --webgpu",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix"
   },

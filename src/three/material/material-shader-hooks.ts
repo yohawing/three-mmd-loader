@@ -16,8 +16,8 @@ const MMD_DEFAULT_TOON_COORD_OFFSET = 0.45;
 const MMD_SYNCED_LIGHT_TOON_COORD_OFFSET = 0.5;
 // MMD light travel direction (the light moves toward this vector). dirToLight is its
 // negation, so the key light arrives from front-up-right (+x, +y, +z toward camera) --
-// matched against the real MMD 9.32 toon golden.
-const MMD_DEFAULT_LIGHT_TRAVEL_DIRECTION: readonly [number, number, number] = [-0.5, -1.0, -1.0];
+// MikuDanceStudio ResetSceneLight: (-0.5, -1, +0.5) before the LH -> RH Z flip.
+const MMD_DEFAULT_LIGHT_TRAVEL_DIRECTION: readonly [number, number, number] = [-0.5, -1.0, -0.5];
 // MMD self-shadow uses the material toon color as a multiplier for fully shadowed
 // fragments. D3D9 traces show that texture-backed toon color comes from the bottom band.
 // Unity treats self-shadow toon as a single ToonColor and changes only the visibility
@@ -63,6 +63,7 @@ const MMD_TEXTURE_FACTOR_HELPERS = [
  * declared by {@link attachMmdSphereTexture} guarded by USE_MMD_SPHERE.
  */
 const MMD_FRAGMENT_PARS = [
+  "varying vec3 vMmdNormal;",
   "uniform vec4 mmdTextureFactor;",
   "uniform vec4 mmdToonTextureFactor;",
   "uniform vec3 mmdDiffuseColor;",
@@ -89,14 +90,22 @@ const MMD_FRAGMENT_PARS = [
  */
 const MMD_OPAQUE_FRAGMENT = [
   "{",
-  "  vec3 ywMmdNormal = normalize( vNormal );",
-  // vViewPosition points from the fragment toward the camera; eyeDir in MMD/saba points
-  // from the camera toward the fragment, hence the negation.
-  "  vec3 ywMmdEyeDir = normalize( -vViewPosition );",
+  "  vec3 ywMmdNormal = normalize( vMmdNormal );",
+  // MMD's Eye = Place - Pos points toward the camera, as does vViewPosition.
+  "  vec3 ywMmdEyeDir = normalize( vViewPosition );",
   // mmdLightDirection is the world-space direction toward the light. The normal is in
   // view space, so transform the light direction into view space before dotting.
   "  vec3 ywMmdLightDir = normalize( ( viewMatrix * vec4( mmdLightDirection, 0.0 ) ).xyz );",
   "  float ywMmdLightVisibility = clamp( dot( ywMmdNormal, ywMmdLightDir ) * 3.0, 0.0, 1.0 );",
+  "  #ifdef USE_SHADOWMAP",
+  "    bool ywMmdShadowEnabled = true;",
+  "  #else",
+  "    bool ywMmdShadowEnabled = false;",
+  "  #endif",
+  "  #ifdef MMD_REFERENCE_SHADOW",
+  "    ywMmdShadowEnabled = mmdReferenceEnabled > 0.5 && mmdSelfShadowReceive > 0.5;",
+  "    if ( ywMmdShadowEnabled ) ywMmdToonShadowFactor = mmdReferenceVisibility( vMmdReferenceCoord );",
+  "  #endif",
   // §10.2: toon materials clamp visibility by the steep pseudo-N.L grade; non-toon
   // materials use the raw shadow factor unmodified ("トゥーン無しは vis = shadowVis").
   "  #ifdef USE_GRADIENTMAP",
@@ -104,13 +113,15 @@ const MMD_OPAQUE_FRAGMENT = [
   "  #else",
   "    float ywMmdVis = ywMmdToonShadowFactor;",
   "  #endif",
+  "  if ( ywMmdToonShadowFactor < 0.0 ) ywMmdVis = 1.0;",
   "  float ywMmdLn = dot( ywMmdNormal, ywMmdLightDir );",
   "  ywMmdLn = clamp( ywMmdLn * 0.5 + mmdToonCoordinateOffset, 0.0, 1.0 );",
   "  #ifdef USE_GRADIENTMAP",
   "    vec3 ywMmdBase = clamp( mmdDiffuseColor * mmdLightColor + mmdMaterialAmbient, 0.0, 1.0 );",
   "  #else",
   "    float ywMmdLambert = max( 0.0, dot( ywMmdNormal, ywMmdLightDir ) );",
-  "    vec3 ywMmdBase = clamp( mmdMaterialAmbient + ywMmdLambert * mmdDiffuseColor * mmdLightColor, 0.0, 1.0 );",
+  "    vec3 ywMmdLitBase = clamp( mmdMaterialAmbient + ywMmdLambert * mmdDiffuseColor * mmdLightColor, 0.0, 1.0 );",
+  "    vec3 ywMmdBase = mix( clamp( mmdMaterialAmbient, 0.0, 1.0 ), ywMmdLitBase, ywMmdVis );",
   "  #endif",
   "  #ifdef USE_MAP",
   // mmdTextureFactor is the morph-aggregated multiply tint (identity = (1,1,1,1)).
@@ -118,15 +129,17 @@ const MMD_OPAQUE_FRAGMENT = [
   "    ywMmdBase *= ywMmdTex;",
   "  #endif",
   "  #ifdef USE_MMD_SPHERE",
-  "    vec2 ywMmdSphereUv = vec2( ywMmdNormal.x * 0.5 + 0.5, ywMmdNormal.y * 0.5 + 0.5 );",
+  // MMD's BShadowSphiaTexture interpolates view-normal XY without fragment
+  // renormalization. Images use top-down UVs (flipY=false).
+  "    vec2 ywMmdSphereUv = vec2( vMmdNormal.x * 0.5 + 0.5, 0.5 - vMmdNormal.y * 0.5 );",
   // Sphere texture is configured SRGBColorSpace, so texture2D returns linear; re-encode
   // to gamma for the MMD (gamma-space) composite.
   "    vec3 ywMmdSphere = ywMmdLinearToGamma( texture2D( mmdSphereMap, ywMmdSphereUv ).rgb );",
   "    #if MMD_SPHERE_MODE == 1",
   "      ywMmdBase *= ywMmdApplyMul( ywMmdSphere, mmdSphereFactor );",
   "    #elif MMD_SPHERE_MODE == 2",
-  // apitrace: MMD 9.32 weights additive sphere by SphCAdd.a + SphCMul.a (= 2.0 at defaults).
-  "      ywMmdBase += ywMmdApplyAdd( ywMmdSphere, mmdSphereFactor ) * 2.0;",
+  // The aggregated morph factor already contains the sphere weight (identity = 1).
+  "      ywMmdBase += ywMmdApplyAdd( ywMmdSphere, mmdSphereFactor );",
   "    #elif MMD_SPHERE_MODE == 3",
   "      ywMmdBase = mix( ywMmdBase, ywMmdSphere, mmdSphereFactor.a );",
   "    #endif",
@@ -138,16 +151,17 @@ const MMD_OPAQUE_FRAGMENT = [
   // per-pixel `< 0.999` hybrid mixes the ramp back in for lightly-shadowed pixels
   // and creates a visible tone-curve seam at the shadow boundary that real MMD
   // does not have.
-  "  #ifdef USE_SHADOWMAP",
+  "    vec3 ywMmdToonLight;",
+  "    if ( ywMmdShadowEnabled ) {",
   "    vec3 ywMmdSelfShadowToon = texture2D( gradientMap, vec2( "
     + `${MMD_TOON_SAMPLE_U.toFixed(1)}, ${MMD_SELF_SHADOW_TOON_V.toFixed(1)} ) ).rgb;`,
   "    ywMmdSelfShadowToon = ywMmdApplyMul( ywMmdSelfShadowToon, mmdToonTextureFactor );",
-  "    vec3 ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );",
-  "  #else",
+  "    ywMmdToonLight = mix( ywMmdSelfShadowToon, vec3( 1.0 ), ywMmdVis );",
+  "    } else {",
   `    vec3 ywMmdToon = texture2D( gradientMap, vec2( ${MMD_TOON_SAMPLE_U.toFixed(1)}, ywMmdLn ) ).rgb;`,
   "    ywMmdToon = ywMmdApplyMul( ywMmdToon, mmdToonTextureFactor );",
-  "    vec3 ywMmdToonLight = ywMmdToon;",
-  "  #endif",
+  "    ywMmdToonLight = ywMmdToon;",
+  "    }",
   "    vec3 ywMmdColor = ywMmdBase * ywMmdToonLight;",
   "  #else",
   "    vec3 ywMmdColor = ywMmdBase;",
@@ -156,11 +170,7 @@ const MMD_OPAQUE_FRAGMENT = [
   "    vec3 ywMmdHalf = normalize( ywMmdEyeDir + ywMmdLightDir );",
   // Specular is always gated by vis when self-shadow is scene-enabled (no
   // per-pixel threshold ternary): §10.2 "スペキュラは影とN.L勾配の両方で減衰する".
-  "    #ifdef USE_SHADOWMAP",
-  "      float ywMmdSpecGate = ywMmdVis;",
-  "    #else",
-  "      float ywMmdSpecGate = 1.0;",
-  "    #endif",
+  "    float ywMmdSpecGate = ywMmdShadowEnabled ? ywMmdVis : 1.0;",
   "    ywMmdColor += pow( max( 0.0, dot( ywMmdHalf, ywMmdNormal ) ), mmdSpecularPower ) * mmdSpecularColor * mmdLightColor * ywMmdSpecGate;",
   "  }",
   "  outgoingLight = ywMmdGammaToLinear( clamp( ywMmdColor, 0.0, 1.0 ) );",
@@ -281,6 +291,11 @@ export function attachMmdMaterialFactors(material: THREE.Material): void {
       shader.uniforms.mmdSpecularPower.value = materialState.specularPower;
     }
     material.userData.mmdMaterialFactorShader = shader;
+    // Keep authored/skinned normal length, excluding model scale from normalMatrix.
+    // MMD normalizes the interpolated result only for lighting, never for sphere UVs.
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vMmdNormal;")
+      .replace("#include <defaultnormal_vertex>", "#include <defaultnormal_vertex>\nvMmdNormal = transformedNormal * ( length( objectNormal ) / max( length( transformedNormal ), 1e-8 ) );");
     shader.fragmentShader = injectMmdShading(shader.fragmentShader);
   };
   material.customProgramCacheKey = () => `${previousProgramCacheKey()}-yw-mmd-material-factors-v3`;
