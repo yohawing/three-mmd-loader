@@ -168,7 +168,9 @@ export async function runReferenceShadowProbe() {
     const inverse=projection.sampleMatrix.clone().invert();
     const slopes=[[0.2,0],[0,0.3],[0.2,0.3]];
     for(const [sx,sy] of slopes) {
-      [[0.1,0.9],[0.9,0.9],[0.5,0.1]].forEach(([u,v],i)=>{
+      // Exact pixel-grid vertices avoid implementation-dependent subpixel
+      // quantization changing the plane slope (not the sampling center).
+      [[0.125,0.875],[0.875,0.875],[0.5,0.125]].forEach(([u,v],i)=>{
         const p=new THREE.Vector3(u,v,0.1+sx*u+sy*v).applyMatrix4(inverse);
         casterGeometry.attributes.position.setXYZ(i,p.x,p.y,p.z);
       });
