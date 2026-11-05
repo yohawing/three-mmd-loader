@@ -38,9 +38,6 @@ export class MmdWebGlReferenceShadowPass {
       mmdReferenceMap: { value: this.target.texture },
       mmdReferenceMatrix: { value: this.projection.sampleMatrix },
       mmdReferenceMode: this.projection.mode,
-      mmdReferenceSampling: this.projection.sampling,
-      mmdReferenceBias: this.projection.receiverBias,
-      mmdReferenceNormalBias: this.projection.normalBias,
       mmdReferenceEnabled: { value: 0 },
       mmdReferenceSize: { value: new THREE.Vector2(width,height) }
     };
@@ -94,9 +91,9 @@ vMmdDepth = mmdReferenceMatrix * modelMatrix * vec4(transformed, 1.0);`);
     this.projection.release();
   }
 
-  render(scene: THREE.Scene, camera: THREE.Camera, enabled: boolean, mode: number, distance: number): void {
+  render(scene: THREE.Scene, camera: THREE.Camera, enabled: boolean, mode: number): void {
     this.uniforms.mmdReferenceEnabled.value = enabled ? 1 : 0;
-    this.projection.update(camera, mode, distance);
+    this.projection.update(mode);
     const renderer = this.renderer;
     const oldShadow = renderer.shadowMap.enabled;
     const oldTarget = renderer.getRenderTarget();

@@ -10,7 +10,7 @@ if(!folder)throw Error('Usage: check-shadow-stability.mjs MODEL_FOLDER [VIEWER_U
 const origin=process.argv[3]??'http://127.0.0.1:3939/';
 const output='test-results/visual/shadow-stability';
 const backends=(process.argv[4]??'baseline,webgpu,forcewebgl').split(',');
-const variants=['stable-mmd','stable-legacy','mmd-mmd','mmd-legacy'];
+const variants=['stable'];
 const angles=[0,0.125,0.25,0.5,1,2,4,0];
 await mkdir(output,{recursive:true});
 const records=[],errors=[],failures=[];
@@ -36,14 +36,6 @@ for(const backend of backends) {
       if(!state.currentModel)throw Error(document.querySelector('#status').textContent);
       await renderStillFrame({physics:false,ik:false});
       state.renderer.setAnimationLoop(null);
-      if(state.shadowProjectionMode!=='stable'||state.shadowSamplingMode!=='mmd')throw Error('Incorrect default shadow preset');
-      const model=state.currentModel;
-      for(const mode of ['mmd','stable']) {
-        const select=document.querySelector('#shadow-method');select.value=mode;
-        select.dispatchEvent(new window.Event('change',{bubbles:true}));
-        if(state.shadowProjectionMode!==mode||state.shadowSamplingMode!=='mmd'||state.currentModel!==model)
-          throw Error('Shadow preset UI roundtrip failed');
-      }
       const raw={value:0};window.shadowComparison={raw};
       if(state.renderer.isWebGPURenderer) {
         const {MeshBasicNodeMaterial}=await import('three/webgpu');
@@ -95,14 +87,12 @@ for(const backend of backends) {
     });
     await page.addStyleTag({content:'body *{visibility:hidden!important}#viewer-canvas{visibility:visible!important}'});
     for(const variant of variants) {
-      const [projection,sampling]=variant.split('-');
       const frames=[];
       console.log(`${backend}/${variant}`);
       for(let frame=0;frame<angles.length;frame++) {
-        const info=await page.evaluate(async({projection,sampling,angle})=>{
+        const info=await page.evaluate(async({angle})=>{
           const {state}=await import('/lib/state.js');
           const {submitViewerRender}=await import('/lib/viewer-pipeline.js');
-          state.shadowProjectionMode=projection;state.shadowSamplingMode=sampling;
           const yaw=(-27.5+angle)*Math.PI/180,pitch=14.3*Math.PI/180,r=9;
           state.controls.target.set(angle*0.08,18.7,0);
           state.camera.position.set(angle*0.08+r*Math.sin(yaw)*Math.cos(pitch),18.7+r*Math.sin(pitch),r*Math.cos(yaw)*Math.cos(pitch));
@@ -112,9 +102,9 @@ for(const backend of backends) {
           }
           submitViewerRender();
           const p=state.keyLight.userData.mmdShadowProjection;
-          return {matrix:p.sampleMatrix.elements.slice(),mapSize:state.keyLight.shadow.mapSize.toArray(),bias:p.receiverBias.value,
+          return {matrix:p.sampleMatrix.elements.slice(),mapSize:state.keyLight.shadow.mapSize.toArray(),
             native:state.renderer.backend?.isWebGPUBackend===true};
-        },{projection,sampling,angle:angles[frame]});
+        },{angle:angles[frame]});
         const file=`${backend}-${variant}-${frame}`;
         await page.locator('#viewer-canvas').screenshot({path:`${output}/${file}.png`});
         // Reproject neither image nor camera motion: measure the same visible
@@ -164,14 +154,13 @@ for(const backend of backends) {
       if(!Number.isFinite(record.meanVisibilityChange))failures.push(`${backend}/${variant}: nonfinite visibility metric`);
       if(frames.some(f=>f.mapSize.some(v=>v!==4096)))failures.push(`${backend}/${variant}: not 4K`);
       if(backend==='webgpu'&&frames.some(f=>!f.native))failures.push('Native WebGPU fallback');
-      if(projection==='stable'&&(maxMatrixChange>1e-10||record.meanVisibilityChange>0.1))failures.push(`${backend}/${variant}: unstable world shadow`);
-      if(projection==='stable'&&(shadowPixels<1000||litPixels<1000))failures.push(`${backend}/${variant}: shadows disappeared`);
-      if(projection==='mmd'&&maxMatrixChange<1e-5)failures.push(`${backend}/${variant}: camera motion did not exercise MMD projection`);
+      if((maxMatrixChange>1e-10||record.meanVisibilityChange>0.1))failures.push(`${backend}/${variant}: unstable world shadow`);
+      if((shadowPixels<1000||litPixels<1000))failures.push(`${backend}/${variant}: shadows disappeared`);
     }
   } finally {await browser.close();}
 }
 await writeFile(`${output}/report.json`,JSON.stringify({folder,angles,records,errors,failures},null,2));
 const data=JSON.stringify({backends,variants,angles,records}).replaceAll('<','\\u003c');
-await writeFile(`${output}/index.html`, `<!doctype html><meta charset="utf-8"><title>Shadow camera comparison</title><style>body{font:16px sans-serif;background:#202125;color:white}main{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}img{width:100%}pre{white-space:pre-wrap}input{width:50%}</style><h1>4Kセルフシャドウ：投影とサンプリングの比較</h1><p>左から安定投影＋補間、安定投影＋旧比較、MMD投影＋補間、MMD投影＋旧比較。固定視点の受影面で比較。診断画像は赤に可視率、青に受影面マスクを格納。平均差は同一Backend内だけで比較してください（TSLはsRGB変換あり）。旧方式はBaselineが二値、TSLが最近傍深度＋ランプです。</p><select id="backend"></select><button id="play">再生 / 停止</button><input id="frame" type="range" min="0" max="7" value="0"><label><input id="raw" type="checkbox" style="width:auto">影の可視率（固定視点）</label><main></main><pre id="metrics"></pre><script>const data=${data};const select=document.querySelector('#backend');data.backends.forEach(b=>select.add(new Option(b,b)));function draw(){let b=select.value,f=document.querySelector('#frame').value,raw=document.querySelector('#raw').checked;document.querySelector('main').innerHTML=data.variants.map(v=>'<section><h3>'+v+'</h3><img src="'+b+'-'+v+'-'+f+(raw?'-visibility':'')+'.png"></section>').join('');document.querySelector('#metrics').textContent=JSON.stringify(data.records.filter(r=>r.backend===b).map(({variant,meanVisibilityChange,changedFraction,maxMatrixChange})=>({variant,meanVisibilityChange,changedFraction,maxMatrixChange})),null,2)}document.querySelectorAll('select,input').forEach(e=>e.oninput=draw);let timer;document.querySelector('#play').onclick=()=>{if(timer){clearInterval(timer);timer=undefined;}else timer=setInterval(()=>{const f=document.querySelector('#frame');f.value=(Number(f.value)+1)%8;draw()},450)};draw();</script>`);
+await writeFile(`${output}/index.html`, `<!doctype html><meta charset="utf-8"><title>Shadow camera comparison</title><style>body{font:16px sans-serif;background:#202125;color:white}main{display:grid;grid-template-columns:minmax(0,640px);gap:8px}img{width:100%}pre{white-space:pre-wrap}input{width:50%}</style><h1>4Kセルフシャドウ：カメラ移動の安定性</h1><p>Stable方式のみ。固定視点の受影面で比較。診断画像は赤に可視率、青に受影面マスクを格納。平均差は同一Backend内で比較します（TSLはsRGB変換あり）。</p><select id="backend"></select><button id="play">再生 / 停止</button><input id="frame" type="range" min="0" max="7" value="0"><label><input id="raw" type="checkbox" style="width:auto">影の可視率（固定視点）</label><main></main><pre id="metrics"></pre><script>const data=${data};const select=document.querySelector('#backend');data.backends.forEach(b=>select.add(new Option(b,b)));function draw(){let b=select.value,f=document.querySelector('#frame').value,raw=document.querySelector('#raw').checked;document.querySelector('main').innerHTML=data.variants.map(v=>'<section><h3>'+v+'</h3><img src="'+b+'-'+v+'-'+f+(raw?'-visibility':'')+'.png"></section>').join('');document.querySelector('#metrics').textContent=JSON.stringify(data.records.filter(r=>r.backend===b).map(({variant,meanVisibilityChange,changedFraction,maxMatrixChange})=>({variant,meanVisibilityChange,changedFraction,maxMatrixChange})),null,2)}document.querySelectorAll('select,input').forEach(e=>e.oninput=draw);let timer;document.querySelector('#play').onclick=()=>{if(timer){clearInterval(timer);timer=undefined;}else timer=setInterval(()=>{const f=document.querySelector('#frame');f.value=(Number(f.value)+1)%8;draw()},450)};draw();</script>`);
 console.log(JSON.stringify({results:records.map(({frames,...r})=>({...r,frames:frames.length})),errors,failures},null,2));
 if(errors.length||failures.length)process.exitCode=1;

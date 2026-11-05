@@ -23,6 +23,7 @@ export function showModelCredits(model, fallbackName) {
   );
   dom.creditModelText.textContent = modelName;
   dom.creditCommentText.textContent = comment;
+  dom.creditCommentText.scrollTop = 0;
   dom.creditPopup.hidden = false;
 }
 

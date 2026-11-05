@@ -3,16 +3,14 @@ import { readFile as readRawFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("example viewer source", () => {
-  it("defaults to stable projection with interpolated depth and retains MMD compatibility", async () => {
+  it("keeps one shadow strategy without projection or sampling selectors", async () => {
     const state = await readFile("examples/viewer/lib/state.js", "utf8");
     const pipeline = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
     const html = await readFile("examples/viewer/index.html", "utf8");
-    expect(state).toContain('query.get("shadowProjection") === "mmd" ? "mmd" : "stable"');
-    expect(state).toContain('query.get("shadowSampling") === "legacy" ? "legacy" : "mmd"');
-    expect(pipeline).toContain('setViewerShadowOptions(projection, sampling = "mmd")');
-    expect(html).toContain('id="shadow-method"');
-    expect(html).toContain('value="stable"');
-    expect(html).toContain('value="mmd"');
+    expect(state).not.toContain("shadowProjectionMode");
+    expect(state).not.toContain("shadowSamplingMode");
+    expect(pipeline).not.toContain("setViewerShadowOptions");
+    expect(html).not.toContain('id="shadow-method"');
   });
   it("initializes the viewer light with the MMD LH-to-RH direction", async () => {
     const source = await readFile("examples/viewer/lib/scene-setup.js", "utf8");

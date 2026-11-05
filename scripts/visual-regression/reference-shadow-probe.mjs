@@ -51,7 +51,6 @@ export async function runReferenceShadowProbe() {
       syncMmdSpecularDirection(material,new THREE.Vector3(0,0,1));
       attachMmdReferenceShadow(material, {
         mmdReferenceMap:{value:texture},mmdReferenceMatrix:{value:projection.sampleMatrix},
-        mmdReferenceSampling:projection.sampling,mmdReferenceBias:projection.receiverBias,mmdReferenceNormalBias:projection.normalBias,
         mmdReferenceMode:mode,mmdReferenceEnabled:enabled,mmdReferenceSize:{value:new THREE.Vector2(2,2)}
       });
     } else {
@@ -92,19 +91,6 @@ export async function runReferenceShadowProbe() {
       cases.push({name,actual,expected:[value,value,value]});
       if(actual.length!==3 || actual.some(v=>!Number.isFinite(v)||Math.abs(v-value)>2)) failures.push(name);
     }
-    for(const [sampling,z,expected] of [[0,0.6,0],[1,0.6,255],[2,0.6,255],[2,-0.1,255],[1,0.8+0.8/1500,128],[2,0.8+0.8/1500,0]]) {
-      projection.sampling.value=sampling;mode.value=1;if(visibility)visibility.mmdTslShadowMode.value=1;
-      projection.sampleMatrix.set(0,0,0,0.5,0,0,0,0.5,0,0,0,z,0,0,0,1);
-      renderer.setRenderTarget(target);
-      if(backend==='baseline')renderer.render(scene,camera);else await renderer.renderAsync(scene,camera);
-      let pixel;
-      if(backend==='baseline'){pixel=new Uint8Array(4);renderer.readRenderTargetPixels(target,32,32,1,1,pixel);}
-      else pixel=await renderer.readRenderTargetPixelsAsync(target,32,32,1,1);
-      const name=`${backend} independent sampling ${sampling}, z=${z}`;
-      cases.push({name,actual:pixel[0],expected});
-      if(!Number.isFinite(pixel[0])||Math.abs(pixel[0]-expected)>2)failures.push(name);
-    }
-    projection.sampling.value=0;
     texture.image.data.set(backend==='baseline'?[0.4,1,0.2,0.8]:[0.2,0.8,0.4,1]);
     texture.needsUpdate=true;
     for(const [y,depth] of [[0.25,0.5],[0.75,0.7]]) {
@@ -148,7 +134,7 @@ export async function runReferenceShadowProbe() {
     casterGeometry.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(9),3));
     if(backend==='baseline')pass.add(caster);
     for(const shadowMode of [1,2]) {
-      projection.update(camera,shadowMode,0.01125);
+      projection.update(shadowMode);
       const inverse=projection.sampleMatrix.clone().invert();
       const positions=casterGeometry.attributes.position;
       const points=[[0.2,0.8,0.3],[0.8,0.8,0.3],[0.5,0.2,0.3]];
@@ -169,16 +155,16 @@ export async function runReferenceShadowProbe() {
         casterMaterial.userData.mmdMaterialState={edgeColor:[0,0,0,edge]};
         casterMaterial.opacity=opacity;
         // Baseline caster materials are created at registration time.
-        if(backend==='baseline'){pass.remove(caster);pass.add(caster);pass.render(casterScene,camera,true,shadowMode,0.01125);}
+        if(backend==='baseline'){pass.remove(caster);pass.add(caster);pass.render(casterScene,camera,true,shadowMode);}
         else {pass.setMode(shadowMode);pass.render(renderer,casterScene,light);}
         const pixel=await readDepth(renderer,depthTarget,depthTarget.width/2,depthTarget.height/2,backend);
         const actual=pixel[0],name=`${backend} caster mode${shadowMode} ${label}`;
         cases.push({name,actual,expected});if(!Number.isFinite(actual)||Math.abs(actual-expected)>0.002)failures.push(name);
       }
     }
-    // D3D9 rasterizes texel (i,j) at integer viewport coordinates, unlike
-    // modern APIs' (i+.5,j+.5). A sloped raw-depth plane distinguishes them.
-    projection.update(camera,1,0.01125);
+    // A sloped plane verifies modern pixel centers (i+.5,j+.5), independently
+    // of the projection implementation and raw-depth sampler.
+    projection.update(1);
     const inverse=projection.sampleMatrix.clone().invert();
     const slopes=[[0.2,0],[0,0.3],[0.2,0.3]];
     for(const [sx,sy] of slopes) {
@@ -189,13 +175,13 @@ export async function runReferenceShadowProbe() {
       casterGeometry.attributes.position.needsUpdate=true;
       casterGeometry.setIndex([0,1,2]);casterMaterial.side=THREE.DoubleSide;casterMaterial.shadowSide=THREE.DoubleSide;
       casterMaterial.opacity=1;casterMaterial.userData.mmdMaterialState.edgeColor[3]=1;
-      if(backend==='baseline'){pass.remove(caster);pass.add(caster);pass.render(casterScene,camera,true,1,0.01125);}
+      if(backend==='baseline'){pass.remove(caster);pass.add(caster);pass.render(casterScene,camera,true,1);}
       else {pass.setMode(1);pass.render(renderer,casterScene,light);}
       const x=depthTarget.width/2,y=depthTarget.height/2;
       const readY=backend==='webgpu'?y:depthTarget.height-1-y;
       const pixel=await readDepth(renderer,depthTarget,x,readY,backend);
-      const expected=0.1+sx*x/depthTarget.width+sy*y/depthTarget.height;
-      const name=`${backend} D3D9 raster center slope ${sx},${sy}`;
+      const expected=0.1+sx*(x+0.5)/depthTarget.width+sy*(y+0.5)/depthTarget.height;
+      const name=`${backend} stable raster center slope ${sx},${sy}`;
       cases.push({name,actual:pixel[0],expected});if(!Number.isFinite(pixel[0])||Math.abs(pixel[0]-expected)>1e-6)failures.push(name);
     }
     pass.dispose();casterGeometry.dispose();casterMaterial.dispose();renderer.dispose();

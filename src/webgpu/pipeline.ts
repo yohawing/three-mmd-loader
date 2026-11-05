@@ -341,7 +341,7 @@ function createInitializedPipeline(
       pipeline.prepareRender(scene);
       if (light && selfShadowPass) {
         const projection = getMmdShadowProjection(light);
-        projection.update(camera, selfShadowMode, projection.distance);
+        projection.update(selfShadowMode);
       }
       const selfShadowPassForRender = selfShadowPass;
       const selfShadowLight = light;

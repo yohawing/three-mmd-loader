@@ -12,7 +12,6 @@ import {
   syncMmdTslDedicatedShadowVisibility,
   syncMmdTslDedicatedRawVisibilityDebug,
   submitViewerRender,
-  setViewerShadowOptions,
   submitViewerRenderAsync
 } from "./viewer-pipeline.js";
 
@@ -38,9 +37,6 @@ export function createViewerDebugApi() {
     },
     async selfShadow(enabled = true) {
       return `selfShadow=${await setSelfShadowEnabled(enabled)}`;
-    },
-    shadowOptions(projection, sampling = "mmd") {
-      return setViewerShadowOptions(projection, sampling);
     },
     dedicatedRawVisibility(enabled = true) {
       return `dedicatedRawVisibility=${setMmdTslDedicatedRawVisibilityDebug(enabled)}`;
