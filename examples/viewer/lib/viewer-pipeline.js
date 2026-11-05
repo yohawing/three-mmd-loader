@@ -34,21 +34,6 @@ export function isTslViewerPipeline() {
   return state.viewerPipeline !== "baseline-webgl";
 }
 
-export function setViewerShadowOptions(projection, sampling = "mmd") {
-  if (!["stable", "mmd"].includes(projection) || !["mmd", "legacy"].includes(sampling)) {
-    throw new Error("Unknown shadow projection or sampling mode");
-  }
-  state.shadowProjectionMode = projection;
-  state.shadowSamplingMode = sampling;
-  const control = document.querySelector("#shadow-method");
-  if (control) control.value = sampling === "mmd" ? projection : "custom";
-  const url = new URL(window.location.href);
-  url.searchParams.set("shadowProjection", projection);
-  url.searchParams.set("shadowSampling", sampling);
-  window.history.replaceState(null, "", url);
-  return submitViewerRender();
-}
-
 function isNativeTslWebGpuPipeline() {
   return isTslViewerPipeline() &&
     state.renderer?.isWebGPURenderer === true &&
@@ -224,17 +209,13 @@ export function submitViewerRender(skipIfCompiling = false) {
   const shadowState = state.currentMotion?.animation?.selfShadowFrames?.length
     ? state.selfShadowStateScratch : undefined;
   const shadowMode = shadowState?.mode ?? 1;
-  const shadowDistance = shadowState?.distance ?? 0.01125;
   if (state.keyLight?.userData.mmdShadowProjection) {
     const projection = getMmdShadowProjection(state.keyLight);
-    projection.projectionMode = state.shadowProjectionMode;
-    projection.sampling.value = state.shadowSamplingMode !== "legacy" ? 0
-      : !isTslViewerPipeline() ? 2 : isNativeTslWebGpuPipeline() ? 3 : 1;
-    projection.update(state.camera, shadowMode, shadowDistance);
+    projection.update(shadowMode);
   }
   if (!isTslViewerPipeline() && mmdBaselineShadowPass) {
     mmdBaselineShadowPass.render(state.scene, state.camera,
-      state.debugSelfShadowEnabled && state.keyLight.castShadow, shadowMode, shadowDistance);
+      state.debugSelfShadowEnabled && state.keyLight.castShadow, shadowMode);
     return true;
   }
   if (isNativeTslWebGpuPipeline() && mmdTslPipeline) {

@@ -44,7 +44,7 @@ try {
     // These mutations must fail actual receiver/caster readback, proving that
     // the new reference checks cannot pass with the old depth behavior.
     for (const mutation of [
-      {name:'D3D9 raster center missing',file:'**/dist/three/mmd-shadow-projection.js',from:'1 / this.light.shadow.mapSize.x',to:'0 / this.light.shadow.mapSize.x'},
+      {name:'stable raster shifted half a texel',file:'**/dist/three/mmd-shadow-projection.js',from:'this.conversion.set(1, 0, 0, 0, 0, 1, 0, 0,',to:'this.conversion.set(1, 0, 0, 1 / this.light.shadow.mapSize.x, 0, 1, 0, 0,'},
       {name:'reference mode1 scale',file:'**/dist/webgpu/shadow-visibility.js',from:'float(1500)',to:'float(150)'},
       {name:'reference raw depth reversed',file:'**/dist/webgpu/self-shadow-pass.js',from:'referencePosition.z.div(referencePosition.w)',to:'referencePosition.w.sub(referencePosition.z).div(referencePosition.w)'}
     ]) {

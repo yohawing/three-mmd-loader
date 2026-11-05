@@ -14,7 +14,7 @@ import { clearMotion, loadMotion, loadMotionFromUrl, loadSecondaryMotionFromUrl,
 import { finishAudioTimeSync, render, renderStillFrame, setPlaybackPlaying, setPlaybackState, syncAudioToMotionTime, syncMotionToAudioTime } from "./lib/playback.js";
 import { resize, setViewportAxesVisible, setViewportGridVisible, setupScene } from "./lib/scene-setup.js";
 import { currentMotionDurationSeconds, debugEnabled, hasCurrentMotion, kurokoModelUrl, state } from "./lib/state.js";
-import { updateViewerPipelineStatus, setViewerShadowOptions } from "./lib/viewer-pipeline.js";
+import { updateViewerPipelineStatus } from "./lib/viewer-pipeline.js";
 
 const volumeStorageKey = "three-mmd-loader.viewer.volume.v1";
 let frameCurrentInputDirty = false;
@@ -86,13 +86,6 @@ async function initializeViewer() {
 }
 
 function bindControls() {
-  const shadowMethod = document.querySelector("#shadow-method");
-  if (shadowMethod) {
-    shadowMethod.value = state.shadowSamplingMode === "mmd" ? state.shadowProjectionMode : "custom";
-    shadowMethod.addEventListener("change", () => {
-      if (shadowMethod.value !== "custom") setViewerShadowOptions(shadowMethod.value);
-    });
-  }
   window.addEventListener("resize", resize);
   window.addEventListener("pagehide", disposeViewerResources, { once: true });
   window.addEventListener("beforeunload", disposeViewerResources, { once: true });
