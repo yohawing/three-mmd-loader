@@ -409,9 +409,11 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
   if (!state.currentFolderTextureMap) {
     return;
   }
+  // A folder can contain models in different directories, each with relative texture paths.
+  state.currentFolderTextureMap = createFolderTextureMap(state.currentFolderFiles, modelFile);
   const generation = beginModelLoad();
   const isCurrentLoad = createLoadGuard(generation, loadOptions);
-  const shouldAutoFitCamera = shouldAutoFitCameraOnModelLoad(loadOptions);
+  const shouldAutoFitCamera = loadOptions.autoFitCamera !== false && !state.currentBackground && !state.currentCameraMotion;
 
   const profile = createViewerLoadProfile(`switch:${modelFile.name}`);
   profile?.mark("start");
@@ -778,7 +780,13 @@ export function findModelFile(files) {
   return findModelFiles(files)[0];
 }
 
-export const findModelFiles = findMmdModelFiles;
+export function findModelFiles(files) {
+  // Prefer the selected folder's models over nested accessories (e.g. RM/boots.pmx).
+  return findMmdModelFiles(files).sort((a, b) =>
+    normalizeMmdRelativePath(a.webkitRelativePath || a.name).split("/").length -
+    normalizeMmdRelativePath(b.webkitRelativePath || b.name).split("/").length
+  );
+}
 
 export function modelFileKey(file) {
   if (typeof file.id === "string") {

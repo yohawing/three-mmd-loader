@@ -17,6 +17,15 @@ import {
 } from "../../../src/three/index.js";
 
 describe("MMD folder file utilities", () => {
+  it("rebases textures when switching from a nested model to the parent model", () => {
+    const boots = file("boots.pmx", "pack/RM/boots.pmx");
+    const character = file("YYB maid.pmx", "pack/YYB maid.pmx");
+    const hair = file("spa-2.bmp", "pack/spa/spa-2.bmp");
+    const files = [boots, character, hair];
+    expect(createMmdTextureMapFromFiles(files, boots)["spa/spa-2.bmp"]).toBeUndefined();
+    expect(createMmdTextureMapFromFiles(files, character)["spa/spa-2.bmp"]).toBe(hair);
+  });
+
   it("normalizes relative paths", () => {
     expect(normalizeMmdRelativePath(".\\models\\miku.pmx")).toBe("models/miku.pmx");
     expect(normalizeMmdRelativePath(".//textures\\face.png")).toBe("textures/face.png");

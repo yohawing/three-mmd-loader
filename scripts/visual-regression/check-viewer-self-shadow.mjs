@@ -91,7 +91,8 @@ async function main() {
       receiverDarkening: "fixed receiver-plane samples compare independent initial selfShadow=0 and selfShadow=1 viewer contexts; positive values are darker with SelfShadow enabled.",
       characterSelfShadow: "local character-only OFF/ON captures measure self-shadow without a background receiver.",
       characterToBackgroundShadow: "local character-plus-background OFF/ON captures measure positive darkening only outside a captured character silhouette, so character self-shadow cannot satisfy the background-shadow observation.",
-      worldShadowPosition: "each positive receiver darkening sample is ray-projected from its capture camera onto y=0.002; the camera-only comparison keeps elevation/depth fixed while changing azimuth so the luminance-weighted world x/z centroid is measured over comparable receiver coverage.",
+      fixedViewStability: "render the shadow maps produced by both moving-camera views from one fixed observation camera; compare image pixels and world-to-shadow matrices while requiring visible geometry.",
+      worldShadowPosition: "diagnostic only: each positive receiver darkening sample is ray-projected from its capture camera onto y=0.002; the camera-only comparison keeps elevation/depth fixed while changing azimuth so the luminance-weighted world x/z centroid is measured over comparable receiver coverage.",
       lightConfiguration: "DirectionalLight world position/target plus shadow-camera world matrix, near/far, and orthographic bounds must be unchanged across camera-only captures.",
       dedicatedRawVisibility: "dedicated raw mode renders grayscale visibility from the independent caster depth target; the same-surface outer ROI must remain lit while the separate-surface shadow ROI contains a bounded dark region. The synthetic fixture has no background receiver, so that ROI is reported as null.",
       localSparseShadow: "local character gates use mean darkening, p995 darkening, and positive shadow-pixel ratio; background gates use mean darkening, max darkening, and positive shadow-pixel ratio because p995 can remain zero at very sparse coverage. p95 remains diagnostic-only.",
@@ -162,6 +163,7 @@ async function main() {
     const worldShadowPosition = primaryReceiver && movedReceiver
       ? compareWorldShadowPosition(primaryReceiver, movedReceiver)
       : undefined;
+    const fixedViewStability = options.localModel ? undefined : compareFixedShadowView(primary.on.fixedShadowView, moved.on.fixedShadowView);
     const fullFrame = {
       primary: compareFullFrameLuminance(primary.off.png, primary.on.png),
       moved: compareFullFrameLuminance(moved.off.png, moved.on.png)
@@ -205,7 +207,7 @@ async function main() {
         primaryReceiver.shadowPixelRatio >= thresholds.shadowPixelRatioMin &&
         movedReceiver.shadowPixelRatio >= thresholds.shadowPixelRatioMin &&
         dedicatedRawPass &&
-        worldShadowPosition.centroidDistance <= thresholds.worldCentroidMaxDistance &&
+        fixedViewStability.passed &&
         lightConfiguration.maxDelta <= thresholds.lightWorldConfigurationMaxDelta
       : undefined;
     const localDarkeningPass = options.localModel
@@ -245,6 +247,7 @@ async function main() {
       ? { bounds: receiverWorldBounds, rois: dedicatedRawRois, primary: dedicatedPrimary, moved: dedicatedMoved, passed: dedicatedRawPass }
       : null;
     report.worldShadowPosition = worldShadowPosition ?? null;
+    report.fixedViewStability = fixedViewStability ?? null;
     report.lightConfiguration = lightConfiguration;
     report.shadowCameraOccupancy = { ...shadowCameraOccupancy, passed: shadowCameraOccupancyPass };
     report.localObservations = options.localModel ? {
@@ -269,7 +272,7 @@ async function main() {
     report.messages = messages;
     report.passed = options.localModel ? localObservationPass && messages.length === 0 : syntheticPass && messages.length === 0;
     if (!report.passed) {
-      throw new Error(`viewer self-shadow gate failed: ${JSON.stringify({ diagnosticPass, shadowCameraOccupancy, shadowCameraOccupancyPass, primaryReceiver, movedReceiver, dedicatedPrimary, dedicatedMoved, dedicatedRawPass, worldShadowPosition, lightConfiguration, fullFrame, backgroundShadow, localDarkeningPass, localBackgroundPass, vmdLifecyclePass, messages })}`);
+      throw new Error(`viewer self-shadow gate failed: ${JSON.stringify({ diagnosticPass, shadowCameraOccupancy, shadowCameraOccupancyPass, primaryReceiver, movedReceiver, dedicatedPrimary, dedicatedMoved, dedicatedRawPass, worldShadowPosition, fixedViewStability, lightConfiguration, fullFrame, backgroundShadow, localDarkeningPass, localBackgroundPass, vmdLifecyclePass, messages })}`);
     }
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
@@ -410,15 +413,54 @@ async function captureIsolatedShadowState(browser, origin, modelUrl, backgroundU
     const characterSilhouette = backgroundUrl && enabled
       ? await captureCharacterSilhouette(page, screenshotPath.replace(/\.png$/, "-character-mask.png"))
       : undefined;
+    const fixedShadowView = enabled && !camera.useAutoFit
+      ? await captureFixedShadowView(page, screenshotPath.replace(/\.png$/, '-fixed.png')) : undefined;
     const shadowCameraOccupancy = enabled && backend !== "baseline"
       ? native.diagnostics?.light?.castShadow === true
         ? await captureShadowCameraOccupancy(page, outputDir, name)
         : { status: "not-applicable", reason: "VMD self-shadow mode disabled" }
       : undefined;
-    return { ...observation, native, characterSilhouette, shadowCameraOccupancy, messages };
+    return { ...observation, native, characterSilhouette, shadowCameraOccupancy, fixedShadowView, messages };
   } finally {
     await context.close();
   }
+}
+
+// Different viewing angles expose different surfaces and specular highlights, so
+// their OFF/ON luminance centroids cannot establish shadow-map stability.
+async function captureFixedShadowView(page, outputPath) {
+  const matrix = await page.evaluate(async (view) => {
+    const { state } = await import('/examples/viewer/lib/state.js');
+    const renderer = state.renderer;
+    renderer.setAnimationLoop(null);
+    const camera = state.camera.clone();
+    camera.position.fromArray(view.position);
+    camera.lookAt(...view.target);
+    camera.updateMatrixWorld(true);
+    const enabled = renderer.shadowMap.enabled;
+    renderer.shadowMap.enabled = false;
+    try {
+      if (renderer.isWebGPURenderer) await renderer.renderAsync(state.scene, camera);
+      else renderer.render(state.scene, camera);
+    } finally { renderer.shadowMap.enabled = enabled; }
+    return state.keyLight.userData.mmdShadowProjection.sampleMatrix.elements.slice();
+  }, cameraViews.primary);
+  await page.addStyleTag({content:'body *{visibility:hidden!important}#viewer-canvas{visibility:visible!important}'});
+  const png=PNG.sync.read(await page.locator('canvas').screenshot());
+  await writeFile(outputPath,PNG.sync.write(png));
+  return {png,matrix};
+}
+
+function compareFixedShadowView(a,b) {
+  if(!a||!b||a.png.width!==b.png.width||a.png.height!==b.png.height)return {passed:false};
+  let difference=0,foreground=0;
+  for(let i=0;i<a.png.data.length;i+=4) {
+    for(let c=0;c<3;c++)difference+=Math.abs(a.png.data[i+c]-b.png.data[i+c]);
+    if(a.png.data[i]<240)foreground++;
+  }
+  const meanDifference=difference/(a.png.width*a.png.height*3);
+  const matrixDelta=Math.max(...a.matrix.map((v,i)=>Math.abs(v-b.matrix[i])));
+  return {meanDifference,matrixDelta,foreground,passed:Number.isFinite(meanDifference)&&meanDifference<=0.1&&matrixDelta<=1e-10&&foreground>1000};
 }
 
 async function useRawShadowVisibilityMaterial(page) {

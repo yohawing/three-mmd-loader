@@ -20,6 +20,9 @@ export function applyMmdLightStateToThreeDirectionalLight(
   if (!state) {
     return light;
   }
+  // The MMD shadow projection uses the authored magnitude for its eye offset.
+  light.userData.mmdLightDirection = state.direction;
+  light.userData.mmdShadowProjection?.direction.set(state.direction[0], state.direction[1], state.direction[2]);
   const colorScale = options.colorScale ?? 1;
   light.color.setRGB(
     state.color[0] * colorScale,

@@ -14,6 +14,8 @@ const initialSelfShadowEnabled = query.get("selfShadow") !== "0";
 const initialPhysicsEnabled = query.get("physics") === "0" ? false : true;
 
 export const state = {
+  shadowProjectionMode: query.get("shadowProjection") === "mmd" ? "mmd" : "stable",
+  shadowSamplingMode: query.get("shadowSampling") === "legacy" ? "legacy" : "mmd",
   hasLocalFixtures: false,
   customBulletMmdScriptUrl: "/dist/physics/mmd/mmd_bullet.js",
   physicsTuningOptions: {

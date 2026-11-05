@@ -3,6 +3,28 @@ import { readFile as readRawFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("example viewer source", () => {
+  it("defaults to stable projection with interpolated depth and retains MMD compatibility", async () => {
+    const state = await readFile("examples/viewer/lib/state.js", "utf8");
+    const pipeline = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
+    const html = await readFile("examples/viewer/index.html", "utf8");
+    expect(state).toContain('query.get("shadowProjection") === "mmd" ? "mmd" : "stable"');
+    expect(state).toContain('query.get("shadowSampling") === "legacy" ? "legacy" : "mmd"');
+    expect(pipeline).toContain('setViewerShadowOptions(projection, sampling = "mmd")');
+    expect(html).toContain('id="shadow-method"');
+    expect(html).toContain('value="stable"');
+    expect(html).toContain('value="mmd"');
+  });
+  it("initializes the viewer light with the MMD LH-to-RH direction", async () => {
+    const source = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
+    expect(source).toContain("state.keyLight.position.set(0.5, 1.9, 0.5);");
+    expect(source).toContain("state.keyLight.target.position.set(0, 0.9, 0);");
+  });
+  it("captures character bounds before GPU morph attributes replace CPU positions", async () => {
+    const source = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
+    const capture = source.indexOf('if (role === "character") characterFramingBounds(model.mesh)');
+    expect(capture).toBeGreaterThan(0);
+    expect(capture).toBeLessThan(source.indexOf("enableMmdTslSparsePositionMorphs(model.mesh)"));
+  });
   it("keeps viewer version metadata aligned with the package version", async () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
@@ -70,7 +92,7 @@ describe("example viewer source", () => {
     expect(playbackSource).toContain("updateShadowCameraForFrame(state.currentModel.mesh)");
     expect(playbackSource).not.toContain("updateShadowCameraForFrame(model.mesh)");
     const sceneSetupSource = await readFile("examples/viewer/lib/scene-setup.js", "utf8");
-    expect(sceneSetupSource).toContain("selfShadowModelBoundsScratch.setFromObject(mesh)");
+    expect(sceneSetupSource).toContain("copyCharacterBounds(mesh, state.selfShadowModelBoundsScratch)");
     expect(sceneSetupSource).toContain("bounds.union(state.selfShadowModelBoundsScratch)");
     expect(pipelineSource).toContain("for (let index = 0; index < models.length; index += 1)");
     expect(pipelineSource).toContain("setTslOutlineHidden(material, hidden)");
@@ -322,7 +344,7 @@ describe("example viewer source", () => {
     expect(pipelineSource).toContain('dom.pipelineBackendSwitcher.setAttribute("value", state.rendererBackend)');
     expect(pipelineSource).toContain('replaceMmdModelMaterialsWithTsl(model.mesh, {');
     expect(pipelineSource).toContain(
-      "createMmdTslShadowCaster(model.mesh, { alphaTest: false });"
+      "createMmdTslShadowCaster(model.mesh, { alphaTest: false, referenceShadow: true });"
     );
     expect(pipelineSource).toContain("disposeMmdTslSelfShadowPass();");
     expect(pipelineSource).toContain("mmdTslSelfShadowPass.dispose();");
@@ -614,6 +636,12 @@ describe("example viewer source", () => {
     expect(modelSource).toContain("findMmdModelFiles");
     expect(modelSource).toContain("createMmdTextureMapFromFiles");
     expect(modelSource).toContain("export async function switchFolderModel(modelFile, loadOptions = {})");
+    const switchBody = modelSource.slice(modelSource.indexOf("export async function switchFolderModel("));
+    expect(switchBody.indexOf("state.currentFolderTextureMap = createFolderTextureMap(state.currentFolderFiles, modelFile)"))
+      .toBeLessThan(switchBody.indexOf("createModelLoader({ textureMap: state.currentFolderTextureMap })"));
+    expect(switchBody).toContain("state.currentFolderTextureMap = createFolderTextureMap(state.currentFolderFiles, modelFile)");
+    expect(switchBody).toContain("const shouldAutoFitCamera = loadOptions.autoFitCamera !== false && !state.currentBackground && !state.currentCameraMotion");
+    expect(modelSource).toContain("return findMmdModelFiles(files).sort((a, b) =>");
     expect(modelSource).toContain('setStatus(`Switching to ${modelFile.name}`, "loading")');
     expect(modelSource).toContain("createModelLoader({ textureMap: state.currentFolderTextureMap })");
     expect(modelSource).toContain("createViewerRuntimeOptions({");
@@ -952,23 +980,21 @@ describe("example viewer source", () => {
     expect(sceneSource).toContain("state.renderer.shadowMap.type = THREE.BasicShadowMap");
     expect(sceneSource).toContain("state.keyLight.castShadow = state.debugSelfShadowEnabled");
     expect(sceneSource).toContain("configureMmdSelfShadowDirectionalLight");
-    expect(sceneSource).toContain("fitMmdSelfShadowDirectionalLightToBox");
+    expect(sceneSource).toContain("getMmdShadowProjection(state.keyLight).bounds.copy(bounds)");
+    expect(sceneSource).not.toContain("fitMmdSelfShadowDirectionalLightToBox");
     expect(sceneSource).toContain("const viewerBaselineSelfShadowQuality = {");
     expect(sceneSource).toContain("mapSize: 4096");
     expect(sceneSource).toContain("const viewerTslSelfShadowQuality = {");
-    expect(sceneSource).toContain("mapSize: 2048");
+    expect(sceneSource).not.toContain("mapSize: 2048");
     expect(sceneSource).toContain("shadowIntensity: 1.0");
     expect(sceneSource).toContain("normalBias: 0.006");
-    expect(sceneSource).toContain("const viewerTslSelfShadowWorldDepthBiasScale = 0.01");
-    expect(sceneSource).toContain(") * viewerTslSelfShadowWorldDepthBiasScale;");
-    expect(sceneSource).toContain("-viewerTslSelfShadowWorldDepthBias / depthRange");
+    expect(sceneSource).toContain("state.keyLight.shadow.bias = 0");
     expect(playbackSource).toContain("updateSelfShadowDepthBias();");
     expect(sceneSource).toContain("export function fitShadowCameraToObject(object)");
-    expect(sceneSource).toContain("state.selfShadowBoundsScratch.setFromObject(object)");
+    expect(sceneSource).toContain("copyCharacterBounds(object, state.selfShadowBoundsScratch)");
     expect(sceneSource).toContain("const viewerTslShadowBoundsRefreshFrames = 6");
     expect(sceneSource).toContain("export function updateShadowCameraForFrame(object)");
     expect(sceneSource).toContain("state.selfShadowBoundsRefreshCountdown -= 1");
-    expect(sceneSource).toContain("marginScale: 0.06");
     expect(stateSource).toContain("selfShadowStateScratch");
     expect(stateSource).toContain("selfShadowBoundsScratch: new THREE.Box3()");
     expect(stateSource).toContain("selfShadowBoundsRefreshCountdown: 0");

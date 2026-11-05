@@ -56,7 +56,9 @@ function unique(values) {
 
 function commandVersion(command, args) {
   try {
-    return execFileSync(command, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
+    // Windows toolchain entry points (notably em++) are .bat wrappers.
+    // Commands and arguments here are fixed version probes, never user input.
+    return execFileSync(command, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: process.platform === "win32" })
       .trim()
       .split(/\r?\n/, 1)[0];
   } catch {

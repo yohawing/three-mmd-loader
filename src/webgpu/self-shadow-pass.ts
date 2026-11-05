@@ -1,8 +1,10 @@
 import * as THREE from "three/webgpu";
-import { getShadowMaterial, getShadowRenderObjectFunction, vec3 } from "three/tsl";
+import { getShadowMaterial, getShadowRenderObjectFunction, positionWorld, uniform, vec3, vec4 } from "three/tsl";
 
 import { MMD_SELF_SHADOW_LAYER } from "../three/shadow.js";
 import { createMmdTslShadowVisibilityNode } from "./shadow-visibility.js";
+import { getMmdShadowProjection } from "../three/mmd-shadow-projection.js";
+import { castsMmdReferenceShadow } from "../three/material/material-shadow-casting.js";
 
 export interface MmdTslSelfShadowPass {
   readonly renderTarget: THREE.RenderTarget;
@@ -20,9 +22,8 @@ export interface MmdTslSelfShadowPass {
 }
 
 /**
- * Owns the Phase 1 caster-only depth target. The receiver graph is intentionally
- * not connected here; this pass only proves that the existing caster layer can be
- * rendered into an independent depth texture without invoking Three's shadow map.
+ * Stores reference z/w in R32F, with a separate raster depth attachment.
+ * Receivers interpolate that raw value before MMD's mode-dependent comparison.
  */
 export function createMmdTslSelfShadowPass(
   renderer: THREE.WebGPURenderer,
@@ -37,27 +38,40 @@ export function createMmdTslSelfShadowPass(
 
   const renderTarget = new THREE.RenderTarget(targetWidth, targetHeight, {
     depthBuffer: true,
-    depthTexture
+    depthTexture,
+    format: THREE.RedFormat,
+    type: THREE.FloatType,
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter
   });
   renderTarget.texture.name = "MMD TSL self-shadow target";
   renderTarget.texture.generateMipmaps = false;
-  // Reflect the renderer's actual reversed-depth mode into the visibility
-  // graph's occlusion math (see shadow-visibility.ts). Native WebGPU viewer
-  // renderers are created with reversedDepthBuffer: true; baseline WebGL and
-  // TSL forceWebGL stay non-reversed.
-  const reversedDepth = renderer.reversedDepthBuffer === true;
-  const visibilityNode = createMmdTslShadowVisibilityNode(light, depthTexture, { reversedDepth });
+  // Raster reversed depth does not change the raw depth used by receivers.
+  const projection = getMmdShadowProjection(light);
+  projection.retain();
+  const visibilityNode = createMmdTslShadowVisibilityNode(light, renderTarget.texture);
   const shadowModeUniform = (visibilityNode as unknown as {
     mmdTslShadowMode: { value: number };
   }).mmdTslShadowMode;
 
-  const shadowMaterial = getShadowMaterial(light);
+  // Own the material so disposing/recreating this pass cannot poison Three's
+  // shared shadow material for the same light.
+  const shadowMaterial = getShadowMaterial(light).clone();
+  (shadowMaterial as unknown as { isShadowPassMaterial: boolean }).isShadowPassMaterial = true;
+  const referencePosition = uniform(projection.sampleMatrix).mul(vec4(positionWorld, 1));
+  shadowMaterial.fragmentNode = vec4(referencePosition.z.div(referencePosition.w), 0, 0, 1);
   const shadowRenderObjectFunction = getShadowRenderObjectFunction(
     renderer,
     light.shadow,
     renderer.shadowMap.type,
     false
   ) as unknown as Parameters<THREE.WebGPURenderer["setRenderObjectFunction"]>[0];
+  const referenceRenderObject: NonNullable<typeof shadowRenderObjectFunction> =
+    (object, scene, camera, geometry, material, group, lightsNode, clippingContext, passId) => {
+      const source = material.userData.mmdReferenceShadowSource ?? material;
+      if (!castsMmdReferenceShadow(source)) return;
+      shadowRenderObjectFunction?.(object, scene, camera, geometry, material, group, lightsNode, clippingContext, passId);
+    };
   const rendererState = { clearColor: new THREE.Color() } as THREE.RendererUtils.RendererAndSceneState;
   const resetRendererAndSceneState = THREE.RendererUtils.resetRendererAndSceneState as unknown as (
     renderer: THREE.WebGPURenderer,
@@ -70,14 +84,26 @@ export function createMmdTslSelfShadowPass(
     state: THREE.RendererUtils.RendererAndSceneState
   ) => void;
   let disposed = false;
+  let prepared = false;
+  let originalLayerMask = 0;
+  let originalShadowMapEnabled = false;
+  let preparedScene: THREE.Scene;
+
+  function restoreShadowRender(): void {
+    if (!prepared) return;
+    prepared = false;
+    light.shadow.camera.layers.mask = originalLayerMask;
+    renderer.shadowMap.enabled = originalShadowMapEnabled;
+    restoreRendererAndSceneState(renderer, preparedScene, rendererState);
+  }
 
   function prepareShadowRender(
     currentRenderer: THREE.WebGPURenderer,
     scene: THREE.Scene,
     currentLight: THREE.DirectionalLight
-  ): { shadowCamera: THREE.Camera; restore: () => void } | undefined {
+  ): THREE.Camera | undefined {
     if (
-      disposed ||
+      disposed || prepared ||
       currentRenderer !== renderer ||
       currentLight !== light ||
       currentLight.castShadow !== true
@@ -86,8 +112,8 @@ export function createMmdTslSelfShadowPass(
     }
 
     const shadowCamera = currentLight.shadow.camera;
-    const originalLayerMask = shadowCamera.layers.mask;
-    const originalShadowMapEnabled = currentRenderer.shadowMap.enabled;
+    originalLayerMask = shadowCamera.layers.mask;
+    originalShadowMapEnabled = currentRenderer.shadowMap.enabled;
     if (shadowCamera.coordinateSystem !== currentRenderer.coordinateSystem) {
       shadowCamera.coordinateSystem = currentRenderer.coordinateSystem;
       shadowCamera.updateProjectionMatrix();
@@ -105,30 +131,18 @@ export function createMmdTslSelfShadowPass(
     currentLight.shadow.updateMatrices(currentLight);
 
     resetRendererAndSceneState(currentRenderer, scene, rendererState);
+    preparedScene = scene;
+    prepared = true;
     try {
       currentRenderer.shadowMap.enabled = false;
       shadowCamera.layers.mask = 1 << MMD_SELF_SHADOW_LAYER;
       scene.overrideMaterial = shadowMaterial;
       currentRenderer.setRenderTarget(renderTarget);
-      currentRenderer.setClearColor(0x000000, 0);
-      currentRenderer.setRenderObjectFunction(shadowRenderObjectFunction);
-      let restored = false;
-      return {
-        shadowCamera,
-        restore() {
-          if (restored) {
-            return;
-          }
-          restored = true;
-          shadowCamera.layers.mask = originalLayerMask;
-          currentRenderer.shadowMap.enabled = originalShadowMapEnabled;
-          restoreRendererAndSceneState(currentRenderer, scene, rendererState);
-        }
-      };
+      currentRenderer.setClearColor(0xffffff, 1);
+      currentRenderer.setRenderObjectFunction(referenceRenderObject);
+      return shadowCamera;
     } catch (error) {
-      shadowCamera.layers.mask = originalLayerMask;
-      currentRenderer.shadowMap.enabled = originalShadowMapEnabled;
-      restoreRendererAndSceneState(currentRenderer, scene, rendererState);
+      restoreShadowRender();
       throw error;
     }
   }
@@ -149,27 +163,27 @@ export function createMmdTslSelfShadowPass(
       if (typeof currentRenderer.compileAsync !== "function") {
         return false;
       }
-      const prepared = prepareShadowRender(currentRenderer, scene, currentLight);
-      if (!prepared) {
+      const shadowCamera = prepareShadowRender(currentRenderer, scene, currentLight);
+      if (!shadowCamera) {
         return false;
       }
       try {
-        await currentRenderer.compileAsync(scene, prepared.shadowCamera);
+        await currentRenderer.compileAsync(scene, shadowCamera);
         return true;
       } finally {
-        prepared.restore();
+        restoreShadowRender();
       }
     },
     render(currentRenderer, scene, currentLight) {
-      const prepared = prepareShadowRender(currentRenderer, scene, currentLight);
-      if (!prepared) {
+      const shadowCamera = prepareShadowRender(currentRenderer, scene, currentLight);
+      if (!shadowCamera) {
         return false;
       }
       try {
-        currentRenderer.render(scene, prepared.shadowCamera);
+        currentRenderer.render(scene, shadowCamera);
         return true;
       } finally {
-        prepared.restore();
+        restoreShadowRender();
       }
     },
     setReceiverVisibilityDebug(root, enabled, sampleTarget = true) {
@@ -224,6 +238,8 @@ export function createMmdTslSelfShadowPass(
       }
       disposed = true;
       renderTarget.dispose();
+      shadowMaterial.dispose();
+      projection.release();
     }
   };
 }

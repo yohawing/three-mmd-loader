@@ -5,6 +5,7 @@ export default tseslint.config(
   {
     ignores: [
       "dist/**",
+      "test-results/**",
       "artifacts/mmd-anim/**",
       "emsdk-cache/**",
       "deploy/**",
