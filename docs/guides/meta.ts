@@ -12,6 +12,7 @@ export default defineMeta({
     "physics",
     "webgpu",
     "performance-and-disposal",
-    "debugging"
+    "debugging",
+    "migration-to-1-0"
   ]
 });

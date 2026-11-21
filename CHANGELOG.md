@@ -4,43 +4,37 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.9.0] - 2026-11-21
+
+This release deprecates APIs ahead of the 1.0.0 public API freeze. The deprecated APIs remain available throughout 0.9.x; see the [migration guide](docs/guides/migration-to-1-0.md) for replacements. This release also includes the physics fixes from mmd-anim v0.5.5.
+
 ### Added
 
 - Added `CustomBulletMmdPhysicsBackend.debugPhysicsContactsForRigidBodyRange` to collect contacts involving either endpoint in a world rigid body index range.
-
 - Added read-only `metadata`, `bones`, `rigidBodies`, and `joints` properties to `ThreeMmdModel`.
-
 - Added `ThreeMmdLoader.createCameraTrackSampler` and `createLightTrackSampler` for sampling VMD camera and light tracks into reusable state with either backend.
-
 - Added the shared `MmdCameraState`, `MmdLightState`, `MmdSelfShadowState`, `MmdDiagnostic`, `MmdDiagnosticCategory`, `MmdRuntimeOptions` types at the root and their respective subpaths.
-
 - Add `createMmdTslModelLoadOptions` to `./webgpu`.
 - Export types used in public signatures, including `MaterialInfo`, `MaterialRuntimeState`, `BoneData`, `MmdCoreModelFormat`, and `ThreeMmdMaterialTextureOptions`.
 
-### Performance
-
-- Reuse external physics pose buffers and scratch storage across frames in both runtimes.
-
 ### Changed
 
+- Update the bundled mmd-anim runtime to v0.5.5 to correct PMX rigid body rotation order, use current Bullet solver transforms, and account for append poses in physics input.
+- Reuse external physics pose buffers and scratch storage across frames in both runtimes.
 - Made `@types/three` an optional peer dependency. TypeScript users should install `@types/three` matching their `three` version.
-
 - The step context passed to `MmdPhysicsBackend.step` is reused between calls. Copy values needed after the call returns.
-
 - The experimental `./webgpu` subpath remains outside semver guarantees in 1.x. Minor releases may introduce breaking changes.
 
 ### Fixed
 
+- Share the model’s source geometry across render-order and outline proxies so Three.js allocates a single morph-target texture per model. Previously, morph VRAM usage grew with the material count, reaching about 5.6 GB for one reported model (#42).
 - Fixed loading the experimental `./webgpu` entry point and rendering MMD self-shadows with Three.js r186 and r187.
-
 - Prevent browser bundlers from resolving Node builtins when importing the WASM parser.
-
 - The types used by `MmdPose.metadata`, entries in `MmdPose.bones`, and `MmdAnimation.metadata` previously shared names with distinct parser types and could not be imported by name. They are now available as `MmdPoseMetadata`, `MmdPoseBone`, and `MmdAnimationMetadata`, respectively.
 
 ### Deprecated
 
 - Deprecated loader methods `createCameraTrack` and `createLightTrack`, and runtime helpers `createMmdAnimWasmCameraTrack`, `createMmdAnimWasmLightTrack`, `sampleMmdAnimWasmCameraTrackInto`, and `sampleMmdAnimWasmLightTrackInto`. Use the corresponding loader sampler instead.
-
 - Deprecated `CameraState`, `LightState`, `SelfShadowState`, `Diagnostic`, `DiagnosticCategory`, `DefaultMmdRuntimeOptions` in favor of their new Mmd-prefixed names.
 - Deprecated `syncThreeMmdRuntimeToMesh`, `syncThreeMmdRuntimeToModel`, `MmdRuntimeMeshSyncSource`, `ThreeMmdRuntimeSyncTarget`. Model updates and runtime ticks already synchronize the mesh.
 

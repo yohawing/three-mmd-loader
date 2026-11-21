@@ -48,6 +48,8 @@ VMDの平行投影を反映するには`orthographicCamera`を渡し、ヘルパ
 
 ## カメラ用VMDが別ファイルにある場合
 
-カメラ用VMDをモデルへ`setAnimation()`すると、設定済みのモデルモーションを置き換えてしまいます。別のVMDを`loadAnimation()`で読み込み、`loader.createCameraTrack()`または`loader.createLightTrack()`で独立したトラックを作成して、同じ再生位置で評価します。これらはWASMトラックを作れない場合に`undefined`を返します。引数と評価メソッドは[ローダーAPI](/api/loader)を参照してください。
+カメラ用VMDをモデルへ設定すると、再生中のモデルモーションを置き換えてしまいます。別のVMDを`loadAnimation()`で読み込み、カメラには`loader.createCameraTrackSampler(animation)`、ライトには`loader.createLightTrackSampler(animation)`を使います。ローダーがWASMとTypeScriptの実装を内部で選びます。
+
+再生前にサンプラーと書き込み先の状態を用意します。モデルを秒単位で更新したら、同じ再生位置をVMDのフレーム番号に換算して`sampler.sampleInto(frame, target)`へ渡します。成功時は更新済みの`target`が返るので、上の例と同じヘルパーで反映できます。空トラックや評価失敗で`undefined`が返ったフレームは適用をスキップします。再生を終えたら`sampler.dispose()`で解放します。[ローダーAPI](/api/loader)
 
 Worker使用中に指定時刻の適用完了を待つ必要がある場合は、通常更新の代わりに`await model.updateAsync(seconds)`を使います。詳細は[Worker API](/api/worker)を参照してください。

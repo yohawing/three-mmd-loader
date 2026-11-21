@@ -14,3 +14,4 @@ description: モデル表示の後に必要な機能を追加します。
 | TSLで描画する | [WebGPU / TSL](/guides/webgpu) |
 | モデル切り替えと負荷を改善する | [パフォーマンスと破棄](/guides/performance-and-disposal) |
 | 問題の原因を絞る | [デバッグ](/guides/debugging) |
+| 0.9.xで非推奨APIを置き換える | [1.0.0への移行](/guides/migration-to-1-0) |
