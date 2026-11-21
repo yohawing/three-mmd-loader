@@ -57,6 +57,11 @@ export interface MmdAnimBulletContactPoint {
 export interface MmdAnimBulletPhysicsBackend extends MmdPhysicsBackend {
   debugContactCount(): number;
   debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[];
+  /**
+   * Returns contacts where either world rigid body index is in [firstRigidBodyIndex, firstRigidBodyIndex + rigidBodyCount).
+   * This debug API writes all native contacts to the buffer and materializes only matches in JS.
+   */
+  debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex: number, rigidBodyCount: number): readonly MmdAnimBulletContactPoint[];
 }
 
 export function createMmdAnimBulletPhysicsBackend(
@@ -185,6 +190,19 @@ class MmdAnimBulletPhysicsBackendImpl implements MmdAnimBulletPhysicsBackend {
   }
 
   debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[] {
+    return this.readContacts(-Infinity, Infinity);
+  }
+
+  debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex: number, rigidBodyCount: number): readonly MmdAnimBulletContactPoint[] {
+    if (!Number.isInteger(firstRigidBodyIndex) || firstRigidBodyIndex < 0 ||
+        !Number.isInteger(rigidBodyCount) || rigidBodyCount < 0) {
+      throw new RangeError("firstRigidBodyIndex and rigidBodyCount must be non-negative integers");
+    }
+    if (rigidBodyCount === 0) return [];
+    return this.readContacts(firstRigidBodyIndex, firstRigidBodyIndex + rigidBodyCount);
+  }
+
+  private readContacts(first: number, end: number): readonly MmdAnimBulletContactPoint[] {
     const collect = this.module._mmd_anim_bullet_world_collect_contacts;
     const count = this.debugContactCount();
     if (!collect || count <= 0) return [];
@@ -205,9 +223,13 @@ class MmdAnimBulletPhysicsBackendImpl implements MmdAnimBulletPhysicsBackend {
     const contacts: MmdAnimBulletContactPoint[] = [];
     for (let index = 0; index < written; index += 1) {
       const base = (this.contactBufferPointer + index * CONTACT_POINT_BYTES) >>> 2;
+      const rigidBodyIndexA = heapI32[base] ?? -1;
+      const rigidBodyIndexB = heapI32[base + 1] ?? -1;
+      if ((rigidBodyIndexA < first || rigidBodyIndexA >= end) &&
+          (rigidBodyIndexB < first || rigidBodyIndexB >= end)) continue;
       contacts.push({
-        rigidBodyIndexA: heapI32[base] ?? -1,
-        rigidBodyIndexB: heapI32[base + 1] ?? -1,
+        rigidBodyIndexA,
+        rigidBodyIndexB,
         distance: heap[base + 2] ?? 0,
         positionWorldOnA: [heap[base + 3] ?? 0, heap[base + 4] ?? 0, heap[base + 5] ?? 0],
         positionWorldOnB: [heap[base + 6] ?? 0, heap[base + 7] ?? 0, heap[base + 8] ?? 0],

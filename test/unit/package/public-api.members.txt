@@ -2292,6 +2292,7 @@ interface CustomBulletMmdPhysicsBackend
   acquireStepBuffers(layout: MmdPhysicsStepBufferLayout): MmdPhysicsStepBuffers | undefined
   debugContactCount(): number
   debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[]
+  debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex: number, rigidBodyCount: number): readonly MmdAnimBulletContactPoint[]
   debugRigidBodyWorldTransformsColumnMajor?(): readonly MmdPhysicsMatrix4ColumnMajorTuple[]
   diagnostics?(): readonly MmdPhysicsDiagnostic[]
   readonly disabled: boolean

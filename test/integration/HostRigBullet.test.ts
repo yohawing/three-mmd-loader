@@ -22,6 +22,26 @@ beforeAll(async () => {
   bullet = await record.exports({ locateFile: (path: string) => resolve(dirname(scriptPath), path) });
 });
 
+it("selects a real Bullet contact by either world rigid body index", () => {
+  const backend = createMmdAnimBulletPhysicsBackend(bullet);
+  const context: Parameters<typeof backend.step>[0] = {
+    seconds: 1 / 60, deltaSeconds: 1 / 60, frame: 1, frameRate: 60,
+    rigidBodies: [0, 1].map(index => ({
+      index, motionType: "dynamic", mass: 1, shape: { type: "sphere", size: [1, 0, 0] },
+      localTranslation: [index, 0, 0], localRotation: [0, 0, 0, 1]
+    }))
+  };
+  try {
+    backend.step(context);
+    backend.step(context);
+    const contacts = backend.debugPhysicsContacts();
+    expect(contacts).toHaveLength(1);
+    expect(backend.debugPhysicsContactsForRigidBodyRange(0, 1)).toEqual(contacts);
+    expect(backend.debugPhysicsContactsForRigidBodyRange(1, 1)).toEqual(contacts);
+    expect(backend.debugPhysicsContactsForRigidBodyRange(2, 1)).toEqual([]);
+  } finally { backend.dispose(); }
+});
+
 it.each(["dynamic", "dynamicBone"])("runs real Bullet %s through host ownership and repeatable reset", mode => {
   const model = new wasm.WasmMmdModel(new Int32Array([-1, 0]), new Float32Array([0, 10, 0, 0, 2, 0]));
   let protectedBodyY = 10;
