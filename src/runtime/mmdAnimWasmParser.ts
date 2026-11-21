@@ -6,8 +6,8 @@ import type {
   VmdCameraInterpolation,
   VmdMorphTrack
 } from "../parser/model/modelTypes.js";
-import type { MmdAnimRuntimeWasmModule } from "./mmdAnimRuntime.js";
-import { parseMmdAnimWasmFormatJson } from "./mmdAnimRuntime.js";
+import type { MmdAnimRuntimeWasmModule } from "./mmdAnimWasm.js";
+import { parseMmdAnimWasmFormatJson } from "./mmdAnimWasm.js";
 
 interface RuntimeWasmVmdDto {
   readonly kind: "vmd";

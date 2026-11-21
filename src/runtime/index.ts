@@ -27,29 +27,31 @@ import {
 } from "./ik/MmdIkChain.js";
 export { DefaultMmdRuntime } from "./core.js";
 export type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig, MmdAnimRuntimeWasmHostRigConstructor } from "./hostRig.js";
+export { MmdAnimRuntime } from "./mmdAnimRuntime.js";
 export {
-  MmdAnimRuntime,
   createMmdAnimWasmCameraTrack,
   createMmdAnimWasmLightTrack,
+  sampleMmdAnimWasmCameraTrackInto,
+  sampleMmdAnimWasmLightTrackInto
+} from "./mmdAnimTracks.js";
+export {
   exportMmdAnimWasmFormatBytes,
   exportMmdAnimWasmVmdAnimationJsonBytes,
   exportMmdAnimWasmVpdPoseJsonBytes,
-  parseMmdAnimWasmFormatJson,
-  sampleMmdAnimWasmCameraTrackInto,
-  sampleMmdAnimWasmLightTrackInto
-} from "./mmdAnimRuntime.js";
+  parseMmdAnimWasmFormatJson
+} from "./mmdAnimWasm.js";
 export { loadMmdAnimWasmVmd, loadMmdAnimWasmVpd } from "./mmdAnimWasmParser.js";
 export { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack, sampleMmdLightTrackInto, sampleMmdSelfShadowTrack, sampleMmdSelfShadowTrackInto } from "./sceneTrackSampling.js";
 export type { CameraState, LightState, SelfShadowState, VmdCameraFrame, VmdLightFrame, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
+export type { MmdAnimRuntimeOptions } from "./mmdAnimRuntime.js";
 export type {
-  MmdAnimRuntimeOptions,
   MmdAnimRuntimeWasmCameraTrack,
   MmdAnimRuntimeWasmClip,
   MmdAnimRuntimeWasmLightTrack,
   MmdAnimRuntimeWasmModel,
   MmdAnimRuntimeWasmModule,
   MmdAnimRuntimeWasmRuntimeInstance
-} from "./mmdAnimRuntime.js";
+} from "./mmdAnimWasm.js";
 export type { MmdMorphOverrides, DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeAsyncEvaluateOptions, MmdRuntimeAsyncTickOptions, MmdRuntimeDebugStageState, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions } from "./types.js";
 
 // Deprecated in 0.9.0, removed in 1.0.0

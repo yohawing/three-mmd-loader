@@ -8,7 +8,7 @@ import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./sceneTrackS
 import { DefaultMmdRuntime } from "./core.js";
 import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
-import type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig, MmdAnimRuntimeWasmHostRigConstructor } from "./hostRig.js";
+import type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig } from "./hostRig.js";
 import { HostRigPhysics } from "./hostRigPhysics.js";
 import { readRuntimeExternalPhysics } from "./physics.js";
 import { captureRuntimeDebugStageInto, extractMmdWorldMatricesInto } from "./debugState.js";
@@ -23,6 +23,32 @@ import type {
   RuntimeExternalPhysicsData
 } from "./types.js";
 
+import type {
+  MmdAnimRuntimeWasmModel,
+  MmdAnimRuntimeWasmClip,
+  MmdAnimRuntimeWasmCameraTrack,
+  MmdAnimRuntimeWasmLightTrack,
+  MmdAnimRuntimeWasmRuntimeInstance,
+  MmdAnimRuntimeWasmModule
+} from "./mmdAnimWasm.js";
+import { createWasmModelFromPmxBytes, createWasmRuntime } from "./mmdAnimWasm.js";
+import {
+  createMmdAnimWasmCameraTrack,
+  createMmdAnimWasmLightTrack,
+  sampleMmdAnimWasmCameraTrackInto,
+  sampleMmdAnimWasmLightTrackInto
+} from "./mmdAnimTracks.js";
+import {
+  syncWorldMatricesToSkeleton,
+  writeParentBoneIndices,
+  syncMorphWeights,
+  syncRuntimeObjectForRender,
+  ensureScratchMatrixArrayLength,
+  isObject3D,
+  isSkinnedMesh
+} from "./mmdAnimMesh.js";
+import { copyFloat32ArrayToScratch, resetNumberArray } from "./mmdAnimPhysics.js";
+
 type MutableFrameState = {
   -readonly [K in keyof MmdFrameState]: MmdFrameState[K];
 };
@@ -36,80 +62,6 @@ const defaultMmdAnimIkTolerance = 1.0e-2;
 interface MmdAnimRuntimeDebugStageState {
   worldMatricesColumnMajor: number[];
   morphWeights: number[];
-}
-
-export interface MmdAnimRuntimeWasmModel {
-  boneCount(): number;
-  morphCount?(): number;
-  ikCount?(): number;
-  free?(): void;
-}
-
-export interface MmdAnimRuntimeWasmClip {
-  free?(): void;
-}
-
-export interface MmdAnimRuntimeWasmCameraTrack {
-  frameCount(): number;
-  sample(frame: number, out: Float32Array): boolean;
-  free?(): void;
-}
-
-export interface MmdAnimRuntimeWasmLightTrack {
-  frameCount(): number;
-  sample(frame: number, out: Float32Array): boolean;
-  free?(): void;
-}
-
-export interface MmdAnimRuntimeWasmRuntimeInstance {
-  evaluateClipFrameWithMorphOverrides?(
-    clip: MmdAnimRuntimeWasmClip, frame: number, indices: Uint32Array, weights: Float32Array,
-    ikTolerance: number | undefined, ikMaxIterationsCap: number, ikEnabled: boolean
-  ): void;
-  evaluateRestPoseWithMorphOverrides?(
-    indices: Uint32Array, weights: Float32Array,
-    ikTolerance: number | undefined, ikMaxIterationsCap: number, ikEnabled: boolean
-  ): void;
-  evaluateRestPose(): void;
-  resetIkHistory?(): void;
-  evaluateClipFrame(clip: MmdAnimRuntimeWasmClip, frame: number): void;
-  evaluateClipFrameWithIkOptions?(
-    clip: MmdAnimRuntimeWasmClip,
-    frame: number,
-    ikTolerance: number,
-    ikMaxIterationsCap: number
-  ): void;
-  worldMatrixF32Len(): number;
-  copyWorldMatrices(out: Float32Array): boolean;
-  worldMatricesView?(): Float32Array;
-  morphWeightLen?(): number;
-  copyMorphWeights?(out: Float32Array): boolean;
-  morphWeightsView?(): Float32Array;
-  free?(): void;
-}
-
-export interface MmdAnimRuntimeWasmModule {
-  readonly WasmMmdHostRig?: MmdAnimRuntimeWasmHostRigConstructor;
-  parseMmdFormatJson?(data: Uint8Array, fileName?: string | null): string;
-  exportMmdFormatBytes?(data: Uint8Array, fileName?: string | null): Uint8Array;
-  exportVmdAnimationJsonBytes?(json: string): Uint8Array;
-  exportVpdPoseJsonBytes?(json: string): Uint8Array;
-  readonly WasmMmdModel?: {
-    fromPmxBytes?(bytes: Uint8Array): MmdAnimRuntimeWasmModel;
-  };
-  readonly WasmMmdClip?: {
-    fromVmdBytesForModel?(model: MmdAnimRuntimeWasmModel, bytes: Uint8Array): MmdAnimRuntimeWasmClip;
-  };
-  readonly WasmVmdCameraTrack?: {
-    fromVmdBytes?(bytes: Uint8Array): MmdAnimRuntimeWasmCameraTrack;
-  };
-  readonly WasmVmdLightTrack?: {
-    fromVmdBytes?(bytes: Uint8Array): MmdAnimRuntimeWasmLightTrack;
-  };
-  readonly WasmMmdRuntimeInstance: {
-    forModel?(model: MmdAnimRuntimeWasmModel): MmdAnimRuntimeWasmRuntimeInstance;
-    new(model: MmdAnimRuntimeWasmModel, morphCount: number): MmdAnimRuntimeWasmRuntimeInstance;
-  };
 }
 
 export interface MmdAnimRuntimeOptions {
@@ -135,105 +87,6 @@ export interface MmdAnimRuntimeOptions {
   readonly ikMaxIterationsCap?: number;
   /** Own and free the wasm model/runtime/created clips on dispose. Defaults to true. */
   readonly ownsWasmResources?: boolean;
-}
-
-export function parseMmdAnimWasmFormatJson(
-  wasm: Pick<MmdAnimRuntimeWasmModule, "parseMmdFormatJson">,
-  data: Uint8Array,
-  fileName?: string | null
-): unknown {
-  const parser = wasm.parseMmdFormatJson;
-  if (!parser) {
-    throw new TypeError("mmd-anim wasm module does not expose parseMmdFormatJson");
-  }
-  return JSON.parse(parser(data, fileName ?? null)) as unknown;
-}
-
-export function exportMmdAnimWasmFormatBytes(
-  wasm: Pick<MmdAnimRuntimeWasmModule, "exportMmdFormatBytes">,
-  data: Uint8Array,
-  fileName?: string | null
-): Uint8Array {
-  const exporter = wasm.exportMmdFormatBytes;
-  if (!exporter) {
-    throw new TypeError("mmd-anim wasm module does not expose exportMmdFormatBytes");
-  }
-  return exporter(data, fileName ?? null);
-}
-
-export function exportMmdAnimWasmVmdAnimationJsonBytes(
-  wasm: Pick<MmdAnimRuntimeWasmModule, "exportVmdAnimationJsonBytes">,
-  json: string
-): Uint8Array {
-  const exporter = wasm.exportVmdAnimationJsonBytes;
-  if (!exporter) {
-    throw new TypeError("mmd-anim wasm module does not expose exportVmdAnimationJsonBytes");
-  }
-  return exporter(json);
-}
-
-export function exportMmdAnimWasmVpdPoseJsonBytes(
-  wasm: Pick<MmdAnimRuntimeWasmModule, "exportVpdPoseJsonBytes">,
-  json: string
-): Uint8Array {
-  const exporter = wasm.exportVpdPoseJsonBytes;
-  if (!exporter) {
-    throw new TypeError("mmd-anim wasm module does not expose exportVpdPoseJsonBytes");
-  }
-  return exporter(json);
-}
-
-export function createMmdAnimWasmCameraTrack(
-  wasm: Pick<MmdAnimRuntimeWasmModule, "WasmVmdCameraTrack">,
-  bytes: Uint8Array
-): MmdAnimRuntimeWasmCameraTrack | undefined {
-  return wasm.WasmVmdCameraTrack?.fromVmdBytes?.(bytes);
-}
-
-export function createMmdAnimWasmLightTrack(
-  wasm: Pick<MmdAnimRuntimeWasmModule, "WasmVmdLightTrack">,
-  bytes: Uint8Array
-): MmdAnimRuntimeWasmLightTrack | undefined {
-  return wasm.WasmVmdLightTrack?.fromVmdBytes?.(bytes);
-}
-
-export function sampleMmdAnimWasmCameraTrackInto(
-  track: MmdAnimRuntimeWasmCameraTrack,
-  frame: number,
-  scratch: Float32Array,
-  target: CameraState
-): CameraState {
-  if (scratch.length < 9 || !track.sample(frame, scratch)) {
-    throw new RangeError("MmdAnimRuntime camera sample buffer is too short");
-  }
-  target.distance = scratch[0] ?? 0;
-  target.position[0] = scratch[1] ?? 0;
-  target.position[1] = scratch[2] ?? 0;
-  target.position[2] = scratch[3] ?? 0;
-  target.rotation[0] = scratch[4] ?? 0;
-  target.rotation[1] = scratch[5] ?? 0;
-  target.rotation[2] = scratch[6] ?? 0;
-  target.fov = scratch[7] ?? 1;
-  target.perspective = (scratch[8] ?? 1) >= 0.5;
-  return target;
-}
-
-export function sampleMmdAnimWasmLightTrackInto(
-  track: MmdAnimRuntimeWasmLightTrack,
-  frame: number,
-  scratch: Float32Array,
-  target: LightState
-): LightState {
-  if (scratch.length < 6 || !track.sample(frame, scratch)) {
-    throw new RangeError("MmdAnimRuntime light sample buffer is too short");
-  }
-  target.color[0] = scratch[0] ?? 0;
-  target.color[1] = scratch[1] ?? 0;
-  target.color[2] = scratch[2] ?? 0;
-  target.direction[0] = scratch[3] ?? 0;
-  target.direction[1] = scratch[4] ?? 0;
-  target.direction[2] = scratch[5] ?? 0;
-  return target;
 }
 
 /**
@@ -948,48 +801,12 @@ export class MmdAnimRuntime implements MmdRuntime {
   }
 }
 
-function copyFloat32ArrayToScratch(
-  source: Float32Array,
-  scratch: Float32Array
-): Float32Array<ArrayBuffer> {
-  const target = ensureFloat32ArrayLength(scratch, source.length);
-  target.set(source);
-  return target;
-}
-
-function resetNumberArray(target: number[]): number[] {
-  target.length = 0;
-  return target;
-}
-
 function copyArrayLikeToNumberArray(values: ArrayLike<number>, target: number[]): number[] {
   target.length = values.length;
   for (let index = 0; index < values.length; index += 1) {
     target[index] = values[index];
   }
   return target;
-}
-
-function createWasmModelFromPmxBytes(
-  wasm: MmdAnimRuntimeWasmModule | undefined,
-  bytes: Uint8Array | undefined
-): MmdAnimRuntimeWasmModel {
-  const factory = wasm?.WasmMmdModel?.fromPmxBytes;
-  if (!factory || !bytes) {
-    throw new TypeError("MmdAnimRuntime requires either a wasm model or wasm.WasmMmdModel.fromPmxBytes with pmxBytes");
-  }
-  return factory(bytes);
-}
-
-function createWasmRuntime(
-  wasm: MmdAnimRuntimeWasmModule | undefined,
-  model: MmdAnimRuntimeWasmModel
-): MmdAnimRuntimeWasmRuntimeInstance {
-  const runtimeFactory = wasm?.WasmMmdRuntimeInstance;
-  if (!runtimeFactory) {
-    throw new TypeError("MmdAnimRuntime requires wasm.WasmMmdRuntimeInstance");
-  }
-  return runtimeFactory.forModel?.(model) ?? new runtimeFactory(model, model.morphCount?.() ?? 0);
 }
 
 function hasParsedModelTracks(animation: MmdAnimation): boolean {
@@ -1007,140 +824,6 @@ function isLikelyVmdBytes(bytes: Uint8Array): boolean {
     }
   }
   return true;
-}
-
-function syncWorldMatricesToSkeleton(
-  mesh: THREE.SkinnedMesh,
-  matrices: Float32Array,
-  worldMatrices: THREE.Matrix4[],
-  parentBoneIndices: readonly number[],
-  threeWorldMatrix: THREE.Matrix4,
-  localMatrix: THREE.Matrix4,
-  parentInverseMatrix: THREE.Matrix4
-): void {
-  const bones = mesh.skeleton.bones;
-  ensureScratchMatrixArrayLength(worldMatrices, bones.length);
-  for (let index = 0; index < bones.length; index += 1) {
-    writeMmdWorldMatrixToThree(matrices, index, threeWorldMatrix);
-    worldMatrices[index].copy(threeWorldMatrix);
-  }
-  for (let index = 0; index < bones.length; index += 1) {
-    const bone = bones[index];
-    const parentBoneIndex = parentBoneIndices[index] ?? -1;
-    if (parentBoneIndex >= 0) {
-      localMatrix.copy(parentInverseMatrix.copy(worldMatrices[parentBoneIndex]).invert()).multiply(worldMatrices[index]);
-    } else {
-      localMatrix.copy(worldMatrices[index]);
-    }
-    localMatrix.decompose(bone.position, bone.quaternion, bone.scale);
-    bone.updateMatrix();
-  }
-  mesh.updateMatrixWorld(true);
-  mesh.skeleton.update();
-  if (mesh.skeleton.boneTexture) {
-    mesh.skeleton.boneTexture.needsUpdate = true;
-  }
-}
-
-function writeMmdWorldMatrixToThree(
-  matrices: Float32Array,
-  index: number,
-  target: THREE.Matrix4
-): THREE.Matrix4 {
-  const offset = index * 16;
-  return target.set(
-    matrices[offset],
-    matrices[offset + 4],
-    -matrices[offset + 8],
-    matrices[offset + 12],
-    matrices[offset + 1],
-    matrices[offset + 5],
-    -matrices[offset + 9],
-    matrices[offset + 13],
-    -matrices[offset + 2],
-    -matrices[offset + 6],
-    matrices[offset + 10],
-    -matrices[offset + 14],
-    0,
-    0,
-    0,
-    1
-  );
-}
-
-function writeParentBoneIndices(bones: readonly THREE.Bone[], target: number[]): void {
-  target.length = bones.length;
-  for (let index = 0; index < bones.length; index += 1) {
-    const parent = bones[index]?.parent;
-    let parentIndex = -1;
-    if (parent) {
-      for (let candidate = 0; candidate < bones.length; candidate += 1) {
-        if (bones[candidate] === parent) {
-          parentIndex = candidate;
-          break;
-        }
-      }
-    }
-    target[index] = parentIndex;
-  }
-}
-
-function syncMorphWeights(mesh: THREE.SkinnedMesh, weights: Float32Array): void {
-  const influences = mesh.morphTargetInfluences;
-  if (!influences) {
-    return;
-  }
-  for (let index = 0; index < influences.length; index += 1) {
-    influences[index] = weights[index] ?? 0;
-  }
-}
-
-function syncRuntimeObjectForRender(object: THREE.Object3D | undefined): void {
-  if (!object) {
-    return;
-  }
-  object.updateMatrixWorld(true);
-  updateSkinnedMeshSkeletons(object);
-}
-
-function updateSkinnedMeshSkeletons(object: THREE.Object3D): void {
-  if (isSkinnedMesh(object)) {
-    object.skeleton.update();
-  }
-  const children = object.children;
-  for (let index = 0; index < children.length; index += 1) {
-    const child = children[index];
-    if (child) {
-      updateSkinnedMeshSkeletons(child);
-    }
-  }
-}
-
-function ensureScratchMatrixArrayLength(
-  matrices: THREE.Matrix4[],
-  length: number
-): THREE.Matrix4[] {
-  for (let index = matrices.length; index < length; index += 1) {
-    matrices.push(new THREE.Matrix4());
-  }
-  matrices.length = length;
-  return matrices;
-}
-
-function isObject3D(value: unknown): value is THREE.Object3D {
-  return value instanceof THREE.Object3D || hasBooleanFlag(value, "isObject3D");
-}
-
-function isSkinnedMesh(value: THREE.Object3D): value is THREE.SkinnedMesh {
-  return value instanceof THREE.SkinnedMesh || hasBooleanFlag(value, "isSkinnedMesh");
-}
-
-function hasBooleanFlag(value: unknown, key: "isObject3D" | "isSkinnedMesh"): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<typeof key, unknown>)[key] === true
-  );
 }
 
 function createEmptyDebugStages(): MutableDebugStages {

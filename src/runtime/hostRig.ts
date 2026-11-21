@@ -1,4 +1,4 @@
-import type { MmdAnimRuntimeWasmModel, MmdAnimRuntimeWasmRuntimeInstance } from "./mmdAnimRuntime.js";
+import type { MmdAnimRuntimeWasmModel, MmdAnimRuntimeWasmRuntimeInstance } from "./mmdAnimWasm.js";
 
 /** Bone indices refer to the PMX model, not Humanoid slots. */
 export interface MmdHostRigDefinition {
