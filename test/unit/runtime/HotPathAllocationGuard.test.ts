@@ -67,16 +67,19 @@ describe("runtime hot path allocation guards", () => {
 
   it("keeps IK apply entry points free of source-level allocation patterns", async () => {
     const solverSource = await readFile("src/runtime/ik/CcdIkSolver.ts", "utf8");
+    const chainSolveSource = await readFile("src/runtime/ik/chainSolve.ts", "utf8");
+    const planeLinkSource = await readFile("src/runtime/ik/planeLink.ts", "utf8");
+    const worldMatricesSource = await readFile("src/runtime/ik/worldMatrices.ts", "utf8");
     const bridgeSource = await readFile("src/runtime/ik-bridge.ts", "utf8");
     const hotPathBodies = [
       extractMethodBody(solverSource, "applyPrepared"),
       extractMethodBody(solverSource, "runPrepared"),
-      extractFunctionBody(solverSource, "solveChain"),
-      extractFunctionBody(solverSource, "solvePlaneLink"),
-      extractFunctionBody(solverSource, "composeWorldMatrices"),
-      extractFunctionBody(solverSource, "composeWorldMatrix"),
-      extractFunctionBody(solverSource, "composeWorldMatrixInOrder"),
-      extractFunctionBody(solverSource, "composeColumnMajorMatrixInto"),
+      extractFunctionBody(chainSolveSource, "solveChain"),
+      extractFunctionBody(planeLinkSource, "solvePlaneLink"),
+      extractFunctionBody(worldMatricesSource, "composeWorldMatrices"),
+      extractFunctionBody(worldMatricesSource, "composeWorldMatrix"),
+      extractFunctionBody(worldMatricesSource, "composeWorldMatrixInOrder"),
+      extractFunctionBody(worldMatricesSource, "composeColumnMajorMatrixInto"),
       extractFunctionBody(bridgeSource, "solvePreparedIk")
     ];
     const forbiddenPatterns: Array<readonly [string, RegExp]> = [
@@ -97,23 +100,26 @@ describe("runtime hot path allocation guards", () => {
   });
 
   it("keeps selected IK helper allocations out of chain solve loops", async () => {
-    const solverSource = await readFile("src/runtime/ik/CcdIkSolver.ts", "utf8");
+    const chainSolveSource = await readFile("src/runtime/ik/chainSolve.ts", "utf8");
+    const planeLinkSource = await readFile("src/runtime/ik/planeLink.ts", "utf8");
+    const mathSource = await readFile("src/runtime/ik/math.ts", "utf8");
+    const linkLimitsSource = await readFile("src/runtime/ik/linkLimits.ts", "utf8");
     const hotPathBodies = [
-      extractFunctionBody(solverSource, "solveChain"),
-      extractFunctionBody(solverSource, "solvePlaneLink"),
-      extractFunctionBody(solverSource, "signedProjectedAngleInto"),
-      extractFunctionBody(solverSource, "projectVectorOnPlaneInto"),
-      extractFunctionBody(solverSource, "axisAngleQuaternionInto"),
-      extractFunctionBody(solverSource, "multiplyQuaternionsInto"),
-      extractFunctionBody(solverSource, "normalizeQuaternionInto"),
-      extractFunctionBody(solverSource, "invertQuaternionInto"),
-      extractFunctionBody(solverSource, "rotateVectorByQuaternionInto"),
-      extractFunctionBody(solverSource, "quaternionToRotation3Into"),
-      extractFunctionBody(solverSource, "decomposeEulerXyzInto"),
-      extractFunctionBody(solverSource, "chooseEulerCandidate"),
-      extractFunctionBody(solverSource, "eulerXyzToQuaternionInto"),
-      extractFunctionBody(solverSource, "clampLimitedRotationInto"),
-      extractFunctionBody(solverSource, "applyEffectiveRotation")
+      extractFunctionBody(chainSolveSource, "solveChain"),
+      extractFunctionBody(planeLinkSource, "solvePlaneLink"),
+      extractFunctionBody(mathSource, "signedProjectedAngleInto"),
+      extractFunctionBody(mathSource, "projectVectorOnPlaneInto"),
+      extractFunctionBody(mathSource, "axisAngleQuaternionInto"),
+      extractFunctionBody(mathSource, "multiplyQuaternionsInto"),
+      extractFunctionBody(mathSource, "normalizeQuaternionInto"),
+      extractFunctionBody(mathSource, "invertQuaternionInto"),
+      extractFunctionBody(mathSource, "rotateVectorByQuaternionInto"),
+      extractFunctionBody(mathSource, "quaternionToRotation3Into"),
+      extractFunctionBody(mathSource, "decomposeEulerXyzInto"),
+      extractFunctionBody(mathSource, "chooseEulerCandidate"),
+      extractFunctionBody(mathSource, "eulerXyzToQuaternionInto"),
+      extractFunctionBody(linkLimitsSource, "clampLimitedRotationInto"),
+      extractFunctionBody(mathSource, "applyEffectiveRotation")
     ];
     const forbiddenPatterns: Array<readonly [string, RegExp]> = [
       ["new Float32Array", /new\s+Float32Array\s*\(/],
