@@ -1,8 +1,37 @@
-import { readFile as readRawFile } from "node:fs/promises";
+import { readdir, readFile as readRawFile } from "node:fs/promises";
 
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 describe("example viewer source", () => {
+  it("limits viewer imports from dist to public entries and four internal modules", async () => {
+    const viewer = "examples/viewer";
+    const pkg = JSON.parse(await readFile("package.json", "utf8")) as {
+      exports: Record<string, { default: string }>;
+    };
+    const publicPaths = new Set(Object.values(pkg.exports).map(entry => entry.default.slice(2)));
+    const internalPaths = new Set<string>();
+    for (const file of await readdir(viewer, { recursive: true })) {
+      if (!/\.(?:js|ts|html)$/.test(file)) continue;
+      const source = await readFile(`${viewer}/${file}`, "utf8");
+      const scripts = file.endsWith(".html")
+        ? Array.from(source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi), match => match[1])
+        : [source];
+      for (const script of scripts) {
+        for (const { fileName } of ts.preProcessFile(script, true, true).importedFiles) {
+          const path = fileName.match(/(?:^|\/)(dist\/[^?#]+)/)?.[1];
+          if (path && !publicPaths.has(path)) internalPaths.add(path);
+        }
+      }
+    }
+    expect([...internalPaths].sort()).toEqual([
+      "dist/three/mmd-shadow-projection.js",
+      "dist/three/reference-shadow-pass.js",
+      "dist/webgpu/self-shadow-pass.js",
+      "dist/webgpu/skinning-capacity.js"
+    ]);
+  });
+
   it("keeps one shadow strategy without projection or sampling selectors", async () => {
     const state = await readFile("examples/viewer/lib/state.js", "utf8");
     const pipeline = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");

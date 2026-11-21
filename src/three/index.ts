@@ -20,14 +20,6 @@ import { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "./ge
 import { createLoaderMmdModelDataFromModel } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
 import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
-import {
-  computeMmdMaterialRenderOrder,
-  mmdMaterialCastsShadow,
-  mmdMaterialCastsSelfShadow,
-  syncMmdModelShadowFlags
-} from "./material/material-metadata.js";
-import type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
-import { attachMmdSdefSkinning } from "./material/material-sdef.js";
 import type {
   MaterialTransparencyDiagnostic,
   TextureLoadDiagnostic,
@@ -35,10 +27,6 @@ import type {
 } from "./materials.js";
 import { isModelSource } from "./modelSource.js";
 import { readModelSource, readModelSourceBytes } from "./modelSource.js";
-import {
-  createMmdMaterialRenderOrderMeshes,
-  createMmdOutlineMeshes
-} from "./outline.js";
 import { createLoaderPerformanceProfile } from "./performance.js";
 import type { LoaderPerformanceMeasure, LoaderPerformanceOptions } from "./performance.js";
 import { MMD_SELF_SHADOW_LAYER } from "./shadow.js";
@@ -46,6 +34,56 @@ import { createThreeSkeleton } from "./skeleton.js";
 import type { ModelSource } from "./modelSource.js";
 import type { ModelSourceDiagnostic, ModelSourceFetch } from "./modelSource.js";
 import type { TextureMap, TextureResolver } from "./textures.js";
+import {
+  mmdMaterialCastsSelfShadow,
+  syncMmdModelShadowFlags,
+  attachMmdMaterialMetadata as attachMmdMaterialMetadataInternal,
+  computeMmdMaterialRenderOrder as computeMmdMaterialRenderOrderInternal,
+  materialTransparencyMode as materialTransparencyModeInternal,
+  mmdMaterialAlphaTest as mmdMaterialAlphaTestInternal,
+  mmdMaterialCastsShadow as mmdMaterialCastsShadowInternal,
+  mmdMaterialDepthWrite as mmdMaterialDepthWriteInternal,
+  mmdMaterialMorphCanAffectAlpha as mmdMaterialMorphCanAffectAlphaInternal,
+  mmdMaterialSuppressesColorAtAlpha as mmdMaterialSuppressesColorAtAlphaInternal,
+  mmdMaterialTransparencyMode as mmdMaterialTransparencyModeInternal,
+  type MmdMaterialRenderOrderEntry as MmdMaterialRenderOrderEntryInternal
+} from "./material/material-metadata.js";
+import {
+  attachMmdMaterialFactors as attachMmdMaterialFactorsInternal,
+  attachMmdSphereTexture as attachMmdSphereTextureInternal,
+  materialHasTextureMap as materialHasTextureMapInternal,
+  mmdSphereModeToUniform as mmdSphereModeToUniformInternal
+} from "./material/material-shader-hooks.js";
+import {
+  attachMmdOutlineExpansion as attachMmdOutlineExpansionInternal,
+  createMmdMaterialRenderOrderMeshes as createMmdMaterialRenderOrderMeshesInternal,
+  createMmdOutlineMeshes as createMmdOutlineMeshesInternal,
+  syncMmdOutlineMaterialStates as syncMmdOutlineMaterialStatesInternal,
+  type MmdMaterialRenderOrderMeshOptions as MmdMaterialRenderOrderMeshOptionsInternal,
+  type MmdOutlineModelSource as MmdOutlineModelSourceInternal,
+  type MmdOutlineOptions as MmdOutlineOptionsInternal
+} from "./outline.js";
+import {
+  attachMmdSdefSkinning as attachMmdSdefSkinningInternal,
+  computeMmdSdefSkinnedNormal as computeMmdSdefSkinnedNormalInternal,
+  computeMmdSdefSkinnedPosition as computeMmdSdefSkinnedPositionInternal,
+  type MmdSdefNormalSkinningInput as MmdSdefNormalSkinningInputInternal,
+  type MmdSdefSkinningInput as MmdSdefSkinningInputInternal
+} from "./material/material-sdef.js";
+import {
+  computeQdefSkinnedNormal as computeQdefSkinnedNormalInternal,
+  computeQdefSkinnedPosition as computeQdefSkinnedPositionInternal,
+  type MmdQdefNormalSkinningInput as MmdQdefNormalSkinningInputInternal,
+  type MmdQdefSkinningInput as MmdQdefSkinningInputInternal
+} from "./material/material-qdef.js";
+import {
+  defaultSharedToonTexturePath as defaultSharedToonTexturePathInternal,
+  getDefaultToonGradientMap as getDefaultToonGradientMapInternal,
+  isMmdDdsTexturePath as isMmdDdsTexturePathInternal,
+  normalizeMmdTexturePath as normalizeMmdTexturePathInternal,
+  resolveMmdToonTextureReference as resolveMmdToonTextureReferenceInternal,
+  type MmdToonTextureReference as MmdToonTextureReferenceInternal
+} from "./textures.js";
 export { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "./geometry.js";
 export type { ThreeMmdGeometryOptions } from "./geometry.js";
 export { applyMmdCameraStateToThreeCamera } from "./camera.js";
@@ -81,50 +119,12 @@ export {
   MMD_SELF_SHADOW_LAYER
 } from "./shadow.js";
 export { createThreeSkeleton } from "./skeleton.js";
-export {
-  attachMmdMaterialMetadata,
-  computeMmdMaterialRenderOrder,
-  materialTransparencyMode,
-  mmdMaterialAlphaTest,
-  mmdMaterialCastsShadow,
-  mmdMaterialDepthWrite,
-  mmdMaterialMorphCanAffectAlpha,
-  mmdMaterialSuppressesColorAtAlpha,
-  mmdMaterialTransparencyMode,
-  syncMmdModelShadowFlags
-} from "./material/material-metadata.js";
-export {
-  attachMmdMaterialFactors,
-  attachMmdSphereTexture,
-  materialHasTextureMap,
-  mmdSphereModeToUniform
-} from "./material/material-shader-hooks.js";
+export { syncMmdModelShadowFlags } from "./material/material-metadata.js";
 export { syncMmdMaterialStates, syncMmdSpecularDirection } from "./material/material-sync.js";
-export {
-  attachMmdOutlineExpansion,
-  createMmdMaterialRenderOrderMeshes,
-  createMmdOutlineMeshes,
-  syncMmdOutlineMaterialStates
-} from "./outline.js";
-export {
-  attachMmdSdefSkinning,
-  computeMmdSdefSkinnedNormal,
-  computeMmdSdefSkinnedPosition
-} from "./material/material-sdef.js";
-export {
-  computeQdefSkinnedNormal,
-  computeQdefSkinnedPosition
-} from "./material/material-qdef.js";
-export type { MmdQdefNormalSkinningInput, MmdQdefSkinningInput } from "./material/material-qdef.js";
 export {
   createMmdBuiltInToonTextureMap,
   createTextureResolver,
-  defaultSharedToonTexturePath,
-  getDefaultToonGradientMap,
-  isMmdDdsTexturePath,
-  normalizeMmdTexturePath,
-  resolveMappedTexture,
-  resolveMmdToonTextureReference
+  resolveMappedTexture
 } from "./textures.js";
 export type {
   ApplyMmdCameraStateOptions
@@ -166,13 +166,6 @@ export type {
   LoaderPerformanceOptions
 } from "./performance.js";
 export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
-export type { MmdSdefNormalSkinningInput, MmdSdefSkinningInput } from "./material/material-sdef.js";
-export type {
-  MmdMaterialRenderOrderMeshOptions,
-  MmdOutlineModelSource,
-  MmdOutlineOptions
-} from "./outline.js";
-export type { MmdMaterialRenderOrderEntry } from "./material/material-metadata.js";
 export type {
   MmdRuntimeMeshSyncSource,
   MmdWorldMatrixBuffer,
@@ -182,11 +175,84 @@ export type {
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
 export type {
   MmdToonTextureMaterial,
-  MmdToonTextureReference,
   MmdMaterialTransparencyMode,
   TextureMap,
   TextureResolver
 } from "./textures.js";
+
+// Deprecated in 0.9.0, removed in 1.0.0
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+export const attachMmdMaterialMetadata = attachMmdMaterialMetadataInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
+export const computeMmdMaterialRenderOrder = computeMmdMaterialRenderOrderInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read material.userData.mmdMaterial.transparencyMode. */
+export const materialTransparencyMode = materialTransparencyModeInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
+export const mmdMaterialAlphaTest = mmdMaterialAlphaTestInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
+export const mmdMaterialCastsShadow = mmdMaterialCastsShadowInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
+export const mmdMaterialDepthWrite = mmdMaterialDepthWriteInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read material.userData.mmdMaterial.morphAlphaTransparent on evaluated materials (true when set). */
+export const mmdMaterialMorphCanAffectAlpha = mmdMaterialMorphCanAffectAlphaInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
+export const mmdMaterialSuppressesColorAtAlpha = mmdMaterialSuppressesColorAtAlphaInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read material.userData.mmdMaterial.transparencyMode. */
+export const mmdMaterialTransparencyMode = mmdMaterialTransparencyModeInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+export const attachMmdMaterialFactors = attachMmdMaterialFactorsInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+export const attachMmdSphereTexture = attachMmdSphereTextureInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
+export const materialHasTextureMap = materialHasTextureMapInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
+export const mmdSphereModeToUniform = mmdSphereModeToUniformInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+export const attachMmdOutlineExpansion = attachMmdOutlineExpansionInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. */
+export const createMmdMaterialRenderOrderMeshes = createMmdMaterialRenderOrderMeshesInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. */
+export const createMmdOutlineMeshes = createMmdOutlineMeshesInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. */
+export const syncMmdOutlineMaterialStates = syncMmdOutlineMaterialStatesInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+export const attachMmdSdefSkinning = attachMmdSdefSkinningInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. CPU reference implementation for tests. No replacement. */
+export const computeMmdSdefSkinnedNormal = computeMmdSdefSkinnedNormalInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. CPU reference implementation for tests. No replacement. */
+export const computeMmdSdefSkinnedPosition = computeMmdSdefSkinnedPositionInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. CPU reference implementation for tests. No replacement. */
+export const computeQdefSkinnedNormal = computeQdefSkinnedNormalInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. CPU reference implementation for tests. No replacement. */
+export const computeQdefSkinnedPosition = computeQdefSkinnedPositionInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. CPU reference implementation for tests. No replacement. */
+export type MmdQdefNormalSkinningInput = MmdQdefNormalSkinningInputInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. CPU reference implementation for tests. No replacement. */
+export type MmdQdefSkinningInput = MmdQdefSkinningInputInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. */
+export const defaultSharedToonTexturePath = defaultSharedToonTexturePathInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. */
+export const getDefaultToonGradientMap = getDefaultToonGradientMapInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. */
+export const isMmdDdsTexturePath = isMmdDdsTexturePathInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. */
+export const normalizeMmdTexturePath = normalizeMmdTexturePathInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. */
+export const resolveMmdToonTextureReference = resolveMmdToonTextureReferenceInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. CPU reference implementation for tests. No replacement. */
+export type MmdSdefNormalSkinningInput = MmdSdefNormalSkinningInputInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. CPU reference implementation for tests. No replacement. */
+export type MmdSdefSkinningInput = MmdSdefSkinningInputInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. */
+export type MmdMaterialRenderOrderMeshOptions = MmdMaterialRenderOrderMeshOptionsInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. */
+export type MmdOutlineModelSource = MmdOutlineModelSourceInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. */
+export type MmdOutlineOptions = MmdOutlineOptionsInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
+export type MmdMaterialRenderOrderEntry = MmdMaterialRenderOrderEntryInternal;
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. */
+export type MmdToonTextureReference = MmdToonTextureReferenceInternal;
 
 export interface ThreeMmdLoaderOptions {
   /** Resolves MMD-relative texture paths when loading model materials. */
@@ -408,7 +474,7 @@ export class ThreeMmdLoader {
           source: sourceDescriptor
         });
         profile?.mark("runtime-ready");
-        const renderOrder = computeMmdMaterialRenderOrder(
+        const renderOrder = computeMmdMaterialRenderOrderInternal(
           materials.map((material, materialIndex) => ({
             materialIndex,
             transparencyMode: material.userData.mmdMaterial?.transparencyMode ?? "opaque"
@@ -686,7 +752,7 @@ function createThreeMmdModel(options: {
   const outlineSources = bodyMeshes.length > 0 ? bodyMeshes : [options.mesh];
   const outlineMeshes = options.outlines
     ? outlineSources.flatMap((mesh) =>
-        createMmdOutlineMeshes({
+        createMmdOutlineMeshesInternal({
           mesh,
           materials: options.materials
         })
@@ -702,7 +768,7 @@ function createThreeMmdModel(options: {
   // MMD-compatible material order and per-material shadow flags need body
   // proxies; outline proxies then interleave with the same material order.
   const renderOrderMeshes = options.renderOrderProxies && bodyMeshes.length === 0
-    ? createMmdMaterialRenderOrderMeshes({
+    ? createMmdMaterialRenderOrderMeshesInternal({
         mesh: options.mesh,
         materials: options.materials
       }, {
@@ -843,7 +909,7 @@ function syncMorphSplitBodyMeshRenderState(
     return;
   }
   const renderOrder = mesh.userData.mmdMaterialRenderOrder as
-    | readonly MmdMaterialRenderOrderEntry[]
+    | readonly MmdMaterialRenderOrderEntryInternal[]
     | undefined;
   const renderOrderByMaterial = new Map(
     (renderOrder ?? []).map((entry) => [entry.materialIndex, entry.renderOrder])
@@ -863,7 +929,7 @@ function syncMorphSplitBodyMeshRenderState(
     }];
     body.frustumCulled = mesh.frustumCulled;
     const material = materials[materialIndex];
-    body.castShadow = !!material && mmdMaterialCastsShadow(material.flags);
+    body.castShadow = !!material && mmdMaterialCastsShadowInternal(material.flags);
     body.receiveShadow = !!material?.flags.selfShadow;
   }
 }
@@ -946,7 +1012,7 @@ function createThreeMmdMesh(
   );
   const materials = createThreeMmdMaterials(modelData.materials);
   if (geometry.userData.mmdSdef || geometry.userData.mmdQdef) {
-    materials.forEach((material) => attachMmdSdefSkinning(material));
+    materials.forEach((material) => attachMmdSdefSkinningInternal(material));
   }
   const mesh = new THREE.SkinnedMesh(geometry, materials.length === 1 ? materials[0] : materials);
   const bodyMeshes = splitGeometries.map((split) => {

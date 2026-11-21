@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   CcdIkSolver,
+  type CcdIkBone,
+  type MutableQuatTuple
+} from "../../../../src/runtime/ik/CcdIkSolver.js";
+import {
   createCcdIkSolveInputFromMmdIk,
   mmdIkChainToCcdIkChain,
-  type CcdIkBone,
-  type MutableQuatTuple,
   type MmdIkRuntimeChain
-} from "../../../../src/runtime/index.js";
+} from "../../../../src/runtime/ik/MmdIkChain.js";
 
 const IDENTITY: MutableQuatTuple = [0, 0, 0, 1];
 

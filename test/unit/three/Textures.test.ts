@@ -4,13 +4,15 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createMmdBuiltInToonTextureMap,
   createTextureResolver,
+  resolveMappedTexture
+} from "../../../src/three/index.js";
+import {
   defaultSharedToonTexturePath,
   getDefaultToonGradientMap,
   isMmdDdsTexturePath,
   normalizeMmdTexturePath,
-  resolveMappedTexture,
   resolveMmdToonTextureReference
-} from "../../../src/three/index.js";
+} from "../../../src/three/textures.js";
 import {
   createFallbackMmdMaterial,
   configureMmdTexture,

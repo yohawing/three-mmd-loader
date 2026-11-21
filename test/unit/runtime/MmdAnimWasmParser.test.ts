@@ -4,10 +4,9 @@ import {
   exportMmdAnimWasmVmdAnimationJsonBytes,
   exportMmdAnimWasmVpdPoseJsonBytes,
   loadMmdAnimWasmVmd,
-  loadMmdAnimWasmVpd,
-  mmdAnimWasmVmdDtoToAnimation,
-  mmdAnimWasmVpdDtoToPose
+  loadMmdAnimWasmVpd
 } from "../../../src/index.js";
+import { mmdAnimWasmVmdDtoToAnimation, mmdAnimWasmVpdDtoToPose } from "../../../src/runtime/mmdAnimWasmParser.js";
 
 describe("mmd-anim wasm parser adapter", () => {
   it("maps VMD parser DTOs into existing packed MmdAnimation tracks", () => {

@@ -1,15 +1,14 @@
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { attachMmdMaterialFactors, attachMmdSphereTexture } from "../../../src/three/material/material-shader-hooks.js";
 import {
-  attachMmdMaterialFactors,
-  attachMmdSphereTexture,
   applyThreeMmdMaterialTextures,
   createThreeMmdMaterials,
-  getDefaultToonGradientMap,
   syncMmdMaterialStates,
   syncMmdSpecularDirection
 } from "../../../src/three/index.js";
+import { getDefaultToonGradientMap } from "../../../src/three/textures.js";
 import type { MaterialInfo, MorphData } from "../../../src/parser/model/modelTypes.js";
 import type { ThreeMmdTextureLoader } from "../../../src/three/index.js";
 import * as Textures from "../../../src/three/textures.js";

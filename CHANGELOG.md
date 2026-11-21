@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Deprecated
+
+These exports remain available in 0.9.x and will be removed from the public API in 1.0.0.
+
+| Entry | Symbol | Migration |
+| --- | --- | --- |
+| `./three` | `attachMmdMaterialFactors`, `attachMmdMaterialMetadata`, `attachMmdOutlineExpansion`, `attachMmdSdefSkinning`, `attachMmdSphereTexture` | ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. |
+| `./three` | `computeMmdSdefSkinnedPosition`, `computeMmdSdefSkinnedNormal`, `computeQdefSkinnedPosition`, `computeQdefSkinnedNormal`, `MmdSdefSkinningInput`, `MmdSdefNormalSkinningInput`, `MmdQdefSkinningInput`, `MmdQdefNormalSkinningInput` | CPU reference implementation for tests. No replacement. |
+| `./three` | `mmdMaterialAlphaTest`, `mmdMaterialCastsShadow`, `mmdMaterialDepthWrite`, `mmdMaterialSuppressesColorAtAlpha`, `materialHasTextureMap`, `mmdSphereModeToUniform`, `computeMmdMaterialRenderOrder`, `MmdMaterialRenderOrderEntry` | No replacement. |
+| `./three` | `mmdMaterialTransparencyMode`, `materialTransparencyMode` | Read material.userData.mmdMaterial.transparencyMode. |
+| `./three` | `mmdMaterialMorphCanAffectAlpha` | Read material.userData.mmdMaterial.morphAlphaTransparent on evaluated materials (true when set). |
+| `./three` | `getDefaultToonGradientMap`, `normalizeMmdTexturePath`, `isMmdDdsTexturePath`, `resolveMmdToonTextureReference`, `defaultSharedToonTexturePath`, `MmdToonTextureReference` | Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. |
+| `./three` | `syncMmdOutlineMaterialStates`, `createMmdOutlineMeshes`, `createMmdMaterialRenderOrderMeshes`, `MmdOutlineModelSource`, `MmdOutlineOptions`, `MmdMaterialRenderOrderMeshOptions` | Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. |
+| `./runtime` | `CcdIkSolver`, `CcdIkBone`, `CcdIkChain`, `CcdIkLink`, `CcdIkLinkAngleLimit`, `CcdIkPose`, `CcdIkPreparedChain`, `CcdIkPreparedSolveInput`, `CcdIkSolveInput`, `CcdIkSolveResult`, `MutableQuatTuple`, `QuatTuple`, `Vec3Tuple`, `createCcdIkSolveInputFromMmdIk`, `mmdIkChainToCcdIkChain`, `CreateCcdIkSolveInputFromMmdIkInput`, `MmdIkRuntimeBone`, `MmdIkRuntimeChain`, `MmdIkRuntimeLink` | DefaultMmdRuntime and MmdAnimRuntime solve IK internally. No replacement. |
+| `./runtime` | `mmdAnimWasmVmdDtoToAnimation` | Use loadMmdAnimWasmVmd. |
+| `./runtime` | `mmdAnimWasmVpdDtoToPose` | Use loadMmdAnimWasmVpd. |
+
 ## [0.8.6] - 2026-11-05
 
 ### Changed

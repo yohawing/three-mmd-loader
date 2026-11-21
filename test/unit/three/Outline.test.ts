@@ -1,12 +1,9 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import {
-  computeMmdMaterialRenderOrder,
-  createMmdMaterialRenderOrderMeshes,
-  createMmdOutlineMeshes,
-  MMD_SELF_SHADOW_LAYER
-} from "../../../src/three/index.js";
+import { computeMmdMaterialRenderOrder } from "../../../src/three/material/material-metadata.js";
+import { createMmdMaterialRenderOrderMeshes, createMmdOutlineMeshes } from "../../../src/three/outline.js";
+import { MMD_SELF_SHADOW_LAYER } from "../../../src/three/index.js";
 import type { MaterialInfo } from "../../../src/parser/model/modelTypes.js";
 
 describe("MMD outline meshes", () => {

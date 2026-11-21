@@ -15,40 +15,40 @@ function   applyMmdLightStateToThreeDirectionalLight
 interface  ApplyMmdSelfShadowStateOptions
 function   applyMmdSelfShadowStateToThreeDirectionalLight
 function   applyThreeMmdMaterialTextures
-function   attachMmdMaterialFactors
-function   attachMmdMaterialMetadata
-function   attachMmdOutlineExpansion
-function   attachMmdSdefSkinning
-function   attachMmdSphereTexture
+const      attachMmdMaterialFactors  @deprecated
+const      attachMmdMaterialMetadata  @deprecated
+const      attachMmdOutlineExpansion  @deprecated
+const      attachMmdSdefSkinning  @deprecated
+const      attachMmdSphereTexture  @deprecated
 interface  CameraState
-interface  CcdIkBone
-interface  CcdIkChain
-interface  CcdIkLink
-interface  CcdIkLinkAngleLimit
-interface  CcdIkPose
-type       CcdIkPreparedChain
-interface  CcdIkPreparedSolveInput
-interface  CcdIkSolveInput
-class      CcdIkSolver
-interface  CcdIkSolveResult
+type       CcdIkBone  @deprecated
+type       CcdIkChain  @deprecated
+type       CcdIkLink  @deprecated
+type       CcdIkLinkAngleLimit  @deprecated
+type       CcdIkPose  @deprecated
+type       CcdIkPreparedChain  @deprecated
+type       CcdIkPreparedSolveInput  @deprecated
+type       CcdIkSolveInput  @deprecated
+const+type CcdIkSolver  @deprecated
+type       CcdIkSolveResult  @deprecated
 function   classifyMmdAssetKind
-function   computeMmdMaterialRenderOrder
-function   computeMmdSdefSkinnedNormal
-function   computeMmdSdefSkinnedPosition
-function   computeQdefSkinnedNormal
-function   computeQdefSkinnedPosition
+const      computeMmdMaterialRenderOrder  @deprecated
+const      computeMmdSdefSkinnedNormal  @deprecated
+const      computeMmdSdefSkinnedPosition  @deprecated
+const      computeQdefSkinnedNormal  @deprecated
+const      computeQdefSkinnedPosition  @deprecated
 function   configureMmdSelfShadowDirectionalLight
 interface  ConfigureMmdSelfShadowDirectionalLightOptions
-function   createCcdIkSolveInputFromMmdIk
-interface  CreateCcdIkSolveInputFromMmdIkInput
+const      createCcdIkSolveInputFromMmdIk  @deprecated
+type       CreateCcdIkSolveInputFromMmdIkInput  @deprecated
 function   createCustomBulletMmdPhysicsBackend
 function   createDisabledMmdPhysicsBackend
 function   createMmdAnimWasmCameraTrack
 function   createMmdAnimWasmLightTrack
 function   createMmdBuiltInToonTextureMap
 function   createMmdFileIndex
-function   createMmdMaterialRenderOrderMeshes
-function   createMmdOutlineMeshes
+const      createMmdMaterialRenderOrderMeshes  @deprecated
+const      createMmdOutlineMeshes  @deprecated
 function   createMmdTextureMapFromFiles
 function   createPmmScenePlan
 function   createPmmStaticPreviewPlan
@@ -64,7 +64,7 @@ interface  CustomBulletMmdPhysicsBackendOptions
 const      customBulletMmdScriptPath
 class      DefaultMmdRuntime
 interface  DefaultMmdRuntimeOptions
-function   defaultSharedToonTexturePath
+const      defaultSharedToonTexturePath  @deprecated
 function   detectModelFormat
 function   detectStandardBones
 interface  Diagnostic
@@ -83,14 +83,14 @@ function   findMmdModelFiles
 function   findMmdMotionFiles
 interface  FitMmdSelfShadowDirectionalLightOptions
 function   fitMmdSelfShadowDirectionalLightToBox
-function   getDefaultToonGradientMap
+const      getDefaultToonGradientMap  @deprecated
 function   getStandardBoneDefinitions
 function   initCore
 interface  InitCoreOptions
 function   initCoreWithFallback
 function   isMmdAccessoryFile
 function   isMmdAudioFile
-function   isMmdDdsTexturePath
+const      isMmdDdsTexturePath  @deprecated
 function   isMmdModelFile
 function   isMmdMotionFile
 function   isMmdTextureFile
@@ -101,9 +101,9 @@ interface  LoaderPerformanceMeasure
 interface  LoaderPerformanceOptions
 function   loadMmdAnimWasmVmd
 function   loadMmdAnimWasmVpd
-function   materialHasTextureMap
+const      materialHasTextureMap  @deprecated
 type       MaterialTransparencyDiagnostic
-function   materialTransparencyMode
+const      materialTransparencyMode  @deprecated
 const      MMD_SELF_SHADOW_LAYER
 interface  MmdAnimation
 interface  MmdAnimBulletContactPoint
@@ -117,8 +117,8 @@ interface  MmdAnimRuntimeWasmLightTrack
 interface  MmdAnimRuntimeWasmModel
 interface  MmdAnimRuntimeWasmModule
 interface  MmdAnimRuntimeWasmRuntimeInstance
-function   mmdAnimWasmVmdDtoToAnimation
-function   mmdAnimWasmVpdDtoToPose
+const      mmdAnimWasmVmdDtoToAnimation  @deprecated
+const      mmdAnimWasmVpdDtoToPose  @deprecated
 type       MmdAssetKind
 interface  MmdCore
 interface  MmdDirectBufferPhysicsBackend
@@ -126,24 +126,24 @@ interface  MmdFileIndex
 interface  MmdFrameState
 interface  MmdHostRigDefinition
 interface  MmdHostRigPose
-function   mmdIkChainToCcdIkChain
-interface  MmdIkRuntimeBone
-interface  MmdIkRuntimeChain
-interface  MmdIkRuntimeLink
-function   mmdMaterialAlphaTest
-function   mmdMaterialCastsShadow
-function   mmdMaterialDepthWrite
-function   mmdMaterialMorphCanAffectAlpha
-interface  MmdMaterialRenderOrderEntry
-interface  MmdMaterialRenderOrderMeshOptions
-function   mmdMaterialSuppressesColorAtAlpha
-function   mmdMaterialTransparencyMode
+const      mmdIkChainToCcdIkChain  @deprecated
+type       MmdIkRuntimeBone  @deprecated
+type       MmdIkRuntimeChain  @deprecated
+type       MmdIkRuntimeLink  @deprecated
+const      mmdMaterialAlphaTest  @deprecated
+const      mmdMaterialCastsShadow  @deprecated
+const      mmdMaterialDepthWrite  @deprecated
+const      mmdMaterialMorphCanAffectAlpha  @deprecated
+type       MmdMaterialRenderOrderEntry  @deprecated
+type       MmdMaterialRenderOrderMeshOptions  @deprecated
+const      mmdMaterialSuppressesColorAtAlpha  @deprecated
 type       MmdMaterialTransparencyMode
+const      mmdMaterialTransparencyMode  @deprecated
 interface  MmdModel
 type       MmdModelFormat
 interface  MmdMorphOverrides
-interface  MmdOutlineModelSource
-interface  MmdOutlineOptions
+type       MmdOutlineModelSource  @deprecated
+type       MmdOutlineOptions  @deprecated
 interface  MmdPhysicsBackend
 interface  MmdPhysicsContact
 interface  MmdPhysicsDebugHooks
@@ -181,8 +181,8 @@ interface  MmdPhysicsStepContextValidationResult
 interface  MmdPhysicsStepResult
 type       MmdPhysicsVector3Tuple
 interface  MmdPose
-interface  MmdQdefNormalSkinningInput
-interface  MmdQdefSkinningInput
+type       MmdQdefNormalSkinningInput  @deprecated
+type       MmdQdefSkinningInput  @deprecated
 interface  MmdRuntime
 interface  MmdRuntimeAsyncEvaluateOptions
 interface  MmdRuntimeAsyncTickOptions
@@ -191,21 +191,21 @@ interface  MmdRuntimeDebugState
 interface  MmdRuntimeEvaluateOptions
 interface  MmdRuntimeMeshSyncSource
 interface  MmdRuntimeTickOptions
-interface  MmdSdefNormalSkinningInput
-interface  MmdSdefSkinningInput
-function   mmdSphereModeToUniform
+type       MmdSdefNormalSkinningInput  @deprecated
+type       MmdSdefSkinningInput  @deprecated
+const      mmdSphereModeToUniform  @deprecated
 interface  MmdToonTextureMaterial
-interface  MmdToonTextureReference
+type       MmdToonTextureReference  @deprecated
 type       MmdWorldMatrixBuffer
 type       MmdWorldMatrixColumnMajorTuple
 function   mmdWorldMatrixToThree
 type       ModelSource
 type       ModelSourceDiagnostic
 type       ModelSourceFetch
-type       MutableQuatTuple
+type       MutableQuatTuple  @deprecated
 function   normalizeMmdPhysicsDebugSnapshot
 function   normalizeMmdRelativePath
-function   normalizeMmdTexturePath
+const      normalizeMmdTexturePath  @deprecated
 function   parseAccessory
 function   parseMmdAnimWasmFormatJson
 function   parsePmdMetadata
@@ -285,12 +285,12 @@ interface  PmxSectionInventory
 type       PmxSectionName
 interface  PmxSectionRange
 type       PmxTextEncoding
-type       QuatTuple
+type       QuatTuple  @deprecated
 interface  ReadModelSourceOptions
 interface  ReadModelSourceResult
 function   resolveCustomBulletMmdScriptUrl
 function   resolveMappedTexture
-function   resolveMmdToonTextureReference
+const      resolveMmdToonTextureReference  @deprecated
 function   resolvePmmAssetPath
 function   resolvePmmAssetReference
 function   sampleMmdAnimWasmCameraTrackInto
@@ -309,7 +309,7 @@ interface  StandardBoneMatchResult
 function   summarizeMmdPhysicsStepContext
 function   syncMmdMaterialStates
 function   syncMmdModelShadowFlags
-function   syncMmdOutlineMaterialStates
+const      syncMmdOutlineMaterialStates  @deprecated
 function   syncMmdSpecularDirection
 function   syncThreeMmdRuntimeToMesh
 function   syncThreeMmdRuntimeToModel
@@ -344,7 +344,7 @@ interface  ThreeMmdUvMorphOffset
 interface  ThreeMmdVertexMorphOffset
 function   validateConcreteMmdPhysicsStepContext
 function   validateMmdPhysicsStepContext
-type       Vec3Tuple
+type       Vec3Tuple  @deprecated
 interface  VmdBoneTrack
 interface  VmdCameraFrame
 interface  VmdLightFrame
@@ -489,18 +489,18 @@ function   vpdPoseToAnimation
 
 ## ./runtime (66)
 interface  CameraState
-interface  CcdIkBone
-interface  CcdIkChain
-interface  CcdIkLink
-interface  CcdIkLinkAngleLimit
-interface  CcdIkPose
-type       CcdIkPreparedChain
-interface  CcdIkPreparedSolveInput
-interface  CcdIkSolveInput
-class      CcdIkSolver
-interface  CcdIkSolveResult
-function   createCcdIkSolveInputFromMmdIk
-interface  CreateCcdIkSolveInputFromMmdIkInput
+type       CcdIkBone  @deprecated
+type       CcdIkChain  @deprecated
+type       CcdIkLink  @deprecated
+type       CcdIkLinkAngleLimit  @deprecated
+type       CcdIkPose  @deprecated
+type       CcdIkPreparedChain  @deprecated
+type       CcdIkPreparedSolveInput  @deprecated
+type       CcdIkSolveInput  @deprecated
+const+type CcdIkSolver  @deprecated
+type       CcdIkSolveResult  @deprecated
+const      createCcdIkSolveInputFromMmdIk  @deprecated
+type       CreateCcdIkSolveInputFromMmdIkInput  @deprecated
 function   createMmdAnimWasmCameraTrack
 function   createMmdAnimWasmLightTrack
 class      DefaultMmdRuntime
@@ -521,15 +521,15 @@ interface  MmdAnimRuntimeWasmLightTrack
 interface  MmdAnimRuntimeWasmModel
 interface  MmdAnimRuntimeWasmModule
 interface  MmdAnimRuntimeWasmRuntimeInstance
-function   mmdAnimWasmVmdDtoToAnimation
-function   mmdAnimWasmVpdDtoToPose
+const      mmdAnimWasmVmdDtoToAnimation  @deprecated
+const      mmdAnimWasmVpdDtoToPose  @deprecated
 interface  MmdFrameState
 interface  MmdHostRigDefinition
 interface  MmdHostRigPose
-function   mmdIkChainToCcdIkChain
-interface  MmdIkRuntimeBone
-interface  MmdIkRuntimeChain
-interface  MmdIkRuntimeLink
+const      mmdIkChainToCcdIkChain  @deprecated
+type       MmdIkRuntimeBone  @deprecated
+type       MmdIkRuntimeChain  @deprecated
+type       MmdIkRuntimeLink  @deprecated
 interface  MmdMorphOverrides
 interface  MmdRuntime
 interface  MmdRuntimeAsyncEvaluateOptions
@@ -538,9 +538,9 @@ interface  MmdRuntimeDebugStageState
 interface  MmdRuntimeDebugState
 interface  MmdRuntimeEvaluateOptions
 interface  MmdRuntimeTickOptions
-type       MutableQuatTuple
+type       MutableQuatTuple  @deprecated
 function   parseMmdAnimWasmFormatJson
-type       QuatTuple
+type       QuatTuple  @deprecated
 function   sampleMmdAnimWasmCameraTrackInto
 function   sampleMmdAnimWasmLightTrackInto
 function   sampleMmdCameraTrack
@@ -550,7 +550,7 @@ function   sampleMmdLightTrackInto
 function   sampleMmdSelfShadowTrack
 function   sampleMmdSelfShadowTrackInto
 interface  SelfShadowState
-type       Vec3Tuple
+type       Vec3Tuple  @deprecated
 interface  VmdCameraFrame
 interface  VmdLightFrame
 interface  VmdSelfShadowFrame
@@ -563,30 +563,30 @@ function   applyMmdLightStateToThreeDirectionalLight
 interface  ApplyMmdSelfShadowStateOptions
 function   applyMmdSelfShadowStateToThreeDirectionalLight
 function   applyThreeMmdMaterialTextures
-function   attachMmdMaterialFactors
-function   attachMmdMaterialMetadata
-function   attachMmdOutlineExpansion
-function   attachMmdSdefSkinning
-function   attachMmdSphereTexture
+const      attachMmdMaterialFactors  @deprecated
+const      attachMmdMaterialMetadata  @deprecated
+const      attachMmdOutlineExpansion  @deprecated
+const      attachMmdSdefSkinning  @deprecated
+const      attachMmdSphereTexture  @deprecated
 function   classifyMmdAssetKind
-function   computeMmdMaterialRenderOrder
-function   computeMmdSdefSkinnedNormal
-function   computeMmdSdefSkinnedPosition
-function   computeQdefSkinnedNormal
-function   computeQdefSkinnedPosition
+const      computeMmdMaterialRenderOrder  @deprecated
+const      computeMmdSdefSkinnedNormal  @deprecated
+const      computeMmdSdefSkinnedPosition  @deprecated
+const      computeQdefSkinnedNormal  @deprecated
+const      computeQdefSkinnedPosition  @deprecated
 function   configureMmdSelfShadowDirectionalLight
 interface  ConfigureMmdSelfShadowDirectionalLightOptions
 function   createMmdBuiltInToonTextureMap
 function   createMmdFileIndex
-function   createMmdMaterialRenderOrderMeshes
-function   createMmdOutlineMeshes
+const      createMmdMaterialRenderOrderMeshes  @deprecated
+const      createMmdOutlineMeshes  @deprecated
 function   createMmdTextureMapFromFiles
 function   createTextureResolver
 function   createThreeBufferGeometry
 function   createThreeMmdMaterials
 function   createThreeMorphSplitGeometries
 function   createThreeSkeleton
-function   defaultSharedToonTexturePath
+const      defaultSharedToonTexturePath  @deprecated
 function   disposeMmdModel
 interface  DisposeMmdModelOptions
 function   findMmdAccessoryFiles
@@ -595,41 +595,41 @@ function   findMmdModelFiles
 function   findMmdMotionFiles
 interface  FitMmdSelfShadowDirectionalLightOptions
 function   fitMmdSelfShadowDirectionalLightToBox
-function   getDefaultToonGradientMap
+const      getDefaultToonGradientMap  @deprecated
 function   isMmdAccessoryFile
 function   isMmdAudioFile
-function   isMmdDdsTexturePath
+const      isMmdDdsTexturePath  @deprecated
 function   isMmdModelFile
 function   isMmdMotionFile
 function   isMmdTextureFile
 function   isModelSource
 interface  LoaderPerformanceMeasure
 interface  LoaderPerformanceOptions
-function   materialHasTextureMap
+const      materialHasTextureMap  @deprecated
 type       MaterialTransparencyDiagnostic
-function   materialTransparencyMode
+const      materialTransparencyMode  @deprecated
 const      MMD_SELF_SHADOW_LAYER
 type       MmdAssetKind
 interface  MmdFileIndex
-function   mmdMaterialAlphaTest
-function   mmdMaterialCastsShadow
-function   mmdMaterialDepthWrite
-function   mmdMaterialMorphCanAffectAlpha
-interface  MmdMaterialRenderOrderEntry
-interface  MmdMaterialRenderOrderMeshOptions
-function   mmdMaterialSuppressesColorAtAlpha
-function   mmdMaterialTransparencyMode
+const      mmdMaterialAlphaTest  @deprecated
+const      mmdMaterialCastsShadow  @deprecated
+const      mmdMaterialDepthWrite  @deprecated
+const      mmdMaterialMorphCanAffectAlpha  @deprecated
+type       MmdMaterialRenderOrderEntry  @deprecated
+type       MmdMaterialRenderOrderMeshOptions  @deprecated
+const      mmdMaterialSuppressesColorAtAlpha  @deprecated
 type       MmdMaterialTransparencyMode
-interface  MmdOutlineModelSource
-interface  MmdOutlineOptions
-interface  MmdQdefNormalSkinningInput
-interface  MmdQdefSkinningInput
+const      mmdMaterialTransparencyMode  @deprecated
+type       MmdOutlineModelSource  @deprecated
+type       MmdOutlineOptions  @deprecated
+type       MmdQdefNormalSkinningInput  @deprecated
+type       MmdQdefSkinningInput  @deprecated
 interface  MmdRuntimeMeshSyncSource
-interface  MmdSdefNormalSkinningInput
-interface  MmdSdefSkinningInput
-function   mmdSphereModeToUniform
+type       MmdSdefNormalSkinningInput  @deprecated
+type       MmdSdefSkinningInput  @deprecated
+const      mmdSphereModeToUniform  @deprecated
 interface  MmdToonTextureMaterial
-interface  MmdToonTextureReference
+type       MmdToonTextureReference  @deprecated
 type       MmdWorldMatrixBuffer
 type       MmdWorldMatrixColumnMajorTuple
 function   mmdWorldMatrixToThree
@@ -637,14 +637,14 @@ type       ModelSource
 type       ModelSourceDiagnostic
 type       ModelSourceFetch
 function   normalizeMmdRelativePath
-function   normalizeMmdTexturePath
+const      normalizeMmdTexturePath  @deprecated
 interface  ReadModelSourceOptions
 interface  ReadModelSourceResult
 function   resolveMappedTexture
-function   resolveMmdToonTextureReference
+const      resolveMmdToonTextureReference  @deprecated
 function   syncMmdMaterialStates
 function   syncMmdModelShadowFlags
-function   syncMmdOutlineMaterialStates
+const      syncMmdOutlineMaterialStates  @deprecated
 function   syncMmdSpecularDirection
 function   syncThreeMmdRuntimeToMesh
 function   syncThreeMmdRuntimeToModel
