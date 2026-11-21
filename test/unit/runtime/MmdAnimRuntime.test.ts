@@ -7,8 +7,15 @@ import {
   exportMmdAnimWasmVmdAnimationJsonBytes,
   exportMmdAnimWasmVpdPoseJsonBytes,
   parseMmdAnimWasmFormatJson
+} from "../../../src/runtime/index.js";
+import type { MmdAnimRuntimeWasmModule } from "../../../src/runtime/index.js";
+import type {
+  MmdAnimation,
+  MmdPhysicsBackend,
+  MmdPhysicsStepContext,
+  MmdPhysicsStepResult,
+  VmdBoneTrack
 } from "../../../src/index.js";
-import type { MmdAnimRuntimeWasmModule, MmdAnimation, MmdPhysicsBackend, MmdPhysicsStepContext, MmdPhysicsStepResult, VmdBoneTrack } from "../../../src/index.js";
 
 describe("MmdAnimRuntime", () => {
   it("constructs an mmd-anim wasm model from PMX bytes and evaluates frame state", () => {

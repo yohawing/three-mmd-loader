@@ -5,7 +5,8 @@ import { promisify } from "node:util";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { DefaultMmdRuntime, ThreeMmdLoader } from "../../../src/index.js";
+import { DefaultMmdRuntime } from "../../../src/runtime/index.js";
+import { ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
   MmdPhysicsBackend,

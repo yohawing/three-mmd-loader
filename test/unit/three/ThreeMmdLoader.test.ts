@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { MmdAnimRuntime, FallbackCore, MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
+import { MmdAnimRuntime } from "../../../src/runtime/index.js";
+import { FallbackCore } from "../../../src/parser/index.js";
+import { MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
   MmdCore,

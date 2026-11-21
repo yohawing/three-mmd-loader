@@ -5,7 +5,7 @@ import {
   exportMmdAnimWasmVpdPoseJsonBytes,
   loadMmdAnimWasmVmd,
   loadMmdAnimWasmVpd
-} from "../../../src/index.js";
+} from "../../../src/runtime/index.js";
 import { mmdAnimWasmVmdDtoToAnimation, mmdAnimWasmVpdDtoToPose } from "../../../src/runtime/mmdAnimWasmParser.js";
 
 describe("mmd-anim wasm parser adapter", () => {

@@ -2,19 +2,19 @@
 # Update with: npx vitest run test/unit/package/PublicApiReport.test.ts -u
 
 ## . (396)
-interface  AccessoryDiagnostic
-interface  AccessoryMaterial
-interface  AccessoryMeshSummary
-interface  AccessoryParsedManifest
-interface  AccessoryVacSettings
-interface  AccessoryVertexColor
+type       AccessoryDiagnostic  @deprecated
+type       AccessoryMaterial  @deprecated
+type       AccessoryMeshSummary  @deprecated
+type       AccessoryParsedManifest  @deprecated
+type       AccessoryVacSettings  @deprecated
+type       AccessoryVertexColor  @deprecated
 interface  ApplyMmdCameraStateOptions
 function   applyMmdCameraStateToThreeCamera
 interface  ApplyMmdLightStateOptions
 function   applyMmdLightStateToThreeDirectionalLight
 interface  ApplyMmdSelfShadowStateOptions
 function   applyMmdSelfShadowStateToThreeDirectionalLight
-function   applyThreeMmdMaterialTextures
+const      applyThreeMmdMaterialTextures  @deprecated
 const      attachMmdMaterialFactors  @deprecated
 const      attachMmdMaterialMetadata  @deprecated
 const      attachMmdOutlineExpansion  @deprecated
@@ -46,45 +46,45 @@ function   configureMmdSelfShadowDirectionalLight
 interface  ConfigureMmdSelfShadowDirectionalLightOptions
 const      createCcdIkSolveInputFromMmdIk  @deprecated
 type       CreateCcdIkSolveInputFromMmdIkInput  @deprecated
-function   createCustomBulletMmdPhysicsBackend
-function   createDisabledMmdPhysicsBackend
-function   createMmdAnimWasmCameraTrack
-function   createMmdAnimWasmLightTrack
+const      createCustomBulletMmdPhysicsBackend  @deprecated
+const      createDisabledMmdPhysicsBackend  @deprecated
+const      createMmdAnimWasmCameraTrack  @deprecated
+const      createMmdAnimWasmLightTrack  @deprecated
 function   createMmdBuiltInToonTextureMap
 function   createMmdFileIndex
 const      createMmdMaterialRenderOrderMeshes  @deprecated
 const      createMmdOutlineMeshes  @deprecated
 function   createMmdTextureMapFromFiles
-function   createPmmScenePlan
-function   createPmmStaticPreviewPlan
+const      createPmmScenePlan  @deprecated
+const      createPmmStaticPreviewPlan  @deprecated
 function   createTextureResolver
-function   createThreeBufferGeometry
-function   createThreeMmdMaterials
-function   createThreeMorphSplitGeometries
-function   createThreeSkeleton
-interface  CustomBulletMmdLoaderOptions
-type       CustomBulletMmdModule
-interface  CustomBulletMmdPhysicsBackend
-interface  CustomBulletMmdPhysicsBackendOptions
-const      customBulletMmdScriptPath
-class      DefaultMmdRuntime
+const      createThreeBufferGeometry  @deprecated
+const      createThreeMmdMaterials  @deprecated
+const      createThreeMorphSplitGeometries  @deprecated
+const      createThreeSkeleton  @deprecated
+type       CustomBulletMmdLoaderOptions  @deprecated
+type       CustomBulletMmdModule  @deprecated
+type       CustomBulletMmdPhysicsBackend  @deprecated
+type       CustomBulletMmdPhysicsBackendOptions  @deprecated
+const      customBulletMmdScriptPath  @deprecated
+const+type DefaultMmdRuntime  @deprecated
 interface  DefaultMmdRuntimeOptions
 const      defaultSharedToonTexturePath  @deprecated
-function   detectModelFormat
-function   detectStandardBones
+const      detectModelFormat  @deprecated
+const      detectStandardBones  @deprecated
 interface  Diagnostic
 type       DiagnosticCategory
-class      DisabledMmdPhysicsBackend
-interface  DisabledMmdPhysicsBackendOptions
+const+type DisabledMmdPhysicsBackend  @deprecated
+type       DisabledMmdPhysicsBackendOptions  @deprecated
 interface  DisplayFrameData
 interface  DisplayFrameElementData
 function   disposeMmdModel
 interface  DisposeMmdModelOptions
 interface  EmbeddedTextureData
-function   exportMmdAnimWasmFormatBytes
-function   exportMmdAnimWasmVmdAnimationJsonBytes
-function   exportMmdAnimWasmVpdPoseJsonBytes
-class      FallbackCore
+const      exportMmdAnimWasmFormatBytes  @deprecated
+const      exportMmdAnimWasmVmdAnimationJsonBytes  @deprecated
+const      exportMmdAnimWasmVpdPoseJsonBytes  @deprecated
+const+type FallbackCore  @deprecated
 function   findMmdAccessoryFiles
 function   findMmdAudioFiles
 function   findMmdModelFiles
@@ -94,10 +94,10 @@ function   fitMmdSelfShadowDirectionalLightToBox
 interface  GeometryBuffers
 interface  GeometryMaterialGroup
 const      getDefaultToonGradientMap  @deprecated
-function   getStandardBoneDefinitions
-function   initCore
-interface  InitCoreOptions
-function   initCoreWithFallback
+const      getStandardBoneDefinitions  @deprecated
+const      initCore  @deprecated
+type       InitCoreOptions  @deprecated
+const      initCoreWithFallback  @deprecated
 function   isMmdAccessoryFile
 function   isMmdAudioFile
 const      isMmdDdsTexturePath  @deprecated
@@ -107,46 +107,46 @@ function   isMmdTextureFile
 function   isModelSource
 interface  JointData
 interface  LightState
-function   loadCustomBulletMmdModule
+const      loadCustomBulletMmdModule  @deprecated
 interface  LoaderPerformanceMeasure
 interface  LoaderPerformanceOptions
-function   loadMmdAnimWasmVmd
-function   loadMmdAnimWasmVpd
+const      loadMmdAnimWasmVmd  @deprecated
+const      loadMmdAnimWasmVpd  @deprecated
 interface  LoadModelOptions
 interface  MaterialFlags
 const      materialHasTextureMap  @deprecated
 interface  MaterialInfo
 interface  MaterialMorphOffset
-interface  MaterialRuntimeState
+type       MaterialRuntimeState  @deprecated
 interface  MaterialTextureInfo
 type       MaterialTransparencyDiagnostic
 const      materialTransparencyMode  @deprecated
 const      MMD_SELF_SHADOW_LAYER
 interface  MmdAnimation
 interface  MmdAnimationMetadata
-interface  MmdAnimBulletContactPoint
-interface  MmdAnimBulletModule
-class      MmdAnimRuntime
-interface  MmdAnimRuntimeOptions
+type       MmdAnimBulletContactPoint  @deprecated
+type       MmdAnimBulletModule  @deprecated
+const+type MmdAnimRuntime  @deprecated
+type       MmdAnimRuntimeOptions  @deprecated
 interface  MmdAnimRuntimeWasmCameraTrack
-interface  MmdAnimRuntimeWasmClip
-interface  MmdAnimRuntimeWasmHostRig
-interface  MmdAnimRuntimeWasmHostRigConstructor
+type       MmdAnimRuntimeWasmClip  @deprecated
+type       MmdAnimRuntimeWasmHostRig  @deprecated
+type       MmdAnimRuntimeWasmHostRigConstructor  @deprecated
 interface  MmdAnimRuntimeWasmLightTrack
-interface  MmdAnimRuntimeWasmModel
-interface  MmdAnimRuntimeWasmModule
-interface  MmdAnimRuntimeWasmRuntimeInstance
+type       MmdAnimRuntimeWasmModel  @deprecated
+type       MmdAnimRuntimeWasmModule  @deprecated
+type       MmdAnimRuntimeWasmRuntimeInstance  @deprecated
 const      mmdAnimWasmVmdDtoToAnimation  @deprecated
 const      mmdAnimWasmVpdDtoToPose  @deprecated
 type       MmdAssetKind
 interface  MmdCore
 type       MmdCoreModelFormat
 interface  MmdDefaultMaterialTransparencyDiagnostic
-interface  MmdDirectBufferPhysicsBackend
+type       MmdDirectBufferPhysicsBackend  @deprecated
 interface  MmdFileIndex
 interface  MmdFrameState
-interface  MmdHostRigDefinition
-interface  MmdHostRigPose
+type       MmdHostRigDefinition  @deprecated
+type       MmdHostRigPose  @deprecated
 const      mmdIkChainToCcdIkChain  @deprecated
 type       MmdIkRuntimeBone  @deprecated
 type       MmdIkRuntimeChain  @deprecated
@@ -162,7 +162,7 @@ type       MmdMaterialTransparencyMode
 const      mmdMaterialTransparencyMode  @deprecated
 type       MmdMaterialTransparencyReason
 interface  MmdModel
-type       MmdModelFormat
+type       MmdModelFormat  @deprecated
 interface  MmdMorphOverrides
 type       MmdOutlineModelSource  @deprecated
 type       MmdOutlineOptions  @deprecated
@@ -170,9 +170,9 @@ interface  MmdPhysicsBackend
 interface  MmdPhysicsContact
 interface  MmdPhysicsDebugHooks
 interface  MmdPhysicsDebugSnapshot
-type       MmdPhysicsDebugSnapshotNonFiniteMode
-interface  MmdPhysicsDebugSnapshotNormalizationOptions
-interface  MmdPhysicsDebugSnapshotNormalizationResult
+type       MmdPhysicsDebugSnapshotNonFiniteMode  @deprecated
+type       MmdPhysicsDebugSnapshotNormalizationOptions  @deprecated
+type       MmdPhysicsDebugSnapshotNormalizationResult  @deprecated
 interface  MmdPhysicsDiagnostic
 type       MmdPhysicsDiagnosticLevel
 type       MmdPhysicsEulerTuple  @deprecated
@@ -194,12 +194,12 @@ type       MmdPhysicsRigidBodyShapeType
 interface  MmdPhysicsRigidBodyTransform
 interface  MmdPhysicsSkeleton
 interface  MmdPhysicsSkeletonBone
-interface  MmdPhysicsStepBufferLayout
-interface  MmdPhysicsStepBuffers
+type       MmdPhysicsStepBufferLayout  @deprecated
+type       MmdPhysicsStepBuffers  @deprecated
 interface  MmdPhysicsStepContext
-interface  MmdPhysicsStepContextSummary
-interface  MmdPhysicsStepContextValidationOptions
-interface  MmdPhysicsStepContextValidationResult
+type       MmdPhysicsStepContextSummary  @deprecated
+type       MmdPhysicsStepContextValidationOptions  @deprecated
+type       MmdPhysicsStepContextValidationResult  @deprecated
 interface  MmdPhysicsStepResult
 type       MmdPhysicsVector3Tuple
 interface  MmdPose
@@ -213,116 +213,116 @@ interface  MmdRuntimeAsyncTickOptions
 interface  MmdRuntimeDebugStageState
 interface  MmdRuntimeDebugState
 interface  MmdRuntimeEvaluateOptions
-interface  MmdRuntimeMeshSyncSource
+type       MmdRuntimeMeshSyncSource  @deprecated
 interface  MmdRuntimeTickOptions
 type       MmdSdefNormalSkinningInput  @deprecated
 type       MmdSdefSkinningInput  @deprecated
 const      mmdSphereModeToUniform  @deprecated
 type       MmdToonTextureMaterial  @deprecated
 type       MmdToonTextureReference  @deprecated
-type       MmdWorldMatrixBuffer
-type       MmdWorldMatrixColumnMajorTuple
-function   mmdWorldMatrixToThree
+type       MmdWorldMatrixBuffer  @deprecated
+type       MmdWorldMatrixColumnMajorTuple  @deprecated
+const      mmdWorldMatrixToThree  @deprecated
 interface  ModelMetadata
 type       ModelSource
 type       ModelSourceDiagnostic
 type       ModelSourceFetch
 interface  MorphData
 type       MutableQuatTuple  @deprecated
-function   normalizeMmdPhysicsDebugSnapshot
+const      normalizeMmdPhysicsDebugSnapshot  @deprecated
 function   normalizeMmdRelativePath
 const      normalizeMmdTexturePath  @deprecated
-function   parseAccessory
-function   parseMmdAnimWasmFormatJson
-function   parsePmdMetadata
-function   parsePmdSectionInventory
-function   parsePmmDocument
-function   parsePmmManifest
-function   parsePmxMetadata
-function   parsePmxSectionInventory
-function   parseVmd
-function   parseVmdMetadata
-function   parseVmdSectionInventory
-function   parseVpd
-function   parseVpdMetadata
-function   parseVpdPose
-function   parseVpdPoseInventory
-interface  PmdHeader
-interface  PmdMetadata
-interface  PmdSectionCounts
-interface  PmdSectionInventory
-type       PmdSectionName
-interface  PmdSectionRange
-interface  PmmAssetReference
-interface  PmmAssetResolution
-interface  PmmAssetResolutionOptions
-interface  PmmAssetSummary
-interface  PmmCameraKeyframeSummary
-interface  PmmDisplayState
-interface  PmmDocumentAccessoryBlockSummary
-interface  PmmDocumentAccessoryKeyframeSummary
-interface  PmmDocumentAccessorySummary
-interface  PmmDocumentBoneKeyframeSummary
-interface  PmmDocumentBoneStateSummary
-interface  PmmDocumentConstraintStateSummary
-interface  PmmDocumentCounts
-interface  PmmDocumentExpandFlags
-interface  PmmDocumentGlobalSummary
-type       PmmDocumentKeyframeSummary
-interface  PmmDocumentModelKeyframeSummary
-interface  PmmDocumentModelSections
-interface  PmmDocumentModelSummary
-interface  PmmDocumentMorphKeyframeSummary
-interface  PmmDocumentMorphStateSummary
-interface  PmmDocumentOutsideParentIndexSummary
-interface  PmmDocumentOutsideParentStateSummary
-interface  PmmDocumentSettingsSummary
-interface  PmmDocumentSummary
-interface  PmmDocumentTrackSummary
-interface  PmmGravityKeyframeSummary
-interface  PmmHeaderTextEntry
-interface  PmmLightKeyframeSummary
-interface  PmmManifest
-interface  PmmModelSlot
-interface  PmmModelSlotFlagEntry
-interface  PmmParsedAssetReference
-interface  PmmParsedManifest
-interface  PmmParserDiagnostic
-interface  PmmProjectAssetBinding
-interface  PmmProjectByteCoverage
-interface  PmmProjectByteRange
-interface  PmmProjectExportBlocker
-interface  PmmProjectExportReadiness
-interface  PmmProjectGraph
-interface  PmmProjectKeyframeReference
-interface  PmmProjectSceneSettings
-interface  PmmProjectSettings
-interface  PmmProjectTrackReference
-interface  PmmSceneAsset
-interface  PmmScenePlan
-interface  PmmSelfShadowKeyframeSummary
-interface  PmmStaticPreviewPlan
-interface  PmmTimeline
-interface  PmxHeader
-interface  PmxIndexSizes
-interface  PmxMetadata
-interface  PmxSectionCounts
-interface  PmxSectionInventory
-type       PmxSectionName
-interface  PmxSectionRange
-type       PmxTextEncoding
+const      parseAccessory  @deprecated
+const      parseMmdAnimWasmFormatJson  @deprecated
+const      parsePmdMetadata  @deprecated
+const      parsePmdSectionInventory  @deprecated
+const      parsePmmDocument  @deprecated
+const      parsePmmManifest  @deprecated
+const      parsePmxMetadata  @deprecated
+const      parsePmxSectionInventory  @deprecated
+const      parseVmd  @deprecated
+const      parseVmdMetadata  @deprecated
+const      parseVmdSectionInventory  @deprecated
+const      parseVpd  @deprecated
+const      parseVpdMetadata  @deprecated
+const      parseVpdPose  @deprecated
+const      parseVpdPoseInventory  @deprecated
+type       PmdHeader  @deprecated
+type       PmdMetadata  @deprecated
+type       PmdSectionCounts  @deprecated
+type       PmdSectionInventory  @deprecated
+type       PmdSectionName  @deprecated
+type       PmdSectionRange  @deprecated
+type       PmmAssetReference  @deprecated
+type       PmmAssetResolution  @deprecated
+type       PmmAssetResolutionOptions  @deprecated
+type       PmmAssetSummary  @deprecated
+type       PmmCameraKeyframeSummary  @deprecated
+type       PmmDisplayState  @deprecated
+type       PmmDocumentAccessoryBlockSummary  @deprecated
+type       PmmDocumentAccessoryKeyframeSummary  @deprecated
+type       PmmDocumentAccessorySummary  @deprecated
+type       PmmDocumentBoneKeyframeSummary  @deprecated
+type       PmmDocumentBoneStateSummary  @deprecated
+type       PmmDocumentConstraintStateSummary  @deprecated
+type       PmmDocumentCounts  @deprecated
+type       PmmDocumentExpandFlags  @deprecated
+type       PmmDocumentGlobalSummary  @deprecated
+type       PmmDocumentKeyframeSummary  @deprecated
+type       PmmDocumentModelKeyframeSummary  @deprecated
+type       PmmDocumentModelSections  @deprecated
+type       PmmDocumentModelSummary  @deprecated
+type       PmmDocumentMorphKeyframeSummary  @deprecated
+type       PmmDocumentMorphStateSummary  @deprecated
+type       PmmDocumentOutsideParentIndexSummary  @deprecated
+type       PmmDocumentOutsideParentStateSummary  @deprecated
+type       PmmDocumentSettingsSummary  @deprecated
+type       PmmDocumentSummary  @deprecated
+type       PmmDocumentTrackSummary  @deprecated
+type       PmmGravityKeyframeSummary  @deprecated
+type       PmmHeaderTextEntry  @deprecated
+type       PmmLightKeyframeSummary  @deprecated
+type       PmmManifest  @deprecated
+type       PmmModelSlot  @deprecated
+type       PmmModelSlotFlagEntry  @deprecated
+type       PmmParsedAssetReference  @deprecated
+type       PmmParsedManifest  @deprecated
+type       PmmParserDiagnostic  @deprecated
+type       PmmProjectAssetBinding  @deprecated
+type       PmmProjectByteCoverage  @deprecated
+type       PmmProjectByteRange  @deprecated
+type       PmmProjectExportBlocker  @deprecated
+type       PmmProjectExportReadiness  @deprecated
+type       PmmProjectGraph  @deprecated
+type       PmmProjectKeyframeReference  @deprecated
+type       PmmProjectSceneSettings  @deprecated
+type       PmmProjectSettings  @deprecated
+type       PmmProjectTrackReference  @deprecated
+type       PmmSceneAsset  @deprecated
+type       PmmScenePlan  @deprecated
+type       PmmSelfShadowKeyframeSummary  @deprecated
+type       PmmStaticPreviewPlan  @deprecated
+type       PmmTimeline  @deprecated
+type       PmxHeader  @deprecated
+type       PmxIndexSizes  @deprecated
+type       PmxMetadata  @deprecated
+type       PmxSectionCounts  @deprecated
+type       PmxSectionInventory  @deprecated
+type       PmxSectionName  @deprecated
+type       PmxSectionRange  @deprecated
+type       PmxTextEncoding  @deprecated
 interface  QdefGeometryBuffers
 type       QuatTuple  @deprecated
 type       ReadModelSourceOptions  @deprecated
 type       ReadModelSourceResult  @deprecated
-function   resolveCustomBulletMmdScriptUrl
-function   resolveMappedTexture
+const      resolveCustomBulletMmdScriptUrl  @deprecated
+const      resolveMappedTexture  @deprecated
 const      resolveMmdToonTextureReference  @deprecated
-function   resolvePmmAssetPath
-function   resolvePmmAssetReference
+const      resolvePmmAssetPath  @deprecated
+const      resolvePmmAssetReference  @deprecated
 interface  RigidBodyData
-function   sampleMmdAnimWasmCameraTrackInto
-function   sampleMmdAnimWasmLightTrackInto
+const      sampleMmdAnimWasmCameraTrackInto  @deprecated
+const      sampleMmdAnimWasmLightTrackInto  @deprecated
 function   sampleMmdCameraTrack
 function   sampleMmdCameraTrackInto
 function   sampleMmdLightTrack
@@ -333,49 +333,49 @@ interface  SdefGeometryBuffers
 interface  SelfShadowState
 interface  SkeletonData
 interface  SoftBodyData
-interface  StandardBoneDetectionResult
-interface  StandardBoneEntry
-interface  StandardBoneMatch
-interface  StandardBoneMatchResult
-function   summarizeMmdPhysicsStepContext
-function   syncMmdMaterialStates
-function   syncMmdModelShadowFlags
+type       StandardBoneDetectionResult  @deprecated
+type       StandardBoneEntry  @deprecated
+type       StandardBoneMatch  @deprecated
+type       StandardBoneMatchResult  @deprecated
+const      summarizeMmdPhysicsStepContext  @deprecated
+const      syncMmdMaterialStates  @deprecated
+const      syncMmdModelShadowFlags  @deprecated
 const      syncMmdOutlineMaterialStates  @deprecated
 function   syncMmdSpecularDirection
-function   syncThreeMmdRuntimeToMesh
-function   syncThreeMmdRuntimeToModel
+const      syncThreeMmdRuntimeToMesh  @deprecated
+const      syncThreeMmdRuntimeToModel  @deprecated
 interface  TextureLoadDiagnostic
 type       TextureMap
 interface  TextureResolver
-interface  ThreeMmdAdditionalUvMorphOffset
+type       ThreeMmdAdditionalUvMorphOffset  @deprecated
 interface  ThreeMmdAnimation
 type       ThreeMmdCoreDiagnostic
 interface  ThreeMmdCoreFallbackEvent
-interface  ThreeMmdGeometryBuffers
-interface  ThreeMmdGeometryMaterial
-interface  ThreeMmdGeometryMorph
-interface  ThreeMmdGeometryOptions
+type       ThreeMmdGeometryBuffers  @deprecated
+type       ThreeMmdGeometryMaterial  @deprecated
+type       ThreeMmdGeometryMorph  @deprecated
+type       ThreeMmdGeometryOptions  @deprecated
 class      ThreeMmdLoader
 interface  ThreeMmdLoaderOptions
 interface  ThreeMmdLoadModelOptions
-interface  ThreeMmdMaterialGroup
-interface  ThreeMmdMaterialTextureOptions
+type       ThreeMmdMaterialGroup  @deprecated
+type       ThreeMmdMaterialTextureOptions  @deprecated
 interface  ThreeMmdModel
 type       ThreeMmdModelSourceDescriptor
-interface  ThreeMmdMorphSplitGeometry
+type       ThreeMmdMorphSplitGeometry  @deprecated
 interface  ThreeMmdPose
-interface  ThreeMmdQdefBuffers
+type       ThreeMmdQdefBuffers  @deprecated
 interface  ThreeMmdRuntimeFactoryContext
-interface  ThreeMmdRuntimeSyncTarget
-interface  ThreeMmdSdefBuffers
-interface  ThreeMmdSkeletonBone
-interface  ThreeMmdSkeletonData
+type       ThreeMmdRuntimeSyncTarget  @deprecated
+type       ThreeMmdSdefBuffers  @deprecated
+type       ThreeMmdSkeletonBone  @deprecated
+type       ThreeMmdSkeletonData  @deprecated
 type       ThreeMmdSphereMappedToonMaterial  @deprecated
 interface  ThreeMmdTextureLoader
-interface  ThreeMmdUvMorphOffset
-interface  ThreeMmdVertexMorphOffset
-function   validateConcreteMmdPhysicsStepContext
-function   validateMmdPhysicsStepContext
+type       ThreeMmdUvMorphOffset  @deprecated
+type       ThreeMmdVertexMorphOffset  @deprecated
+const      validateConcreteMmdPhysicsStepContext  @deprecated
+const      validateMmdPhysicsStepContext  @deprecated
 type       Vec3Tuple  @deprecated
 interface  VmdBoneTrack
 interface  VmdCameraFrame
@@ -383,21 +383,21 @@ interface  VmdCameraInterpolation
 interface  VmdIkState
 type       VmdInterpolationCurve
 interface  VmdLightFrame
-interface  VmdMetadata
+type       VmdMetadata  @deprecated
 interface  VmdMorphTrack
 interface  VmdPropertyFrame
-interface  VmdSectionCounts
-interface  VmdSectionInventory
-type       VmdSectionName
-interface  VmdSectionRecord
+type       VmdSectionCounts  @deprecated
+type       VmdSectionInventory  @deprecated
+type       VmdSectionName  @deprecated
+type       VmdSectionRecord  @deprecated
 interface  VmdSelfShadowFrame
-interface  VpdBoneBlockInventory
-interface  VpdBoneCountMismatch
-interface  VpdBonePose
-interface  VpdMetadata
-interface  VpdPose
-interface  VpdPoseInventory
-function   vpdPoseToAnimation
+type       VpdBoneBlockInventory  @deprecated
+type       VpdBoneCountMismatch  @deprecated
+type       VpdBonePose  @deprecated
+type       VpdMetadata  @deprecated
+type       VpdPose  @deprecated
+type       VpdPoseInventory  @deprecated
+const      vpdPoseToAnimation  @deprecated
 
 ## ./parser (156)
 interface  AccessoryDiagnostic

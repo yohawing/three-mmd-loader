@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
-import { DefaultMmdRuntime } from "../../../src/index.js";
+import { DefaultMmdRuntime } from "../../../src/runtime/index.js";
 import type { MmdAnimation, VmdBoneFrame, VmdBoneTrack, VmdMorphFrame, VmdMorphTrack } from "../../../src/index.js";
 import type {
   MmdDirectBufferPhysicsBackend,

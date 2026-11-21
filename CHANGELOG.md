@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
 
 ### Deprecated
 
+In 1.0.0 the root entry will stop re-exporting parser functions, runtime classes, low-level three helpers, physics helpers, and their standalone types. Import them from `@yohawing/three-mmd-loader/parser`, `/runtime`, `/three`, or `/physics` under the same package name. The root keeps `ThreeMmdLoader`, model disposal, folder and texture helpers, camera, light and shadow playback helpers, and the types reachable through their public signatures.
+
 These exports remain available in 0.9.x and will be removed from the public API in 1.0.0.
 
 | Entry | Symbol | Migration |
