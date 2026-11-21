@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import type { LightState } from "../parser/model/modelTypes.js";
+import type { MmdLightState } from "../parser/model/modelTypes.js";
 
 export interface ApplyMmdLightStateOptions {
   readonly target?: THREE.Vector3;
@@ -14,7 +14,7 @@ const defaultLightDirectionScratch = new THREE.Vector3();
 
 export function applyMmdLightStateToThreeDirectionalLight(
   light: THREE.DirectionalLight,
-  state: LightState | undefined,
+  state: MmdLightState | undefined,
   options: ApplyMmdLightStateOptions = {}
 ): THREE.DirectionalLight {
   if (!state) {

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { applyMorphOverrides, validateMorphOverrides } from "./morphOverrides.js";
 
-import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
+import type { MmdCameraState, MmdLightState, MmdAnimation } from "../parser/model/modelTypes.js";
 import type { MmdPhysicsBackend } from "../physics/index.js";
 import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./sceneTrackSampling.js";
 import { DefaultMmdRuntime } from "./core.js";
@@ -88,7 +88,7 @@ export interface MmdAnimRuntimeOptions {
 }
 
 /**
- * Experimental runtime adapter for the mmd-anim WASM evaluator.
+ * Default runtime for PMX models loaded by ThreeMmdLoader, backed by the mmd-anim WASM evaluator.
  *
  * The adapter intentionally accepts structural wasm types instead of importing
  * a package name, so local harness builds and future published artifacts can be
@@ -123,7 +123,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   private readonly scratchLocalMatrix = new THREE.Matrix4();
   private readonly scratchParentInverseMatrix = new THREE.Matrix4();
   private readonly scratchParentBoneIndices: number[] = [];
-  private readonly scratchCameraState: CameraState = {
+  private readonly scratchCameraState: MmdCameraState = {
     distance: 0,
     position: [0, 0, 0],
     rotation: [0, 0, 0],
@@ -132,7 +132,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   };
   private readonly scratchCameraSample = new Float32Array(9);
   private readonly scratchCameraFrameHint = { index: 0 };
-  private readonly scratchLightState: LightState = {
+  private readonly scratchLightState: MmdLightState = {
     color: [0, 0, 0],
     direction: [0, 0, 0]
   };
@@ -419,7 +419,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     this._restPoseDirty = true;
   }
 
-  cameraState(): CameraState | undefined {
+  cameraState(): MmdCameraState | undefined {
     if (this.parsedTrackRuntime) {
       return this.parsedTrackRuntime.cameraState();
     }
@@ -444,7 +444,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     );
   }
 
-  lightState(): LightState | undefined {
+  lightState(): MmdLightState | undefined {
     if (this.parsedTrackRuntime) {
       return this.parsedTrackRuntime.lightState();
     }

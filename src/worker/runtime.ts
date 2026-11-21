@@ -1,6 +1,6 @@
 import { DefaultMmdRuntime } from "../runtime/core.js";
 import type {
-  DefaultMmdRuntimeOptions,
+  MmdRuntimeOptions,
   MmdFrameState,
   MmdRuntime,
   MmdRuntimeAsyncTickOptions,
@@ -8,7 +8,7 @@ import type {
   MmdRuntimeEvaluateOptions,
   MmdRuntimeTickOptions
 } from "../runtime/types.js";
-import type { MmdAnimation, CameraState, LightState } from "../parser/model/modelTypes.js";
+import type { MmdAnimation, MmdCameraState, MmdLightState } from "../parser/model/modelTypes.js";
 import type * as THREE from "three";
 import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "../runtime/sceneTrackSampling.js";
 import type { ThreeMmdRuntimeFactoryContext } from "../three/index.js";
@@ -70,14 +70,14 @@ const emptyDebugState = {
  */
 export class WorkerMmdRuntime implements MmdRuntime {
   private readonly mesh: ThreeMmdRuntimeFactoryContext["mesh"];
-  private readonly runtimeOptions: DefaultMmdRuntimeOptions;
+  private readonly runtimeOptions: MmdRuntimeOptions;
   private readonly applyScratch: MmdRuntimePoseApplyScratch;
   private readonly frameStateScratch: MutableFrameState = {
     seconds: 0,
     frame: 0,
     frameRate: 30
   };
-  private readonly cameraStateScratch: CameraState = {
+  private readonly cameraStateScratch: MmdCameraState = {
     distance: 0,
     position: [0, 0, 0],
     rotation: [0, 0, 0],
@@ -85,7 +85,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     perspective: true
   };
   private readonly cameraFrameHint = { index: 0 };
-  private readonly lightStateScratch: LightState = {
+  private readonly lightStateScratch: MmdLightState = {
     color: [0, 0, 0],
     direction: [0, 0, 0]
   };
@@ -364,7 +364,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     this.post(this.clearAnimationCommand as MmdRuntimeWorkerCommand);
   }
 
-  cameraState(): CameraState | undefined {
+  cameraState(): MmdCameraState | undefined {
     if (this.fallbackRuntime) {
       return this.fallbackRuntime.cameraState();
     }
@@ -372,7 +372,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     return frames ? sampleMmdCameraTrackInto(frames, this.frameStateScratch.frame, this.cameraStateScratch, this.cameraFrameHint) : undefined;
   }
 
-  lightState(): LightState | undefined {
+  lightState(): MmdLightState | undefined {
     if (this.fallbackRuntime) {
       return this.fallbackRuntime.lightState();
     }

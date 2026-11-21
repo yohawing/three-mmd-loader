@@ -98,12 +98,12 @@ function detectModelFormat
   (bytes: Uint8Array<ArrayBufferLike>): MmdModelFormat
 function detectStandardBones
   (bones: readonly BoneData[]): StandardBoneDetectionResult
-interface Diagnostic
-  category?: DiagnosticCategory | undefined
+type Diagnostic  @deprecated
+  category?: MmdDiagnosticCategory | undefined
   code: string
   level: "warning" | "error"
   message: string
-type DiagnosticCategory
+type DiagnosticCategory  @deprecated
   = "material" | "morph" | "skeleton" | "physics" | "texture" | "accessory" | "project" | "core"
 interface DisplayFrameData
   englishName: string
@@ -244,6 +244,13 @@ interface MmdCore
   version(): string
 type MmdCoreModelFormat
   = "pmx" | "pmd" | "auto"
+interface MmdDiagnostic
+  category?: MmdDiagnosticCategory | undefined
+  code: string
+  level: "warning" | "error"
+  message: string
+type MmdDiagnosticCategory
+  = "material" | "morph" | "skeleton" | "physics" | "texture" | "accessory" | "project" | "core"
 interface MmdModel
   displayFrames(): DisplayFrameData[]
   dispose?(): void
@@ -272,11 +279,14 @@ interface MmdPoseMetadata
   boneCount: number
   modelFile: string
   morphCount: number
+interface MmdSelfShadowState
+  distance: number
+  mode: number
 interface ModelMetadata
   additionalUvCount: number
   comment: string
   counts: { vertices: number; faces: number; materials: number; bones: number; morphs: number; displayFrames: number; rigidBodies: number; joints: number; softBodies: number; }
-  diagnostics: Diagnostic[]
+  diagnostics: MmdDiagnostic[]
   encoding: "unknown" | "utf-8" | "utf-16-le" | "shift-jis"
   englishComment: string
   englishName: string
@@ -1082,7 +1092,7 @@ interface SdefGeometryBuffers
   r1: Float32Array<ArrayBufferLike>
   rw0: Float32Array<ArrayBufferLike>
   rw1: Float32Array<ArrayBufferLike>
-interface SelfShadowState
+type SelfShadowState  @deprecated
   distance: number
   mode: number
 interface SkeletonData
@@ -1238,7 +1248,7 @@ function vpdPoseToAnimation
   (pose: MmdPose, name?: string): MmdAnimation
 
 ## ./runtime
-interface CameraState
+type CameraState  @deprecated
   distance: number
   fov: number
   perspective: boolean
@@ -1304,21 +1314,21 @@ function createMmdAnimWasmCameraTrack
 function createMmdAnimWasmLightTrack
   (wasm: Pick<MmdAnimRuntimeWasmModule, "WasmVmdLightTrack">, bytes: Uint8Array<ArrayBufferLike>): MmdAnimRuntimeWasmLightTrack | undefined
 class DefaultMmdRuntime
-  new (options?: DefaultMmdRuntimeOptions): DefaultMmdRuntime
-  cameraState(): CameraState | undefined
+  new (options?: MmdRuntimeOptions): DefaultMmdRuntime
+  cameraState(): MmdCameraState | undefined
   clearAnimation(): void
   debugRigidBodyWorldTransformsColumnMajor(): readonly (readonly number[])[]
   debugState(): MmdRuntimeDebugState
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState
   frameState(): MmdFrameState
-  lightState(): LightState | undefined
+  lightState(): MmdLightState | undefined
   reset(seconds?: number): MmdFrameState  @deprecated
   resetPose(): void
   seek(seconds: number): MmdFrameState
   setAnimation(animation: MmdAnimation, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>): void
   tick(seconds: number, options?: MmdRuntimeTickOptions | undefined): MmdFrameState
   tick(seconds: number, mesh: Object3D<Object3DEventMap> | null | undefined, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState  @deprecated
-interface DefaultMmdRuntimeOptions
+type DefaultMmdRuntimeOptions  @deprecated
   readonly frameRate?: number | undefined
   readonly ikMaxIterationsCap?: number | undefined
   readonly ikTolerance?: number | undefined
@@ -1331,7 +1341,7 @@ function exportMmdAnimWasmVmdAnimationJsonBytes
   (wasm: Pick<MmdAnimRuntimeWasmModule, "exportVmdAnimationJsonBytes">, json: string): Uint8Array<ArrayBufferLike>
 function exportMmdAnimWasmVpdPoseJsonBytes
   (wasm: Pick<MmdAnimRuntimeWasmModule, "exportVpdPoseJsonBytes">, json: string): Uint8Array<ArrayBufferLike>
-interface LightState
+type LightState  @deprecated
   color: [number, number, number]
   direction: [number, number, number]
 function loadMmdAnimWasmVmd
@@ -1340,7 +1350,7 @@ function loadMmdAnimWasmVpd
   (wasm: Pick<MmdAnimRuntimeWasmModule, "parseMmdFormatJson">, bytes: Uint8Array<ArrayBufferLike>, fileName?: string | null | undefined): MmdPose
 class MmdAnimRuntime
   new (options: MmdAnimRuntimeOptions): MmdAnimRuntime
-  cameraState(): CameraState | undefined
+  cameraState(): MmdCameraState | undefined
   clearAnimation(): void
   clearHostRig(): void
   debugRigidBodyWorldTransformsColumnMajor(): readonly (readonly number[])[]
@@ -1348,7 +1358,7 @@ class MmdAnimRuntime
   dispose(): void
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState
   frameState(): MmdFrameState
-  lightState(): LightState | undefined
+  lightState(): MmdLightState | undefined
   reset(seconds?: number): MmdFrameState  @deprecated
   resetPose(): void
   seek(seconds: number): MmdFrameState
@@ -1420,6 +1430,12 @@ const mmdAnimWasmVmdDtoToAnimation  @deprecated
   : (dto: RuntimeWasmVmdDto, bytes?: Uint8Array<ArrayBuffer>) => MmdAnimation
 const mmdAnimWasmVpdDtoToPose  @deprecated
   : (dto: RuntimeWasmVpdDto, bytes?: Uint8Array<ArrayBuffer>) => MmdPose
+interface MmdCameraState
+  distance: number
+  fov: number
+  perspective: boolean
+  position: [number, number, number]
+  rotation: [number, number, number]
 interface MmdFrameState
   readonly frame: number
   readonly frameRate: number
@@ -1450,17 +1466,20 @@ type MmdIkRuntimeLink  @deprecated
   readonly boneIndex: number
   readonly enabled?: boolean | undefined
   readonly limitsKind?: "pmdKnee" | "pmxLinkLimit" | undefined
+interface MmdLightState
+  color: [number, number, number]
+  direction: [number, number, number]
 interface MmdMorphOverrides
   readonly indices: Uint32Array<ArrayBufferLike>
   readonly weights: Float32Array<ArrayBufferLike>
 interface MmdRuntime
-  cameraState(): CameraState | undefined
+  cameraState(): MmdCameraState | undefined
   clearAnimation(): void
   debugRigidBodyWorldTransformsColumnMajor?(): readonly (readonly number[])[]
   debugState(): MmdRuntimeDebugState
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState
   frameState(): MmdFrameState
-  lightState(): LightState | undefined
+  lightState(): MmdLightState | undefined
   reset(seconds?: number | undefined): MmdFrameState  @deprecated
   resetPose(): void
   seek(seconds: number): MmdFrameState
@@ -1489,11 +1508,21 @@ interface MmdRuntimeEvaluateOptions
   readonly ik?: boolean | undefined
   readonly morphOverrides?: MmdMorphOverrides | undefined
   readonly physics?: boolean | undefined
+interface MmdRuntimeOptions
+  readonly frameRate?: number | undefined
+  readonly ikMaxIterationsCap?: number | undefined
+  readonly ikTolerance?: number | undefined
+  readonly initialSeconds?: number | undefined
+  readonly physics?: "none" | "stateful-spring" | "external" | undefined
+  readonly physicsBackend?: MmdPhysicsBackend | undefined
 interface MmdRuntimeTickOptions
   readonly ik?: boolean | undefined
   readonly mesh?: Object3D<Object3DEventMap> | null | undefined
   readonly morphOverrides?: MmdMorphOverrides | undefined
   readonly physics?: boolean | undefined
+interface MmdSelfShadowState
+  distance: number
+  mode: number
 type MutableQuatTuple  @deprecated
   = [number, number, number, number]
 function parseMmdAnimWasmFormatJson
@@ -1501,22 +1530,22 @@ function parseMmdAnimWasmFormatJson
 type QuatTuple  @deprecated
   = readonly [number, number, number, number]
 function sampleMmdAnimWasmCameraTrackInto
-  (track: MmdAnimRuntimeWasmCameraTrack, frame: number, scratch: Float32Array<ArrayBufferLike>, target: CameraState): CameraState
+  (track: MmdAnimRuntimeWasmCameraTrack, frame: number, scratch: Float32Array<ArrayBufferLike>, target: MmdCameraState): MmdCameraState
 function sampleMmdAnimWasmLightTrackInto
-  (track: MmdAnimRuntimeWasmLightTrack, frame: number, scratch: Float32Array<ArrayBufferLike>, target: LightState): LightState
+  (track: MmdAnimRuntimeWasmLightTrack, frame: number, scratch: Float32Array<ArrayBufferLike>, target: MmdLightState): MmdLightState
 function sampleMmdCameraTrack
-  (frames: readonly VmdCameraFrame[], frame: number): CameraState | undefined
+  (frames: readonly VmdCameraFrame[], frame: number): MmdCameraState | undefined
 function sampleMmdCameraTrackInto
-  (frames: readonly VmdCameraFrame[], frame: number, target: CameraState, hint?: { index: number; } | undefined): CameraState | undefined
+  (frames: readonly VmdCameraFrame[], frame: number, target: MmdCameraState, hint?: { index: number; } | undefined): MmdCameraState | undefined
 function sampleMmdLightTrack
-  (frames: readonly VmdLightFrame[], frame: number): LightState | undefined
+  (frames: readonly VmdLightFrame[], frame: number): MmdLightState | undefined
 function sampleMmdLightTrackInto
-  (frames: readonly VmdLightFrame[], frame: number, target: LightState): LightState | undefined
+  (frames: readonly VmdLightFrame[], frame: number, target: MmdLightState): MmdLightState | undefined
 function sampleMmdSelfShadowTrack
-  (frames: readonly VmdSelfShadowFrame[], frame: number): SelfShadowState | undefined
+  (frames: readonly VmdSelfShadowFrame[], frame: number): MmdSelfShadowState | undefined
 function sampleMmdSelfShadowTrackInto
-  (frames: readonly VmdSelfShadowFrame[], frame: number, target: SelfShadowState, hint?: { index: number; } | undefined): SelfShadowState | undefined
-interface SelfShadowState
+  (frames: readonly VmdSelfShadowFrame[], frame: number, target: MmdSelfShadowState, hint?: { index: number; } | undefined): MmdSelfShadowState | undefined
+type SelfShadowState  @deprecated
   distance: number
   mode: number
 type Vec3Tuple  @deprecated
@@ -1554,14 +1583,14 @@ interface ApplyMmdCameraStateOptions
   readonly target?: Vector3 | undefined
   readonly up?: Vector3 | undefined
 function applyMmdCameraStateToThreeCamera
-  (camera: PerspectiveCamera, state: CameraState, options?: ApplyMmdCameraStateOptions | undefined): OrthographicCamera | PerspectiveCamera
+  (camera: PerspectiveCamera, state: MmdCameraState, options?: ApplyMmdCameraStateOptions | undefined): OrthographicCamera | PerspectiveCamera
 interface ApplyMmdLightStateOptions
   readonly colorScale?: number | undefined
   readonly directionScratch?: Vector3 | undefined
   readonly distance?: number | undefined
   readonly target?: Vector3 | undefined
 function applyMmdLightStateToThreeDirectionalLight
-  (light: DirectionalLight, state: LightState | undefined, options?: ApplyMmdLightStateOptions): DirectionalLight
+  (light: DirectionalLight, state: MmdLightState | undefined, options?: ApplyMmdLightStateOptions): DirectionalLight
 interface ApplyMmdSelfShadowStateOptions
   readonly distanceScale?: number | undefined
   readonly enabledModes?: readonly number[] | undefined
@@ -1569,7 +1598,7 @@ interface ApplyMmdSelfShadowStateOptions
   readonly minFar?: number | undefined
   readonly shadowIntensity?: number | undefined
 function applyMmdSelfShadowStateToThreeDirectionalLight
-  (light: DirectionalLight, state: SelfShadowState | undefined, options?: ApplyMmdSelfShadowStateOptions | undefined): DirectionalLight
+  (light: DirectionalLight, state: MmdSelfShadowState | undefined, options?: ApplyMmdSelfShadowStateOptions | undefined): DirectionalLight
 function applyThreeMmdMaterialTextures
   (threeMaterials: readonly MeshToonMaterial[], mmdMaterials: readonly MaterialInfo[], options?: ThreeMmdMaterialTextureOptions): Promise<TextureLoadDiagnostic[]>
 const attachMmdMaterialFactors  @deprecated
@@ -1750,7 +1779,7 @@ type MmdQdefSkinningInput  @deprecated
   readonly boneMatrices: readonly [Matrix4, Matrix4, Matrix4, Matrix4]
   readonly position: Vector3
   readonly skinWeights: readonly [number, number, number, number]
-interface MmdRuntimeMeshSyncSource
+type MmdRuntimeMeshSyncSource  @deprecated
   boneMatrices(): Float32Array<ArrayBufferLike>
   materialStates(): readonly MaterialRuntimeState[]
   morphWeights(): Float32Array<ArrayBufferLike>
@@ -1816,10 +1845,10 @@ const syncMmdOutlineMaterialStates  @deprecated
   : (materials: Material<MaterialEventMap> | Material<MaterialEventMap>[], states: readonly MaterialRuntimeState[]) => void
 function syncMmdSpecularDirection
   (material: Material<MaterialEventMap> | Material<MaterialEventMap>[], lightDirection: Vector3 | DirectionalLight): void
-function syncThreeMmdRuntimeToMesh
-  (model: Pick<MmdModel, "skeleton">, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>, runtime: MmdRuntimeMeshSyncSource, outlineMeshes?: readonly SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>[] | undefined, renderOrderMeshes?: readonly SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>[] | undefined): void
-function syncThreeMmdRuntimeToModel
-  (model: Pick<MmdModel, "skeleton">, target: ThreeMmdRuntimeSyncTarget, runtime: MmdRuntimeMeshSyncSource): void
+const syncThreeMmdRuntimeToMesh  @deprecated
+  : (model: Pick<MmdModel, "skeleton">, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>, runtime: MmdRuntimeMeshSyncSource, outlineMeshes?: readonly SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>[] | undefined, renderOrderMeshes?: readonly SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>[] | undefined) => void
+const syncThreeMmdRuntimeToModel  @deprecated
+  : (model: Pick<MmdModel, "skeleton">, target: ThreeMmdRuntimeSyncTarget, runtime: MmdRuntimeMeshSyncSource) => void
 interface TextureLoadDiagnostic
   readonly code: "TEXTURE_FORMAT_UNSUPPORTED" | "TEXTURE_RESOLVE_FAILED" | "SPHERE_MAP_NOT_SUPPORTED"
   readonly level: "warning"
@@ -1885,7 +1914,7 @@ interface ThreeMmdLoaderOptions
   readonly geometryAwareAlpha?: boolean | undefined
   readonly onCoreFallback?: ((event: ThreeMmdCoreFallbackEvent) => void) | undefined
   readonly performance?: boolean | LoaderPerformanceOptions | undefined
-  readonly runtime?: DefaultMmdRuntimeOptions | undefined
+  readonly runtime?: MmdRuntimeOptions | undefined
   readonly runtimeFactory?: ((context: ThreeMmdRuntimeFactoryContext) => MmdRuntime) | undefined
   readonly textureLoader?: ThreeMmdTextureLoader | undefined
   readonly textureMap?: TextureMap | undefined
@@ -1946,7 +1975,7 @@ interface ThreeMmdRuntimeFactoryContext
   readonly mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>
   readonly modelBytes: Uint8Array<ArrayBufferLike>
   readonly source: ThreeMmdModelSourceDescriptor
-interface ThreeMmdRuntimeSyncTarget
+type ThreeMmdRuntimeSyncTarget  @deprecated
   readonly mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>
   readonly outlineMeshes?: readonly SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>[] | undefined
   readonly renderOrderMeshes?: readonly SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>[] | undefined
@@ -2577,7 +2606,7 @@ const+type MmdRuntimeTransferablePosePool  @deprecated
   availableCount(): number
   release(pose: MmdRuntimePoseBuffer): boolean
 type MmdRuntimeWorkerCommand
-  = { readonly type: "init"; readonly descriptor: MmdRuntimeModelDescriptor; readonly runtimeOptions?: Omit<DefaultMmdRuntimeOptions, "physicsBackend"> | undefined; readonly sharedPoseSlots?: readonly MmdRuntimeSharedPoseSlot[] | undefined; readonly externalPhysics?: CustomBulletWorkerPhysicsConfig | undefined; } | { readonly type: "setAnimation"; readonly epoch: number; readonly animation: MmdAnimation; } | { readonly type: "tick"; readonly epoch: number; readonly seconds: number; readonly options?: MmdRuntimeEvaluateOptions | undefined; readonly requestId?: number | undefined; } | { readonly type: "seek"; readonly epoch: number; readonly seconds: number; } | { readonly type: "resetPose"; readonly epoch: number; } | { readonly type: "clearAnimation"; readonly epoch: number; } | { readonly type: "recycle"; readonly pose: MmdRuntimePoseBuffer; } | { readonly type: "sharedRelease"; } | { readonly type: "dispose"; }
+  = { readonly type: "init"; readonly descriptor: MmdRuntimeModelDescriptor; readonly runtimeOptions?: Omit<MmdRuntimeOptions, "physicsBackend"> | undefined; readonly sharedPoseSlots?: readonly MmdRuntimeSharedPoseSlot[] | undefined; readonly externalPhysics?: CustomBulletWorkerPhysicsConfig | undefined; } | { readonly type: "setAnimation"; readonly epoch: number; readonly animation: MmdAnimation; } | { readonly type: "tick"; readonly epoch: number; readonly seconds: number; readonly options?: MmdRuntimeEvaluateOptions | undefined; readonly requestId?: number | undefined; } | { readonly type: "seek"; readonly epoch: number; readonly seconds: number; } | { readonly type: "resetPose"; readonly epoch: number; } | { readonly type: "clearAnimation"; readonly epoch: number; } | { readonly type: "recycle"; readonly pose: MmdRuntimePoseBuffer; } | { readonly type: "sharedRelease"; } | { readonly type: "dispose"; }
 type MmdRuntimeWorkerCommandEnvelope  @deprecated
   readonly command: MmdRuntimeWorkerCommand
   readonly runtimeId: number
@@ -2615,7 +2644,7 @@ const+type MmdRuntimeWorkerHost  @deprecated
   setAnimation(animation: MmdAnimation): MmdRuntimePoseBuffer
 type MmdRuntimeWorkerHostOptions  @deprecated
   readonly runtime?: MmdRuntime | undefined
-  readonly runtimeOptions?: DefaultMmdRuntimeOptions | undefined
+  readonly runtimeOptions?: MmdRuntimeOptions | undefined
 interface MmdRuntimeWorkerLease
   dispose(): void
   readonly generation: number
@@ -2671,13 +2700,13 @@ const serializeMmdRuntimeModelDescriptor  @deprecated
   : (mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>) => MmdRuntimeModelDescriptor
 class WorkerMmdRuntime
   new (context: ThreeMmdRuntimeFactoryContext, options?: WorkerMmdRuntimeOptions): WorkerMmdRuntime
-  cameraState(): CameraState | undefined
+  cameraState(): MmdCameraState | undefined
   clearAnimation(): void
   debugState(): MmdRuntimeDebugState
   dispose(): void
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState
   frameState(): MmdFrameState
-  lightState(): LightState | undefined
+  lightState(): MmdLightState | undefined
   poseAgeFrames(): number
   poseAgeSeconds(): number
   reset(seconds?: number): MmdFrameState  @deprecated
@@ -2699,7 +2728,7 @@ type WorkerMmdRuntimeFactoryOptions  @deprecated
   readonly onFallback?: ((error: unknown) => void) | undefined
   readonly pool?: MmdRuntimeWorkerPool | undefined
   readonly poolSize?: number | undefined
-  readonly runtimeOptions?: DefaultMmdRuntimeOptions | undefined
+  readonly runtimeOptions?: MmdRuntimeOptions | undefined
   readonly sharedMemory?: "auto" | "required" | "disabled" | undefined
   readonly workerFactory?: ((context: ThreeMmdRuntimeFactoryContext) => MmdRuntimeWorkerLike) | undefined
   readonly workerOptions?: WorkerOptions | undefined
@@ -2710,7 +2739,7 @@ interface WorkerMmdRuntimeOptions
   readonly onFallback?: ((error: unknown) => void) | undefined
   readonly pool?: MmdRuntimeWorkerPool | undefined
   readonly poolSize?: number | undefined
-  readonly runtimeOptions?: DefaultMmdRuntimeOptions | undefined
+  readonly runtimeOptions?: MmdRuntimeOptions | undefined
   readonly sharedMemory?: "auto" | "required" | "disabled" | undefined
   readonly workerFactory?: ((context: ThreeMmdRuntimeFactoryContext) => MmdRuntimeWorkerLike) | undefined
   readonly workerOptions?: WorkerOptions | undefined

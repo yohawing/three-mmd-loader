@@ -1,7 +1,7 @@
 import type { MmdAnimation } from "../parser/model/modelTypes.js";
 import { DefaultMmdRuntime } from "../runtime/core.js";
 import type {
-  DefaultMmdRuntimeOptions,
+  MmdRuntimeOptions,
   MmdFrameState,
   MmdRuntime,
   MmdRuntimeDebugState,
@@ -19,7 +19,7 @@ import {
 
 export interface MmdRuntimeWorkerHostOptions {
   readonly runtime?: MmdRuntime;
-  readonly runtimeOptions?: DefaultMmdRuntimeOptions;
+  readonly runtimeOptions?: MmdRuntimeOptions;
 }
 
 /**

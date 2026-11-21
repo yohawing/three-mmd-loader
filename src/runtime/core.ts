@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { validateMorphOverrides } from "./morphOverrides.js";
-import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
+import type { MmdCameraState, MmdLightState, MmdAnimation } from "../parser/model/modelTypes.js";
 import type { MmdPhysicsBackend } from "../physics/index.js";
 import {
   applyMmdAnimation,
@@ -28,7 +28,7 @@ import { StatefulSpringPhysicsSimulation, readRuntimeExternalPhysics, readRuntim
 import { captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStages } from "./debugState.js";
 import { createPhysicsResetContext } from "./physicsPose.js";
 import { ExternalPhysicsStepper } from "./externalPhysicsStepper.js";
-import type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeRestTransform } from "./types.js";
+import type { MmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeRestTransform } from "./types.js";
 import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
 import { ensureTuple3ScratchLength } from "./defaultPhysics.js";
 import { copyFrameStateInto, createFrameState, writeFrameState } from "./frameState.js";
@@ -94,7 +94,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   };
   private readonly scratchSingleIkChain: CcdIkPreparedChain[] = [];
   private readonly scratchChangedIkBoneIndices = new Set<number>();
-  private readonly scratchCameraState: CameraState = {
+  private readonly scratchCameraState: MmdCameraState = {
     distance: 0,
     position: [0, 0, 0],
     rotation: [0, 0, 0],
@@ -102,13 +102,13 @@ export class DefaultMmdRuntime implements MmdRuntime {
     perspective: true
   };
   private readonly scratchCameraFrameHint = { index: 0 };
-  private readonly scratchLightState: LightState = {
+  private readonly scratchLightState: MmdLightState = {
     color: [0, 0, 0],
     direction: [0, 0, 0]
   };
   private readonly scratchStatefulSpringTranslations: Array<[number, number, number]> = [];
 
-  constructor(options: DefaultMmdRuntimeOptions = {}) {
+  constructor(options: MmdRuntimeOptions = {}) {
     this.frameRate = normalizeFrameRate(options.frameRate ?? 30);
     this.physicsMode = options.physics ?? "none";
     this.physicsBackend = options.physicsBackend;
@@ -200,7 +200,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.scratchCameraFrameHint.index = 0;
   }
 
-  cameraState(): CameraState | undefined {
+  cameraState(): MmdCameraState | undefined {
     const frames = this.mmdAnimation?.cameraFrames;
     if (!frames || frames.length === 0) {
       this.scratchCameraFrameHint.index = 0;
@@ -214,7 +214,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     );
   }
 
-  lightState(): LightState | undefined {
+  lightState(): MmdLightState | undefined {
     const frames = this.mmdAnimation?.lightFrames;
     if (!frames || frames.length === 0) {
       return undefined;

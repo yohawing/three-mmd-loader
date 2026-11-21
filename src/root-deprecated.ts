@@ -143,15 +143,12 @@ import {
   createThreeMmdMaterials as createThreeMmdMaterials_,
   createThreeMorphSplitGeometries as createThreeMorphSplitGeometries_,
   createThreeSkeleton as createThreeSkeleton_,
-  type MmdRuntimeMeshSyncSource as MmdRuntimeMeshSyncSource_,
   type MmdWorldMatrixBuffer as MmdWorldMatrixBuffer_,
   type MmdWorldMatrixColumnMajorTuple as MmdWorldMatrixColumnMajorTuple_,
   mmdWorldMatrixToThree as mmdWorldMatrixToThree_,
   resolveMappedTexture as resolveMappedTexture_,
   syncMmdMaterialStates as syncMmdMaterialStates_,
   syncMmdModelShadowFlags as syncMmdModelShadowFlags_,
-  syncThreeMmdRuntimeToMesh as syncThreeMmdRuntimeToMesh_,
-  syncThreeMmdRuntimeToModel as syncThreeMmdRuntimeToModel_,
   type ThreeMmdAdditionalUvMorphOffset as ThreeMmdAdditionalUvMorphOffset_,
   type ThreeMmdGeometryBuffers as ThreeMmdGeometryBuffers_,
   type ThreeMmdGeometryMaterial as ThreeMmdGeometryMaterial_,
@@ -161,7 +158,6 @@ import {
   type ThreeMmdMaterialTextureOptions as ThreeMmdMaterialTextureOptions_,
   type ThreeMmdMorphSplitGeometry as ThreeMmdMorphSplitGeometry_,
   type ThreeMmdQdefBuffers as ThreeMmdQdefBuffers_,
-  type ThreeMmdRuntimeSyncTarget as ThreeMmdRuntimeSyncTarget_,
   type ThreeMmdSdefBuffers as ThreeMmdSdefBuffers_,
   type ThreeMmdSkeletonBone as ThreeMmdSkeletonBone_,
   type ThreeMmdSkeletonData as ThreeMmdSkeletonData_,
@@ -624,9 +620,6 @@ export const createThreeMorphSplitGeometries = createThreeMorphSplitGeometries_;
 export const createThreeSkeleton = createThreeSkeleton_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
-export type MmdRuntimeMeshSyncSource = MmdRuntimeMeshSyncSource_;
-
-/** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
 export type MmdWorldMatrixBuffer = MmdWorldMatrixBuffer_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
@@ -643,12 +636,6 @@ export const syncMmdMaterialStates = syncMmdMaterialStates_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
 export const syncMmdModelShadowFlags = syncMmdModelShadowFlags_;
-
-/** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
-export const syncThreeMmdRuntimeToMesh = syncThreeMmdRuntimeToMesh_;
-
-/** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
-export const syncThreeMmdRuntimeToModel = syncThreeMmdRuntimeToModel_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
 export type ThreeMmdAdditionalUvMorphOffset = ThreeMmdAdditionalUvMorphOffset_;
@@ -676,9 +663,6 @@ export type ThreeMmdMorphSplitGeometry = ThreeMmdMorphSplitGeometry_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
 export type ThreeMmdQdefBuffers = ThreeMmdQdefBuffers_;
-
-/** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
-export type ThreeMmdRuntimeSyncTarget = ThreeMmdRuntimeSyncTarget_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
 export type ThreeMmdSdefBuffers = ThreeMmdSdefBuffers_;

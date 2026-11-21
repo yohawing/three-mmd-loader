@@ -1,4 +1,4 @@
-import type { Diagnostic } from "./modelTypes.js";
+import type { MmdDiagnostic } from "./modelTypes.js";
 
 const fallbackNormal: readonly [number, number, number] = [0, 1, 0];
 const normalEpsilon = 1e-12;
@@ -7,7 +7,7 @@ export function sanitizeNonFiniteModelNormals(
   positions: Float32Array,
   normals: Float32Array,
   indices: Uint16Array | Uint32Array,
-  diagnostics: Diagnostic[]
+  diagnostics: MmdDiagnostic[]
 ): void {
   const vertexCount = positions.length / 3;
   if (normals.length !== positions.length || vertexCount === 0) {

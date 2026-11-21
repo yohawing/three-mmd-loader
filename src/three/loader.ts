@@ -11,7 +11,7 @@ import {
   type MmdAnimRuntimeWasmModule,
   type MmdAnimRuntimeWasmCameraTrack,
   type MmdAnimRuntimeWasmLightTrack,
-  type DefaultMmdRuntimeOptions,
+  type MmdRuntimeOptions,
   type MmdRuntime
 } from "../runtime/index.js";
 import { createLoaderMmdModelDataFromModel } from "./modelAssembly.js";
@@ -395,7 +395,7 @@ function formatDiagnosticReason(error: unknown): string {
 }
 
 function normalizeMmdAnimRuntimeOptions(
-  options: DefaultMmdRuntimeOptions | undefined
+  options: MmdRuntimeOptions | undefined
 ): Parameters<typeof MmdAnimRuntime.fromPmxBytes>[2] {
   return {
     frameRate: options?.frameRate,

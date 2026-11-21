@@ -28,4 +28,4 @@ description: 再生時刻の評価と状態取得を使い分けます。
 
 `MmdAnimRuntime`はmmd-animのWASMを使い、`DefaultMmdRuntime`はTypeScript側の実装です。全てのモデルや機能で同一の結果を保証するものではありません。独自実装を使う場合は、ローダーの`runtimeFactory(context)`から`MmdRuntime`を返します。Workerへの移行は[Worker API](/api/worker)を参照してください。
 
-[Runtimeの全API](/api/reference/runtime) / [MmdRuntime](/api/reference/runtime/interfaces/MmdRuntime) / [設定](/api/reference/runtime/interfaces/DefaultMmdRuntimeOptions)
+[Runtimeの全API](/api/reference/runtime) / [MmdRuntime](/api/reference/runtime/interfaces/MmdRuntime) / [設定](/api/reference/runtime/interfaces/MmdRuntimeOptions)

@@ -1,4 +1,4 @@
-import type { DefaultMmdRuntimeOptions } from "../runtime/types.js";
+import type { MmdRuntimeOptions } from "../runtime/types.js";
 import type { ThreeMmdRuntimeFactoryContext } from "../three/index.js";
 import type {
   MmdRuntimeWorkerCommand,
@@ -24,7 +24,7 @@ export interface WorkerMmdRuntimeOptions {
   ) => MmdRuntimeWorkerLike;
   readonly workerUrl?: string | URL;
   readonly workerOptions?: WorkerOptions;
-  readonly runtimeOptions?: DefaultMmdRuntimeOptions;
+  readonly runtimeOptions?: MmdRuntimeOptions;
   readonly onFallback?: (error: unknown) => void;
   /** Allows a failed worker to continue through an equivalent inline runtime. Defaults to true. */
   readonly fallback?: boolean;
@@ -53,8 +53,8 @@ export function createDefaultWorker(options: WorkerMmdRuntimeOptions): MmdRuntim
 }
 
 export function workerRuntimeOptions(
-  options: DefaultMmdRuntimeOptions
-): Omit<DefaultMmdRuntimeOptions, "physicsBackend"> {
+  options: MmdRuntimeOptions
+): Omit<MmdRuntimeOptions, "physicsBackend"> {
   return {
     frameRate: options.frameRate,
     initialSeconds: options.initialSeconds,

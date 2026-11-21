@@ -36,10 +36,10 @@ export interface ModelMetadata {
     rigidBody: number;
   };
   additionalUvCount: number;
-  diagnostics: Diagnostic[];
+  diagnostics: MmdDiagnostic[];
 }
 
-export type DiagnosticCategory =
+export type MmdDiagnosticCategory =
   | "material"
   | "morph"
   | "skeleton"
@@ -49,11 +49,11 @@ export type DiagnosticCategory =
   | "project"
   | "core";
 
-export interface Diagnostic {
+export interface MmdDiagnostic {
   level: "warning" | "error";
   code: string;
   message: string;
-  category?: DiagnosticCategory;
+  category?: MmdDiagnosticCategory;
 }
 
 export interface GeometryBuffers {
@@ -505,7 +505,7 @@ export interface VmdSelfShadowFrame {
   distance: number;
 }
 
-export interface SelfShadowState {
+export interface MmdSelfShadowState {
   mode: number;
   distance: number;
 }
@@ -522,7 +522,7 @@ export interface VmdIkState {
   enabled: boolean;
 }
 
-export interface CameraState {
+export interface MmdCameraState {
   distance: number;
   position: [number, number, number];
   rotation: [number, number, number];
@@ -530,7 +530,7 @@ export interface CameraState {
   perspective: boolean;
 }
 
-export interface LightState {
+export interface MmdLightState {
   color: [number, number, number];
   direction: [number, number, number];
 }
@@ -569,3 +569,18 @@ export interface MmdCore {
   loadVpd(bytes: ArrayBuffer | Uint8Array): MmdPose;
   loadVpdAnimation(bytes: ArrayBuffer | Uint8Array, name?: string): MmdAnimation;
 }
+
+/** @deprecated Use MmdCameraState. */
+export type CameraState = MmdCameraState;
+
+/** @deprecated Use MmdLightState. */
+export type LightState = MmdLightState;
+
+/** @deprecated Use MmdSelfShadowState. */
+export type SelfShadowState = MmdSelfShadowState;
+
+/** @deprecated Use MmdDiagnostic. */
+export type Diagnostic = MmdDiagnostic;
+
+/** @deprecated Use MmdDiagnosticCategory. */
+export type DiagnosticCategory = MmdDiagnosticCategory;

@@ -26,11 +26,7 @@ export type {
   MmdMaterialTransparencyReason
 } from "./material/material-texture-set.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
-export {
-  mmdWorldMatrixToThree,
-  syncThreeMmdRuntimeToMesh,
-  syncThreeMmdRuntimeToModel
-} from "./runtime-sync.js";
+export { mmdWorldMatrixToThree } from "./runtime-sync.js";
 export {
   applyMmdSelfShadowStateToThreeDirectionalLight,
   configureMmdSelfShadowDirectionalLight,
@@ -86,16 +82,16 @@ export type {
   LoaderPerformanceOptions
 } from "./performance.js";
 export type {
+  MmdRuntimeMeshSyncSource,
+  ThreeMmdRuntimeSyncTarget,
   ReadModelSourceOptions,
   ReadModelSourceResult,
   ThreeMmdSphereMappedToonMaterial,
   MmdToonTextureMaterial
 } from "./deprecated.js";
 export type {
-  MmdRuntimeMeshSyncSource,
   MmdWorldMatrixBuffer,
-  MmdWorldMatrixColumnMajorTuple,
-  ThreeMmdRuntimeSyncTarget
+  MmdWorldMatrixColumnMajorTuple
 } from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
 export type {
@@ -104,6 +100,8 @@ export type {
   TextureResolver
 } from "./textures.js";
 export {
+  syncThreeMmdRuntimeToMesh,
+  syncThreeMmdRuntimeToModel,
   attachMmdMaterialMetadata,
   computeMmdMaterialRenderOrder,
   materialTransparencyMode,

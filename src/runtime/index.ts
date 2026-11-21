@@ -42,7 +42,7 @@ export {
 } from "./mmdAnimWasm.js";
 export { loadMmdAnimWasmVmd, loadMmdAnimWasmVpd } from "./mmdAnimWasmParser.js";
 export { sampleMmdCameraTrack, sampleMmdCameraTrackInto, sampleMmdLightTrack, sampleMmdLightTrackInto, sampleMmdSelfShadowTrack, sampleMmdSelfShadowTrackInto } from "./sceneTrackSampling.js";
-export type { CameraState, LightState, SelfShadowState, VmdCameraFrame, VmdLightFrame, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
+export type { CameraState, MmdCameraState, LightState, MmdLightState, SelfShadowState, MmdSelfShadowState, VmdCameraFrame, VmdLightFrame, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
 export type { MmdAnimRuntimeOptions } from "./mmdAnimRuntime.js";
 export type {
   MmdAnimRuntimeWasmCameraTrack,
@@ -52,7 +52,7 @@ export type {
   MmdAnimRuntimeWasmModule,
   MmdAnimRuntimeWasmRuntimeInstance
 } from "./mmdAnimWasm.js";
-export type { MmdMorphOverrides, DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeAsyncEvaluateOptions, MmdRuntimeAsyncTickOptions, MmdRuntimeDebugStageState, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions } from "./types.js";
+export type { MmdMorphOverrides, DefaultMmdRuntimeOptions, MmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeAsyncEvaluateOptions, MmdRuntimeAsyncTickOptions, MmdRuntimeDebugStageState, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions } from "./types.js";
 
 // Deprecated in 0.9.0, removed in 1.0.0
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use loadMmdAnimWasmVmd. */

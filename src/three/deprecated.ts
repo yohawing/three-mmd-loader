@@ -1,3 +1,9 @@
+import {
+  syncThreeMmdRuntimeToMesh as syncThreeMmdRuntimeToMeshInternal,
+  syncThreeMmdRuntimeToModel as syncThreeMmdRuntimeToModelInternal,
+  type MmdRuntimeMeshSyncSource as MmdRuntimeMeshSyncSourceInternal,
+  type ThreeMmdRuntimeSyncTarget as ThreeMmdRuntimeSyncTargetInternal
+} from "./runtime-sync.js";
 import type { ReadModelSourceOptions as ReadModelSourceOptionsInternal } from "./modelSource.js";
 import type { ReadModelSourceResult as ReadModelSourceResultInternal } from "./modelSource.js";
 import type { ThreeMmdSphereMappedToonMaterial as ThreeMmdSphereMappedToonMaterialInternal } from "./materials.js";
@@ -133,3 +139,15 @@ export type ReadModelSourceResult = ReadModelSourceResultInternal;
 export type ThreeMmdSphereMappedToonMaterial = ThreeMmdSphereMappedToonMaterialInternal;
 /** @deprecated No replacement. Will be removed in 1.0.0. */
 export type MmdToonTextureMaterial = MmdToonTextureMaterialInternal;
+
+/** @deprecated No replacement. ThreeMmdModel.update and runtime.tick already synchronize the mesh. */
+export const syncThreeMmdRuntimeToMesh = syncThreeMmdRuntimeToMeshInternal;
+
+/** @deprecated No replacement. ThreeMmdModel.update and runtime.tick already synchronize the mesh. */
+export const syncThreeMmdRuntimeToModel = syncThreeMmdRuntimeToModelInternal;
+
+/** @deprecated No replacement. ThreeMmdModel.update and runtime.tick already synchronize the mesh. */
+export type MmdRuntimeMeshSyncSource = MmdRuntimeMeshSyncSourceInternal;
+
+/** @deprecated No replacement. ThreeMmdModel.update and runtime.tick already synchronize the mesh. */
+export type ThreeMmdRuntimeSyncTarget = ThreeMmdRuntimeSyncTargetInternal;

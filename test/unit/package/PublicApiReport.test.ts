@@ -11,10 +11,15 @@ describe("public API report", () => {
   it("matches the reviewed snapshot of every package entry point", async () => {
     const report: string = buildPublicApiReport();
     const keep = JSON.parse(readFileSync("scripts/root-entry-keep.json", "utf8")) as { values: string[], types: string[] };
+    const legacyTypes = ["CameraState", "DefaultMmdRuntimeOptions", "Diagnostic", "DiagnosticCategory", "LightState", "SelfShadowState"];
     const rows = report.split(/^## /m)[1].trim().split("\n").slice(1)
       .filter((line) => !line.includes("@deprecated")).map((line) => line.split(/\s+/));
     expect(rows.filter(([kind]) => !["type", "interface"].includes(kind)).map(([, name]) => name).sort()).toEqual(keep.values);
-    expect(rows.filter(([kind]) => ["type", "interface", "class", "const+type", "enum"].includes(kind)).map(([, name]) => name).sort()).toEqual(keep.types);
+    expect(rows.filter(([kind]) => ["type", "interface", "class", "const+type", "enum"].includes(kind)).map(([, name]) => name).sort()).toEqual(keep.types.filter((name) => !legacyTypes.includes(name)));
+    for (const name of legacyTypes) {
+      expect(keep.types).toContain(name);
+      expect(report.split(/^## /m)[1]).toMatch(new RegExp(`^type\\s+${name}\\s+@deprecated$`, "m"));
+    }
     await expect(report).toMatchFileSnapshot("./public-api.report.txt");
   }, 120_000);
 

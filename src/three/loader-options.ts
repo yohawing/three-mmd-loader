@@ -1,6 +1,6 @@
 import type * as THREE from "three";
 import type { MmdCore } from "../parser/model/modelTypes.js";
-import type { DefaultMmdRuntimeOptions, MmdRuntime } from "../runtime/index.js";
+import type { MmdRuntimeOptions, MmdRuntime } from "../runtime/index.js";
 import type { ThreeMmdTextureLoader } from "./materials.js";
 import type { LoaderPerformanceOptions } from "./performance.js";
 import type { ModelSourceFetch } from "./modelSource.js";
@@ -19,7 +19,7 @@ export interface ThreeMmdLoaderOptions {
   /** Enables geometry-aware texture alpha checks. Defaults to off, except when outlines require it internally. */
   readonly geometryAwareAlpha?: boolean;
   /** Options forwarded to the per-model runtime. */
-  readonly runtime?: DefaultMmdRuntimeOptions;
+  readonly runtime?: MmdRuntimeOptions;
   /** Creates a per-model runtime. When omitted, the bundled mmd-anim runtime is used for PMX. */
   readonly runtimeFactory?: (context: ThreeMmdRuntimeFactoryContext) => MmdRuntime;
   /** Parser core override. When omitted, the loader uses the TypeScript parser core. */

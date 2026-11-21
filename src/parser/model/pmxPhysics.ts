@@ -1,5 +1,5 @@
 import type { BinaryReader } from "../binary/index.js";
-import type { Diagnostic, JointData, RigidBodyData, SoftBodyData } from "./modelTypes.js";
+import type { MmdDiagnostic, JointData, RigidBodyData, SoftBodyData } from "./modelTypes.js";
 import type { PmxIndexSizes } from "./pmxBinary.js";
 import { readCount, readVertexIndex, readVec3 } from "./pmxBinary.js";
 
@@ -161,8 +161,8 @@ export function createSoftBodyDiagnostics(
   materialCount: number,
   vertexCount: number,
   rigidBodyCount: number
-): Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
+): MmdDiagnostic[] {
+  const diagnostics: MmdDiagnostic[] = [];
   if (
     softBodies.some((softBody) => softBody.type === "unknown" || softBody.aeroModel === "unknown")
   ) {
@@ -211,7 +211,7 @@ export function createSoftBodyDiagnostics(
 }
 
 function pushSoftBodyReferenceDiagnostic(
-  diagnostics: Diagnostic[],
+  diagnostics: MmdDiagnostic[],
   index: number,
   count: number,
   owner: string,

@@ -1,10 +1,10 @@
-import type { CameraState, LightState, SelfShadowState, VmdCameraFrame, VmdLightFrame, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
+import type { MmdCameraState, MmdLightState, MmdSelfShadowState, VmdCameraFrame, VmdLightFrame, VmdSelfShadowFrame } from "../parser/model/modelTypes.js";
 import { interpolateBezier, interpolationRatio, lerp } from "./math.js";
 
 export function sampleMmdCameraTrack(
   frames: readonly VmdCameraFrame[],
   frame: number
-): CameraState | undefined {
+): MmdCameraState | undefined {
   return sampleMmdCameraTrackInto(frames, frame, {
     distance: 0,
     position: [0, 0, 0],
@@ -17,9 +17,9 @@ export function sampleMmdCameraTrack(
 export function sampleMmdCameraTrackInto(
   frames: readonly VmdCameraFrame[],
   frame: number,
-  target: CameraState,
+  target: MmdCameraState,
   hint?: { index: number }
-): CameraState | undefined {
+): MmdCameraState | undefined {
   if (frames.length === 0) {
     return undefined;
   }
@@ -62,7 +62,7 @@ export function sampleMmdCameraTrackInto(
 export function sampleMmdLightTrack(
   frames: readonly VmdLightFrame[],
   frame: number
-): LightState | undefined {
+): MmdLightState | undefined {
   return sampleMmdLightTrackInto(frames, frame, {
     color: [0, 0, 0],
     direction: [0, 0, 0]
@@ -72,8 +72,8 @@ export function sampleMmdLightTrack(
 export function sampleMmdLightTrackInto(
   frames: readonly VmdLightFrame[],
   frame: number,
-  target: LightState
-): LightState | undefined {
+  target: MmdLightState
+): MmdLightState | undefined {
   const pair = sampleFramePair(frames, frame);
   if (!pair) {
     return undefined;
@@ -91,7 +91,7 @@ export function sampleMmdLightTrackInto(
 export function sampleMmdSelfShadowTrack(
   frames: readonly VmdSelfShadowFrame[],
   frame: number
-): SelfShadowState | undefined {
+): MmdSelfShadowState | undefined {
   if (frames.length === 0) {
     return undefined;
   }
@@ -108,9 +108,9 @@ export function sampleMmdSelfShadowTrack(
 export function sampleMmdSelfShadowTrackInto(
   frames: readonly VmdSelfShadowFrame[],
   frame: number,
-  target: SelfShadowState,
+  target: MmdSelfShadowState,
   hint?: { index: number }
-): SelfShadowState | undefined {
+): MmdSelfShadowState | undefined {
   if (frames.length === 0) {
     return undefined;
   }

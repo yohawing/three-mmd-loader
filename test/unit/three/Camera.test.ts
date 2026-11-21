@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import { applyMmdCameraStateToThreeCamera } from "../../../src/three/index.js";
-import type { CameraState } from "../../../src/parser/model/modelTypes.js";
+import type { MmdCameraState } from "../../../src/parser/model/modelTypes.js";
 
 describe("Three.js MMD camera helpers", () => {
   it("applies MMD camera state with the loader coordinate conversion", () => {
@@ -224,7 +224,7 @@ describe("Three.js MMD camera helpers", () => {
   });
 });
 
-function createCameraState(): CameraState {
+function createCameraState(): MmdCameraState {
   return {
     distance: -45,
     position: [1, 2, 3],

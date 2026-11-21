@@ -1,4 +1,4 @@
-import type { CameraState, LightState } from "../parser/model/modelTypes.js";
+import type { MmdCameraState, MmdLightState } from "../parser/model/modelTypes.js";
 import type {
   MmdAnimRuntimeWasmCameraTrack,
   MmdAnimRuntimeWasmLightTrack,
@@ -23,8 +23,8 @@ export function sampleMmdAnimWasmCameraTrackInto(
   track: MmdAnimRuntimeWasmCameraTrack,
   frame: number,
   scratch: Float32Array,
-  target: CameraState
-): CameraState {
+  target: MmdCameraState
+): MmdCameraState {
   if (scratch.length < 9 || !track.sample(frame, scratch)) {
     throw new RangeError("MmdAnimRuntime camera sample buffer is too short");
   }
@@ -44,8 +44,8 @@ export function sampleMmdAnimWasmLightTrackInto(
   track: MmdAnimRuntimeWasmLightTrack,
   frame: number,
   scratch: Float32Array,
-  target: LightState
-): LightState {
+  target: MmdLightState
+): MmdLightState {
   if (scratch.length < 6 || !track.sample(frame, scratch)) {
     throw new RangeError("MmdAnimRuntime light sample buffer is too short");
   }

@@ -9,7 +9,7 @@ description: モデルの同期とカメラ、ライト、描画を接続しま�
 | --- | --- |
 | カメラ・ライト | `applyMmdCameraStateToThreeCamera`、`applyMmdLightStateToThreeDirectionalLight` |
 | ジオメトリ・ボーン構築 | `createThreeBufferGeometry`、`createThreeSkeleton` |
-| ランタイムの同期 | `syncThreeMmdRuntimeToModel`、`syncThreeMmdRuntimeToMesh` |
+| ランタイムの同期（非推奨） | `syncThreeMmdRuntimeToModel`、`syncThreeMmdRuntimeToMesh`。直接の代替はありません。`ThreeMmdModel.update` または `runtime.tick` が同期します。 |
 | ファイルとテクスチャ | `findMmdModelFiles`、`createMmdTextureMapFromFiles`、`createTextureResolver` |
 | 影 | `configureMmdSelfShadowDirectionalLight`、`fitMmdSelfShadowDirectionalLightToBox` |
 | 終了処理 | `disposeMmdModel` |
