@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { validateMorphOverrides } from "./morphOverrides.js";
 import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
 import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
-import type { MmdDirectBufferPhysicsBackend, MmdPhysicsBackend, MmdPhysicsStepBuffers, MmdPhysicsStepContext } from "../physics/index.js";
+import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
 import {
   applyMmdAnimation,
   isMmdAnimation,
@@ -35,14 +35,22 @@ import { applyPhysicsOutputToSkeleton, createPhysicsResetContext, createPrePhysi
 import type { PrePhysicsScratch } from "./physicsPose.js";
 import type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeExternalPhysicsData, RuntimeRestTransform } from "./types.js";
 import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
+import {
+  ensureTuple3ScratchLength,
+  copyFloat32ArrayToScratch,
+  resetNumberArray,
+  resetDirectUpdatedBoneIndices,
+  acquireDirectStepBuffersIfPossible,
+  extractMmdWorldMatricesIntoFloat32
+} from "./defaultPhysics.js";
+import { copyFrameStateInto, createFrameState, writeFrameState } from "./frameState.js";
+import type { MutableFrameState } from "./frameState.js";
+import { findPropertyFrameIndex } from "./ikState.js";
+import { isObject3D, syncRuntimeMeshForRender } from "./renderSync.js";
+
 type MutableDebugStages = {
   -readonly [K in keyof MmdRuntimeDebugState["stages"]]: MmdRuntimeDebugState["stages"][K];
 };
-type MutableFrameState = {
-  -readonly [K in keyof MmdFrameState]: MmdFrameState[K];
-};
-
-const mmdMatrixAxisSigns = [1, 1, -1, 1] as const;
 
 export class DefaultMmdRuntime implements MmdRuntime {
   private readonly frameRate: number;
@@ -771,197 +779,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 }
 
-
-function findPropertyFrameIndex(
-  frames: readonly MmdAnimation["propertyFrames"][number][],
-  frame: number
-): number {
-  let low = 0;
-  let high = frames.length - 1;
-  while (low <= high) {
-    const middle = (low + high) >> 1;
-    const middleFrame = frames[middle]?.frame ?? Number.POSITIVE_INFINITY;
-    if (middleFrame <= frame) {
-      low = middle + 1;
-    } else {
-      high = middle - 1;
-    }
-  }
-  return Math.max(0, high);
-}
-
-function syncRuntimeMeshForRender(mesh: THREE.Object3D | undefined): void {
-  if (!mesh) {
-    return;
-  }
-  // Keep renderer-facing world and bone matrices in sync after runtime evaluation.
-  mesh.updateMatrixWorld(true);
-  updateSkinnedMeshSkeletons(mesh);
-}
-
-function updateSkinnedMeshSkeletons(object: THREE.Object3D): void {
-  if (isSkinnedMesh(object)) {
-    object.skeleton.update();
-  }
-  const children = object.children;
-  for (let index = 0; index < children.length; index += 1) {
-    const child = children[index];
-    if (child) {
-      updateSkinnedMeshSkeletons(child);
-    }
-  }
-}
-
-function isObject3D(value: unknown): value is THREE.Object3D {
-  return value instanceof THREE.Object3D || hasBooleanFlag(value, "isObject3D");
-}
-
-function isSkinnedMesh(value: THREE.Object3D): value is THREE.SkinnedMesh {
-  return value instanceof THREE.SkinnedMesh || hasBooleanFlag(value, "isSkinnedMesh");
-}
-
-function hasBooleanFlag(value: unknown, key: "isObject3D" | "isSkinnedMesh"): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<typeof key, unknown>)[key] === true
-  );
-}
-
-function ensureTuple3ScratchLength(
-  scratch: Array<[number, number, number]>,
-  length: number
-): Array<[number, number, number]> {
-  for (let index = scratch.length; index < length; index += 1) {
-    scratch.push([0, 0, 0]);
-  }
-  scratch.length = length;
-  return scratch;
-}
-
-function copyFloat32ArrayToScratch(
-  source: Float32Array,
-  scratch: Float32Array
-): Float32Array<ArrayBuffer> {
-  const target = ensureFloat32ArrayLength(scratch, source.length);
-  target.set(source);
-  return target;
-}
-
-function resetNumberArray(target: number[]): number[] {
-  target.length = 0;
-  return target;
-}
-
 function clearDebugStage(stage: MmdRuntimeDebugState["stages"]["physics"]): void {
   (stage.worldMatricesColumnMajor as number[]).length = 0;
   (stage.morphWeights as number[]).length = 0;
-}
-
-function resetDirectUpdatedBoneIndices(
-  target: MmdPhysicsStepBuffers["updatedBoneIndices"] | undefined
-): MmdPhysicsStepBuffers["updatedBoneIndices"] | undefined {
-  if (Array.isArray(target)) {
-    target.length = 0;
-  }
-  return target;
-}
-
-function acquireDirectStepBuffersIfPossible(
-  backend: MmdPhysicsBackend,
-  data: RuntimeExternalPhysicsData,
-  boneCount: number
-): MmdPhysicsStepBuffers | undefined {
-  if (!isDirectBufferPhysicsBackend(backend) || requiresPrePhysicsRestPose(data)) {
-    return undefined;
-  }
-  const buffers = backend.acquireStepBuffers({
-    boneCount,
-    translationValueCount: boneCount * 3,
-    rotationValueCount: boneCount * 4,
-    worldMatrixValueCount: boneCount * 16
-  });
-  return buffers && hasDirectStepBufferCapacity(buffers, boneCount) ? buffers : undefined;
-}
-
-function isDirectBufferPhysicsBackend(
-  backend: MmdPhysicsBackend
-): backend is MmdDirectBufferPhysicsBackend {
-  return typeof (backend as { acquireStepBuffers?: unknown }).acquireStepBuffers === "function";
-}
-
-function requiresPrePhysicsRestPose(data: RuntimeExternalPhysicsData): boolean {
-  for (const bone of data.skeleton.bones) {
-    if (bone.transformAfterPhysics === true) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function hasDirectStepBufferCapacity(buffers: MmdPhysicsStepBuffers, boneCount: number): boolean {
-  return (
-    buffers.inputTranslations.length >= boneCount * 3 &&
-    buffers.inputRotations.length >= boneCount * 4 &&
-    buffers.inputWorldMatricesColumnMajor.length >= boneCount * 16 &&
-    buffers.outputTranslations.length >= boneCount * 3 &&
-    buffers.outputRotations.length >= boneCount * 4 &&
-    buffers.outputWorldMatricesColumnMajor.length >= boneCount * 16 &&
-    buffers.bonePhysicsToggles.length >= boneCount &&
-    (buffers.updatedBoneIndices === undefined || buffers.updatedBoneIndices.length >= boneCount)
-  );
-}
-
-function extractMmdWorldMatricesIntoFloat32(
-  mesh: THREE.SkinnedMesh,
-  matrices: Float32Array<ArrayBuffer>
-): Float32Array<ArrayBuffer> {
-  for (let boneIndex = 0; boneIndex < mesh.skeleton.bones.length; boneIndex += 1) {
-    const bone = mesh.skeleton.bones[boneIndex];
-    const elements = bone.matrixWorld.elements;
-    const base = boneIndex * 16;
-    for (let column = 0; column < 4; column += 1) {
-      for (let row = 0; row < 4; row += 1) {
-        matrices[base + column * 4 + row] =
-          mmdMatrixAxisSigns[row] * elements[column * 4 + row] * mmdMatrixAxisSigns[column];
-      }
-    }
-  }
-  return matrices;
-}
-
-function createFrameState(seconds: number, frameRate: number): MmdFrameState {
-  return writeFrameState(
-    {
-      seconds: 0,
-      frame: 0,
-      frameRate: 30
-    },
-    seconds,
-    frameRate
-  );
-}
-
-function writeFrameState(
-  target: MutableFrameState,
-  seconds: number,
-  frameRate: number
-): MutableFrameState {
-  if (!Number.isFinite(seconds)) {
-    throw new RangeError("MMD runtime seconds must be finite");
-  }
-  target.seconds = seconds;
-  target.frame = seconds * frameRate;
-  target.frameRate = frameRate;
-  return target;
-}
-
-function copyFrameStateInto(
-  target: MutableFrameState,
-  source: MmdFrameState
-): MmdFrameState {
-  target.seconds = source.seconds;
-  target.frame = source.frame;
-  target.frameRate = source.frameRate;
-  return target;
 }

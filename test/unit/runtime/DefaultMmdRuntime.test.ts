@@ -85,18 +85,20 @@ describe("DefaultMmdRuntime", () => {
 
   it("keeps tick render sync on the hot path allocation-free", async () => {
     const source = await readFile("src/runtime/core.ts", "utf8");
+    const renderSource = await readFile("src/runtime/renderSync.ts", "utf8");
 
     expect(source).not.toContain("function normalizeTickOptions");
     expect(source).not.toContain("const { mesh, evaluateOptions } =");
     expect(source).not.toContain("evaluate(seconds: number, options: MmdRuntimeEvaluateOptions = {})");
     expect(source).not.toContain("this.state = createFrameState(seconds, this.frameRate);");
     expect(source).not.toContain(".traverse((");
+    expect(renderSource).not.toContain(".traverse((");
     expect(source).toContain("let mesh: THREE.Object3D | null | undefined;");
     expect(source).toContain("let evaluateOptions: MmdRuntimeEvaluateOptions | undefined;");
     expect(source).toContain("evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions)");
     expect(source).toContain("writeFrameState(this.state, seconds, this.frameRate);");
     expect(source).toContain("return copyFrameStateInto(this.evaluateReturnState, this.state);");
-    expect(source).toContain("function updateSkinnedMeshSkeletons(");
+    expect(renderSource).toContain("function updateSkinnedMeshSkeletons(");
   });
 
   it("ticks evaluation and syncs renderer-facing skeleton matrices", () => {
