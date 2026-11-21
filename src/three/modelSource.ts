@@ -114,3 +114,31 @@ export async function readModelSourceBytes(
 ): Promise<Uint8Array> {
   return (await readModelSource(source, options)).bytes;
 }
+
+export function describeModelSourceForPerformance(source: ModelSource): string {
+  if (typeof source === "string") {
+    return `url:${source.split(/[\\/]/).at(-1) ?? "model"}`;
+  }
+  if (typeof File !== "undefined" && source instanceof File) {
+    return `file:${source.name || "model"}`;
+  }
+  if (source instanceof Uint8Array) {
+    return `bytes:${source.byteLength}`;
+  }
+  if (source instanceof ArrayBuffer) {
+    return `array-buffer:${source.byteLength}`;
+  }
+  return "model";
+}
+
+export function createEmptySourceError(method: string): Error {
+  return new Error(`ThreeMmdLoader.${method} source must not be empty`);
+}
+
+export function validateModelSource(source: ModelSource, method: string): void {
+  if (!isModelSource(source)) {
+    throw new TypeError(
+      `ThreeMmdLoader.${method} source must be a string, File, ArrayBuffer, or Uint8Array`
+    );
+  }
+}

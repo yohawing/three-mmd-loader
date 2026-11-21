@@ -582,7 +582,7 @@ describe("example viewer source", () => {
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const i18nSource = await readFile("examples/viewer/lib/i18n.js", "utf8");
     const styles = await readFile("examples/viewer/styles.css", "utf8");
-    const threeSource = await readFile("src/three/index.ts", "utf8");
+    const threeSource = await readFile("src/three/model-mesh.ts", "utf8");
 
     expect(threeSource).toContain("comment: modelData.metadata.comment");
     expect(threeSource).toContain("englishComment: modelData.metadata.englishComment");
