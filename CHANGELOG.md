@@ -6,7 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Add `createMmdTslModelLoadOptions` to `./webgpu`.
 - Export types used in public signatures, including `MaterialInfo`, `MaterialRuntimeState`, `BoneData`, `MmdCoreModelFormat`, and `ThreeMmdMaterialTextureOptions`.
+
+### Changed
+
+- The experimental `./webgpu` subpath remains outside semver guarantees in 1.x. Minor releases may introduce breaking changes.
 
 ### Fixed
 
@@ -37,6 +42,7 @@ These exports remain available in 0.9.x and will be removed from the public API 
 | `./worker` | `createWorkerMmdRuntime`, `WorkerMmdRuntimeFactoryOptions` | Use createWorkerMmdRuntimeFactory and WorkerMmdRuntimeOptions, respectively. |
 | `./worker` | Low-level pose and model helpers, transferable pose pool, worker host, endpoint, dispatcher, and their transport types | Pass `createWorkerMmdRuntimeFactory(options)` to `ThreeMmdLoader` as `runtimeFactory`. |
 | `./webgpu` | `MmdTslPipelineAttachOptions.selfShadow` | Use selfShadowEnabled. |
+| `./webgpu` | `createModelLoadOptions` | Use `createMmdTslModelLoadOptions` or `pipeline.createModelLoadOptions()`. |
 | `./physics` | `MmdPhysicsEulerTuple` | No replacement. |
 
 ## [0.8.6] - 2026-11-05

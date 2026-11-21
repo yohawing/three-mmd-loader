@@ -42,6 +42,7 @@ const shadowCasterStates = new WeakMap<THREE.SkinnedMesh, MmdTslShadowCasterStat
  * Creates a shadow-only child representation with compatible opaque-side and
  * alpha-test buckets. Vertex, skinning, morph, and storage attributes
  * remain shared with the visible mesh; only the compact caster index is owned.
+ * @experimental
  */
 export function createMmdTslShadowCaster(
   mesh: THREE.SkinnedMesh,
@@ -131,6 +132,7 @@ export function createMmdTslShadowCaster(
   return proxy;
 }
 
+/** @experimental */
 export function disposeMmdTslShadowCaster(mesh: THREE.SkinnedMesh): boolean {
   return releaseMmdTslShadowCaster(mesh, true);
 }

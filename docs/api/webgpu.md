@@ -3,6 +3,8 @@ title: WebGPU
 description: TSLパイプラインと低水準の材質APIを使い分けます。
 ---
 
+`./webgpu` は実験的な API で、1.0.0 以降も semver の保証対象外です。マイナーリリースでも破壊的変更が入ることがあります。
+
 `/webgpu`は`three/webgpu`のレンダラー向けAPIです。ルートexportには含まれません。`createMmdTslPipeline()`はネイティブWebGPUを必須とし、WebGLへフォールバックしたレンダラーを拒否します。
 
 ## パイプラインを使う

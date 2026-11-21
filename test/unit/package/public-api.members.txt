@@ -2104,6 +2104,8 @@ function createMmdTslBaseColorNode
   (options?: MmdTslMaterialCoreOptions & { readonly uniforms?: MmdTslMaterialUniforms | undefined; }): VarNode<"vec3", JoinNode<"vec3">>
 function createMmdTslMaterialFromSource
   (sourceMaterial: Material<MaterialEventMap>, options?: MmdTslMaterialAssemblyOptions): MeshToonNodeMaterial
+function createMmdTslModelLoadOptions
+  (overrides?: Partial<MmdTslModelLoadOptions>): MmdTslModelLoadOptions
 function createMmdTslPipeline
   (renderer: WebGPURenderer, options?: MmdTslPipelineOptions): Promise<MmdTslPipeline>
 function createMmdTslShadowCaster
@@ -2114,8 +2116,8 @@ interface CreateMmdTslShadowCasterOptions
   readonly shadowLayer?: number | undefined
 function createMmdTslToonMaterial
   (options?: MmdTslMaterialCoreOptions): MeshToonNodeMaterial
-function createModelLoadOptions
-  (overrides?: Partial<MmdTslModelLoadOptions>): MmdTslModelLoadOptions
+const createModelLoadOptions  @deprecated
+  : (overrides?: Partial<MmdTslModelLoadOptions>) => MmdTslModelLoadOptions
 function disposeMmdTslShadowCaster
   (mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>): boolean
 function disposeMmdTslSparsePositionMorphs

@@ -751,16 +751,17 @@ interface  ThreeMmdTextureLoader
 interface  ThreeMmdUvMorphOffset
 interface  ThreeMmdVertexMorphOffset
 
-## ./webgpu (26)
+## ./webgpu (27)
 function   appendMmdTslOutlineGroups
 function   computeMmdTslSparsePositionMorphs
 function   createMmdTslBaseColorNode
 function   createMmdTslMaterialFromSource
+function   createMmdTslModelLoadOptions
 function   createMmdTslPipeline
 function   createMmdTslShadowCaster
 interface  CreateMmdTslShadowCasterOptions
 function   createMmdTslToonMaterial
-function   createModelLoadOptions
+const      createModelLoadOptions  @deprecated
 function   disposeMmdTslShadowCaster
 function   disposeMmdTslSparsePositionMorphs
 function   enableMmdTslSparsePositionMorphs
