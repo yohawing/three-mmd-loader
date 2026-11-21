@@ -21,7 +21,6 @@ import type {
   MmdRuntimeWorkerCommand,
   MmdRuntimeWorkerEvent
 } from "./messages.js";
-import type { CustomBulletWorkerPhysicsConfig } from "./externalPhysics.js";
 import { serializeMmdRuntimeModelDescriptor } from "./modelDescriptor.js";
 import type { MmdRuntimePoseBuffer } from "./protocol.js";
 import {
@@ -31,50 +30,16 @@ import {
   releaseMmdRuntimeSharedPoseReadSlot,
   type MmdRuntimeSharedPoseSlot
 } from "./sharedPose.js";
+import type { MmdRuntimeWorkerLease, MmdRuntimeWorkerPhysicalFactory } from "./pool.js";
 import {
-  MmdRuntimeWorkerPool,
-  type MmdRuntimeWorkerLease,
-  type MmdRuntimeWorkerPhysicalFactory
-} from "./pool.js";
-
-export interface MmdRuntimeWorkerLike {
-  postMessage(message: MmdRuntimeWorkerCommand, transfer?: Transferable[]): void;
-  terminate?: () => void | Promise<number>;
-  addEventListener?: (type: string, listener: (event: { readonly data: MmdRuntimeWorkerEvent }) => void) => void;
-  removeEventListener?: (type: string, listener: (event: { readonly data: MmdRuntimeWorkerEvent }) => void) => void;
-  on?: (type: string, listener: (event: MmdRuntimeWorkerEvent) => void) => void;
-  off?: (type: string, listener: (event: MmdRuntimeWorkerEvent) => void) => void;
-  onmessage?: unknown;
-  onerror?: unknown;
-}
-
-export interface WorkerMmdRuntimeOptions {
-  readonly workerFactory?: (
-    context: ThreeMmdRuntimeFactoryContext
-  ) => MmdRuntimeWorkerLike;
-  readonly workerUrl?: string | URL;
-  readonly workerOptions?: WorkerOptions;
-  readonly runtimeOptions?: DefaultMmdRuntimeOptions;
-  readonly onFallback?: (error: unknown) => void;
-  /** Allows a failed worker to continue through an equivalent inline runtime. Defaults to true. */
-  readonly fallback?: boolean;
-  /** Explicit bounded pool; the factory creates one lazily when omitted. */
-  readonly pool?: MmdRuntimeWorkerPool;
-  /** Physical slot count for the factory-owned pool. */
-  readonly poolSize?: number;
-  /** Structured-clone-safe external physics configuration for worker init. */
-  readonly externalPhysics?: CustomBulletWorkerPhysicsConfig;
-  /** Uses SAB pose transport when cross-origin isolation permits it. Defaults to auto. */
-  readonly sharedMemory?: "auto" | "required" | "disabled";
-}
-
-export type WorkerMmdRuntimeFactoryOptions = WorkerMmdRuntimeOptions;
-
-export interface WorkerMmdRuntimeFactory {
-  (context: ThreeMmdRuntimeFactoryContext): MmdRuntime;
-  /** Releases a factory-owned pool and its physical workers. */
-  dispose(): void;
-}
+  createDefaultWorker,
+  resolveSharedMemoryMode,
+  workerRuntimeOptions,
+  type MmdRuntimeWorkerLike,
+  type WorkerMmdRuntimeOptions
+} from "./runtimeConnection.js";
+import { createAbortError, type ReadyWaiter, type SettledRequest } from "./runtimeRequests.js";
+import type { MutableFrameState } from "./runtimePose.js";
 
 interface MutableWorkerCommand {
   type: "setAnimation" | "tick" | "seek" | "resetPose" | "clearAnimation";
@@ -82,19 +47,6 @@ interface MutableWorkerCommand {
   animation?: MmdAnimation;
   seconds?: number;
   options?: MmdRuntimeEvaluateOptions;
-}
-
-interface SettledRequest {
-  readonly epoch: number;
-  readonly resolve: (state: MmdFrameState) => void;
-  readonly reject: (error: Error) => void;
-  readonly signal: AbortSignal | undefined;
-  readonly onAbort: (() => void) | undefined;
-}
-
-interface ReadyWaiter {
-  readonly resolve: () => void;
-  readonly reject: (error: Error) => void;
 }
 
 const emptyDebugState = {
@@ -705,92 +657,6 @@ export class WorkerMmdRuntime implements MmdRuntime {
   }
 }
 
-export function createWorkerMmdRuntimeFactory(
-  options: WorkerMmdRuntimeFactoryOptions = {}
-): WorkerMmdRuntimeFactory {
-  let internalPool: MmdRuntimeWorkerPool | undefined;
-  const factory = (context: ThreeMmdRuntimeFactoryContext): MmdRuntime => {
-    try {
-      if (options.runtimeOptions?.physics === "external" && !options.externalPhysics) {
-        throw new Error("MMD runtime worker does not support external physics");
-      }
-      const pool = options.pool ?? (internalPool ??= new MmdRuntimeWorkerPool({
-        size: options.poolSize,
-        workerFactory: options.workerFactory as MmdRuntimeWorkerPhysicalFactory | undefined,
-        workerUrl: options.workerUrl,
-        workerOptions: options.workerOptions
-      }));
-      const runtime = new WorkerMmdRuntime(context, { ...options, pool });
-      return runtime;
-    } catch (error) {
-      options.onFallback?.(error);
-      if (options.fallback === false) {
-        throw error;
-      }
-      return new DefaultMmdRuntime(options.runtimeOptions);
-    }
-  };
-  factory.dispose = () => {
-    if (!options.pool) {
-      internalPool?.dispose();
-    }
-  };
-  return factory;
-}
-
-export function createWorkerMmdRuntime(
-  context: ThreeMmdRuntimeFactoryContext,
-  options: WorkerMmdRuntimeOptions = {}
-): MmdRuntime {
-  return createWorkerMmdRuntimeFactory(options)(context);
-}
-
-function createDefaultWorker(options: WorkerMmdRuntimeOptions): MmdRuntimeWorkerLike {
-  const WorkerConstructor = (globalThis as typeof globalThis & {
-    Worker?: new (url: string | URL, options?: WorkerOptions) => MmdRuntimeWorkerLike;
-  }).Worker;
-  if (!WorkerConstructor) {
-    throw new Error("MMD runtime worker is unavailable in this environment");
-  }
-  const workerUrl = options.workerUrl ?? new URL("./entry.js", import.meta.url);
-  return new WorkerConstructor(workerUrl, {
-    type: "module",
-    ...options.workerOptions
-  });
-}
-
-function workerRuntimeOptions(
-  options: DefaultMmdRuntimeOptions
-): Omit<DefaultMmdRuntimeOptions, "physicsBackend"> {
-  return {
-    frameRate: options.frameRate,
-    initialSeconds: options.initialSeconds,
-    physics: options.physics,
-    ikTolerance: options.ikTolerance,
-    ikMaxIterationsCap: options.ikMaxIterationsCap
-  };
-}
-
-function resolveSharedMemoryMode(mode: NonNullable<WorkerMmdRuntimeOptions["sharedMemory"]>): boolean {
-  if (mode === "disabled") {
-    return false;
-  }
-  const available =
-    typeof SharedArrayBuffer !== "undefined" &&
-    typeof Atomics !== "undefined" &&
-    globalThis.crossOriginIsolated === true;
-  if (mode === "required" && !available) {
-    throw new Error("MMD runtime shared memory requires cross-origin isolation and SharedArrayBuffer");
-  }
-  return available;
-}
-
-interface MutableFrameState {
-  seconds: number;
-  frame: number;
-  frameRate: number;
-}
-
 interface MutableEvaluateOptions {
   physics?: boolean;
   ik?: boolean;
@@ -807,10 +673,4 @@ function isObject3D(value: unknown): value is THREE.Object3D {
 
 function normalizeError(error: unknown, fallbackMessage: string): Error {
   return error instanceof Error ? error : new Error(error === undefined ? fallbackMessage : String(error));
-}
-
-function createAbortError(): Error {
-  const error = new Error("MMD runtime settled request was aborted");
-  error.name = "AbortError";
-  return error;
 }

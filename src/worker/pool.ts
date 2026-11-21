@@ -1,5 +1,5 @@
 import type { ThreeMmdRuntimeFactoryContext } from "../three/index.js";
-import type { MmdRuntimeWorkerLike } from "./runtime.js";
+import type { MmdRuntimeWorkerLike } from "./runtimeConnection.js";
 import type {
   MmdRuntimeWorkerCommand,
   MmdRuntimeWorkerEvent,

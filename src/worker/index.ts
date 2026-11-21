@@ -60,15 +60,8 @@ export type {
 } from "./dispatcher.js";
 export type { MmdRuntimePoseApplyScratch } from "./applyPose.js";
 export type { MmdRuntimePoseBuffer } from "./protocol.js";
-export {
-  WorkerMmdRuntime,
-  createWorkerMmdRuntime,
-  createWorkerMmdRuntimeFactory
-} from "./runtime.js";
-export type {
-  MmdRuntimeWorkerLike,
-  WorkerMmdRuntimeFactory,
-  WorkerMmdRuntimeFactoryOptions,
-  WorkerMmdRuntimeOptions
-} from "./runtime.js";
+export { WorkerMmdRuntime } from "./runtime.js";
+export { createWorkerMmdRuntime, createWorkerMmdRuntimeFactory } from "./runtimeFactory.js";
+export type { WorkerMmdRuntimeFactory, WorkerMmdRuntimeFactoryOptions } from "./runtimeFactory.js";
+export type { MmdRuntimeWorkerLike, WorkerMmdRuntimeOptions } from "./runtimeConnection.js";
 export type { MmdRuntimeSharedPoseSlot } from "./sharedPose.js";
