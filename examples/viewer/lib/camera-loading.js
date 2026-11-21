@@ -1,4 +1,3 @@
-import { sampleMmdAnimWasmCameraTrackInto, sampleMmdCameraTrackInto } from "../../../dist/runtime/index.js";
 import { applyMmdCameraStateToThreeCamera } from "../../../dist/three/index.js";
 
 import { dom, setLoadedFileSwitcherOptions, setStatus, updatePlaybackDisplay, updateTransportState } from "./dom.js";
@@ -41,8 +40,8 @@ export async function switchCameraEntry(entry) {
 }
 
 export function clearCameraMotion() {
-  state.currentCameraMotion?.cameraTrack?.free?.();
-  state.currentCameraMotion?.lightTrack?.free?.();
+  state.currentCameraMotion?.cameraTrack.dispose();
+  state.currentCameraMotion?.lightTrack.dispose();
   state.currentCameraMotion = undefined;
   state.currentCameraEntries = [];
   state.camera = state.perspectiveCamera;
@@ -54,21 +53,8 @@ export function clearCameraMotion() {
 
 export function applyCameraMotion() {
   const cameraMotion = state.currentCameraMotion;
-  const sampled = cameraMotion?.cameraTrack
-    ? sampleMmdAnimWasmCameraTrackInto(
-        cameraMotion.cameraTrack,
-        currentMmdFrame(),
-        state.cameraSampleScratch,
-        state.cameraStateScratch
-      )
-    : cameraMotion && cameraMotion.frames.length > 0
-      ? sampleMmdCameraTrackInto(
-          cameraMotion.frames,
-          currentMmdFrame(),
-          state.cameraStateScratch,
-          cameraMotion.frameIndexHint
-        )
-      : state.currentModel?.runtime?.cameraState?.();
+  const sampled = cameraMotion?.cameraTrack.sampleInto(currentMmdFrame(), state.cameraStateScratch)
+    ?? state.currentModel?.runtime?.cameraState?.();
   if (!sampled) {
     return;
   }
@@ -90,20 +76,13 @@ export async function loadCameraAnimation(loadedAnimation, label, entry) {
     setStatus("Selected VMD has no camera frames.", "error");
     return false;
   }
-  state.currentCameraMotion?.cameraTrack?.free?.();
-  state.currentCameraMotion?.lightTrack?.free?.();
+  state.currentCameraMotion?.cameraTrack.dispose();
+  state.currentCameraMotion?.lightTrack.dispose();
   state.currentCameraMotion = {
     name: label,
-    frames: animation.cameraFrames,
-    lightFrames: animation.lightFrames,
-    cameraTrack: loadedAnimation.animation
-      ? state.animationLoader.createCameraTrack(loadedAnimation)
-      : undefined,
-    lightTrack: loadedAnimation.animation
-      ? state.animationLoader.createLightTrack(loadedAnimation)
-      : undefined,
-    durationSeconds: Math.max((animation.metadata?.maxFrame ?? 0) / state.mmdFrameRate, 0),
-    frameIndexHint: { index: 0 }
+    cameraTrack: state.animationLoader.createCameraTrackSampler(loadedAnimation),
+    lightTrack: state.animationLoader.createLightTrackSampler(loadedAnimation),
+    durationSeconds: Math.max((animation.metadata?.maxFrame ?? 0) / state.mmdFrameRate, 0)
   };
   updateCameraSwitcher({
     ...entry,

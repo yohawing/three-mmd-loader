@@ -151,3 +151,4 @@ export type {
 export type { ThreeMmdModelSourceDescriptor, ThreeMmdModel } from "./loaded-model.js";
 export type { ThreeMmdAnimation, ThreeMmdPose } from "./loader-animation.js";
 export { ThreeMmdLoader } from "./loader.js";
+export type { MmdCameraTrackSampler, MmdLightTrackSampler } from "./trackSampler.js";

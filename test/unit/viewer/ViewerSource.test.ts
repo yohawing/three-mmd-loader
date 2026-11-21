@@ -727,11 +727,11 @@ describe("example viewer source", () => {
     expect(cameraSource).not.toContain("parseVmd");
     expect(cameraSource).toContain("state.animationLoader.loadAnimation(url)");
     expect(cameraSource).toContain("state.animationLoader.loadAnimation(file)");
-    expect(cameraSource).toContain("sampleMmdAnimWasmCameraTrackInto");
-    expect(cameraSource).toContain("state.cameraSampleScratch");
-    expect(cameraSource).toContain("state.animationLoader.createCameraTrack(loadedAnimation)");
-    expect(cameraSource).toContain("lightFrames: animation.lightFrames");
-    expect(cameraSource).toContain("state.animationLoader.createLightTrack(loadedAnimation)");
+    expect(cameraSource).not.toContain("sampleMmdAnimWasmCameraTrackInto");
+    expect(cameraSource).toContain("cameraTrack.sampleInto(currentMmdFrame(), state.cameraStateScratch)");
+    expect(cameraSource).toContain("state.animationLoader.createCameraTrackSampler(loadedAnimation)");
+    expect(cameraSource).toContain("lightTrack.dispose()");
+    expect(cameraSource).toContain("state.animationLoader.createLightTrackSampler(loadedAnimation)");
     expect(cameraSource).not.toContain("state.renderer.render(");
 
     const dropHandler = modelSource.slice(
@@ -958,7 +958,7 @@ describe("example viewer source", () => {
     expect(cameraSource).toContain("syncTimelineRangeToCurrentMotion()");
     expect(cameraSource).toContain("currentMotionDurationSeconds()");
     expect(cameraSource).not.toContain("existingMax");
-    expect(cameraSource).toContain("cameraMotion.frameIndexHint");
+    expect(cameraSource).toContain("cameraTrack.dispose()");
     expect(cameraSource).toContain("currentMmdFrame()");
     expect(cameraSource).toContain("/ state.mmdFrameRate");
     expect(cameraSource).toContain("applyMmdCameraStateToThreeCamera(");
@@ -980,8 +980,8 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("cameraQuaternionScratch: new THREE.Quaternion()");
     expect(stateSource).toContain("quaternion: state.cameraQuaternionScratch");
     expect(stateSource).toContain("cameraStateScratch: {");
-    expect(stateSource).toContain("cameraSampleScratch: new Float32Array(9)");
-    expect(stateSource).toContain("lightSampleScratch: new Float32Array(6)");
+    expect(stateSource).not.toContain("cameraSampleScratch");
+    expect(stateSource).not.toContain("lightSampleScratch");
     expect(stateSource).toContain("lightStateScratch: {");
     expect(stateSource).toContain("orthographicCamera: undefined");
     expect(stateSource).toContain("get orthographicCamera()");
@@ -1217,12 +1217,12 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("runtimePhysicsDisabledOptionsScratch");
     expect(stateSource).toContain("audioNoEvaluateOptionsScratch");
     expect(stateSource).toContain("selfShadowLightOptionsScratch");
-    expect(stateSource).toContain("cameraSampleScratch: new Float32Array(9)");
-    expect(stateSource).toContain("lightSampleScratch: new Float32Array(6)");
-    expect(cameraSource).toContain("sampleMmdAnimWasmCameraTrackInto(");
-    expect(playbackSource).toContain("sampleMmdAnimWasmLightTrackInto(");
-    expect(playbackSource).toContain("state.lightSampleScratch");
-    expect(playbackSource).toContain("sampleMmdLightTrackInto(cameraMotion.lightFrames");
+    expect(stateSource).not.toContain("cameraSampleScratch");
+    expect(stateSource).not.toContain("lightSampleScratch");
+    expect(cameraSource).not.toContain("sampleMmdAnimWasmCameraTrackInto(");
+    expect(playbackSource).not.toContain("sampleMmdAnimWasmLightTrackInto(");
+    expect(playbackSource).toContain("lightTrack.sampleInto(currentMmdFrame(), state.lightStateScratch)");
+    expect(playbackSource).not.toContain("sampleMmdLightTrackInto(cameraMotion.lightFrames");
     expect(cameraSource).not.toContain(".sampleJson(");
     expect(cameraSource).not.toContain(".sampleArray(");
     expect(playbackSource).not.toContain(".sampleJson(");

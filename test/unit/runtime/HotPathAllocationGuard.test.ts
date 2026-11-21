@@ -2,6 +2,27 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("runtime hot path allocation guards", () => {
+  it("samples camera and light tracks without temporary buffers or frame-pair objects", async () => {
+    const sampler = await readFile("src/three/trackSampler.ts", "utf8");
+    const sampling = await readFile("src/runtime/sceneTrackSampling.ts", "utf8");
+    const tracks = await readFile("src/runtime/mmdAnimTracks.ts", "utf8");
+    const loader = await readFile("src/three/loader.ts", "utf8");
+    const delegates = loader.match(/return tsTrackSampler\(.*$/gm) ?? [];
+    expect(delegates).toHaveLength(2);
+    expectNoForbiddenPatterns([
+      ...delegates,
+      extractMethodBody(sampler.slice(sampler.indexOf("export function tsTrackSampler")), "sampleInto"),
+      extractMethodBody(sampler.slice(sampler.indexOf("export function wasmTrackSampler")), "sampleInto"),
+      ...["sampleMmdCameraTrackInto", "sampleMmdLightTrackInto", "nextLightFrameIndex"]
+        .map((name) => extractFunctionBody(sampling, name)),
+      ...["readCameraState", "readLightState"].map((name) => extractFunctionBody(tracks, name))
+    ], [
+      ["constructor", /\bnew\s+/],
+      ["object or array literal", /(?:[=(,]|\breturn)\s*[[{]/],
+      ["copying array methods", /\.(?:map|filter|slice|subarray)\s*\(/]
+    ], "track sampling");
+  });
+
   it("keeps external physics stepping free of per-frame allocations", async () => {
     const stepper = await readFile("src/runtime/externalPhysicsStepper.ts", "utf8");
     const pose = await readFile("src/runtime/physicsPose.ts", "utf8");

@@ -74,11 +74,11 @@ export function sampleMmdLightTrackInto(
   frame: number,
   target: MmdLightState
 ): MmdLightState | undefined {
-  const pair = sampleFramePair(frames, frame);
-  if (!pair) {
-    return undefined;
-  }
-  const { previous, next, t } = pair;
+  if (frames.length === 0) return undefined;
+  const index = nextLightFrameIndex(frames, frame);
+  const previous = frames[Math.max(0, index - 1)];
+  const next = frames[Math.min(frames.length - 1, index)];
+  const t = interpolationRatio(previous.frame, next.frame, frame);
   target.color[0] = lerp(previous.color[0], next.color[0], t);
   target.color[1] = lerp(previous.color[1], next.color[1], t);
   target.color[2] = lerp(previous.color[2], next.color[2], t);
@@ -138,37 +138,13 @@ export function sampleMmdSelfShadowTrackInto(
   return target;
 }
 
-function sampleFramePair<T extends { readonly frame: number }>(
-  frames: readonly T[],
-  frame: number
-): { readonly previous: T; readonly next: T; readonly t: number } | undefined {
-  if (frames.length === 0) {
-    return undefined;
+function nextLightFrameIndex(frames: readonly VmdLightFrame[], frame: number): number {
+  let low = 0;
+  let high = frames.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (frame < frames[middle].frame) high = middle;
+    else low = middle + 1;
   }
-  if (frame < frames[0].frame) {
-    return { previous: frames[0], next: frames[0], t: 0 };
-  }
-  let low = 1;
-  let high = frames.length - 1;
-  let nextIndex = frames.length;
-  while (low <= high) {
-    const middle = (low + high) >> 1;
-    const middleFrame = frames[middle]?.frame ?? Number.POSITIVE_INFINITY;
-    if (frame < middleFrame) {
-      nextIndex = middle;
-      high = middle - 1;
-    } else {
-      low = middle + 1;
-    }
-  }
-  if (nextIndex >= frames.length) {
-    return { previous: frames[frames.length - 1], next: frames[frames.length - 1], t: 0 };
-  }
-  const previous = frames[nextIndex - 1];
-  const next = frames[nextIndex];
-  return {
-    previous,
-    next,
-    t: interpolationRatio(previous.frame, next.frame, frame)
-  };
+  return low;
 }

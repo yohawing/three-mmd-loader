@@ -1,3 +1,6 @@
+import { tsTrackSampler, wasmTrackSampler, type MmdCameraTrackSampler, type MmdLightTrackSampler } from "./trackSampler.js";
+import { readCameraState, readLightState } from "../runtime/mmdAnimTracks.js";
+import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "../runtime/sceneTrackSampling.js";
 import type * as THREE from "three";
 import * as mmdAnimWasm from "../parser/wasm/generated/mmd_anim_wasm.js";
 import { FallbackCore, initCore } from "../parser/wasm/index.js";
@@ -314,7 +317,21 @@ export class ThreeMmdLoader {
     };
   }
 
+  /** Always returns a camera sampler, using WASM when available and TypeScript otherwise. */
+  createCameraTrackSampler(animation: MmdAnimation | ThreeMmdAnimation): MmdCameraTrackSampler {
+    const track = this.createWasmCameraTrack(animation);
+    if (track) return wasmTrackSampler(track, new Float32Array(9), readCameraState);
+    const frames = unwrapThreeMmdAnimation(animation).cameraFrames;
+    const hint = { index: 0 };
+    return tsTrackSampler((frame, target) => sampleMmdCameraTrackInto(frames, frame, target, hint));
+  }
+
+  /** @deprecated Use createCameraTrackSampler. */
   createCameraTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmCameraTrack | undefined {
+    return this.createWasmCameraTrack(animation);
+  }
+
+  private createWasmCameraTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmCameraTrack | undefined {
     if (!this.implicitMmdAnimWasmReady || this.useExplicitCore) {
       return undefined;
     }
@@ -335,7 +352,20 @@ export class ThreeMmdLoader {
     }
   }
 
+  /** Always returns a light sampler, using WASM when available and TypeScript otherwise. */
+  createLightTrackSampler(animation: MmdAnimation | ThreeMmdAnimation): MmdLightTrackSampler {
+    const track = this.createWasmLightTrack(animation);
+    if (track) return wasmTrackSampler(track, new Float32Array(6), readLightState);
+    const frames = unwrapThreeMmdAnimation(animation).lightFrames;
+    return tsTrackSampler((frame, target) => sampleMmdLightTrackInto(frames, frame, target));
+  }
+
+  /** @deprecated Use createLightTrackSampler. */
   createLightTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmLightTrack | undefined {
+    return this.createWasmLightTrack(animation);
+  }
+
+  private createWasmLightTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmLightTrack | undefined {
     if (!this.implicitMmdAnimWasmReady || this.useExplicitCore) {
       return undefined;
     }

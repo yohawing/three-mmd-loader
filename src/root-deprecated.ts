@@ -115,8 +115,6 @@ import {
   vpdPoseToAnimation as vpdPoseToAnimation_
 } from "./parser/index.js";
 import {
-  createMmdAnimWasmCameraTrack as createMmdAnimWasmCameraTrack_,
-  createMmdAnimWasmLightTrack as createMmdAnimWasmLightTrack_,
   DefaultMmdRuntime as DefaultMmdRuntime_,
   exportMmdAnimWasmFormatBytes as exportMmdAnimWasmFormatBytes_,
   exportMmdAnimWasmVmdAnimationJsonBytes as exportMmdAnimWasmVmdAnimationJsonBytes_,
@@ -133,9 +131,7 @@ import {
   type MmdAnimRuntimeWasmRuntimeInstance as MmdAnimRuntimeWasmRuntimeInstance_,
   type MmdHostRigDefinition as MmdHostRigDefinition_,
   type MmdHostRigPose as MmdHostRigPose_,
-  parseMmdAnimWasmFormatJson as parseMmdAnimWasmFormatJson_,
-  sampleMmdAnimWasmCameraTrackInto as sampleMmdAnimWasmCameraTrackInto_,
-  sampleMmdAnimWasmLightTrackInto as sampleMmdAnimWasmLightTrackInto_
+  parseMmdAnimWasmFormatJson as parseMmdAnimWasmFormatJson_
 } from "./runtime/index.js";
 import {
   applyThreeMmdMaterialTextures as applyThreeMmdMaterialTextures_,
@@ -536,12 +532,6 @@ export type VpdPoseInventory = VpdPoseInventory_;
 export const vpdPoseToAnimation = vpdPoseToAnimation_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/runtime". Removed from the root entry in 1.0.0. */
-export const createMmdAnimWasmCameraTrack = createMmdAnimWasmCameraTrack_;
-
-/** @deprecated Import from "@yohawing/three-mmd-loader/runtime". Removed from the root entry in 1.0.0. */
-export const createMmdAnimWasmLightTrack = createMmdAnimWasmLightTrack_;
-
-/** @deprecated Import from "@yohawing/three-mmd-loader/runtime". Removed from the root entry in 1.0.0. */
 export const DefaultMmdRuntime = DefaultMmdRuntime_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/runtime". Removed from the root entry in 1.0.0. */
@@ -597,12 +587,6 @@ export type MmdHostRigPose = MmdHostRigPose_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/runtime". Removed from the root entry in 1.0.0. */
 export const parseMmdAnimWasmFormatJson = parseMmdAnimWasmFormatJson_;
-
-/** @deprecated Import from "@yohawing/three-mmd-loader/runtime". Removed from the root entry in 1.0.0. */
-export const sampleMmdAnimWasmCameraTrackInto = sampleMmdAnimWasmCameraTrackInto_;
-
-/** @deprecated Import from "@yohawing/three-mmd-loader/runtime". Removed from the root entry in 1.0.0. */
-export const sampleMmdAnimWasmLightTrackInto = sampleMmdAnimWasmLightTrackInto_;
 
 /** @deprecated Import from "@yohawing/three-mmd-loader/three". Removed from the root entry in 1.0.0. */
 export const applyThreeMmdMaterialTextures = applyThreeMmdMaterialTextures_;

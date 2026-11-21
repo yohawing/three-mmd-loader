@@ -3,6 +3,8 @@ title: Runtime
 description: 再生時刻の評価と状態取得を使い分けます。
 ---
 
+カメラ・ライトを単独で評価する場合は、`ThreeMmdLoader` の `createCameraTrackSampler` と `createLightTrackSampler` が WASM と TypeScript の経路を選択します。生のフレーム配列には引き続き `sampleMmdCameraTrackInto` と `sampleMmdLightTrackInto` を使えます。
+
 `MmdRuntime`は1モデルのアニメーション、IK、付与変形、物理を評価します。通常は`ThreeMmdLoader`がモデルに結び付けたランタイムを使います。
 
 ## 時刻を評価する

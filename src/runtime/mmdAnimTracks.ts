@@ -28,6 +28,10 @@ export function sampleMmdAnimWasmCameraTrackInto(
   if (scratch.length < 9 || !track.sample(frame, scratch)) {
     throw new RangeError("MmdAnimRuntime camera sample buffer is too short");
   }
+  return readCameraState(scratch, target);
+}
+
+export function readCameraState(scratch: Float32Array, target: MmdCameraState): MmdCameraState {
   target.distance = scratch[0] ?? 0;
   target.position[0] = scratch[1] ?? 0;
   target.position[1] = scratch[2] ?? 0;
@@ -49,6 +53,10 @@ export function sampleMmdAnimWasmLightTrackInto(
   if (scratch.length < 6 || !track.sample(frame, scratch)) {
     throw new RangeError("MmdAnimRuntime light sample buffer is too short");
   }
+  return readLightState(scratch, target);
+}
+
+export function readLightState(scratch: Float32Array, target: MmdLightState): MmdLightState {
   target.color[0] = scratch[0] ?? 0;
   target.color[1] = scratch[1] ?? 0;
   target.color[2] = scratch[2] ?? 0;

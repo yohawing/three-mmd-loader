@@ -1309,10 +1309,10 @@ type CreateCcdIkSolveInputFromMmdIkInput  @deprecated
   readonly bones: readonly MmdIkRuntimeBone[]
   readonly chains: readonly MmdIkRuntimeChain[]
   readonly pose: CcdIkPose
-function createMmdAnimWasmCameraTrack
-  (wasm: Pick<MmdAnimRuntimeWasmModule, "WasmVmdCameraTrack">, bytes: Uint8Array<ArrayBufferLike>): MmdAnimRuntimeWasmCameraTrack | undefined
-function createMmdAnimWasmLightTrack
-  (wasm: Pick<MmdAnimRuntimeWasmModule, "WasmVmdLightTrack">, bytes: Uint8Array<ArrayBufferLike>): MmdAnimRuntimeWasmLightTrack | undefined
+const createMmdAnimWasmCameraTrack  @deprecated
+  : (wasm: Pick<MmdAnimRuntimeWasmModule, "WasmVmdCameraTrack">, bytes: Uint8Array<ArrayBufferLike>) => MmdAnimRuntimeWasmCameraTrack | undefined
+const createMmdAnimWasmLightTrack  @deprecated
+  : (wasm: Pick<MmdAnimRuntimeWasmModule, "WasmVmdLightTrack">, bytes: Uint8Array<ArrayBufferLike>) => MmdAnimRuntimeWasmLightTrack | undefined
 class DefaultMmdRuntime
   new (options?: MmdRuntimeOptions): DefaultMmdRuntime
   cameraState(): MmdCameraState | undefined
@@ -1529,10 +1529,10 @@ function parseMmdAnimWasmFormatJson
   (wasm: Pick<MmdAnimRuntimeWasmModule, "parseMmdFormatJson">, data: Uint8Array<ArrayBufferLike>, fileName?: string | null | undefined): unknown
 type QuatTuple  @deprecated
   = readonly [number, number, number, number]
-function sampleMmdAnimWasmCameraTrackInto
-  (track: MmdAnimRuntimeWasmCameraTrack, frame: number, scratch: Float32Array<ArrayBufferLike>, target: MmdCameraState): MmdCameraState
-function sampleMmdAnimWasmLightTrackInto
-  (track: MmdAnimRuntimeWasmLightTrack, frame: number, scratch: Float32Array<ArrayBufferLike>, target: MmdLightState): MmdLightState
+const sampleMmdAnimWasmCameraTrackInto  @deprecated
+  : (track: MmdAnimRuntimeWasmCameraTrack, frame: number, scratch: Float32Array<ArrayBufferLike>, target: MmdCameraState) => MmdCameraState
+const sampleMmdAnimWasmLightTrackInto  @deprecated
+  : (track: MmdAnimRuntimeWasmLightTrack, frame: number, scratch: Float32Array<ArrayBufferLike>, target: MmdLightState) => MmdLightState
 function sampleMmdCameraTrack
   (frames: readonly VmdCameraFrame[], frame: number): MmdCameraState | undefined
 function sampleMmdCameraTrackInto
@@ -1722,6 +1722,9 @@ const MMD_SELF_SHADOW_LAYER
   : 1
 type MmdAssetKind
   = "texture" | "accessory" | "model" | "motion" | "audio"
+interface MmdCameraTrackSampler
+  dispose(): void
+  sampleInto(frame: number, target: MmdCameraState): MmdCameraState | undefined
 interface MmdDefaultMaterialTransparencyDiagnostic
   readonly finalTransparencyMode: MmdMaterialTransparencyMode
   readonly materialIndex: number
@@ -1737,6 +1740,9 @@ interface MmdFileIndex
   readonly motions: readonly File[]
   resolve(path: string): File | undefined
   readonly textures: readonly File[]
+interface MmdLightTrackSampler
+  dispose(): void
+  sampleInto(frame: number, target: MmdLightState): MmdLightState | undefined
 const mmdMaterialAlphaTest  @deprecated
   : (material: MaterialInfo, hasDiffuseTexture: boolean, textureTransparencyMode?: MmdMaterialTransparencyMode | undefined) => number
 const mmdMaterialCastsShadow  @deprecated
@@ -1900,8 +1906,10 @@ interface ThreeMmdGeometryOptions
   readonly morphAttributes?: boolean | undefined
 class ThreeMmdLoader
   new (options?: ThreeMmdLoaderOptions): ThreeMmdLoader
-  createCameraTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmCameraTrack | undefined
-  createLightTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmLightTrack | undefined
+  createCameraTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmCameraTrack | undefined  @deprecated
+  createCameraTrackSampler(animation: MmdAnimation | ThreeMmdAnimation): MmdCameraTrackSampler
+  createLightTrack(animation: MmdAnimation | ThreeMmdAnimation): MmdAnimRuntimeWasmLightTrack | undefined  @deprecated
+  createLightTrackSampler(animation: MmdAnimation | ThreeMmdAnimation): MmdLightTrackSampler
   loadAnimation(source: ModelSource): Promise<ThreeMmdAnimation>
   loadModel(source: ModelSource, options?: ThreeMmdLoadModelOptions): Promise<ThreeMmdModel>
   loadPose(source: ModelSource): Promise<ThreeMmdPose>

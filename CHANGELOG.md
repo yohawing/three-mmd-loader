@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Added `ThreeMmdLoader.createCameraTrackSampler` and `createLightTrackSampler` for sampling VMD camera and light tracks into reusable state with either backend.
+
 - Added the shared `MmdCameraState`, `MmdLightState`, `MmdSelfShadowState`, `MmdDiagnostic`, `MmdDiagnosticCategory`, `MmdRuntimeOptions` types at the root and their respective subpaths.
 
 - Add `createMmdTslModelLoadOptions` to `./webgpu`.
@@ -26,6 +28,8 @@ All notable changes to this project will be documented in this file.
 - The types used by `MmdPose.metadata`, entries in `MmdPose.bones`, and `MmdAnimation.metadata` previously shared names with distinct parser types and could not be imported by name. They are now available as `MmdPoseMetadata`, `MmdPoseBone`, and `MmdAnimationMetadata`, respectively.
 
 ### Deprecated
+
+- Deprecated loader methods `createCameraTrack` and `createLightTrack`, and runtime helpers `createMmdAnimWasmCameraTrack`, `createMmdAnimWasmLightTrack`, `sampleMmdAnimWasmCameraTrackInto`, and `sampleMmdAnimWasmLightTrackInto`. Use the corresponding loader sampler instead.
 
 - Deprecated `CameraState`, `LightState`, `SelfShadowState`, `Diagnostic`, `DiagnosticCategory`, `DefaultMmdRuntimeOptions` in favor of their new Mmd-prefixed names.
 - Deprecated `syncThreeMmdRuntimeToMesh`, `syncThreeMmdRuntimeToModel`, `MmdRuntimeMeshSyncSource`, `ThreeMmdRuntimeSyncTarget`. Model updates and runtime ticks already synchronize the mesh.

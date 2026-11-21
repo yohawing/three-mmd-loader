@@ -28,12 +28,20 @@ import {
 export { DefaultMmdRuntime } from "./core.js";
 export type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig, MmdAnimRuntimeWasmHostRigConstructor } from "./hostRig.js";
 export { MmdAnimRuntime } from "./mmdAnimRuntime.js";
-export {
-  createMmdAnimWasmCameraTrack,
-  createMmdAnimWasmLightTrack,
-  sampleMmdAnimWasmCameraTrackInto,
-  sampleMmdAnimWasmLightTrackInto
+import {
+  createMmdAnimWasmCameraTrack as createMmdAnimWasmCameraTrackInternal,
+  createMmdAnimWasmLightTrack as createMmdAnimWasmLightTrackInternal,
+  sampleMmdAnimWasmCameraTrackInto as sampleMmdAnimWasmCameraTrackIntoInternal,
+  sampleMmdAnimWasmLightTrackInto as sampleMmdAnimWasmLightTrackIntoInternal
 } from "./mmdAnimTracks.js";
+/** @deprecated Use ThreeMmdLoader.createCameraTrackSampler. */
+export const createMmdAnimWasmCameraTrack = createMmdAnimWasmCameraTrackInternal;
+/** @deprecated Use ThreeMmdLoader.createLightTrackSampler. */
+export const createMmdAnimWasmLightTrack = createMmdAnimWasmLightTrackInternal;
+/** @deprecated Use ThreeMmdLoader.createCameraTrackSampler. */
+export const sampleMmdAnimWasmCameraTrackInto = sampleMmdAnimWasmCameraTrackIntoInternal;
+/** @deprecated Use ThreeMmdLoader.createLightTrackSampler. */
+export const sampleMmdAnimWasmLightTrackInto = sampleMmdAnimWasmLightTrackIntoInternal;
 export {
   exportMmdAnimWasmFormatBytes,
   exportMmdAnimWasmVmdAnimationJsonBytes,

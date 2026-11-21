@@ -26,6 +26,6 @@ description: モデル、モーション、ポーズを読み込みます。
 
 `model.root`をシーンへ追加し、`model.setAnimation(animation)`と`model.update(seconds)`で再生します。更新結果は後続更新で再利用されるため、保持する場合は`model.runtime.frameState()`でスナップショットを取得します。
 
-カメラ専用VMDなどを別に評価する場合は`createCameraTrack(animation)`と`createLightTrack(animation)`を使えます。返り値はWASMトラックまたは`undefined`です。トラックの`sample()`は秒ではなくフレームを受け取ります。通常は`/runtime`の`sampleMmdAnimWasmCameraTrackInto()`と`sampleMmdAnimWasmLightTrackInto()`で状態へ変換します。不要になったトラックは`free?.()`で解放します。
+カメラ専用 VMD などを評価するときは、`loader.createCameraTrackSampler(animation)` または `loader.createLightTrackSampler(animation)` を使います。どちらもトラックが空でも sampler を返します。`sampleInto(frame, target)` に VMD のフレーム番号と再利用する状態を渡すと、成功時は更新した `target`、空トラックや WASM のサンプリング失敗時は `undefined` が返ります。使い終わったら `dispose()` を呼んでください。複数回呼んでも安全です。
 
 [ThreeMmdLoaderの全メソッド](/api/reference/three/classes/ThreeMmdLoader) / [モデルの型](/api/reference/three/interfaces/ThreeMmdModel) / [読み込み設定](/api/reference/three/interfaces/ThreeMmdLoaderOptions)
