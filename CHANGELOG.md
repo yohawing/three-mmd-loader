@@ -29,6 +29,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Prevent browser bundlers from resolving Node builtins when importing the WASM parser.
+
 - The types used by `MmdPose.metadata`, entries in `MmdPose.bones`, and `MmdAnimation.metadata` previously shared names with distinct parser types and could not be imported by name. They are now available as `MmdPoseMetadata`, `MmdPoseBone`, and `MmdAnimationMetadata`, respectively.
 
 ### Deprecated
