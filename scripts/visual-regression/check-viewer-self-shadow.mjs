@@ -75,7 +75,7 @@ async function main() {
     background: options.localBackground ? path.dirname(options.localBackground) : undefined
   };
   const server = await startStaticServer(
-    pathname => resolveRequestPath(pathname, dataRoots),
+    pathname => resolveRequestPath(pathname, dataRoots, options.threeRoot),
     mimeTypes,
     rewriteWorkerResponse
   );
@@ -704,7 +704,12 @@ function dataUrl(root, filePath) {
   return `/__mmd_data__/${root}/${encodeURIComponent(path.basename(filePath))}`;
 }
 
-function resolveRequestPath(pathname, dataRoots) {
+function resolveRequestPath(pathname, dataRoots, threeRoot) {
+  const threeRoute = "/node_modules/three/";
+  if (threeRoot && pathname.startsWith(threeRoute)) {
+    const candidate = path.resolve(threeRoot, decodeURIComponent(pathname.slice(threeRoute.length)));
+    return isPathInside(candidate, threeRoot) ? candidate : undefined;
+  }
   if (pathname.startsWith(workerDistRoute)) {
     const distRoot = path.join(repoRoot, "dist");
     const candidate = path.resolve(distRoot, decodeURIComponent(pathname.slice(workerDistRoute.length)));
@@ -736,6 +741,24 @@ async function verifyRuntimeRoutes(browser, origin, modelUrl, backend) {
         { waitUntil: "domcontentloaded" }
       );
       await waitForViewer(page);
+      if (runtime === "js" && backend !== "baseline") {
+        await page.evaluate(async () => {
+          await import("/dist/webgpu/index.js");
+          const { DirectionalLight, Scene } = await import("three/webgpu");
+          const { createMmdTslSelfShadowPass } = await import("/dist/webgpu/self-shadow-pass.js");
+          const light = new DirectionalLight();
+          light.castShadow = true;
+          const renderer = globalThis.mmdViewer.renderer;
+          const pass = createMmdTslSelfShadowPass(renderer, light);
+          try {
+            if (!pass.render(renderer, new Scene(), light)) throw new Error("Self-shadow pass skipped render");
+          } finally {
+            pass.dispose();
+            pass.dispose();
+          }
+          if (light.userData.mmdShadowProjection) throw new Error("Self-shadow projection was retained");
+        });
+      }
       const loaded = await page.evaluate(async (url) => globalThis.mmdViewer.loadModelUrl(url), modelUrl);
       const status = await page.evaluate(() => globalThis.mmdViewer.runtimeStatus);
       if (!loaded || status.requested !== runtime || status.active !== runtime || status.transport !== "inline" || pageErrors.length > 0) {
@@ -992,6 +1015,9 @@ function parseArgs(args) {
     const value = peekArgValue(args, index);
     if (arg === "--output-dir" && value) {
       options.outputDir = path.resolve(value);
+      index += 1;
+    } else if (arg === "--three-root" && value) {
+      options.threeRoot = path.resolve(value);
       index += 1;
     } else if (arg === "--backend" && value) {
       options.backend = value.toLowerCase();

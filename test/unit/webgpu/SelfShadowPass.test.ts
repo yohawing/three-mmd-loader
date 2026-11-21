@@ -20,4 +20,16 @@ describe("MMD reference shadow target", () => {
     pass.dispose(); pass.dispose();
     expect(dispose).toHaveBeenCalledTimes(1);
   });
+
+  it("releases the projection when a disposal listener throws", () => {
+    const light = new THREE.DirectionalLight();
+    const originalUpdate = light.shadow.updateMatrices;
+    const renderer = { shadowMap: { type: THREE.BasicShadowMap } } as THREE.WebGPURenderer;
+    const pass = createMmdTslSelfShadowPass(renderer, light);
+    pass.renderTarget.addEventListener("dispose", () => { throw new Error("listener failed"); });
+
+    expect(() => pass.dispose()).toThrow("listener failed");
+    expect(light.shadow.updateMatrices).toBe(originalUpdate);
+    expect(() => pass.dispose()).not.toThrow();
+  });
 });

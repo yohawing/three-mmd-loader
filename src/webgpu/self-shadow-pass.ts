@@ -1,5 +1,5 @@
 import * as THREE from "three/webgpu";
-import { getShadowMaterial, getShadowRenderObjectFunction, positionWorld, uniform, vec3, vec4 } from "three/tsl";
+import { positionWorld, uniform, vec3, vec4 } from "three/tsl";
 
 import { MMD_SELF_SHADOW_LAYER } from "../three/shadow.js";
 import { createMmdTslShadowVisibilityNode } from "./shadow-visibility.js";
@@ -49,28 +49,49 @@ export function createMmdTslSelfShadowPass(
   // Raster reversed depth does not change the raw depth used by receivers.
   const projection = getMmdShadowProjection(light);
   projection.retain();
-  const visibilityNode = createMmdTslShadowVisibilityNode(light, renderTarget.texture);
+  let shadowMaterial: THREE.NodeMaterial;
+  function disposeResources(): void {
+    try {
+      renderTarget.dispose();
+    } finally {
+      try {
+        shadowMaterial?.dispose();
+      } finally {
+        projection.release();
+      }
+    }
+  }
+  let visibilityNode: MmdTslSelfShadowPass["visibilityNode"];
+  try {
+    visibilityNode = createMmdTslShadowVisibilityNode(light, renderTarget.texture);
+    // This directional pass owns its override independently of Three's light cache.
+    shadowMaterial = new THREE.NodeMaterial();
+    shadowMaterial.name = "ShadowMaterial";
+    shadowMaterial.colorNode = vec4(0, 0, 0, 1);
+    shadowMaterial.blending = THREE.NoBlending;
+    shadowMaterial.fog = false;
+    (shadowMaterial as unknown as { isShadowPassMaterial: boolean }).isShadowPassMaterial = true;
+    const referencePosition = uniform(projection.sampleMatrix).mul(vec4(positionWorld, 1));
+    shadowMaterial.fragmentNode = vec4(referencePosition.z.div(referencePosition.w), 0, 0, 1);
+  } catch (error) {
+    disposeResources();
+    throw error;
+  }
   const shadowModeUniform = (visibilityNode as unknown as {
     mmdTslShadowMode: { value: number };
   }).mmdTslShadowMode;
 
-  // Own the material so disposing/recreating this pass cannot poison Three's
-  // shared shadow material for the same light.
-  const shadowMaterial = getShadowMaterial(light).clone();
-  (shadowMaterial as unknown as { isShadowPassMaterial: boolean }).isShadowPassMaterial = true;
-  const referencePosition = uniform(projection.sampleMatrix).mul(vec4(positionWorld, 1));
-  shadowMaterial.fragmentNode = vec4(referencePosition.z.div(referencePosition.w), 0, 0, 1);
-  const shadowRenderObjectFunction = getShadowRenderObjectFunction(
-    renderer,
-    light.shadow,
-    renderer.shadowMap.type,
-    false
-  ) as unknown as Parameters<THREE.WebGPURenderer["setRenderObjectFunction"]>[0];
-  const referenceRenderObject: NonNullable<typeof shadowRenderObjectFunction> =
+  const includeReceivers = renderer.shadowMap.type === THREE.VSMShadowMap;
+  const referenceRenderObject: NonNullable<Parameters<THREE.WebGPURenderer["setRenderObjectFunction"]>[0]> =
     (object, scene, camera, geometry, material, group, lightsNode, clippingContext, passId) => {
       const source = material.userData.mmdReferenceShadowSource ?? material;
       if (!castsMmdReferenceShadow(source)) return;
-      shadowRenderObjectFunction?.(object, scene, camera, geometry, material, group, lightsNode, clippingContext, passId);
+      if (!object.castShadow && !(includeReceivers && object.receiveShadow)) return;
+      // @ts-expect-error Common Renderer passes renderer/object to the WebGL-typed shadow hooks.
+      object.onBeforeShadow(renderer, object, camera, light.shadow.camera, geometry, scene.overrideMaterial, group);
+      renderer.renderObject(object, scene, camera, geometry, material, group, lightsNode, clippingContext, passId);
+      // @ts-expect-error Same Common Renderer hook signature as onBeforeShadow.
+      object.onAfterShadow(renderer, object, camera, light.shadow.camera, geometry, scene.overrideMaterial, group);
     };
   const rendererState = { clearColor: new THREE.Color() } as THREE.RendererUtils.RendererAndSceneState;
   const resetRendererAndSceneState = THREE.RendererUtils.resetRendererAndSceneState as unknown as (
@@ -237,9 +258,7 @@ export function createMmdTslSelfShadowPass(
         return;
       }
       disposed = true;
-      renderTarget.dispose();
-      shadowMaterial.dispose();
-      projection.release();
+      disposeResources();
     }
   };
 }
