@@ -162,11 +162,17 @@ describe("runtime hot path allocation guards", () => {
     const coreSource = await readFile("src/runtime/core.ts", "utf8");
     const wasmRuntimeSource = await readFile("src/runtime/mmdAnimRuntime.ts", "utf8");
     const debugStateSource = await readFile("src/runtime/debugState.ts", "utf8");
+    const wasmCaptureBody = extractMethodBody(wasmRuntimeSource, "captureDebugStage");
+    expect(wasmRuntimeSource).not.toMatch(/\bfunction\s+copyArrayLikeToNumberArray\b/);
+    expect(wasmRuntimeSource).toMatch(
+      /import\s*\{[^}]*\bcopyArrayLikeToNumberArray\b[^}]*\}\s*from\s*"\.\/debugState\.js"/
+    );
+    expect(wasmCaptureBody).toContain("copyArrayLikeToNumberArray(this.worldMatrices, target.worldMatricesColumnMajor)");
+    expect(wasmCaptureBody).toContain("copyArrayLikeToNumberArray(this.morphWeights, target.morphWeights)");
     const hotPathBodies = [
       extractMethodBody(coreSource, "captureDebugStage"),
-      extractMethodBody(wasmRuntimeSource, "captureDebugStage"),
+      wasmCaptureBody,
       extractMethodBody(wasmRuntimeSource, "capturePhysicsDebugStage"),
-      extractFunctionBody(wasmRuntimeSource, "copyArrayLikeToNumberArray"),
       extractFunctionBody(debugStateSource, "captureRuntimeDebugStageInto"),
       extractFunctionBody(debugStateSource, "extractMmdWorldMatricesInto"),
       extractFunctionBody(debugStateSource, "copyArrayLikeToNumberArray")

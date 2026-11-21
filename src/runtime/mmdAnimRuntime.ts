@@ -11,7 +11,7 @@ import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
 import type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig } from "./hostRig.js";
 import { HostRigPhysics } from "./hostRigPhysics.js";
 import { readRuntimeExternalPhysics } from "./physics.js";
-import { captureRuntimeDebugStageInto } from "./debugState.js";
+import { captureRuntimeDebugStageInto, copyArrayLikeToNumberArray } from "./debugState.js";
 import { createPhysicsResetContext } from "./physicsPose.js";
 import type {
   MmdFrameState,
@@ -663,14 +663,6 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.wasmLightTrack?.free?.();
     this.wasmLightTrack = undefined;
   }
-}
-
-function copyArrayLikeToNumberArray(values: ArrayLike<number>, target: number[]): number[] {
-  target.length = values.length;
-  for (let index = 0; index < values.length; index += 1) {
-    target[index] = values[index];
-  }
-  return target;
 }
 
 function hasParsedModelTracks(animation: MmdAnimation): boolean {

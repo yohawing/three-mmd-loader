@@ -39,7 +39,7 @@ function extractMmdWorldMatricesInto(mesh: THREE.SkinnedMesh, matrices: number[]
   return matrices;
 }
 
-function copyArrayLikeToNumberArray(values: ArrayLike<number>, target: number[]): number[] {
+export function copyArrayLikeToNumberArray(values: ArrayLike<number>, target: number[]): number[] {
   target.length = values.length;
   for (let index = 0; index < values.length; index += 1) {
     target[index] = values[index];
