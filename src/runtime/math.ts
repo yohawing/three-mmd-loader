@@ -88,7 +88,18 @@ function mmdQuaternionToThree(
 }
 
 function threeQuaternionToMmd(quaternion: THREE.Quaternion): [number, number, number, number] {
-  return [-quaternion.x, -quaternion.y, quaternion.z, quaternion.w];
+  return threeQuaternionToMmdInto(quaternion, [0, 0, 0, 1]);
+}
+
+export function threeQuaternionToMmdInto(
+  quaternion: THREE.Quaternion,
+  target: [number, number, number, number]
+): [number, number, number, number] {
+  target[0] = -quaternion.x;
+  target[1] = -quaternion.y;
+  target[2] = quaternion.z;
+  target[3] = quaternion.w;
+  return target;
 }
 
 const zeroVector3 = new THREE.Vector3();

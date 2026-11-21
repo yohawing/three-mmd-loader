@@ -1150,7 +1150,7 @@ class TranslatingPhysicsBackend implements MmdPhysicsBackend {
 
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
     this.stepCount += 1;
-    this.lastContext = context;
+    this.lastContext = structuredClone(context);
     context.output?.translations?.set(this.translation, 0);
     context.output?.updatedBoneIndices?.push(0);
     return { simulated: true };
@@ -1168,7 +1168,7 @@ class InspectingPhysicsBackend implements MmdPhysicsBackend {
   lastContext: MmdPhysicsStepContext | undefined;
 
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
-    this.lastContext = context;
+    this.lastContext = structuredClone(context);
     return { simulated: true };
   }
 }
@@ -1202,7 +1202,7 @@ class DirectBufferPhysicsBackend implements MmdDirectBufferPhysicsBackend {
   }
 
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
-    this.lastContext = context;
+    this.lastContext = { ...context, output: { ...context.output } };
     context.output?.translations?.set([4, 5, 6], 0);
     context.output?.rotations?.set([0, 0, 0, 1], 0);
     if (context.output?.updatedBoneIndices instanceof Uint32Array) {

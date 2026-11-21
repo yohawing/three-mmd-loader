@@ -156,6 +156,7 @@ export interface MmdPhysicsBackend {
   readonly name: string;
   readonly disabled: boolean;
   readonly disposed: boolean;
+  /** The runtime reuses the context and its buffers between calls. Copy any values needed after step returns. */
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult;
   reset?(context?: MmdPhysicsResetContext): void;
   dispose?(): void;

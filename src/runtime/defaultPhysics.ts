@@ -1,5 +1,5 @@
 import type * as THREE from "three";
-import type { MmdDirectBufferPhysicsBackend, MmdPhysicsBackend, MmdPhysicsStepBuffers } from "../physics/index.js";
+import type { MmdDirectBufferPhysicsBackend, MmdPhysicsBackend, MmdPhysicsStepBufferLayout, MmdPhysicsStepBuffers } from "../physics/index.js";
 import type { RuntimeExternalPhysicsData } from "./types.js";
 
 const mmdMatrixAxisSigns = [1, 1, -1, 1] as const;
@@ -27,17 +27,13 @@ export function resetDirectUpdatedBoneIndices(
 export function acquireDirectStepBuffersIfPossible(
   backend: MmdPhysicsBackend,
   data: RuntimeExternalPhysicsData,
-  boneCount: number
+  layout: MmdPhysicsStepBufferLayout
 ): MmdPhysicsStepBuffers | undefined {
   if (!isDirectBufferPhysicsBackend(backend) || requiresPrePhysicsRestPose(data)) {
     return undefined;
   }
-  const buffers = backend.acquireStepBuffers({
-    boneCount,
-    translationValueCount: boneCount * 3,
-    rotationValueCount: boneCount * 4,
-    worldMatrixValueCount: boneCount * 16
-  });
+  const boneCount = layout.boneCount;
+  const buffers = backend.acquireStepBuffers(layout);
   return buffers && hasDirectStepBufferCapacity(buffers, boneCount) ? buffers : undefined;
 }
 

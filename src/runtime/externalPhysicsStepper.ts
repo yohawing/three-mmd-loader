@@ -3,14 +3,11 @@ import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js"
 import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
 import {
   copyFloat32ArrayToScratch,
-  copyNumbersToFloat32Scratch,
   ensureFloat32ArrayLength,
   resetNumberArray,
-  threeQuaternionToMmd,
-  writeQuaternionToBuffer,
-  writeVector3ToBuffer
+  threeQuaternionToMmdInto,
+  writeQuaternionToBuffer
 } from "./math.js";
-import { extractMmdWorldMatricesInto } from "./debugState.js";
 import { applyPhysicsOutputToSkeleton, createPrePhysicsInputBuffersIfNeeded, mergePhysicsOutputDeltas } from "./physicsPose.js";
 import type { PrePhysicsScratch } from "./physicsPose.js";
 import type { MmdFrameState, RuntimeExternalPhysicsData } from "./types.js";
@@ -19,6 +16,8 @@ import {
   acquireDirectStepBuffersIfPossible,
   extractMmdWorldMatricesIntoFloat32
 } from "./defaultPhysics.js";
+
+type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
 
 export class ExternalPhysicsStepper {
   private externalPhysicsData: RuntimeExternalPhysicsData | undefined;
@@ -33,8 +32,25 @@ export class ExternalPhysicsStepper {
     outputWorldMatricesColumnMajor: new Float32Array(0),
     updatedBoneIndices: [] as number[],
     bonePhysicsToggleBuffer: new Uint8Array(0),
-    worldMatricesColumnMajorNumbers: [] as number[]
+    appliedBones: new Uint8Array(0)
   };
+  private readonly rotation: [number, number, number, number] = [0, 0, 0, 1];
+  private readonly output: Mutable<NonNullable<MmdPhysicsStepContext["output"]>> = {};
+  private readonly context: Mutable<MmdPhysicsStepContext> = {
+    seconds: 0, deltaSeconds: 0, frame: 0, frameRate: 0, output: this.output
+  };
+  private layout = { boneCount: 0, translationValueCount: 0, rotationValueCount: 0, worldMatrixValueCount: 0 };
+
+  private ensureLayout(boneCount: number): void {
+    if (this.layout.boneCount !== boneCount) {
+      this.layout = {
+        boneCount, translationValueCount: boneCount * 3,
+        rotationValueCount: boneCount * 4, worldMatrixValueCount: boneCount * 16
+      };
+      this.scratchExternalPhysicsInput.appliedBones = new Uint8Array(boneCount);
+    }
+  }
+
   private readonly scratchPrePhysics: PrePhysicsScratch = {
     preTranslations: new Float32Array(0),
     preRotations: new Float32Array(0),
@@ -59,6 +75,10 @@ export class ExternalPhysicsStepper {
 
   bind(data: RuntimeExternalPhysicsData | undefined): void {
     this.externalPhysicsData = data;
+    const count = data?.bones.length ?? 0;
+    if (this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer.length < count) {
+      this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer = new Uint8Array(count);
+    }
   }
 
   markEvaluated(seconds: number | undefined): void {
@@ -79,8 +99,9 @@ export class ExternalPhysicsStepper {
 
     mesh.updateWorldMatrix(false, true);
     const boneCount = mesh.skeleton.bones.length;
+    this.ensureLayout(boneCount);
     const directBuffers = this.directBuffers
-      ? acquireDirectStepBuffersIfPossible(backend, data, boneCount)
+      ? acquireDirectStepBuffersIfPossible(backend, data, this.layout)
       : undefined;
     let inputTranslations: Float32Array<ArrayBuffer>;
     if (directBuffers) {
@@ -109,12 +130,11 @@ export class ExternalPhysicsStepper {
       if (!bone) {
         continue;
       }
-      writeVector3ToBuffer(inputTranslations, index, [
-        bone.position.x,
-        bone.position.y,
-        -bone.position.z
-      ]);
-      writeQuaternionToBuffer(inputRotations, index, threeQuaternionToMmd(bone.quaternion));
+      const offset = index * 3;
+      inputTranslations[offset] = bone.position.x;
+      inputTranslations[offset + 1] = bone.position.y;
+      inputTranslations[offset + 2] = -bone.position.z;
+      writeQuaternionToBuffer(inputRotations, index, threeQuaternionToMmdInto(bone.quaternion, this.rotation));
     }
     let inputWorldMatricesColumnMajor: Float32Array<ArrayBuffer>;
     if (directBuffers) {
@@ -123,12 +143,8 @@ export class ExternalPhysicsStepper {
         directBuffers.inputWorldMatricesColumnMajor
       );
     } else {
-      inputWorldMatricesColumnMajor = copyNumbersToFloat32Scratch(
-        extractMmdWorldMatricesInto(
-          mesh,
-          this.scratchExternalPhysicsInput.worldMatricesColumnMajorNumbers
-        ),
-        this.scratchExternalPhysicsInput.worldMatricesColumnMajor
+      inputWorldMatricesColumnMajor = extractMmdWorldMatricesIntoFloat32(
+        mesh, ensureFloat32ArrayLength(this.scratchExternalPhysicsInput.worldMatricesColumnMajor, boneCount * 16)
       );
       this.scratchExternalPhysicsInput.worldMatricesColumnMajor = inputWorldMatricesColumnMajor;
     }
@@ -139,10 +155,10 @@ export class ExternalPhysicsStepper {
       inputWorldMatricesColumnMajor,
       this.scratchPrePhysics
     );
-    const physicsInputTranslations = prePhysics?.translations ?? inputTranslations;
-    const physicsInputRotations = prePhysics?.rotations ?? inputRotations;
+    const physicsInputTranslations = prePhysics?.preTranslations ?? inputTranslations;
+    const physicsInputRotations = prePhysics?.preRotations ?? inputRotations;
     const physicsInputWorldMatricesColumnMajor =
-      prePhysics?.worldMatricesColumnMajor ?? inputWorldMatricesColumnMajor;
+      prePhysics?.preWorldMatricesColumnMajor ?? inputWorldMatricesColumnMajor;
     let outputTranslations: Float32Array<ArrayBuffer>;
     if (directBuffers) {
       outputTranslations = directBuffers.outputTranslations;
@@ -177,42 +193,30 @@ export class ExternalPhysicsStepper {
       this.scratchExternalPhysicsInput.outputWorldMatricesColumnMajor =
         outputWorldMatricesColumnMajor;
     }
-    if (
-      !directBuffers &&
-      this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer.length < data.bones.length
-    ) {
-      this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer = new Uint8Array(data.bones.length);
-    }
     const bonePhysicsToggleBuffer = writeBonePhysicsToggleBuffer(
       data.bones,
       bonePhysicsToggles,
       directBuffers?.bonePhysicsToggles ?? this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer
     );
-    const context: MmdPhysicsStepContext = {
-      seconds: state.seconds,
-      deltaSeconds: Math.max(0, state.seconds - previousSeconds),
-      frame: state.frame,
-      frameRate: state.frameRate,
-      seeking:
-        this.previousEvaluateSeconds === undefined ||
-        state.seconds < this.previousEvaluateSeconds,
-      skeleton: data.skeleton,
-      rigidBodies: data.rigidBodies,
-      joints: data.joints,
-      inputTranslations: physicsInputTranslations,
-      inputRotations: physicsInputRotations,
-      inputWorldMatricesColumnMajor: physicsInputWorldMatricesColumnMajor,
-      output: {
-        translations: outputTranslations,
-        rotations: outputRotations,
-        worldMatricesColumnMajor: outputWorldMatricesColumnMajor,
-        updatedBoneIndices:
-          resetDirectUpdatedBoneIndices(directBuffers?.updatedBoneIndices) ??
-          resetNumberArray(this.scratchExternalPhysicsInput.updatedBoneIndices)
-      },
-      bonePhysicsToggles: bonePhysicsToggleBuffer,
-      morphImpulses: data.morphImpulses
-    };
+    const context = this.context;
+    context.seconds = state.seconds;
+    context.deltaSeconds = Math.max(0, state.seconds - previousSeconds);
+    context.frame = state.frame;
+    context.frameRate = state.frameRate;
+    context.seeking = this.previousEvaluateSeconds === undefined || state.seconds < this.previousEvaluateSeconds;
+    context.skeleton = data.skeleton;
+    context.rigidBodies = data.rigidBodies;
+    context.joints = data.joints;
+    context.inputTranslations = physicsInputTranslations;
+    context.inputRotations = physicsInputRotations;
+    context.inputWorldMatricesColumnMajor = physicsInputWorldMatricesColumnMajor;
+    context.bonePhysicsToggles = bonePhysicsToggleBuffer;
+    context.morphImpulses = data.morphImpulses;
+    this.output.translations = outputTranslations;
+    this.output.rotations = outputRotations;
+    this.output.worldMatricesColumnMajor = outputWorldMatricesColumnMajor;
+    this.output.updatedBoneIndices = resetDirectUpdatedBoneIndices(directBuffers?.updatedBoneIndices) ??
+      resetNumberArray(this.scratchExternalPhysicsInput.updatedBoneIndices);
 
     const result = backend.step(context);
     const updatedBoneCount = result.updatedBoneCount ?? context.output?.updatedBoneIndices?.length ?? 0;
@@ -224,11 +228,10 @@ export class ExternalPhysicsStepper {
         context,
         inputTranslations,
         inputRotations,
-        prePhysics,
-        this.scratchPrePhysics
+        prePhysics
       );
     }
-    applyPhysicsOutputToSkeleton(mesh, context, updatedBoneCount);
+    applyPhysicsOutputToSkeleton(mesh, context, this.scratchExternalPhysicsInput.appliedBones, updatedBoneCount);
     return true;
   }
 }

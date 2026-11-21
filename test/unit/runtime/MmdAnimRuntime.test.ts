@@ -614,7 +614,7 @@ class TranslatingPhysicsBackend implements MmdPhysicsBackend {
 
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
     this.stepCount += 1;
-    this.lastContext = context;
+    this.lastContext = structuredClone(context);
     context.output?.translations?.set(this.translation, 0);
     context.output?.updatedBoneIndices?.push(0);
     return { simulated: true };

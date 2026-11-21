@@ -2,6 +2,32 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("runtime hot path allocation guards", () => {
+  it("keeps external physics stepping free of per-frame allocations", async () => {
+    const stepper = await readFile("src/runtime/externalPhysicsStepper.ts", "utf8");
+    const pose = await readFile("src/runtime/physicsPose.ts", "utf8");
+    const direct = await readFile("src/runtime/defaultPhysics.ts", "utf8");
+    const math = await readFile("src/runtime/math.ts", "utf8");
+    const bodies = [
+      extractMethodBody(stepper, "step"),
+      extractFunctionBody(math, "threeQuaternionToMmdInto"),
+      extractFunctionBody(math, "writeQuaternionToBuffer"),
+      extractFunctionBody(direct, "acquireDirectStepBuffersIfPossible"),
+      extractFunctionBody(direct, "extractMmdWorldMatricesIntoFloat32"),
+      ...["transformsAfterPhysics", "createPrePhysicsInputBuffersIfNeeded",
+        "composeMmdWorldMatricesFromLocalBuffers", "mergePhysicsOutputDeltas",
+        "applyPhysicsOutputToSkeleton", "applyPhysicsOutputToBone"
+      ].map((name) => extractFunctionBody(pose, name))
+    ];
+    expectNoForbiddenPatterns(bodies, [
+      ["constructor", /\bnew\s+/],
+      ["array or object literal", /(?:[=(,]|\breturn)\s*[[{]/],
+      ["empty array", /\[\s*\]/],
+      ["copying array methods", /\.(?:map|filter|slice|subarray)\s*\(/],
+      ["allocating quaternion conversion", /\bthreeQuaternionToMmd\s*\(/],
+      ["inline callback", /=>/]
+    ], "external physics stepping");
+  });
+
   it("keeps append transform hot paths free of source-level allocation patterns", async () => {
     const source = await readFile("src/runtime/append.ts", "utf8");
     const hotPathBodies = [

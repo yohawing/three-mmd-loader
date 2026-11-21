@@ -9,7 +9,13 @@ All notable changes to this project will be documented in this file.
 - Add `createMmdTslModelLoadOptions` to `./webgpu`.
 - Export types used in public signatures, including `MaterialInfo`, `MaterialRuntimeState`, `BoneData`, `MmdCoreModelFormat`, and `ThreeMmdMaterialTextureOptions`.
 
+### Performance
+
+- Reuse external physics pose buffers and scratch storage across frames in both runtimes.
+
 ### Changed
+
+- The step context passed to `MmdPhysicsBackend.step` is reused between calls. Copy values needed after the call returns.
 
 - The experimental `./webgpu` subpath remains outside semver guarantees in 1.x. Minor releases may introduce breaking changes.
 
