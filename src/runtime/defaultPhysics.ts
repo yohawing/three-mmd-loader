@@ -1,6 +1,5 @@
 import type * as THREE from "three";
 import type { MmdDirectBufferPhysicsBackend, MmdPhysicsBackend, MmdPhysicsStepBuffers } from "../physics/index.js";
-import { ensureFloat32ArrayLength } from "./math.js";
 import type { RuntimeExternalPhysicsData } from "./types.js";
 
 const mmdMatrixAxisSigns = [1, 1, -1, 1] as const;
@@ -14,20 +13,6 @@ export function ensureTuple3ScratchLength(
   }
   scratch.length = length;
   return scratch;
-}
-
-export function copyFloat32ArrayToScratch(
-  source: Float32Array,
-  scratch: Float32Array
-): Float32Array<ArrayBuffer> {
-  const target = ensureFloat32ArrayLength(scratch, source.length);
-  target.set(source);
-  return target;
-}
-
-export function resetNumberArray(target: number[]): number[] {
-  target.length = 0;
-  return target;
 }
 
 export function resetDirectUpdatedBoneIndices(

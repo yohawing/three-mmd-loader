@@ -39,7 +39,12 @@ import {
   type WorkerMmdRuntimeOptions
 } from "./runtimeConnection.js";
 import { createAbortError, type ReadyWaiter, type SettledRequest } from "./runtimeRequests.js";
-import type { MutableFrameState } from "./runtimePose.js";
+
+interface MutableFrameState {
+  seconds: number;
+  frame: number;
+  frameRate: number;
+}
 
 interface MutableWorkerCommand {
   type: "setAnimation" | "tick" | "seek" | "resetPose" | "clearAnimation";

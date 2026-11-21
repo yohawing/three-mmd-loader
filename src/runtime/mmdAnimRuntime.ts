@@ -6,7 +6,7 @@ import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js"
 import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
 import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./sceneTrackSampling.js";
 import { DefaultMmdRuntime } from "./core.js";
-import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
+import { copyFloat32ArrayToScratch, copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, resetNumberArray, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
 import type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig } from "./hostRig.js";
 import { HostRigPhysics } from "./hostRigPhysics.js";
@@ -47,7 +47,6 @@ import {
   isObject3D,
   isSkinnedMesh
 } from "./mmdAnimMesh.js";
-import { copyFloat32ArrayToScratch, resetNumberArray } from "./mmdAnimPhysics.js";
 
 type MutableFrameState = {
   -readonly [K in keyof MmdFrameState]: MmdFrameState[K];

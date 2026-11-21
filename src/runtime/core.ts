@@ -19,11 +19,13 @@ import type { SolvePreparedIkScratch } from "./ik-bridge.js";
 import { CcdIkSolver } from "./ik/index.js";
 import type { CcdIkPreparedChain } from "./ik/index.js";
 import {
+  copyFloat32ArrayToScratch,
   copyNumbersToFloat32Scratch,
   ensureFloat32ArrayLength,
   normalizeFrameRate,
   prepareQuaternionScratchArray,
   prepareVector3ScratchArray,
+  resetNumberArray,
   threeQuaternionToMmd,
   writeQuaternionToBuffer,
   writeVector3ToBuffer
@@ -37,15 +39,12 @@ import type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDeb
 import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
 import {
   ensureTuple3ScratchLength,
-  copyFloat32ArrayToScratch,
-  resetNumberArray,
   resetDirectUpdatedBoneIndices,
   acquireDirectStepBuffersIfPossible,
   extractMmdWorldMatricesIntoFloat32
 } from "./defaultPhysics.js";
 import { copyFrameStateInto, createFrameState, writeFrameState } from "./frameState.js";
 import type { MutableFrameState } from "./frameState.js";
-import { findPropertyFrameIndex } from "./ikState.js";
 import { isObject3D, syncRuntimeMeshForRender } from "./renderSync.js";
 
 type MutableDebugStages = {
@@ -777,6 +776,24 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
     captureRuntimeDebugStageInto(mesh, this.debugStages[stage]);
   }
+}
+
+function findPropertyFrameIndex(
+  frames: readonly MmdAnimation["propertyFrames"][number][],
+  frame: number
+): number {
+  let low = 0;
+  let high = frames.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    const middleFrame = frames[middle]?.frame ?? Number.POSITIVE_INFINITY;
+    if (middleFrame <= frame) {
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return Math.max(0, high);
 }
 
 function clearDebugStage(stage: MmdRuntimeDebugState["stages"]["physics"]): void {
