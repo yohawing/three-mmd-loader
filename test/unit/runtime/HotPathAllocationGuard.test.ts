@@ -155,15 +155,15 @@ describe("runtime hot path allocation guards", () => {
   it("keeps runtime debug capture paths using caller-owned arrays", async () => {
     const coreSource = await readFile("src/runtime/core.ts", "utf8");
     const wasmRuntimeSource = await readFile("src/runtime/mmdAnimRuntime.ts", "utf8");
-    const physicsSource = await readFile("src/runtime/physics.ts", "utf8");
+    const debugStateSource = await readFile("src/runtime/debugState.ts", "utf8");
     const hotPathBodies = [
       extractMethodBody(coreSource, "captureDebugStage"),
       extractMethodBody(wasmRuntimeSource, "captureDebugStage"),
       extractMethodBody(wasmRuntimeSource, "capturePhysicsDebugStage"),
       extractFunctionBody(wasmRuntimeSource, "copyArrayLikeToNumberArray"),
-      extractFunctionBody(physicsSource, "captureRuntimeDebugStageInto"),
-      extractFunctionBody(physicsSource, "extractMmdWorldMatricesInto"),
-      extractFunctionBody(physicsSource, "copyArrayLikeToNumberArray")
+      extractFunctionBody(debugStateSource, "captureRuntimeDebugStageInto"),
+      extractFunctionBody(debugStateSource, "extractMmdWorldMatricesInto"),
+      extractFunctionBody(debugStateSource, "copyArrayLikeToNumberArray")
     ];
     const forbiddenPatterns: Array<readonly [string, RegExp]> = [
       ["new Array", /new\s+Array\s*\(/],

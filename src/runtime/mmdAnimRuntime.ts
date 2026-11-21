@@ -10,8 +10,10 @@ import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRa
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
 import type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig, MmdAnimRuntimeWasmHostRigConstructor } from "./hostRig.js";
 import { HostRigPhysics } from "./hostRigPhysics.js";
-import { applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics } from "./physics.js";
-import type { PrePhysicsScratch } from "./physics.js";
+import { readRuntimeExternalPhysics } from "./physics.js";
+import { captureRuntimeDebugStageInto, extractMmdWorldMatricesInto } from "./debugState.js";
+import { applyPhysicsOutputToSkeleton, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, mergePhysicsOutputDeltas } from "./physicsPose.js";
+import type { PrePhysicsScratch } from "./physicsPose.js";
 import type {
   MmdFrameState,
   MmdRuntime,

@@ -29,8 +29,10 @@ import {
   writeVector3ToBuffer
 } from "./math.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
-import { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
-import type { PrePhysicsScratch } from "./physics.js";
+import { StatefulSpringPhysicsSimulation, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
+import { captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStages, extractMmdWorldMatricesInto } from "./debugState.js";
+import { applyPhysicsOutputToSkeleton, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, mergePhysicsOutputDeltas } from "./physicsPose.js";
+import type { PrePhysicsScratch } from "./physicsPose.js";
 import type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeExternalPhysicsData, RuntimeRestTransform } from "./types.js";
 import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
 type MutableDebugStages = {
