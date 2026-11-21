@@ -7,13 +7,13 @@ import type {
   VmdCameraInterpolation,
   VmdIkState,
   VmdLightFrame,
-  VmdMetadata,
+  MmdAnimationMetadata,
   VmdMorphTrack,
   VmdPropertyFrame,
   VmdSelfShadowFrame
 } from "../model/modelTypes.js";
 
-type MutableVmdMetadata = VmdMetadata & {
+type MutableMmdAnimationMetadata = MmdAnimationMetadata & {
   readonly format: "vmd";
   readonly name?: string;
 };
@@ -44,7 +44,7 @@ export function parseVmd(input: Uint8Array | ArrayBuffer): MmdAnimation {
         properties: parsedTail.propertyFrames.length
       },
       maxFrame: Math.max(firstPass.maxFrame, parsedTail.maxFrame)
-    } as MutableVmdMetadata,
+    } as MutableMmdAnimationMetadata,
     boneTracks,
     morphTracks,
     cameraFrames: parsedTail.cameraFrames,

@@ -1,7 +1,7 @@
 import { toUint8Array } from "../binary/index.js";
-import type { MmdAnimation, MmdPose, VmdBoneTrack, VmdMorphTrack, VpdBonePose, VpdMetadata } from "../model/modelTypes.js";
+import type { MmdAnimation, MmdPose, VmdBoneTrack, VmdMorphTrack, MmdPoseBone, MmdPoseMetadata } from "../model/modelTypes.js";
 
-type MutableVpdMetadata = VpdMetadata & {
+type MutableMmdPoseMetadata = MmdPoseMetadata & {
   readonly format: "vpd";
   readonly signature: "Vocaloid Pose Data file";
   readonly encoding: "utf-8" | "shift-jis";
@@ -15,7 +15,7 @@ export function parseVpd(input: Uint8Array | string): MmdPose {
   const bytes = typeof input === "string" ? new TextEncoder().encode(input) : toUint8Array(input);
   const text = typeof input === "string" ? input : decodeVpdText(bytes);
   const parsedPose = readVpdPoseText(text);
-  const bones: Record<string, VpdBonePose> = {};
+  const bones: Record<string, MmdPoseBone> = {};
   for (const bonePose of parsedPose.bones) {
     bones[bonePose.name] = {
       name: bonePose.name,
@@ -25,7 +25,7 @@ export function parseVpd(input: Uint8Array | string): MmdPose {
   }
   const morphs = readMorphPoses(text, parsedPose.poseTextOffset);
 
-  const metadata: MutableVpdMetadata = {
+  const metadata: MutableMmdPoseMetadata = {
     format: "vpd",
     signature,
     encoding: detectEncoding(bytes),
@@ -101,7 +101,7 @@ function createSingleMorphTrack(weight: number): VmdMorphTrack {
 function readVpdPoseText(text: string): {
   readonly modelFile: string;
   readonly poseTextOffset: number;
-  readonly bones: VpdBonePose[];
+  readonly bones: MmdPoseBone[];
 } {
   const header = readVpdHeader(text);
   return {
@@ -181,12 +181,12 @@ function consumeLine(text: string, startIndex: number): number {
   return index;
 }
 
-function readBonePoses(text: string, startIndex: number): VpdBonePose[] {
+function readBonePoses(text: string, startIndex: number): MmdPoseBone[] {
   const blockPattern =
     /Bone\d+\s*\{\s*([^\r\n]+)\s*\r?\n\s*(?:(?:\/\/)[^\r\n]*\r?\n\s*)?([^;]*);\s*(?:\/\/[^\r\n]*)?\r?\n\s*(?:(?:\/\/)[^\r\n]*\r?\n\s*)?([^;]*);\s*(?:\/\/[^\r\n]*)?\r?\n\s*\}/g;
   blockPattern.lastIndex = startIndex;
 
-  const bones: VpdBonePose[] = [];
+  const bones: MmdPoseBone[] = [];
   const blockRanges: Array<{ readonly start: number; readonly end: number }> = [];
   for (const match of text.matchAll(blockPattern)) {
     const offset = match.index ?? 0;

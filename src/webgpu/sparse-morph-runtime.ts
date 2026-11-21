@@ -23,7 +23,7 @@ interface MmdSparseMorphAttributeState {
   readonly hadMorphAttributes: boolean;
 }
 
-interface MmdWebGpuRenderer {
+export interface MmdWebGpuRenderer {
   readonly backend?: { readonly isWebGPUBackend?: boolean };
   compute(node: THREE.Node | THREE.Node[]): Promise<void> | undefined;
 }

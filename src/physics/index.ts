@@ -8,7 +8,7 @@ export {
   type CustomBulletMmdPhysicsBackendOptions,
   type CustomBulletMmdModule
 } from "./customBulletMmd.js";
-export type { MmdAnimBulletContactPoint } from "./mmdAnimBullet.js";
+export type { MmdAnimBulletContactPoint, MmdAnimBulletModule } from "./mmdAnimBullet.js";
 export {
   type MmdPhysicsDiagnosticLevel,
   type MmdPhysicsDiagnostic,

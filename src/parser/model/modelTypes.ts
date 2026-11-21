@@ -1,11 +1,11 @@
-export type MmdModelFormat = "pmx" | "pmd" | "auto";
+export type MmdCoreModelFormat = "pmx" | "pmd" | "auto";
 
 export interface InitCoreOptions {
   wasmUrl?: string | URL;
 }
 
 export interface LoadModelOptions {
-  format?: MmdModelFormat;
+  format?: MmdCoreModelFormat;
 }
 
 export interface ModelMetadata {
@@ -390,7 +390,7 @@ export interface DisplayFrameElementData {
 export interface MmdAnimation {
   readonly kind: "vmd";
   readonly bytes: Uint8Array;
-  readonly metadata: VmdMetadata;
+  readonly metadata: MmdAnimationMetadata;
   readonly boneTracks: Record<string, VmdBoneTrack>;
   readonly morphTracks: Record<string, VmdMorphTrack>;
   readonly cameraFrames: VmdCameraFrame[];
@@ -418,12 +418,12 @@ export interface MmdCompositeAnimationOptions {
 export interface MmdPose {
   readonly kind: "vpd";
   readonly bytes: Uint8Array;
-  readonly metadata: VpdMetadata;
-  readonly bones: Record<string, VpdBonePose>;
+  readonly metadata: MmdPoseMetadata;
+  readonly bones: Record<string, MmdPoseBone>;
   readonly morphs: Record<string, number>;
 }
 
-export interface VmdMetadata {
+export interface MmdAnimationMetadata {
   modelName: string;
   counts: {
     bones: number;
@@ -535,13 +535,13 @@ export interface LightState {
   direction: [number, number, number];
 }
 
-export interface VpdMetadata {
+export interface MmdPoseMetadata {
   modelFile: string;
   boneCount: number;
   morphCount: number;
 }
 
-export interface VpdBonePose {
+export interface MmdPoseBone {
   name: string;
   translation: [number, number, number];
   rotation: [number, number, number, number];

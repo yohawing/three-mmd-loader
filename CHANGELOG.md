@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Export types used in public signatures, including `MaterialInfo`, `MaterialRuntimeState`, `BoneData`, `MmdCoreModelFormat`, and `ThreeMmdMaterialTextureOptions`.
+
+### Fixed
+
+- The types used by `MmdPose.metadata`, entries in `MmdPose.bones`, and `MmdAnimation.metadata` previously shared names with distinct parser types and could not be imported by name. They are now available as `MmdPoseMetadata`, `MmdPoseBone`, and `MmdAnimationMetadata`, respectively.
+
 ### Deprecated
 
 These exports remain available in 0.9.x and will be removed from the public API in 1.0.0.

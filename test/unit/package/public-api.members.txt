@@ -50,6 +50,46 @@ interface AccessoryVertexColor
   readonly green: number
   readonly index: number
   readonly red: number
+interface BoneAppendTransform
+  parentIndex: number
+  weight: number
+interface BoneData
+  appendTransform?: BoneAppendTransform | undefined
+  englishName: string
+  externalParentKey?: number | undefined
+  fixedAxis?: [number, number, number] | undefined
+  flags: BoneFlags
+  ik?: BoneIk | undefined
+  ikStateName?: string | undefined
+  layer: number
+  localAxis?: { x: [number, number, number]; z: [number, number, number]; } | undefined
+  name: string
+  parentIndex: number
+  position: [number, number, number]
+  tailIndex: number
+  tailPosition: [number, number, number] | undefined
+interface BoneFlags
+  appendLocal: boolean
+  appendRotate: boolean
+  appendTranslate: boolean
+  enabled: boolean
+  externalParentTransform: boolean
+  fixedAxis: boolean
+  ik: boolean
+  indexedTail: boolean
+  localAxis: boolean
+  rotatable: boolean
+  transformAfterPhysics: boolean
+  translatable: boolean
+  visible: boolean
+interface BoneIk
+  limitAngle: number
+  links: BoneIkLink[]
+  loopCount: number
+  targetIndex: number
+interface BoneIkLink
+  boneIndex: number
+  limits?: { kind?: "pmdKnee" | undefined; lower: [number, number, number]; upper: [number, number, number]; } | undefined
 function createPmmScenePlan
   (manifest: PmmManifest, options?: PmmAssetResolutionOptions): PmmScenePlan
 function createPmmStaticPreviewPlan
@@ -65,6 +105,18 @@ interface Diagnostic
   message: string
 type DiagnosticCategory
   = "material" | "morph" | "skeleton" | "physics" | "texture" | "accessory" | "project" | "core"
+interface DisplayFrameData
+  englishName: string
+  frames: DisplayFrameElementData[]
+  name: string
+  special: boolean
+interface DisplayFrameElementData
+  index: number
+  type: "morph" | "bone" | "unknown"
+interface EmbeddedTextureData
+  data: Uint8Array<ArrayBufferLike>
+  mimeType: string | undefined
+  path: string
 class FallbackCore
   new (): FallbackCore
   healthCheck(): boolean
@@ -73,6 +125,22 @@ class FallbackCore
   loadVpd(bytes: ArrayBuffer | Uint8Array<ArrayBufferLike>): MmdPose
   loadVpdAnimation(bytes: ArrayBuffer | Uint8Array<ArrayBufferLike>, name?: string | undefined): MmdAnimation
   version(): string
+interface GeometryBuffers
+  additionalUvs: Float32Array<ArrayBufferLike>[]
+  edgeScale?: Float32Array<ArrayBufferLike> | undefined
+  indices: Uint16Array<ArrayBufferLike> | Uint32Array<ArrayBufferLike>
+  materialGroups?: GeometryMaterialGroup[] | undefined
+  normals: Float32Array<ArrayBufferLike>
+  positions: Float32Array<ArrayBufferLike>
+  qdef?: QdefGeometryBuffers | undefined
+  sdef?: SdefGeometryBuffers | undefined
+  skinIndices: Uint16Array<ArrayBufferLike>
+  skinWeights: Float32Array<ArrayBufferLike>
+  uvs: Float32Array<ArrayBufferLike>
+interface GeometryMaterialGroup
+  count: number
+  materialIndex: number
+  start: number
 function getStandardBoneDefinitions
   (): readonly StandardBoneEntry[]
 function initCore
@@ -81,16 +149,92 @@ interface InitCoreOptions
   wasmUrl?: string | URL | undefined
 function initCoreWithFallback
   (options?: InitCoreOptions): Promise<MmdCore>
+interface JointData
+  englishName: string
+  name: string
+  position: [number, number, number]
+  rigidBodyIndexA: number
+  rigidBodyIndexB: number
+  rotation: [number, number, number]
+  rotationLowerLimit: [number, number, number]
+  rotationUpperLimit: [number, number, number]
+  springRotationFactor: [number, number, number]
+  springTranslationFactor: [number, number, number]
+  translationLowerLimit: [number, number, number]
+  translationUpperLimit: [number, number, number]
+  type: "unknown" | "generic6dofSpring" | "generic6dof" | "point2point" | "coneTwist" | "slider" | "hinge"
+interface LoadModelOptions
+  format?: MmdCoreModelFormat | undefined
+interface MaterialFlags
+  doubleSided: boolean
+  edge: boolean
+  groundShadow: boolean
+  lineDraw: boolean
+  pointDraw: boolean
+  selfShadow: boolean
+  selfShadowMap: boolean
+  vertexColor: boolean
+interface MaterialInfo
+  ambient: [number, number, number]
+  diffuse: [number, number, number, number]
+  edgeColor: [number, number, number, number]
+  edgeSize: number
+  englishName: string
+  evaluatedTransparency?: number | undefined
+  faceCount: number
+  flags: MaterialFlags
+  name: string
+  sharedToonIndex: number | undefined
+  specular: [number, number, number]
+  specularPower: number
+  sphereMode: "none" | "multiply" | "add" | "subTexture"
+  sphereTextureInfo?: MaterialTextureInfo | undefined
+  sphereTexturePath: string
+  textureInfo?: MaterialTextureInfo | undefined
+  texturePath: string
+  toonTextureInfo?: MaterialTextureInfo | undefined
+  toonTexturePath: string
+interface MaterialMorphOffset
+  ambient: [number, number, number]
+  diffuse: [number, number, number, number]
+  edgeColor: [number, number, number, number]
+  edgeSize: number
+  materialIndex: number
+  operation: "multiply" | "add"
+  specular: [number, number, number]
+  specularPower: number
+  sphereTextureFactor: [number, number, number, number]
+  textureFactor: [number, number, number, number]
+  toonTextureFactor: [number, number, number, number]
+interface MaterialRuntimeState
+  ambient: [number, number, number]
+  diffuse: [number, number, number, number]
+  edgeColor: [number, number, number, number]
+  edgeSize: number
+  specular: [number, number, number]
+  specularPower: number
+  sphereTextureFactor: [number, number, number, number]
+  textureFactor: [number, number, number, number]
+  toonTextureFactor: [number, number, number, number]
+interface MaterialTextureInfo
+  imageIndex: number
+  invertY: boolean
+  noMipmap: boolean
+  samplingMode: number
 interface MmdAnimation
   readonly boneTracks: Record<string, VmdBoneTrack>
   readonly bytes: Uint8Array<ArrayBufferLike>
   readonly cameraFrames: VmdCameraFrame[]
   readonly kind: "vmd"
   readonly lightFrames: VmdLightFrame[]
-  readonly metadata: VmdMetadata
+  readonly metadata: MmdAnimationMetadata
   readonly morphTracks: Record<string, VmdMorphTrack>
   readonly propertyFrames: VmdPropertyFrame[]
   readonly selfShadowFrames: VmdSelfShadowFrame[]
+interface MmdAnimationMetadata
+  counts: { bones: number; morphs: number; cameras: number; lights: number; selfShadows: number; properties: number; }
+  maxFrame: number
+  modelName: string
 interface MmdCore
   healthCheck(): boolean
   loadModel(bytes: ArrayBuffer | Uint8Array<ArrayBufferLike>, options?: LoadModelOptions | undefined): MmdModel
@@ -98,6 +242,8 @@ interface MmdCore
   loadVpd(bytes: ArrayBuffer | Uint8Array<ArrayBufferLike>): MmdPose
   loadVpdAnimation(bytes: ArrayBuffer | Uint8Array<ArrayBufferLike>, name?: string | undefined): MmdAnimation
   version(): string
+type MmdCoreModelFormat
+  = "pmx" | "pmd" | "auto"
 interface MmdModel
   displayFrames(): DisplayFrameData[]
   dispose?(): void
@@ -113,11 +259,46 @@ interface MmdModel
 type MmdModelFormat
   = "pmx" | "pmd"
 interface MmdPose
-  readonly bones: Record<string, VpdBonePose>
+  readonly bones: Record<string, MmdPoseBone>
   readonly bytes: Uint8Array<ArrayBufferLike>
   readonly kind: "vpd"
-  readonly metadata: VpdMetadata
+  readonly metadata: MmdPoseMetadata
   readonly morphs: Record<string, number>
+interface MmdPoseBone
+  name: string
+  rotation: [number, number, number, number]
+  translation: [number, number, number]
+interface MmdPoseMetadata
+  boneCount: number
+  modelFile: string
+  morphCount: number
+interface ModelMetadata
+  additionalUvCount: number
+  comment: string
+  counts: { vertices: number; faces: number; materials: number; bones: number; morphs: number; displayFrames: number; rigidBodies: number; joints: number; softBodies: number; }
+  diagnostics: Diagnostic[]
+  encoding: "unknown" | "utf-8" | "utf-16-le" | "shift-jis"
+  englishComment: string
+  englishName: string
+  format: "pmx" | "pmd"
+  indexSizes: { vertex: number; texture: number; material: number; bone: number; morph: number; rigidBody: number; }
+  name: string
+  version: number
+interface MorphData
+  additionalUvOffsets: { vertexIndex: number; uvIndex: number; uv: [number, number, number, number]; }[]
+  boneOffsets: { boneIndex: number; translation: [number, number, number]; rotation: [number, number, number, number]; }[]
+  denseAdditionalUvOffsets?: (Float32Array<ArrayBufferLike> | undefined)[] | undefined
+  densePositionOffsets?: Float32Array<ArrayBufferLike> | undefined
+  denseUvOffsets?: Float32Array<ArrayBufferLike> | undefined
+  englishName: string
+  flipOffsets?: { morphIndex: number; weight: number; }[] | undefined
+  groupOffsets: { morphIndex: number; weight: number; }[]
+  impulseOffsets?: { rigidBodyIndex: number; local: boolean; velocity: [number, number, number]; torque: [number, number, number]; }[] | undefined
+  materialOffsets: MaterialMorphOffset[]
+  name: string
+  type: "material" | "bone" | "unknown" | "base" | "group" | "vertex" | "uv" | "additionalUv" | "flip" | "impulse"
+  uvOffsets: { vertexIndex: number; uv: [number, number, number, number]; }[]
+  vertexOffsets: { vertexIndex: number; position: [number, number, number]; }[]
 function parseAccessory
   (bytes: ArrayBuffer | Uint8Array<ArrayBufferLike>, core: MmdCore, fileName?: string | undefined): AccessoryParsedManifest
 function parsePmdMetadata
@@ -186,7 +367,7 @@ interface PmdSectionRange
 interface PmmAssetReference
   extension: string
   fileName: string
-  kind: "accessory" | "model" | "motion" | "audio" | "image" | "unknown"
+  kind: "accessory" | "unknown" | "model" | "motion" | "audio" | "image"
   normalizedPath: string
   offset: number
   path: string
@@ -871,14 +1052,60 @@ interface PmxSectionRange
   name: PmxSectionName
   offset: number
 type PmxTextEncoding
-  = "utf-16-le" | "utf-8"
+  = "utf-8" | "utf-16-le"
+interface QdefGeometryBuffers
+  enabled: Float32Array<ArrayBufferLike>
 function resolvePmmAssetPath
   (path: string, userFileRoot?: string): string
 function resolvePmmAssetReference
   (reference: PmmAssetReference, options?: PmmAssetResolutionOptions): PmmAssetResolution
+interface RigidBodyData
+  angularDamping: number
+  boneIndex: number
+  englishName: string
+  friction: number
+  group: number
+  linearDamping: number
+  mask: number
+  mass: number
+  mode: "unknown" | "static" | "dynamic" | "dynamicBone"
+  name: string
+  position: [number, number, number]
+  restitution: number
+  rotation: [number, number, number]
+  shape: "unknown" | "sphere" | "box" | "capsule"
+  size: [number, number, number]
+interface SdefGeometryBuffers
+  c: Float32Array<ArrayBufferLike>
+  enabled: Float32Array<ArrayBufferLike>
+  r0: Float32Array<ArrayBufferLike>
+  r1: Float32Array<ArrayBufferLike>
+  rw0: Float32Array<ArrayBufferLike>
+  rw1: Float32Array<ArrayBufferLike>
 interface SelfShadowState
   distance: number
   mode: number
+interface SkeletonData
+  bones: BoneData[]
+interface SoftBodyData
+  aeroModel: "unknown" | "vertexPoint" | "vertexTwoSided" | "vertexOneSided" | "faceTwoSided" | "faceOneSided"
+  anchors: { rigidBodyIndex: number; vertexIndex: number; nearMode: boolean; }[]
+  bendingConstraintsDistance: number
+  cluster: { softVsRigidHardness: number; softVsKineticHardness: number; softVsSoftHardness: number; softVsRigidImpulseSplit: number; softVsKineticImpulseSplit: number; softVsSoftImpulseSplit: number; }
+  clusterCount: number
+  collisionGroup: number
+  collisionMargin: number
+  collisionMask: number
+  config: { velocityCorrectionFactor: number; dampingCoefficient: number; dragCoefficient: number; liftCoefficient: number; pressureCoefficient: number; volumeConversationCoefficient: number; dynamicFrictionCoefficient: number; poseMatchingCoefficient: number; rigidContactHardness: number; kineticContactHardness: number; softContactHardness: number; anchorHardness: number; }
+  englishName: string
+  flags: number
+  iteration: { velocity: number; position: number; drift: number; cluster: number; }
+  material: { linearStiffnessCoefficient: number; angularStiffnessCoefficient: number; volumeStiffnessCoefficient: number; }
+  materialIndex: number
+  name: string
+  pinnedVertexIndices: number[]
+  totalMass: number
+  type: "unknown" | "triMesh" | "rope"
 interface StandardBoneDetectionResult
   readonly hasSemiStandardSkeleton: boolean
   readonly hasStandardSkeleton: boolean
@@ -903,6 +1130,30 @@ interface VmdBoneTrack
   readonly physicsToggles: Int8Array<ArrayBufferLike>
   readonly rotations: Float32Array<ArrayBufferLike>
   readonly translations: Float32Array<ArrayBufferLike>
+interface VmdCameraFrame
+  distance: number
+  fov: number
+  frame: number
+  interpolation?: VmdCameraInterpolation | undefined
+  perspective: boolean
+  position: [number, number, number]
+  rotation: [number, number, number]
+interface VmdCameraInterpolation
+  distance: VmdInterpolationCurve
+  fov: VmdInterpolationCurve
+  positionX: VmdInterpolationCurve
+  positionY: VmdInterpolationCurve
+  positionZ: VmdInterpolationCurve
+  rotation: VmdInterpolationCurve
+interface VmdIkState
+  boneName: string
+  enabled: boolean
+type VmdInterpolationCurve
+  = [number, number, number, number]
+interface VmdLightFrame
+  color: [number, number, number]
+  direction: [number, number, number]
+  frame: number
 interface VmdMetadata
   counts: VmdSectionCounts
   encoding: "shift-jis"
@@ -914,6 +1165,11 @@ interface VmdMorphTrack
   readonly frames: Uint32Array<ArrayBufferLike>
   readonly packed: "morph"
   readonly weights: Float32Array<ArrayBufferLike>
+interface VmdPropertyFrame
+  frame: number
+  ikStates: VmdIkState[]
+  physicsSimulation: boolean
+  visible: boolean
 interface VmdSectionCounts
   bones: number
   cameras: number
@@ -1437,6 +1693,14 @@ const MMD_SELF_SHADOW_LAYER
   : 1
 type MmdAssetKind
   = "texture" | "accessory" | "model" | "motion" | "audio"
+interface MmdDefaultMaterialTransparencyDiagnostic
+  readonly finalTransparencyMode: MmdMaterialTransparencyMode
+  readonly materialIndex: number
+  readonly materialName: string
+  readonly morphAlphaTransparent: boolean
+  readonly pmxTransparencyMode: MmdMaterialTransparencyMode
+  readonly reason: MmdMaterialTransparencyReason
+  readonly textureTransparencyMode?: MmdMaterialTransparencyMode | undefined
 interface MmdFileIndex
   readonly accessories: readonly File[]
   readonly audios: readonly File[]
@@ -1466,6 +1730,8 @@ const mmdMaterialTransparencyMode  @deprecated
   : (material: MaterialInfo, _hasDiffuseTexture: boolean, textureTransparencyMode?: MmdMaterialTransparencyMode | undefined) => MmdMaterialTransparencyMode
 type MmdMaterialTransparencyMode
   = "opaque" | "alphaTest" | "alphaBlend"
+type MmdMaterialTransparencyReason
+  = "pmx" | "texture-metadata" | "texture-alpha-scan" | "geometry-alpha-scan" | "morph-alpha" | "name-heuristic"
 type MmdOutlineModelSource  @deprecated
   readonly materials: readonly MaterialInfo[]
   readonly mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>
@@ -1560,7 +1826,7 @@ interface TextureLoadDiagnostic
   readonly materialIndex: number
   readonly path: string
   readonly sphereMode?: "none" | "multiply" | "add" | "subTexture" | undefined
-  readonly textureKind: "diffuse" | "sphere" | "toon"
+  readonly textureKind: "sphere" | "diffuse" | "toon"
 type TextureMap
   [key: string]: string | URL | Blob
 interface TextureResolver
@@ -1581,7 +1847,7 @@ interface ThreeMmdCoreFallbackEvent
 interface ThreeMmdGeometryBuffers
   readonly additionalUvs?: readonly Float32Array<ArrayBufferLike>[] | undefined
   readonly edgeScale?: Float32Array<ArrayBufferLike> | undefined
-  readonly indices: Uint32Array<ArrayBufferLike> | Uint16Array<ArrayBufferLike>
+  readonly indices: Uint16Array<ArrayBufferLike> | Uint32Array<ArrayBufferLike>
   readonly materialGroups?: readonly ThreeMmdMaterialGroup[] | undefined
   readonly normals: Float32Array<ArrayBufferLike>
   readonly positions: Float32Array<ArrayBufferLike>
@@ -1638,6 +1904,17 @@ interface ThreeMmdMaterialGroup
   readonly count: number
   readonly materialIndex: number
   readonly start: number
+interface ThreeMmdMaterialTextureOptions
+  readonly ddsLoader?: ThreeMmdTextureLoader | undefined
+  readonly geometry?: BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap> | undefined
+  readonly geometryAwareAlpha?: boolean | undefined
+  readonly materialDiagnostics?: MmdDefaultMaterialTransparencyDiagnostic[] | undefined
+  readonly modelUrl?: string | undefined
+  readonly morphs?: readonly MorphData[] | undefined
+  readonly textureCache?: Map<string, Promise<Texture<unknown, TextureEventMap> | undefined>> | undefined
+  readonly textureLoader?: ThreeMmdTextureLoader | undefined
+  readonly textureMap?: TextureMap | undefined
+  readonly textureResolver?: TextureResolver | undefined
 interface ThreeMmdModel
   readonly diagnostics: { readonly core: ThreeMmdCoreDiagnostic; readonly source: ModelSourceDiagnostic; readonly textures: readonly TextureLoadDiagnostic[]; readonly materials: readonly MmdDefaultMaterialTransparencyDiagnostic[]; readonly performance: readonly LoaderPerformanceMeasure[]; }
   readonly mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>
@@ -1657,7 +1934,7 @@ interface ThreeMmdMorphSplitGeometry
   readonly geometry: BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>
   readonly materialIndex: number
   readonly morphPositionAttributeCount: number
-  readonly morphTargetIndices: Uint32Array<ArrayBufferLike> | Uint16Array<ArrayBufferLike>
+  readonly morphTargetIndices: Uint16Array<ArrayBufferLike> | Uint32Array<ArrayBufferLike>
   readonly sourceVertexCount: number
   readonly vertexCount: number
 interface ThreeMmdPose
@@ -1928,6 +2205,9 @@ interface MmdTslSelfShadowDebugState
   readonly enabledReceiverUniformCount: number
   readonly passReady: boolean
   readonly receiverUniformCount: number
+interface MmdWebGpuRenderer
+  readonly backend?: { readonly isWebGPUBackend?: boolean | undefined; } | undefined
+  compute(node: Node | Node[]): Promise<void> | undefined
 function replaceMmdModelMaterialsWithTsl
   (mesh: Mesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>, options?: MmdTslMaterialAssemblyOptions): void
 function syncMmdTslMaterialState
@@ -2003,6 +2283,29 @@ interface MmdAnimBulletContactPoint
   readonly positionWorldOnB: readonly [number, number, number]
   readonly rigidBodyIndexA: number
   readonly rigidBodyIndexB: number
+interface MmdAnimBulletModule
+  _free(pointer: number): void
+  _malloc(size: number): number
+  _mmd_anim_bullet_get_last_error(): number
+  _mmd_anim_bullet_get_version(): number
+  _mmd_anim_bullet_world_add_6dof_spring_joint(world: number, descriptor: number, outIndex: number): number
+  _mmd_anim_bullet_world_add_rigidbody(world: number, descriptor: number, outIndex: number): number
+  _mmd_anim_bullet_world_collect_contacts?(world: number, outContacts: number, capacity: number, outCount: number): number
+  _mmd_anim_bullet_world_create(outWorld: number): number
+  _mmd_anim_bullet_world_destroy(world: number): void
+  _mmd_anim_bullet_world_get_constraint_count?(world: number): number
+  _mmd_anim_bullet_world_get_gravity(world: number, outGravity: number): number
+  _mmd_anim_bullet_world_get_rigidbody_count?(world: number): number
+  _mmd_anim_bullet_world_get_rigidbody_transform(world: number, index: number, position: number, rotation: number): number
+  _mmd_anim_bullet_world_reset(world: number): number
+  _mmd_anim_bullet_world_set_gravity(world: number, gravity: number): number
+  _mmd_anim_bullet_world_set_rigidbody_transform(world: number, index: number, position: number, rotation: number): number
+  _mmd_anim_bullet_world_settle_to_current(world: number): number
+  _mmd_anim_bullet_world_step(world: number, delta: number, maxSubSteps: number, fixed: number): number
+  readonly HEAPF32?: Float32Array<ArrayBufferLike> | undefined
+  readonly HEAPU32?: Uint32Array<ArrayBufferLike> | undefined
+  readonly HEAPU8?: Uint8Array<ArrayBufferLike> | undefined
+  refreshMemoryViews?(): void
 interface MmdDirectBufferPhysicsBackend
   acquireStepBuffers(layout: MmdPhysicsStepBufferLayout): MmdPhysicsStepBuffers | undefined
   debugRigidBodyWorldTransformsColumnMajor?(): readonly MmdPhysicsMatrix4ColumnMajorTuple[]

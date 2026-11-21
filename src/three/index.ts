@@ -21,6 +21,10 @@ export {
   normalizeMmdRelativePath
 } from "./folder.js";
 export { isModelSource } from "./modelSource.js";
+export type {
+  MmdDefaultMaterialTransparencyDiagnostic,
+  MmdMaterialTransparencyReason
+} from "./material/material-texture-set.js";
 export { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
 export {
   mmdWorldMatrixToThree,
@@ -76,6 +80,7 @@ export type {
 export type {
   MaterialTransparencyDiagnostic,
   TextureLoadDiagnostic,
+  ThreeMmdMaterialTextureOptions,
   ThreeMmdTextureLoader
 } from "./materials.js";
 export type {

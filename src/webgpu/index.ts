@@ -20,6 +20,7 @@ export {
   type CreateMmdTslShadowCasterOptions
 } from "./shadow-caster.js";
 
+export type { MmdWebGpuRenderer } from "./sparse-morph-runtime.js";
 export {
   computeMmdTslSparsePositionMorphs,
   disposeMmdTslSparsePositionMorphs,
