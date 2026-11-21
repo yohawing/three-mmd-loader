@@ -100,7 +100,7 @@ function currentPhysicsContacts(limit = 20) {
   if (typeof backend?.debugPhysicsContacts !== "function") {
     return [];
   }
-  const rigidBodies = state.currentModel?.mesh.userData.mmdPhysics?.rigidBodies ?? [];
+  const rigidBodies = state.currentModel?.rigidBodies ?? [];
   return backend.debugPhysicsContacts().slice(0, Math.max(0, Number(limit) || 0)).map((contact) => {
     const bodyA = rigidBodies[contact.rigidBodyIndexA];
     const bodyB = rigidBodies[contact.rigidBodyIndexB];
@@ -117,7 +117,7 @@ function currentPhysicsContacts(limit = 20) {
 }
 
 function currentRigidBodies() {
-  return state.currentModel?.mesh.userData.mmdPhysics?.rigidBodies ?? [];
+  return state.currentModel?.rigidBodies ?? [];
 }
 
 function currentRigidBodyRows(indices) {
@@ -715,8 +715,8 @@ function createSmokeState() {
         frame: frameState.frame
       };
     }),
-    rigidBodyCount: model?.mesh.userData.mmdModel?.rigidBodyCount ?? 0,
-    jointCount: model?.mesh.userData.mmdModel?.jointCount ?? 0,
+    rigidBodyCount: model?.rigidBodies.length ?? 0,
+    jointCount: model?.joints.length ?? 0,
     rigidBodyTransformCount: rigidBodyTransforms.length,
     contactCount: typeof runtime?.physicsBackend?.debugContactCount === "function"
       ? runtime.physicsBackend.debugContactCount()

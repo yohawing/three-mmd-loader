@@ -234,7 +234,7 @@ export async function loadModel(source, label = source.name ?? "model", modelLoa
     } else {
       reportTextureDiagnostics(state.currentModel);
       updateDiagnosticsPanel(state.currentModel);
-      updateBoneDetectionPanel(detectStandardBones(state.currentModel.mesh.userData.mmdModel?.metadata?.bones ?? []));
+      updateBoneDetectionPanel(detectStandardBones(state.currentModel.bones));
       showModelCredits(state.currentModel, label);
       if (state.debugOutlineHidden) {
         setOutlineHidden(true);
@@ -374,7 +374,7 @@ export async function loadModelFolder(files, loadOptions = {}) {
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
     updateDiagnosticsPanel(state.currentModel);
-    updateBoneDetectionPanel(detectStandardBones(state.currentModel.mesh.userData.mmdModel?.metadata?.bones ?? []));
+    updateBoneDetectionPanel(detectStandardBones(state.currentModel.bones));
     showModelCredits(state.currentModel, modelFile.name);
     updateStageState();
     if (state.debugOutlineHidden) {
@@ -483,7 +483,7 @@ export async function switchFolderModel(modelFile, loadOptions = {}) {
     setStatus("", "ready");
     reportTextureDiagnostics(state.currentModel);
     updateDiagnosticsPanel(state.currentModel);
-    updateBoneDetectionPanel(detectStandardBones(state.currentModel.mesh.userData.mmdModel?.metadata?.bones ?? []));
+    updateBoneDetectionPanel(detectStandardBones(state.currentModel.bones));
     showModelCredits(state.currentModel, modelFile.name);
     updateStageState();
     if (state.debugOutlineHidden) {

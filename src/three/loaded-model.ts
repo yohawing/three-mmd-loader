@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { MmdAnimation } from "../parser/model/modelTypes.js";
+import type { BoneData, JointData, MmdAnimation, ModelMetadata, RigidBodyData } from "../parser/model/modelTypes.js";
 import type {
   MmdFrameState,
   MmdRuntime,
@@ -50,6 +50,10 @@ export interface ThreeMmdModel {
   readonly object: THREE.Group;
   /** Base MMD SkinnedMesh for advanced access and runtime binding. */
   readonly mesh: THREE.SkinnedMesh;
+  readonly metadata: Readonly<ModelMetadata>;
+  readonly bones: readonly BoneData[];
+  readonly rigidBodies: readonly RigidBodyData[];
+  readonly joints: readonly JointData[];
   /** Generated outline proxy meshes. Empty when outline is false. */
   readonly outlineMeshes: readonly THREE.SkinnedMesh[];
   /** Generated render-order proxy meshes. Empty when materialRenderOrder is false. */
@@ -95,7 +99,7 @@ export function createThreeMmdModel(options: {
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
   readonly outlines: boolean;
   readonly renderOrderProxies: boolean;
-}): ThreeMmdModel {
+} & Pick<ThreeMmdModel, "metadata" | "bones" | "rigidBodies" | "joints">): ThreeMmdModel {
   const bodyMeshes = readMorphSplitBodyMeshes(options.mesh);
   const outlineSources = bodyMeshes.length > 0 ? bodyMeshes : [options.mesh];
   const outlineMeshes = options.outlines
@@ -140,6 +144,10 @@ export function createThreeMmdModel(options: {
       return object;
     },
     mesh: options.mesh,
+    metadata: options.metadata,
+    bones: options.bones,
+    rigidBodies: options.rigidBodies,
+    joints: options.joints,
     outlineMeshes,
     renderOrderMeshes,
     runtime: options.runtime,

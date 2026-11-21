@@ -6,7 +6,7 @@ export function bindCreditPopupControls() {
 }
 
 export function showModelCredits(model, fallbackName) {
-  const metadata = model?.mesh?.userData?.mmdModel;
+  const metadata = model?.metadata;
   const comment = formatModelCreditComment(metadata);
   if (!comment) {
     hideCreditPopup();

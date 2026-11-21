@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Added read-only `metadata`, `bones`, `rigidBodies`, and `joints` properties to `ThreeMmdModel`.
+
 - Added `ThreeMmdLoader.createCameraTrackSampler` and `createLightTrackSampler` for sampling VMD camera and light tracks into reusable state with either backend.
 
 - Added the shared `MmdCameraState`, `MmdLightState`, `MmdSelfShadowState`, `MmdDiagnostic`, `MmdDiagnosticCategory`, `MmdRuntimeOptions` types at the root and their respective subpaths.

@@ -1953,11 +1953,15 @@ interface ThreeMmdMaterialTextureOptions
   readonly textureMap?: TextureMap | undefined
   readonly textureResolver?: TextureResolver | undefined
 interface ThreeMmdModel
+  readonly bones: readonly BoneData[]
   readonly diagnostics: { readonly core: ThreeMmdCoreDiagnostic; readonly source: ModelSourceDiagnostic; readonly textures: readonly TextureLoadDiagnostic[]; readonly materials: readonly MmdDefaultMaterialTransparencyDiagnostic[]; readonly performance: readonly LoaderPerformanceMeasure[]; }
+  readonly joints: readonly JointData[]
   readonly mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>
+  readonly metadata: Readonly<ModelMetadata>
   readonly object: Group<Object3DEventMap>  @deprecated
   readonly outlineMeshes: readonly SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>[]
   readonly renderOrderMeshes: readonly SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>[]
+  readonly rigidBodies: readonly RigidBodyData[]
   readonly root: Group<Object3DEventMap>
   readonly runtime: MmdRuntime
   setAnimation(animation: MmdAnimation | ThreeMmdAnimation): void

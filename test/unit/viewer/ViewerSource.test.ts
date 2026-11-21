@@ -1716,7 +1716,7 @@ describe("example viewer source", () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
 
     expect(modelSource).toContain('import { detectStandardBones } from "../../../dist/parser/index.js"');
-    expect(modelSource).toContain("detectStandardBones(");
+    expect(modelSource.match(/detectStandardBones\(state\.currentModel\.bones\)/g)).toHaveLength(3);
     expect(modelSource).toContain("updateBoneDetectionPanel(");
     expect(modelSource).toContain("clearBoneDetectionPanel()");
     expect(diagnosticsSource).toContain("function updateBoneDetectionPanel(");

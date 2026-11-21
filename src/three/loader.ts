@@ -93,11 +93,15 @@ export class ThreeMmdLoader {
       const core = await this.getCore();
       profile?.mark("core-ready");
       const { model: parsedModel, coreDiagnostic } = this.loadCoreModel(core, bytes);
-      const modelData = createLoaderMmdModelDataFromModel(parsedModel);
+      const metadata = parsedModel.metadata();
+      const skeleton = parsedModel.skeleton();
+      const modelData = createLoaderMmdModelDataFromModel(parsedModel, metadata, skeleton);
       let parsedModelDisposed = false;
       try {
         profile?.mark("parsed");
         const mesh = createThreeMmdMesh(modelData, {
+          metadata,
+          bones: skeleton.bones,
           morphSplit: options.morphSplit ?? true,
           morphAttributes: options.morphAttributes ?? true
         });
@@ -143,6 +147,10 @@ export class ThreeMmdLoader {
         syncMorphSplitBodyMeshRenderState(mesh, modelData.materials);
         profile?.mark("materials");
         const model = createThreeMmdModel({
+          metadata,
+          bones: skeleton.bones,
+          rigidBodies: modelData.rigidBodies,
+          joints: modelData.joints,
           mesh,
           runtime,
           source: sourceDescriptor,

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { ThreeMmdModel } from "./loaded-model.js";
 import { createThreeBufferGeometry } from "./geometry.js";
 import { createThreeMorphSplitGeometries } from "./geometry-split.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
@@ -8,7 +9,7 @@ import { attachMmdSdefSkinning as attachMmdSdefSkinningInternal } from "./materi
 
 export function createThreeMmdMesh(
   modelData: LoaderMmdModelData,
-  options: { readonly morphSplit: boolean; readonly morphAttributes: boolean }
+  options: Pick<ThreeMmdModel, "metadata" | "bones"> & { readonly morphSplit: boolean; readonly morphAttributes: boolean }
 ): THREE.SkinnedMesh {
   const splitGeometries = options.morphAttributes && options.morphSplit && shouldCreateMorphSplitMeshes(modelData)
     ? createThreeMorphSplitGeometries(modelData.geometry, modelData.materials, modelData.morphs)
@@ -48,7 +49,10 @@ export function createThreeMmdMesh(
     attachMorphSplitInfluenceSync(mesh, body);
   });
   mesh.name = modelData.metadata.englishName || modelData.metadata.name;
+  // Keep mmd* userData keys internal (outside semver) so consumers can rely on ThreeMmdModel.
   mesh.userData.mmdModel = {
+    metadata: options.metadata,
+    bones: options.bones,
     format: modelData.metadata.format,
     name: modelData.metadata.name,
     englishName: modelData.metadata.englishName,
@@ -59,37 +63,8 @@ export function createThreeMmdMesh(
     jointCount: modelData.joints.length
   };
   mesh.userData.mmdPhysics = {
-    rigidBodies: modelData.rigidBodies.map((body) => ({
-      name: body.name,
-      englishName: body.englishName,
-      boneIndex: body.boneIndex,
-      group: body.group,
-      mask: body.mask,
-      shape: body.shape,
-      mode: body.mode,
-      size: [...body.size],
-      position: [...body.position],
-      rotation: [...body.rotation],
-      mass: body.mass,
-      linearDamping: body.linearDamping,
-      angularDamping: body.angularDamping,
-      restitution: body.restitution,
-      friction: body.friction
-    })),
-    joints: modelData.joints.map((joint) => ({
-      name: joint.name,
-      englishName: joint.englishName,
-      rigidBodyIndexA: joint.rigidBodyIndexA,
-      rigidBodyIndexB: joint.rigidBodyIndexB,
-      position: [...joint.position],
-      rotation: [...joint.rotation],
-      translationLowerLimit: [...joint.translationLowerLimit],
-      translationUpperLimit: [...joint.translationUpperLimit],
-      rotationLowerLimit: [...joint.rotationLowerLimit],
-      rotationUpperLimit: [...joint.rotationUpperLimit],
-      springTranslationFactor: [...joint.springTranslationFactor],
-      springRotationFactor: [...joint.springRotationFactor]
-    }))
+    rigidBodies: modelData.rigidBodies,
+    joints: modelData.joints
   };
   mesh.userData.mmdMorphs = modelData.morphs.map((morph) => ({
     name: morph.name,
