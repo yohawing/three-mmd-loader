@@ -14,7 +14,7 @@ import type {
   ThreeMmdLoaderOptions,
   ThreeMmdTextureLoader
 } from "../../../src/index.js";
-import * as Textures from "../../../src/three/textures.js";
+import * as Textures from "../../../src/three/texture-alpha.js";
 import { syncMorphSplitTargetInfluences } from "../../../src/runtime/morphSplitSync.js";
 
 describe("ThreeMmdLoader", () => {

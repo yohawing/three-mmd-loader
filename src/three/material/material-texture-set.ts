@@ -3,7 +3,9 @@ import type * as THREE from "three";
 
 import type { TextureLoadDiagnostic, ThreeMmdTextureLoader } from "../materials.js";
 import type { MmdMaterialTransparencyMode, TextureResolver } from "../textures.js";
-import * as textureAlpha from "../textures.js";
+import * as textureAlpha from "../texture-alpha.js";
+import { loadMaterialTextureWithDiagnostics } from "../texture-loading.js";
+import { loadToonTexture } from "../texture-toon.js";
 import {
   mmdMaterialMorphCanAffectAlpha,
   mmdMaterialTransparencyMode
@@ -54,7 +56,7 @@ export async function loadMmdDefaultMaterialTextureSet(
 ): Promise<MmdDefaultMaterialTextureSet> {
   const shouldLoadSphereTexture = material.sphereMode !== "none";
   const [texture, gradientMap, sphereTexture] = await Promise.all([
-    textureAlpha.loadMaterialTextureWithDiagnostics(
+    loadMaterialTextureWithDiagnostics(
       material.texturePath,
       material.textureInfo,
       "diffuse",
@@ -66,7 +68,7 @@ export async function loadMmdDefaultMaterialTextureSet(
       textureCache,
       ddsLoader
     ),
-    textureAlpha.loadToonTexture(
+    loadToonTexture(
       material,
       materialIndex,
       modelUrl,
@@ -77,7 +79,7 @@ export async function loadMmdDefaultMaterialTextureSet(
       ddsLoader
     ),
     shouldLoadSphereTexture
-      ? textureAlpha.loadMaterialTextureWithDiagnostics(
+      ? loadMaterialTextureWithDiagnostics(
           material.sphereTexturePath,
           material.sphereTextureInfo,
           "sphere",

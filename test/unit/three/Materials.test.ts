@@ -11,7 +11,7 @@ import {
 import { getDefaultToonGradientMap } from "../../../src/three/textures.js";
 import type { MaterialInfo, MorphData } from "../../../src/parser/model/modelTypes.js";
 import type { ThreeMmdTextureLoader } from "../../../src/three/index.js";
-import * as Textures from "../../../src/three/textures.js";
+import * as Textures from "../../../src/three/texture-alpha.js";
 
 function createMaterialInfo(overrides: Partial<MaterialInfo> = {}): MaterialInfo {
   return {
