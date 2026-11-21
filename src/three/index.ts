@@ -16,7 +16,8 @@ import type {
   MmdRuntimeEvaluateOptions,
   MmdRuntimeTickOptions
 } from "../runtime/index.js";
-import { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "./geometry.js";
+import { createThreeBufferGeometry } from "./geometry.js";
+import { createThreeMorphSplitGeometries } from "./geometry-split.js";
 import { createLoaderMmdModelDataFromModel } from "./modelAssembly.js";
 import type { LoaderMmdModelData } from "./internalModelData.js";
 import { applyThreeMmdMaterialTextures, createThreeMmdMaterials } from "./materials.js";
@@ -84,7 +85,8 @@ import {
   resolveMmdToonTextureReference as resolveMmdToonTextureReferenceInternal,
   type MmdToonTextureReference as MmdToonTextureReferenceInternal
 } from "./textures.js";
-export { createThreeBufferGeometry, createThreeMorphSplitGeometries } from "./geometry.js";
+export { createThreeBufferGeometry } from "./geometry.js";
+export { createThreeMorphSplitGeometries } from "./geometry-split.js";
 export type { ThreeMmdGeometryOptions } from "./geometry.js";
 export { applyMmdCameraStateToThreeCamera } from "./camera.js";
 export { applyMmdLightStateToThreeDirectionalLight } from "./light.js";
@@ -138,17 +140,19 @@ export type {
   FitMmdSelfShadowDirectionalLightOptions
 } from "./shadow.js";
 export type {
-  ThreeMmdAdditionalUvMorphOffset,
   ThreeMmdGeometryBuffers,
   ThreeMmdGeometryMaterial,
-  ThreeMmdGeometryMorph,
-  ThreeMmdMorphSplitGeometry,
   ThreeMmdMaterialGroup,
   ThreeMmdQdefBuffers,
-  ThreeMmdSdefBuffers,
+  ThreeMmdSdefBuffers
+} from "./geometry.js";
+export type {
+  ThreeMmdAdditionalUvMorphOffset,
+  ThreeMmdGeometryMorph,
   ThreeMmdUvMorphOffset,
   ThreeMmdVertexMorphOffset
-} from "./geometry.js";
+} from "./geometry-morph.js";
+export type { ThreeMmdMorphSplitGeometry } from "./geometry-split.js";
 export type {
   ModelSource,
   ModelSourceDiagnostic,
