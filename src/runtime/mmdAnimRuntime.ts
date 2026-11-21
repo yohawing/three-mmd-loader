@@ -4,7 +4,7 @@ import { applyMorphOverrides, validateMorphOverrides } from "./morphOverrides.js
 import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
 import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
 import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
-import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./animation.js";
+import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./sceneTrackSampling.js";
 import { DefaultMmdRuntime } from "./core.js";
 import { copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";

@@ -10,7 +10,7 @@ import type {
 } from "../runtime/types.js";
 import type { MmdAnimation, CameraState, LightState } from "../parser/model/modelTypes.js";
 import type * as THREE from "three";
-import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "../runtime/animation.js";
+import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "../runtime/sceneTrackSampling.js";
 import type { ThreeMmdRuntimeFactoryContext } from "../three/index.js";
 import {
   applyMmdRuntimePoseToMesh,

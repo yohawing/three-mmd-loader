@@ -264,3 +264,14 @@ function writeQuaternionToBuffer(
 }
 
 export { clamp, clampOffsetVector, copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, interpolateBezier, isTuple3, lerp, mmdQuaternionToThree, normalizeFrameRate, normalizeQuaternion, prepareQuaternionScratchArray, prepareVector3ScratchArray, readMmdRestPosition, slerp, slerpIdentityQuaternionInto, threeQuaternionToMmd, weightedThreeQuaternion, writeQuaternionToBuffer, writeVector3ToBuffer, zeroVector3 };
+
+export function interpolationRatio(previousFrame: number, nextFrame: number, frame: number): number {
+  const span = nextFrame - previousFrame;
+  if (span <= 0) {
+    return 0;
+  }
+  if (span <= 1) {
+    return frame >= nextFrame ? 1 : 0;
+  }
+  return (frame - previousFrame) / span;
+}

@@ -6,10 +6,9 @@ import type { MmdDirectBufferPhysicsBackend, MmdPhysicsBackend, MmdPhysicsStepBu
 import {
   applyMmdAnimation,
   isMmdAnimation,
-  preparePreAppendTransforms,
-  sampleMmdCameraTrackInto,
-  sampleMmdLightTrackInto
+  preparePreAppendTransforms
 } from "./animation.js";
+import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./sceneTrackSampling.js";
 import {
   appendTransformOrder,
   applyAppendTransforms,

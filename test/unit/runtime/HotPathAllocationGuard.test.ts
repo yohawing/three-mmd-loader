@@ -32,15 +32,16 @@ describe("runtime hot path allocation guards", () => {
 
   it("keeps applyMmdAnimation bone sampling hot paths free of source-level allocation patterns", async () => {
     const source = await readFile("src/runtime/animation.ts", "utf8");
+    const sampling = await readFile("src/runtime/boneTrackSampling.ts", "utf8");
     const hotPathBodies = [
       extractFunctionBody(source, "applyMmdAnimation"),
-      extractFunctionBody(source, "sampleBoneTrackInto"),
-      extractFunctionBody(source, "samplePackedBoneTrackInto"),
-      extractFunctionBody(source, "readPackedBoneFrameInto"),
-      extractFunctionBody(source, "readInterpolatedPackedBoneFrameInto"),
-      extractFunctionBody(source, "interpolatePackedCurve"),
-      extractFunctionBody(source, "slerpPackedRotationInto"),
-      extractFunctionBody(source, "normalizeSampleRotationInto"),
+      extractFunctionBody(sampling, "sampleBoneTrackInto"),
+      extractFunctionBody(sampling, "samplePackedBoneTrackInto"),
+      extractFunctionBody(sampling, "readPackedBoneFrameInto"),
+      extractFunctionBody(sampling, "readInterpolatedPackedBoneFrameInto"),
+      extractFunctionBody(sampling, "interpolatePackedCurve"),
+      extractFunctionBody(sampling, "slerpPackedRotationInto"),
+      extractFunctionBody(sampling, "normalizeSampleRotationInto"),
       extractFunctionBody(source, "copyPreAppendTransforms"),
       extractFunctionBody(source, "clearNumberRecord")
     ];
