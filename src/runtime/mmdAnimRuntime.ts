@@ -2,25 +2,23 @@ import * as THREE from "three";
 import { applyMorphOverrides, validateMorphOverrides } from "./morphOverrides.js";
 
 import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
-import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
-import type { MmdPhysicsBackend, MmdPhysicsStepContext } from "../physics/index.js";
+import type { MmdPhysicsBackend } from "../physics/index.js";
 import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./sceneTrackSampling.js";
 import { DefaultMmdRuntime } from "./core.js";
-import { copyFloat32ArrayToScratch, copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, normalizeFrameRate, resetNumberArray, threeQuaternionToMmd, writeQuaternionToBuffer, writeVector3ToBuffer } from "./math.js";
+import { ExternalPhysicsStepper } from "./externalPhysicsStepper.js";
+import { normalizeFrameRate } from "./math.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
 import type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig } from "./hostRig.js";
 import { HostRigPhysics } from "./hostRigPhysics.js";
 import { readRuntimeExternalPhysics } from "./physics.js";
-import { captureRuntimeDebugStageInto, extractMmdWorldMatricesInto } from "./debugState.js";
-import { applyPhysicsOutputToSkeleton, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, mergePhysicsOutputDeltas } from "./physicsPose.js";
-import type { PrePhysicsScratch } from "./physicsPose.js";
+import { captureRuntimeDebugStageInto } from "./debugState.js";
+import { createPhysicsResetContext } from "./physicsPose.js";
 import type {
   MmdFrameState,
   MmdRuntime,
   MmdRuntimeDebugState,
   MmdRuntimeEvaluateOptions,
-  MmdRuntimeTickOptions,
-  RuntimeExternalPhysicsData
+  MmdRuntimeTickOptions
 } from "./types.js";
 
 import type {
@@ -57,6 +55,7 @@ type MutableDebugStages = {
 };
 
 const defaultMmdAnimIkTolerance = 1.0e-2;
+const emptyBonePhysicsToggles = Object.freeze({});
 
 interface MmdAnimRuntimeDebugStageState {
   worldMatricesColumnMajor: number[];
@@ -138,31 +137,6 @@ export class MmdAnimRuntime implements MmdRuntime {
     direction: [0, 0, 0]
   };
   private readonly scratchLightSample = new Float32Array(6);
-  private readonly scratchExternalPhysicsInput = {
-    translations: new Float32Array(0),
-    rotations: new Float32Array(0),
-    worldMatricesColumnMajor: new Float32Array(0),
-    outputTranslations: new Float32Array(0),
-    outputRotations: new Float32Array(0),
-    outputWorldMatricesColumnMajor: new Float32Array(0),
-    updatedBoneIndices: [] as number[],
-    bonePhysicsToggleBuffer: new Uint8Array(0),
-    worldMatricesColumnMajorNumbers: [] as number[]
-  };
-  private readonly scratchPrePhysics: PrePhysicsScratch = {
-    preTranslations: new Float32Array(0),
-    preRotations: new Float32Array(0),
-    preWorldMatricesColumnMajor: new Float32Array(0),
-    composeWorldPositions: [],
-    composeWorldRotations: [],
-    composeMatrix: new THREE.Matrix4(),
-    composeUnitScale: new THREE.Vector3(1, 1, 1),
-    mergeTargetRotation: new THREE.Quaternion(),
-    mergePreRotation: new THREE.Quaternion(),
-    mergePhysicsRotation: new THREE.Quaternion(),
-    localPosition: new THREE.Vector3(),
-    localRotation: new THREE.Quaternion()
-  };
   private wasmClip: MmdAnimRuntimeWasmClip | undefined;
   private wasmCameraTrack: MmdAnimRuntimeWasmCameraTrack | undefined;
   private wasmLightTrack: MmdAnimRuntimeWasmLightTrack | undefined;
@@ -170,8 +144,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   private mesh: THREE.SkinnedMesh | undefined;
   private mmdAnimation: MmdAnimation | undefined;
   private parsedTrackRuntime: DefaultMmdRuntime | undefined;
-  private externalPhysicsData: RuntimeExternalPhysicsData | undefined;
-  private previousEvaluateSeconds: number | undefined;
+  private readonly externalPhysicsStepper: ExternalPhysicsStepper;
   private physicsDisabled = false;
   private _restPoseDirty = true;
 
@@ -183,6 +156,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.ownsWasmResources = options.ownsWasmResources ?? true;
     this.physicsMode = options.physics ?? "none";
     this.physicsBackend = options.physicsBackend;
+    this.externalPhysicsStepper = new ExternalPhysicsStepper(this.physicsBackend, { directBuffers: false });
     this.ikTolerance = readNonNegativeOptionalNumber(options.ikTolerance, "MmdAnimRuntime ikTolerance");
     this.ikMaxIterationsCap = readNonNegativeIntegerOptionalNumber(
       options.ikMaxIterationsCap,
@@ -259,11 +233,14 @@ export class MmdAnimRuntime implements MmdRuntime {
       }
       this.physicsDisabled = true;
     } else {
-      this.stepExternalPhysics(previousSeconds);
+      const mesh = this.mesh;
+      if (mesh && this.externalPhysicsStepper.step(mesh, this.state, previousSeconds, emptyBonePhysicsToggles)) {
+        mesh.skeleton.update();
+      }
       this.physicsDisabled = false;
     }
     this.capturePhysicsDebugStage();
-    this.previousEvaluateSeconds = options?.physics === false ? undefined : this.state.seconds;
+    this.externalPhysicsStepper.markEvaluated(options?.physics === false ? undefined : this.state.seconds);
     return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
 
@@ -288,11 +265,12 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.clearAnimation();
     this.hostRig = rig;
     // Keep the ordinary path bound to the same mesh when the rig is cleared.
-    this.externalPhysicsData = this.physicsMode === "external" && this.physicsBackend
+    const data = this.physicsMode === "external" && this.physicsBackend
       ? readRuntimeExternalPhysics(mesh)
       : undefined;
-    if (this.externalPhysicsData && this.physicsBackend) {
-      this.hostRigPhysics = new HostRigPhysics(this.physicsBackend, this.externalPhysicsData, definition.drivenBoneIndices);
+    this.externalPhysicsStepper.bind(data);
+    if (data && this.physicsBackend) {
+      this.hostRigPhysics = new HostRigPhysics(this.physicsBackend, data, definition.drivenBoneIndices);
       this.hostRigPhysics.reset();
     }
     this.hostIkDisabled = new Uint8Array(this.wasmModel.ikCount?.() ?? 0);
@@ -312,7 +290,7 @@ export class MmdAnimRuntime implements MmdRuntime {
   /** Release the configured rig and return to ordinary rest/VMD evaluation. */
   clearHostRig(): void {
     if (this.hostRig) {
-      this.previousEvaluateSeconds = undefined;
+      this.externalPhysicsStepper.markEvaluated(undefined);
       this.physicsDisabled = false;
     }
     this.hostRigPhysics?.reset();
@@ -510,17 +488,18 @@ export class MmdAnimRuntime implements MmdRuntime {
     this.releaseCameraTrack();
     this.releaseLightTrack();
     writeParentBoneIndices(mesh.skeleton.bones, this.scratchParentBoneIndices);
-    this.externalPhysicsData =
+    this.externalPhysicsStepper.bind(
       this.physicsMode === "external" && this.physicsBackend
         ? readRuntimeExternalPhysics(mesh)
-        : undefined;
+        : undefined
+    );
     this.resetPhysicsState();
-    this.previousEvaluateSeconds = undefined;
+    this.externalPhysicsStepper.markEvaluated(undefined);
     this.physicsDisabled = false;
     if (hasParsedModelTracks(animation) && !isLikelyVmdBytes(animation.bytes)) {
       this.releaseOwnedClip();
       this.wasmClip = undefined;
-      this.externalPhysicsData = undefined;
+      this.externalPhysicsStepper.bind(undefined);
       this.parsedTrackRuntime = new DefaultMmdRuntime({
         frameRate: this.frameRate,
         initialSeconds: this.state.seconds,
@@ -661,121 +640,6 @@ export class MmdAnimRuntime implements MmdRuntime {
       return;
     }
     captureRuntimeDebugStageInto(mesh, this.debugStages.physics);
-  }
-
-  private stepExternalPhysics(previousSeconds: number): void {
-    const mesh = this.mesh;
-    const data = this.externalPhysicsData;
-    const backend = this.physicsBackend;
-    if (this.physicsMode !== "external" || !mesh || !data || !backend || backend.disabled || backend.disposed) {
-      return;
-    }
-
-    mesh.updateWorldMatrix(false, true);
-    const boneCount = mesh.skeleton.bones.length;
-    const inputTranslations = ensureFloat32ArrayLength(
-      this.scratchExternalPhysicsInput.translations,
-      boneCount * 3
-    );
-    this.scratchExternalPhysicsInput.translations = inputTranslations;
-    inputTranslations.fill(0, 0, boneCount * 3);
-    const inputRotations = ensureFloat32ArrayLength(
-      this.scratchExternalPhysicsInput.rotations,
-      boneCount * 4
-    );
-    this.scratchExternalPhysicsInput.rotations = inputRotations;
-    inputRotations.fill(0, 0, boneCount * 4);
-    for (let index = 0; index < boneCount; index += 1) {
-      const bone = mesh.skeleton.bones[index];
-      if (!bone) {
-        continue;
-      }
-      writeVector3ToBuffer(inputTranslations, index, [
-        bone.position.x,
-        bone.position.y,
-        -bone.position.z
-      ]);
-      writeQuaternionToBuffer(inputRotations, index, threeQuaternionToMmd(bone.quaternion));
-    }
-    const inputWorldMatricesColumnMajor = copyNumbersToFloat32Scratch(
-      extractMmdWorldMatricesInto(mesh, this.scratchExternalPhysicsInput.worldMatricesColumnMajorNumbers),
-      this.scratchExternalPhysicsInput.worldMatricesColumnMajor
-    );
-    this.scratchExternalPhysicsInput.worldMatricesColumnMajor = inputWorldMatricesColumnMajor;
-    const prePhysics = createPrePhysicsInputBuffersIfNeeded(
-      data.skeleton,
-      inputTranslations,
-      inputRotations,
-      inputWorldMatricesColumnMajor,
-      this.scratchPrePhysics
-    );
-    const physicsInputTranslations = prePhysics?.translations ?? inputTranslations;
-    const physicsInputRotations = prePhysics?.rotations ?? inputRotations;
-    const physicsInputWorldMatricesColumnMajor =
-      prePhysics?.worldMatricesColumnMajor ?? inputWorldMatricesColumnMajor;
-    const outputTranslations = copyFloat32ArrayToScratch(
-      physicsInputTranslations,
-      this.scratchExternalPhysicsInput.outputTranslations
-    );
-    this.scratchExternalPhysicsInput.outputTranslations = outputTranslations;
-    const outputRotations = copyFloat32ArrayToScratch(
-      physicsInputRotations,
-      this.scratchExternalPhysicsInput.outputRotations
-    );
-    this.scratchExternalPhysicsInput.outputRotations = outputRotations;
-    const outputWorldMatricesColumnMajor = copyFloat32ArrayToScratch(
-      physicsInputWorldMatricesColumnMajor,
-      this.scratchExternalPhysicsInput.outputWorldMatricesColumnMajor
-    );
-    this.scratchExternalPhysicsInput.outputWorldMatricesColumnMajor =
-      outputWorldMatricesColumnMajor;
-    if (this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer.length < data.bones.length) {
-      this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer = new Uint8Array(data.bones.length);
-    }
-    const context: MmdPhysicsStepContext = {
-      seconds: this.state.seconds,
-      deltaSeconds: Math.max(0, this.state.seconds - previousSeconds),
-      frame: this.state.frame,
-      frameRate: this.state.frameRate,
-      seeking:
-        this.previousEvaluateSeconds === undefined ||
-        this.state.seconds < this.previousEvaluateSeconds,
-      skeleton: data.skeleton,
-      rigidBodies: data.rigidBodies,
-      joints: data.joints,
-      inputTranslations: physicsInputTranslations,
-      inputRotations: physicsInputRotations,
-      inputWorldMatricesColumnMajor: physicsInputWorldMatricesColumnMajor,
-      output: {
-        translations: outputTranslations,
-        rotations: outputRotations,
-        worldMatricesColumnMajor: outputWorldMatricesColumnMajor,
-        updatedBoneIndices: resetNumberArray(this.scratchExternalPhysicsInput.updatedBoneIndices)
-      },
-      bonePhysicsToggles: writeBonePhysicsToggleBuffer(
-        data.bones,
-        {},
-        this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer
-      ),
-      morphImpulses: data.morphImpulses
-    };
-
-    const result = backend.step(context);
-    const updatedBoneCount = result.updatedBoneCount ?? context.output?.updatedBoneIndices?.length ?? 0;
-    if (!result.simulated && updatedBoneCount === 0) {
-      return;
-    }
-    if (prePhysics) {
-      mergePhysicsOutputDeltas(
-        context,
-        inputTranslations,
-        inputRotations,
-        prePhysics,
-        this.scratchPrePhysics
-      );
-    }
-    applyPhysicsOutputToSkeleton(mesh, context, updatedBoneCount);
-    mesh.skeleton.update();
   }
 
   private resetPhysicsState(): void {
