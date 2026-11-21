@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 
 import {
@@ -225,6 +225,60 @@ describe("MmdAnimRuntime", () => {
 
     expect(wasm.createdClips).toEqual([]);
     expect(renderedBoneWorldPosition(mesh, 0).toArray()).toEqual([7, 8, -9]);
+  });
+
+  it("reports external physics timing across forward, backward and resumed evaluation", () => {
+    const backend = new TranslatingPhysicsBackend([0, 0, 0]);
+    const mesh = createSingleBoneMesh();
+    const runtime = MmdAnimRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]), {
+      physics: "external", physicsBackend: backend
+    });
+    runtime.setAnimation(createMmdAnimation(createLikelyVmdBytes()), mesh);
+    const steps = [];
+    for (const [seconds, physics] of [[1 / 32, true], [3 / 32, true], [2 / 32, true], [4 / 32, false], [5 / 32, true]] as const) {
+      runtime.evaluate(seconds, { physics });
+      steps.push([backend.stepCount, backend.lastContext?.seeking, backend.lastContext?.deltaSeconds]);
+    }
+    expect(steps).toEqual([
+      [1, true, 1 / 32],
+      [2, false, 2 / 32],
+      [3, true, 0],
+      [3, true, 0],
+      [4, true, 1 / 32]
+    ]);
+  });
+
+  it("resets external physics only once across consecutive disabled evaluations", () => {
+    const backend = new TranslatingPhysicsBackend([0, 0, 0]);
+    const mesh = createSingleBoneMesh();
+    const runtime = MmdAnimRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]), {
+      physics: "external", physicsBackend: backend
+    });
+    runtime.setAnimation(createMmdAnimation(createLikelyVmdBytes()), mesh);
+    runtime.evaluate(0);
+    const initial = backend.resetCount;
+    runtime.evaluate(1 / 30, { physics: false });
+    expect(backend.resetCount - initial).toBe(1);
+    runtime.evaluate(2 / 30, { physics: false });
+    expect(backend.resetCount - initial).toBe(1);
+  });
+
+  it("uses ordinary step buffers and enables physics for every bone", () => {
+    const backend = Object.assign(new TranslatingPhysicsBackend([0, 0, 0]), {
+      acquireStepBuffers: vi.fn(() => undefined)
+    });
+    const mesh = createSingleBoneMesh();
+    const child = new THREE.Bone();
+    mesh.skeleton.bones[0].add(child);
+    mesh.bind(new THREE.Skeleton([mesh.skeleton.bones[0], child]));
+    const runtime = MmdAnimRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([0xaa]), {
+      physics: "external", physicsBackend: backend
+    });
+    runtime.setAnimation(createMmdAnimation(createLikelyVmdBytes()), mesh);
+    runtime.evaluate(0);
+    expect(backend.stepCount).toBe(1);
+    expect(backend.acquireStepBuffers).not.toHaveBeenCalled();
+    expect(Array.from(backend.lastContext?.bonePhysicsToggles ?? [])).toEqual([1, 1]);
   });
 
   it("steps external physics after wasm pose evaluation", () => {

@@ -651,7 +651,7 @@ describe("DefaultMmdRuntime", () => {
     expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
   });
 
-  it("honors VMD property frame IK enable states", () => {
+  it("honors VMD property frame IK enable states across backward seeks", () => {
     const ikSource = new THREE.Bone();
     ikSource.name = "ikSource";
     const effector = new THREE.Bone();
@@ -688,6 +688,12 @@ describe("DefaultMmdRuntime", () => {
           visible: true,
           physicsSimulation: true,
           ikStates: [{ boneName: "足ＩＫ", enabled: true }]
+        },
+        {
+          frame: 2,
+          visible: true,
+          physicsSimulation: true,
+          ikStates: [{ boneName: "足ＩＫ", enabled: false }]
         }
       ]
     };
@@ -706,6 +712,11 @@ describe("DefaultMmdRuntime", () => {
     runtime.setAnimation(animation, mesh);
     runtime.evaluate(1 / 30, { physics: false });
 
+    expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
+
+    runtime.evaluate(2 / 30, { physics: false });
+    expect(ikSource.quaternion.equals(new THREE.Quaternion())).toBe(true);
+    runtime.evaluate(1 / 30, { physics: false });
     expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
   });
 
@@ -750,6 +761,44 @@ describe("DefaultMmdRuntime", () => {
 
     expectBonePoseClose(secondA, firstA);
     expectBonePoseClose(secondB, firstB);
+  });
+
+  it("reports external physics timing across forward, backward and resumed evaluation", () => {
+    const backend = new TranslatingPhysicsBackend([0, 0, 0]);
+    const bone = new THREE.Bone();
+    const mesh = new THREE.SkinnedMesh();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    const runtime = new DefaultMmdRuntime({ physics: "external", physicsBackend: backend });
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
+    const steps = [];
+    for (const [seconds, physics] of [[1 / 32, true], [3 / 32, true], [2 / 32, true], [4 / 32, false], [5 / 32, true]] as const) {
+      runtime.evaluate(seconds, { physics });
+      steps.push([backend.stepCount, backend.lastContext?.seeking, backend.lastContext?.deltaSeconds]);
+    }
+    expect(steps).toEqual([
+      [1, true, 1 / 32],
+      [2, false, 2 / 32],
+      [3, true, 0],
+      [3, true, 0],
+      [4, true, 1 / 32]
+    ]);
+  });
+
+  it("does not step external physics on reset or subsequent unbound evaluation", () => {
+    const backend = new TranslatingPhysicsBackend([0, 0, 0]);
+    const bone = new THREE.Bone();
+    const mesh = new THREE.SkinnedMesh();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    const runtime = new DefaultMmdRuntime({ physics: "external", physicsBackend: backend });
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
+    runtime.evaluate(0);
+    expect(backend.stepCount).toBe(1);
+    runtime.reset(0.5);
+    expect(backend.stepCount).toBe(1);
+    runtime.evaluate(0.5);
+    expect(backend.stepCount).toBe(1);
   });
 
   it("steps an external physics backend and applies updated local bone transforms", () => {
