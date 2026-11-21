@@ -479,6 +479,46 @@ describe("DefaultMmdRuntime", () => {
     expect(appendB.quaternion.w).toBeCloseTo(appendA.quaternion.w, 5);
   });
 
+  it("updates the next IK goal through append rotation for a Japanese hand-twist name", () => {
+    function evaluateSecondEffector(goalName: string): THREE.Vector3 {
+      const source = new THREE.Bone();
+      const tip = new THREE.Bone();
+      tip.position.x = 1;
+      source.add(tip);
+      const goal = new THREE.Bone();
+      goal.name = goalName;
+      goal.position.y = 1;
+
+      // The second goal starts on +X and moves to +Y when it inherits the first link's turn.
+      const append = new THREE.Bone();
+      append.userData.mmdAppendTransform = { parentIndex: 0, weight: 1 };
+      append.userData.mmdFlags = { appendRotate: true };
+      const secondGoal = new THREE.Bone();
+      secondGoal.position.x = 1;
+      append.add(secondGoal);
+      const secondLink = new THREE.Bone();
+      const secondTip = new THREE.Bone();
+      secondTip.position.x = 1;
+      secondLink.add(secondTip);
+
+      const mesh = new THREE.SkinnedMesh();
+      mesh.add(source, goal, append, secondLink);
+      mesh.bind(new THREE.Skeleton([source, tip, goal, append, secondGoal, secondLink, secondTip]));
+      mesh.userData.mmdIkChains = [
+        { goalBoneIndex: 2, effectorBoneIndex: 1, iterationCount: 4, maxAnglePerIteration: Math.PI, links: [{ boneIndex: 0 }] },
+        { goalBoneIndex: 4, effectorBoneIndex: 6, iterationCount: 4, maxAnglePerIteration: Math.PI, links: [{ boneIndex: 5 }] }
+      ];
+
+      const runtime = new DefaultMmdRuntime();
+      runtime.setAnimation(createEmptyMmdAnimation(), mesh);
+      runtime.evaluate(0);
+      return secondTip.getWorldPosition(new THREE.Vector3());
+    }
+
+    expect(evaluateSecondEffector("左手捩IK").distanceTo(new THREE.Vector3(0, 1, 0))).toBeLessThan(1e-5);
+    expect(evaluateSecondEffector("左腕IK").distanceTo(new THREE.Vector3(1, 0, 0))).toBeLessThan(1e-5);
+  });
+
   it("evaluates append transforms by PMX layer before bone array order", () => {
     const source = new THREE.Bone();
     source.name = "source";
