@@ -28,9 +28,10 @@ try {
         type: "module",
         dependencies: {
           "@yohawing/three-mmd-loader": `file:${packagePath.replaceAll("\\", "/")}`,
-          three: "^0.176.0"
+          three: "^0.184.0"
         },
         devDependencies: {
+          "@types/three": "^0.184.1",
           typescript: "^5.8.3"
         }
       },
@@ -58,7 +59,8 @@ try {
   );
   await writeFile(
     join(workDir, "consumer.ts"),
-    `import { ThreeMmdLoader, type ThreeMmdAnimation, type ThreeMmdModel } from "@yohawing/three-mmd-loader";
+    `import { Scene } from "three";
+import { ThreeMmdLoader, type ThreeMmdAnimation, type ThreeMmdModel } from "@yohawing/three-mmd-loader";
 import { parsePmxMetadata } from "@yohawing/three-mmd-loader/parser";
 import { DefaultMmdRuntime, MmdAnimRuntime, exportMmdAnimWasmVmdAnimationJsonBytes, loadMmdAnimWasmVmd, parseMmdAnimWasmFormatJson, type MmdRuntimeAsyncEvaluateOptions, type MmdHostRigPose, type MmdHostRigDefinition } from "@yohawing/three-mmd-loader/runtime";
 import {
@@ -115,6 +117,7 @@ declare const webgpuCoreOptions: MmdTslMaterialCoreOptions;
 declare const webgpuAssemblyOptions: MmdTslMaterialAssemblyOptions;
 declare const webgpuUniforms: MmdTslMaterialUniforms;
 model.root.add(model.mesh);
+new Scene().add(model.root);
 model.setAnimation(animation);
 model.update(0);
 const asyncUpdateOptions: MmdRuntimeAsyncEvaluateOptions = { physics: false };

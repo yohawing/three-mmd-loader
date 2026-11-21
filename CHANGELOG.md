@@ -21,6 +21,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Made `@types/three` an optional peer dependency. TypeScript users should install `@types/three` matching their `three` version.
+
 - The step context passed to `MmdPhysicsBackend.step` is reused between calls. Copy values needed after the call returns.
 
 - The experimental `./webgpu` subpath remains outside semver guarantees in 1.x. Minor releases may introduce breaking changes.

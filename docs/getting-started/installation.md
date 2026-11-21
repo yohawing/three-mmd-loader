@@ -13,7 +13,9 @@ ESMを扱えるブラウザー向けプロジェクトに、ライブラリとTh
 npm install @yohawing/three-mmd-loader three
 ```
 
-TypeScriptの型定義はパッケージに含まれています。現在の`peerDependencies`はThree.jsの`>=0.176.0 <1.0.0`です。リポジトリの開発依存は`0.184.0`を基準にしており、この範囲内の全バージョンで同じ描画結果を保証するものではありません。特にTSLを使う場合は、[互換性](/reference/compatibility)を確認します。
+TypeScriptの型定義はパッケージに含まれています。TypeScriptで使う場合は、プロジェクトの`three`と同じマイナーバージョンの`@types/three`を開発依存に追加してください（例：`three@0.184.x`なら`npm install -D @types/three@0.184`）。
+
+現在の`peerDependencies`はThree.jsの`>=0.176.0 <1.0.0`です。リポジトリの開発依存は`0.184.0`を基準にしており、この範囲内の全バージョンで同じ描画結果を保証するものではありません。特にTSLを使う場合は、[互換性](/reference/compatibility)を確認します。
 
 ## アセットをHTTPで配信する
 
