@@ -73,9 +73,7 @@ export type { ThreeMmdMorphSplitGeometry } from "./geometry-split.js";
 export type {
   ModelSource,
   ModelSourceDiagnostic,
-  ModelSourceFetch,
-  ReadModelSourceOptions,
-  ReadModelSourceResult
+  ModelSourceFetch
 } from "./modelSource.js";
 export type {
   MaterialTransparencyDiagnostic,
@@ -87,7 +85,12 @@ export type {
   LoaderPerformanceMeasure,
   LoaderPerformanceOptions
 } from "./performance.js";
-export type { ThreeMmdSphereMappedToonMaterial } from "./materials.js";
+export type {
+  ReadModelSourceOptions,
+  ReadModelSourceResult,
+  ThreeMmdSphereMappedToonMaterial,
+  MmdToonTextureMaterial
+} from "./deprecated.js";
 export type {
   MmdRuntimeMeshSyncSource,
   MmdWorldMatrixBuffer,
@@ -96,7 +99,6 @@ export type {
 } from "./runtime-sync.js";
 export type { ThreeMmdSkeletonBone, ThreeMmdSkeletonData } from "./skeleton.js";
 export type {
-  MmdToonTextureMaterial,
   MmdMaterialTransparencyMode,
   TextureMap,
   TextureResolver

@@ -175,7 +175,7 @@ interface  MmdPhysicsDebugSnapshotNormalizationOptions
 interface  MmdPhysicsDebugSnapshotNormalizationResult
 interface  MmdPhysicsDiagnostic
 type       MmdPhysicsDiagnosticLevel
-type       MmdPhysicsEulerTuple
+type       MmdPhysicsEulerTuple  @deprecated
 interface  MmdPhysicsJoint
 interface  MmdPhysicsJointLimit
 interface  MmdPhysicsJointSpring
@@ -218,7 +218,7 @@ interface  MmdRuntimeTickOptions
 type       MmdSdefNormalSkinningInput  @deprecated
 type       MmdSdefSkinningInput  @deprecated
 const      mmdSphereModeToUniform  @deprecated
-interface  MmdToonTextureMaterial
+type       MmdToonTextureMaterial  @deprecated
 type       MmdToonTextureReference  @deprecated
 type       MmdWorldMatrixBuffer
 type       MmdWorldMatrixColumnMajorTuple
@@ -313,8 +313,8 @@ interface  PmxSectionRange
 type       PmxTextEncoding
 interface  QdefGeometryBuffers
 type       QuatTuple  @deprecated
-interface  ReadModelSourceOptions
-interface  ReadModelSourceResult
+type       ReadModelSourceOptions  @deprecated
+type       ReadModelSourceResult  @deprecated
 function   resolveCustomBulletMmdScriptUrl
 function   resolveMappedTexture
 const      resolveMmdToonTextureReference  @deprecated
@@ -370,7 +370,7 @@ interface  ThreeMmdRuntimeSyncTarget
 interface  ThreeMmdSdefBuffers
 interface  ThreeMmdSkeletonBone
 interface  ThreeMmdSkeletonData
-type       ThreeMmdSphereMappedToonMaterial
+type       ThreeMmdSphereMappedToonMaterial  @deprecated
 interface  ThreeMmdTextureLoader
 interface  ThreeMmdUvMorphOffset
 interface  ThreeMmdVertexMorphOffset
@@ -700,7 +700,7 @@ interface  MmdRuntimeMeshSyncSource
 type       MmdSdefNormalSkinningInput  @deprecated
 type       MmdSdefSkinningInput  @deprecated
 const      mmdSphereModeToUniform  @deprecated
-interface  MmdToonTextureMaterial
+type       MmdToonTextureMaterial  @deprecated
 type       MmdToonTextureReference  @deprecated
 type       MmdWorldMatrixBuffer
 type       MmdWorldMatrixColumnMajorTuple
@@ -710,8 +710,8 @@ type       ModelSourceDiagnostic
 type       ModelSourceFetch
 function   normalizeMmdRelativePath
 const      normalizeMmdTexturePath  @deprecated
-interface  ReadModelSourceOptions
-interface  ReadModelSourceResult
+type       ReadModelSourceOptions  @deprecated
+type       ReadModelSourceResult  @deprecated
 function   resolveMappedTexture
 const      resolveMmdToonTextureReference  @deprecated
 function   syncMmdMaterialStates
@@ -746,7 +746,7 @@ interface  ThreeMmdRuntimeSyncTarget
 interface  ThreeMmdSdefBuffers
 interface  ThreeMmdSkeletonBone
 interface  ThreeMmdSkeletonData
-type       ThreeMmdSphereMappedToonMaterial
+type       ThreeMmdSphereMappedToonMaterial  @deprecated
 interface  ThreeMmdTextureLoader
 interface  ThreeMmdUvMorphOffset
 interface  ThreeMmdVertexMorphOffset
@@ -802,7 +802,7 @@ interface  MmdPhysicsDebugSnapshotNormalizationOptions
 interface  MmdPhysicsDebugSnapshotNormalizationResult
 interface  MmdPhysicsDiagnostic
 type       MmdPhysicsDiagnosticLevel
-type       MmdPhysicsEulerTuple
+type       MmdPhysicsEulerTuple  @deprecated
 interface  MmdPhysicsJoint
 interface  MmdPhysicsJointLimit
 interface  MmdPhysicsJointSpring
@@ -845,7 +845,7 @@ function   createMmdRuntimePoseApplyScratch
 function   createMmdRuntimePoseBuffer
 function   createMmdRuntimeSharedPoseReadBuffer
 function   createMmdRuntimeSharedPoseSlots
-function   createWorkerMmdRuntime
+const      createWorkerMmdRuntime  @deprecated
 function   createWorkerMmdRuntimeFactory
 interface  CustomBulletWorkerPhysicsConfig
 function   getDefaultMmdRuntimeWorkerPoolSize
@@ -886,5 +886,5 @@ function   resolveMmdRuntimeWorkerPoolSize
 function   serializeMmdRuntimeModelDescriptor
 class      WorkerMmdRuntime
 interface  WorkerMmdRuntimeFactory
-type       WorkerMmdRuntimeFactoryOptions
+type       WorkerMmdRuntimeFactoryOptions  @deprecated
 interface  WorkerMmdRuntimeOptions

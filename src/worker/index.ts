@@ -61,7 +61,13 @@ export type {
 export type { MmdRuntimePoseApplyScratch } from "./applyPose.js";
 export type { MmdRuntimePoseBuffer } from "./protocol.js";
 export { WorkerMmdRuntime } from "./runtime.js";
-export { createWorkerMmdRuntime, createWorkerMmdRuntimeFactory } from "./runtimeFactory.js";
-export type { WorkerMmdRuntimeFactory, WorkerMmdRuntimeFactoryOptions } from "./runtimeFactory.js";
+import { createWorkerMmdRuntime as createWorkerMmdRuntimeInternal } from "./runtimeFactory.js";
+/** @deprecated Use createWorkerMmdRuntimeFactory. Will be removed in 1.0.0. */
+export const createWorkerMmdRuntime = createWorkerMmdRuntimeInternal;
+export { createWorkerMmdRuntimeFactory } from "./runtimeFactory.js";
+import type { WorkerMmdRuntimeFactoryOptions as WorkerMmdRuntimeFactoryOptionsInternal } from "./runtimeFactory.js";
+/** @deprecated Use WorkerMmdRuntimeOptions. Will be removed in 1.0.0. */
+export type WorkerMmdRuntimeFactoryOptions = WorkerMmdRuntimeFactoryOptionsInternal;
+export type { WorkerMmdRuntimeFactory } from "./runtimeFactory.js";
 export type { MmdRuntimeWorkerLike, WorkerMmdRuntimeOptions } from "./runtimeConnection.js";
 export type { MmdRuntimeSharedPoseSlot } from "./sharedPose.js";

@@ -21,13 +21,22 @@ These exports remain available in 0.9.x and will be removed from the public API 
 | `./three` | `attachMmdMaterialFactors`, `attachMmdMaterialMetadata`, `attachMmdOutlineExpansion`, `attachMmdSdefSkinning`, `attachMmdSphereTexture` | ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. |
 | `./three` | `computeMmdSdefSkinnedPosition`, `computeMmdSdefSkinnedNormal`, `computeQdefSkinnedPosition`, `computeQdefSkinnedNormal`, `MmdSdefSkinningInput`, `MmdSdefNormalSkinningInput`, `MmdQdefSkinningInput`, `MmdQdefNormalSkinningInput` | CPU reference implementation for tests. No replacement. |
 | `./three` | `mmdMaterialAlphaTest`, `mmdMaterialCastsShadow`, `mmdMaterialDepthWrite`, `mmdMaterialSuppressesColorAtAlpha`, `materialHasTextureMap`, `mmdSphereModeToUniform`, `computeMmdMaterialRenderOrder`, `MmdMaterialRenderOrderEntry` | No replacement. |
-| `./three` | `mmdMaterialTransparencyMode`, `materialTransparencyMode` | Read material.userData.mmdMaterial.transparencyMode. |
-| `./three` | `mmdMaterialMorphCanAffectAlpha` | Read material.userData.mmdMaterial.morphAlphaTransparent on evaluated materials (true when set). |
+| `./three` | `mmdMaterialTransparencyMode`, `materialTransparencyMode` | Read model.diagnostics.materials[i].finalTransparencyMode. |
+| `./three` | `mmdMaterialMorphCanAffectAlpha` | Read model.diagnostics.materials[i].morphAlphaTransparent. |
 | `./three` | `getDefaultToonGradientMap`, `normalizeMmdTexturePath`, `isMmdDdsTexturePath`, `resolveMmdToonTextureReference`, `defaultSharedToonTexturePath`, `MmdToonTextureReference` | Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. |
 | `./three` | `syncMmdOutlineMaterialStates`, `createMmdOutlineMeshes`, `createMmdMaterialRenderOrderMeshes`, `MmdOutlineModelSource`, `MmdOutlineOptions`, `MmdMaterialRenderOrderMeshOptions` | Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. |
 | `./runtime` | `CcdIkSolver`, `CcdIkBone`, `CcdIkChain`, `CcdIkLink`, `CcdIkLinkAngleLimit`, `CcdIkPose`, `CcdIkPreparedChain`, `CcdIkPreparedSolveInput`, `CcdIkSolveInput`, `CcdIkSolveResult`, `MutableQuatTuple`, `QuatTuple`, `Vec3Tuple`, `createCcdIkSolveInputFromMmdIk`, `mmdIkChainToCcdIkChain`, `CreateCcdIkSolveInputFromMmdIkInput`, `MmdIkRuntimeBone`, `MmdIkRuntimeChain`, `MmdIkRuntimeLink` | DefaultMmdRuntime and MmdAnimRuntime solve IK internally. No replacement. |
 | `./runtime` | `mmdAnimWasmVmdDtoToAnimation` | Use loadMmdAnimWasmVmd. |
 | `./runtime` | `mmdAnimWasmVpdDtoToPose` | Use loadMmdAnimWasmVpd. |
+| `./three` | `ReadModelSourceOptions`, `ReadModelSourceResult`, `ThreeMmdSphereMappedToonMaterial`, `MmdToonTextureMaterial` | No replacement. |
+| `./three` | `ThreeMmdModel.object`, `ThreeMmdModel.textureDiagnostics` | Use root and diagnostics.textures, respectively. |
+| `./three` | `ThreeMmdLoadModelOptions.outlines`, `ThreeMmdLoadModelOptions.renderOrderProxies` | Use outline and materialRenderOrder, respectively. |
+| `./runtime` | `tick(seconds, mesh, options)` | Use `tick(seconds, { mesh, ...options })`. |
+| `./runtime` | `reset()` | Use seek, resetPose, or clearAnimation. |
+| `./worker` | `MmdRuntimeWorkerPool.release(slot, lease)` | Use lease.release() or lease.dispose(). |
+| `./worker` | `createWorkerMmdRuntime`, `WorkerMmdRuntimeFactoryOptions` | Use createWorkerMmdRuntimeFactory and WorkerMmdRuntimeOptions, respectively. |
+| `./webgpu` | `MmdTslPipelineAttachOptions.selfShadow` | Use selfShadowEnabled. |
+| `./physics` | `MmdPhysicsEulerTuple` | No replacement. |
 
 ## [0.8.6] - 2026-11-05
 

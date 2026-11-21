@@ -1,3 +1,4 @@
+import type { MmdPhysicsEulerTuple as MmdPhysicsEulerTupleInternal } from "./backend.js";
 export {
   createCustomBulletMmdPhysicsBackend,
   customBulletMmdScriptPath,
@@ -14,7 +15,6 @@ export {
   type MmdPhysicsDiagnostic,
   type MmdPhysicsVector3Tuple,
   type MmdPhysicsQuaternionTuple,
-  type MmdPhysicsEulerTuple,
   type MmdPhysicsMatrix4ColumnMajorTuple,
   type MmdPhysicsNumericBuffer,
   type MmdPhysicsMutableNumericBuffer,
@@ -61,3 +61,6 @@ export {
   type MmdPhysicsDebugHooks,
   normalizeMmdPhysicsDebugSnapshot
 } from "./debugSnapshot.js";
+
+/** @deprecated No replacement. Will be removed in 1.0.0. */
+export type MmdPhysicsEulerTuple = MmdPhysicsEulerTupleInternal;

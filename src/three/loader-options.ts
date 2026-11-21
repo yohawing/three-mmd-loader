@@ -47,15 +47,13 @@ export interface ThreeMmdLoadModelOptions {
   /** Creates MMD outline proxy meshes. Defaults to true. */
   readonly outline?: boolean;
   /**
-   * @deprecated Use outline instead. This alias will be removed in the next
-   * breaking release.
+   * @deprecated Use outline instead. This alias will be removed in 1.0.0.
    */
   readonly outlines?: boolean;
   /** Applies MMD-compatible per-material render ordering with proxy meshes. Defaults to true. */
   readonly materialRenderOrder?: boolean;
   /**
-   * @deprecated Use materialRenderOrder instead. This alias will be removed in
-   * the next breaking release.
+   * @deprecated Use materialRenderOrder instead. This alias will be removed in 1.0.0.
    */
   readonly renderOrderProxies?: boolean;
   /** Splits large sparse morph geometry into per-material body meshes. Defaults to true. */

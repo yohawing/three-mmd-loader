@@ -46,7 +46,7 @@ export interface MmdTslPipelineAttachOptions {
   /** Backgrounds can opt out of the sparse position-morph compute path. */
   readonly sparseMorphs?: boolean;
   readonly selfShadowEnabled?: boolean;
-  /** Alias for selfShadowEnabled for callers that use the feature name. */
+  /** @deprecated Use selfShadowEnabled. Will be removed in 1.0.0. */
   readonly selfShadow?: boolean;
 }
 

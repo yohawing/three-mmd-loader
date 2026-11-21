@@ -238,6 +238,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
   }
 
   tick(seconds: number, options?: MmdRuntimeTickOptions): MmdFrameState;
+  /** @deprecated Use tick(seconds, { mesh, ...options }) instead. */
   tick(
     seconds: number,
     mesh: THREE.Object3D | null | undefined,
@@ -379,6 +380,7 @@ export class WorkerMmdRuntime implements MmdRuntime {
     return frames ? sampleMmdLightTrackInto(frames, this.frameStateScratch.frame, this.lightStateScratch) : undefined;
   }
 
+  /** @deprecated Prefer seek / resetPose / clearAnimation for finer control. */
   reset(seconds = 0): MmdFrameState {
     this.seek(seconds);
     this.resetPose();

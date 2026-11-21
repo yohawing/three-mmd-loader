@@ -156,6 +156,7 @@ export class MmdRuntimeWorkerPool {
     }
   }
 
+  /** @deprecated Use lease.release() or lease.dispose(). Will be removed in 1.0.0. */
   release(slot: Slot, lease: MutableLease): void {
     if (!slot.leases.delete(lease)) {
       return;

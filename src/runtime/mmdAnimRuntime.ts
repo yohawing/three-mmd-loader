@@ -485,6 +485,7 @@ export class MmdAnimRuntime implements MmdRuntime {
     return sampleMmdLightTrackInto(frames, this.state.frame, this.scratchLightState);
   }
 
+  /** @deprecated Prefer seek / resetPose / clearAnimation for finer control. */
   reset(seconds = 0): MmdFrameState {
     this.seek(seconds);
     this.resetPose();

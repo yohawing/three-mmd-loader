@@ -31,10 +31,12 @@ function symbolKind(symbol) {
   return "unknown";
 }
 
+function hasDeprecatedTag(decl) {
+  return !!decl && ts.getJSDocTags(decl).some((tag) => tag.tagName.text === "deprecated");
+}
+
 function isDeprecated(symbol) {
-  return (symbol.declarations ?? []).some((decl) =>
-    ts.getJSDocTags(decl).some((tag) => tag.tagName.text === "deprecated")
-  );
+  return (symbol.declarations ?? []).some(hasDeprecatedTag);
 }
 
 function publicEntries() {
@@ -86,9 +88,10 @@ function memberRows(checker, target, kind) {
   const rows = [];
   // Omitting the enclosing declaration keeps names independent of relative import paths.
   const typeText = (type, flags = format) => oneLine(checker.typeToString(type, undefined, flags));
-  function signatures(type, signatureKind, prefix, suffix = "") {
+  function signatures(type, signatureKind, prefix) {
     for (const sig of checker.getSignaturesOfType(type, signatureKind)) {
       if (!(modifiers(sig.declaration) & hidden)) {
+        const suffix = hasDeprecatedTag(sig.declaration) ? "  @deprecated" : "";
         rows.push(prefix + oneLine(checker.signatureToString(sig, undefined, format)) + suffix);
       }
     }
@@ -109,11 +112,11 @@ function memberRows(checker, target, kind) {
       const readonly = modifiers(decl) & ts.ModifierFlags.Readonly ||
         ((prop.flags & ts.SymbolFlags.GetAccessor) && !(prop.flags & ts.SymbolFlags.SetAccessor));
       const label = prefix + (readonly ? "readonly " : "") + memberName(prop) + (prop.flags & ts.SymbolFlags.Optional ? "?" : "");
-      const suffix = isDeprecated(prop) ? "  @deprecated" : "";
       const value = checker.getTypeOfSymbol(prop);
       if (prop.flags & ts.SymbolFlags.Method) {
-        signatures(checker.getNonNullableType(value), ts.SignatureKind.Call, label, suffix);
+        signatures(checker.getNonNullableType(value), ts.SignatureKind.Call, label);
       } else {
+        const suffix = isDeprecated(prop) ? "  @deprecated" : "";
         rows.push(label + ": " + typeText(value) + suffix);
       }
     }

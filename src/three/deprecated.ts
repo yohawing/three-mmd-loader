@@ -1,3 +1,7 @@
+import type { ReadModelSourceOptions as ReadModelSourceOptionsInternal } from "./modelSource.js";
+import type { ReadModelSourceResult as ReadModelSourceResultInternal } from "./modelSource.js";
+import type { ThreeMmdSphereMappedToonMaterial as ThreeMmdSphereMappedToonMaterialInternal } from "./materials.js";
+import type { MmdToonTextureMaterial as MmdToonTextureMaterialInternal } from "./textures.js";
 import {
   attachMmdMaterialMetadata as attachMmdMaterialMetadataInternal,
   computeMmdMaterialRenderOrder as computeMmdMaterialRenderOrderInternal,
@@ -52,7 +56,7 @@ import {
 export const attachMmdMaterialMetadata = attachMmdMaterialMetadataInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
 export const computeMmdMaterialRenderOrder = computeMmdMaterialRenderOrderInternal;
-/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read material.userData.mmdMaterial.transparencyMode. */
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read model.diagnostics.materials[i].finalTransparencyMode. */
 export const materialTransparencyMode = materialTransparencyModeInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
 export const mmdMaterialAlphaTest = mmdMaterialAlphaTestInternal;
@@ -60,11 +64,11 @@ export const mmdMaterialAlphaTest = mmdMaterialAlphaTestInternal;
 export const mmdMaterialCastsShadow = mmdMaterialCastsShadowInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
 export const mmdMaterialDepthWrite = mmdMaterialDepthWriteInternal;
-/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read material.userData.mmdMaterial.morphAlphaTransparent on evaluated materials (true when set). */
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read model.diagnostics.materials[i].morphAlphaTransparent. */
 export const mmdMaterialMorphCanAffectAlpha = mmdMaterialMorphCanAffectAlphaInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
 export const mmdMaterialSuppressesColorAtAlpha = mmdMaterialSuppressesColorAtAlphaInternal;
-/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read material.userData.mmdMaterial.transparencyMode. */
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read model.diagnostics.materials[i].finalTransparencyMode. */
 export const mmdMaterialTransparencyMode = mmdMaterialTransparencyModeInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
 export const attachMmdMaterialFactors = attachMmdMaterialFactorsInternal;
@@ -120,3 +124,12 @@ export type MmdOutlineOptions = MmdOutlineOptionsInternal;
 export type MmdMaterialRenderOrderEntry = MmdMaterialRenderOrderEntryInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. */
 export type MmdToonTextureReference = MmdToonTextureReferenceInternal;
+
+/** @deprecated No replacement. Will be removed in 1.0.0. */
+export type ReadModelSourceOptions = ReadModelSourceOptionsInternal;
+/** @deprecated No replacement. Will be removed in 1.0.0. */
+export type ReadModelSourceResult = ReadModelSourceResultInternal;
+/** @deprecated No replacement. Will be removed in 1.0.0. */
+export type ThreeMmdSphereMappedToonMaterial = ThreeMmdSphereMappedToonMaterialInternal;
+/** @deprecated No replacement. Will be removed in 1.0.0. */
+export type MmdToonTextureMaterial = MmdToonTextureMaterialInternal;

@@ -45,8 +45,7 @@ export interface ThreeMmdModel {
   /** Scene-ready root. Usually add only this object to the scene. */
   readonly root: THREE.Group;
   /**
-   * @deprecated Use root instead. This alias will be removed in the next
-   * breaking release.
+   * @deprecated Use root instead. This alias will be removed in 1.0.0.
    */
   readonly object: THREE.Group;
   /** Base MMD SkinnedMesh for advanced access and runtime binding. */
@@ -67,8 +66,7 @@ export interface ThreeMmdModel {
     readonly performance: readonly LoaderPerformanceMeasure[];
   };
   /**
-   * @deprecated Use diagnostics.textures instead. This alias will be removed in
-   * the next breaking release.
+   * @deprecated Use diagnostics.textures instead. This alias will be removed in 1.0.0.
    */
   readonly textureDiagnostics: readonly TextureLoadDiagnostic[];
   /** Binds a VMD/VPD animation to this model's mesh. */

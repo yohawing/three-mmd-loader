@@ -1316,7 +1316,7 @@ class DefaultMmdRuntime
   resetPose(): void
   seek(seconds: number): MmdFrameState
   setAnimation(animation: MmdAnimation, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>): void
-  tick(seconds: number, options?: MmdRuntimeTickOptions | undefined): MmdFrameState  @deprecated
+  tick(seconds: number, options?: MmdRuntimeTickOptions | undefined): MmdFrameState
   tick(seconds: number, mesh: Object3D<Object3DEventMap> | null | undefined, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState  @deprecated
 interface DefaultMmdRuntimeOptions
   readonly frameRate?: number | undefined
@@ -1349,13 +1349,13 @@ class MmdAnimRuntime
   evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState
   frameState(): MmdFrameState
   lightState(): LightState | undefined
-  reset(seconds?: number): MmdFrameState
+  reset(seconds?: number): MmdFrameState  @deprecated
   resetPose(): void
   seek(seconds: number): MmdFrameState
   setAnimation(animation: MmdAnimation, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>): void
   setHostPose(pose: MmdHostRigPose): void
   setHostRig(definition: MmdHostRigDefinition, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>): void
-  tick(seconds: number, options?: MmdRuntimeTickOptions | undefined): MmdFrameState  @deprecated
+  tick(seconds: number, options?: MmdRuntimeTickOptions | undefined): MmdFrameState
   tick(seconds: number, mesh: Object3D<Object3DEventMap> | null | undefined, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState  @deprecated
   static fromPmxBytes(wasm: MmdAnimRuntimeWasmModule, pmxBytes: Uint8Array<ArrayBufferLike>, options?: Omit<MmdAnimRuntimeOptions, "model" | "wasm" | "pmxBytes">): MmdAnimRuntime
 interface MmdAnimRuntimeOptions
@@ -1465,7 +1465,7 @@ interface MmdRuntime
   resetPose(): void
   seek(seconds: number): MmdFrameState
   setAnimation(animation: MmdAnimation, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>): void
-  tick(seconds: number, options?: MmdRuntimeTickOptions | undefined): MmdFrameState  @deprecated
+  tick(seconds: number, options?: MmdRuntimeTickOptions | undefined): MmdFrameState
   tick(seconds: number, mesh: Object3D<Object3DEventMap> | null | undefined, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState  @deprecated
   tickAsync?(seconds: number, options?: MmdRuntimeAsyncTickOptions | undefined): Promise<MmdFrameState>
   whenReady?(): Promise<void>
@@ -1774,7 +1774,7 @@ type MmdSdefSkinningInput  @deprecated
   readonly skinWeights: readonly [number, number, number, number]
 const mmdSphereModeToUniform  @deprecated
   : (sphereMode: "none" | "multiply" | "add" | "subTexture") => number
-interface MmdToonTextureMaterial
+type MmdToonTextureMaterial  @deprecated
   readonly sharedToonIndex?: number | undefined
   readonly toonTextureInfo?: MaterialTextureInfo | undefined
   readonly toonTexturePath?: string | undefined
@@ -1798,10 +1798,10 @@ function normalizeMmdRelativePath
   (path: string): string
 const normalizeMmdTexturePath  @deprecated
   : (texturePath: string) => string
-interface ReadModelSourceOptions
+type ReadModelSourceOptions  @deprecated
   readonly fetch?: ModelSourceFetch | undefined
   readonly signal?: AbortSignal | undefined
-interface ReadModelSourceResult
+type ReadModelSourceResult  @deprecated
   readonly bytes: Uint8Array<ArrayBufferLike>
   readonly diagnostic: ModelSourceDiagnostic
 function resolveMappedTexture
@@ -1971,7 +1971,7 @@ interface ThreeMmdSkeletonBone
   readonly position: readonly [number, number, number]
 interface ThreeMmdSkeletonData
   readonly bones: readonly ThreeMmdSkeletonBone[]
-type ThreeMmdSphereMappedToonMaterial
+type ThreeMmdSphereMappedToonMaterial  @deprecated
   addEventListener<T extends "dispose">(type: T, listener: EventListener<MaterialEventMap[T], T, ThreeMmdSphereMappedToonMaterial>): void
   allowOverride: boolean
   alphaHash: boolean
@@ -2187,7 +2187,7 @@ interface MmdTslPipeline
   setSelfShadowMode(mode: 0 | 2 | 1): boolean
 interface MmdTslPipelineAttachOptions
   readonly light?: DirectionalLight | undefined
-  readonly selfShadow?: boolean | undefined
+  readonly selfShadow?: boolean | undefined  @deprecated
   readonly selfShadowEnabled?: boolean | undefined
   readonly sparseMorphs?: boolean | undefined
 interface MmdTslPipelineModel
@@ -2354,7 +2354,7 @@ interface MmdPhysicsDiagnostic
   readonly message: string
 type MmdPhysicsDiagnosticLevel
   = "warning" | "error"
-type MmdPhysicsEulerTuple
+type MmdPhysicsEulerTuple  @deprecated
   = readonly [x: number, y: number, z: number]
 interface MmdPhysicsJoint
   readonly angularLimit?: MmdPhysicsJointLimit | undefined
@@ -2519,8 +2519,8 @@ function createMmdRuntimeSharedPoseReadBuffer
   (boneCount: number, morphCount: number): MmdRuntimePoseBuffer
 function createMmdRuntimeSharedPoseSlots
   (boneCount: number, morphCount: number, capacity?: number): MmdRuntimeSharedPoseSlot[]
-function createWorkerMmdRuntime
-  (context: ThreeMmdRuntimeFactoryContext, options?: WorkerMmdRuntimeOptions): MmdRuntime
+const createWorkerMmdRuntime  @deprecated
+  : (context: ThreeMmdRuntimeFactoryContext, options?: WorkerMmdRuntimeOptions) => MmdRuntime
 function createWorkerMmdRuntimeFactory
   (options?: WorkerMmdRuntimeOptions): WorkerMmdRuntimeFactory
 interface CustomBulletWorkerPhysicsConfig
@@ -2646,7 +2646,7 @@ class MmdRuntimeWorkerPool
   acquire(context: ThreeMmdRuntimeFactoryContext, workerFactory?: MmdRuntimeWorkerPhysicalFactory | undefined): MmdRuntimeWorkerLease
   activeLeaseCount(): number
   dispose(): void
-  release(slot: Slot, lease: MutableLease): void
+  release(slot: Slot, lease: MutableLease): void  @deprecated
   size(): number
 interface MmdRuntimeWorkerPoolOptions
   readonly size?: number | undefined
@@ -2678,20 +2678,20 @@ class WorkerMmdRuntime
   lightState(): LightState | undefined
   poseAgeFrames(): number
   poseAgeSeconds(): number
-  reset(seconds?: number): MmdFrameState
+  reset(seconds?: number): MmdFrameState  @deprecated
   resetPose(): void
   seek(seconds: number): MmdFrameState
   setAnimation(animation: MmdAnimation, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>): void
   sharedMemoryEnabled(): boolean
   tick(seconds: number, options?: MmdRuntimeTickOptions | undefined): MmdFrameState
-  tick(seconds: number, mesh: Object3D<Object3DEventMap> | null | undefined, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState
+  tick(seconds: number, mesh: Object3D<Object3DEventMap> | null | undefined, options?: MmdRuntimeEvaluateOptions | undefined): MmdFrameState  @deprecated
   tickAsync(seconds: number, options?: MmdRuntimeAsyncTickOptions | undefined): Promise<MmdFrameState>
   whenReady(): Promise<void>
   workerReady(): boolean
 interface WorkerMmdRuntimeFactory
   (context: ThreeMmdRuntimeFactoryContext): MmdRuntime
   dispose(): void
-type WorkerMmdRuntimeFactoryOptions
+type WorkerMmdRuntimeFactoryOptions  @deprecated
   readonly externalPhysics?: CustomBulletWorkerPhysicsConfig | undefined
   readonly fallback?: boolean | undefined
   readonly onFallback?: ((error: unknown) => void) | undefined
