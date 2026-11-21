@@ -120,6 +120,15 @@ function createAlphaMaterialMorph(materialIndex = 0): MorphData[] {
 }
 
 describe("Three.js MMD materials", () => {
+  it("applies material factors to a standalone material without textures", async () => {
+    const mmdMaterials = [createMaterialInfo()];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials);
+
+    expect(materials[0].userData.mmdMaterialFactors.shaderApplied).toBe(true);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

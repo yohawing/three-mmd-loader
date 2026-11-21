@@ -18,6 +18,17 @@ description: モデルの同期とカメラ、ライト、描画を接続しま�
 
 ローダーが `mesh.userData` に書き込む `mmd*` キーは内部実装であり、semver による互換性保証の対象外です。
 
+### ローダーを使わずにMMD材質を作る
+
+テストなどで材質を単体で作るには、`/three`の次の2関数に同じ材質定義の配列を渡します。
+
+```ts
+const materials = createThreeMmdMaterials(mmdMaterials);
+await applyThreeMmdMaterialTextures(materials, mmdMaterials);
+```
+
+1行目で各材質にMMDのメタデータが付きます。2行目でテクスチャの有無にかかわらず材質係数がシェーダーに適用されます。
+
 ### Three.js ヘルパー
 
 | 用途 | 主なAPI |

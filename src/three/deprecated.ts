@@ -58,7 +58,7 @@ import {
 } from "./textures.js";
 
 // Deprecated in 0.9.0, removed in 1.0.0
-/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader.loadModel and createThreeMmdMaterials attach material metadata. */
 export const attachMmdMaterialMetadata = attachMmdMaterialMetadataInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
 export const computeMmdMaterialRenderOrder = computeMmdMaterialRenderOrderInternal;
@@ -76,15 +76,15 @@ export const mmdMaterialMorphCanAffectAlpha = mmdMaterialMorphCanAffectAlphaInte
 export const mmdMaterialSuppressesColorAtAlpha = mmdMaterialSuppressesColorAtAlphaInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. Read model.diagnostics.materials[i].finalTransparencyMode. */
 export const mmdMaterialTransparencyMode = mmdMaterialTransparencyModeInternal;
-/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use ThreeMmdLoader.loadModel, or createThreeMmdMaterials followed by applyThreeMmdMaterialTextures. */
 export const attachMmdMaterialFactors = attachMmdMaterialFactorsInternal;
-/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use ThreeMmdLoader.loadModel, or createThreeMmdMaterials followed by applyThreeMmdMaterialTextures. Sphere mapping requires an enabled sphere mode and a loaded sphere texture. */
 export const attachMmdSphereTexture = attachMmdSphereTextureInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
 export const materialHasTextureMap = materialHasTextureMapInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. No replacement. */
 export const mmdSphereModeToUniform = mmdSphereModeToUniformInternal;
-/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. For model outlines, use the outline option of ThreeMmdLoader.loadModel. There is no direct replacement for this hook. */
 export const attachMmdOutlineExpansion = attachMmdOutlineExpansionInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. */
 export const createMmdMaterialRenderOrderMeshes = createMmdMaterialRenderOrderMeshesInternal;
@@ -92,7 +92,7 @@ export const createMmdMaterialRenderOrderMeshes = createMmdMaterialRenderOrderMe
 export const createMmdOutlineMeshes = createMmdOutlineMeshesInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. */
 export const syncMmdOutlineMaterialStates = syncMmdOutlineMaterialStatesInternal;
-/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. */
+/** @deprecated Internal helper; will be removed from the public API in 1.0.0. ThreeMmdLoader.loadModel applies skinning to model materials for geometry with SDEF or QDEF. */
 export const attachMmdSdefSkinning = attachMmdSdefSkinningInternal;
 /** @deprecated Internal helper; will be removed from the public API in 1.0.0. CPU reference implementation for tests. No replacement. */
 export const computeMmdSdefSkinnedNormal = computeMmdSdefSkinnedNormalInternal;

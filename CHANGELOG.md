@@ -42,7 +42,11 @@ These exports remain available in 0.9.x and will be removed from the public API 
 
 | Entry | Symbol | Migration |
 | --- | --- | --- |
-| `./three` | `attachMmdMaterialFactors`, `attachMmdMaterialMetadata`, `attachMmdOutlineExpansion`, `attachMmdSdefSkinning`, `attachMmdSphereTexture` | ThreeMmdLoader and createThreeMmdMaterials apply these hooks automatically. |
+| `./three` | `attachMmdMaterialMetadata` | `ThreeMmdLoader.loadModel` and `createThreeMmdMaterials` attach material metadata. |
+| `./three` | `attachMmdMaterialFactors` | Use `ThreeMmdLoader.loadModel`, or `createThreeMmdMaterials` followed by `applyThreeMmdMaterialTextures`. |
+| `./three` | `attachMmdSphereTexture` | Use `ThreeMmdLoader.loadModel`, or `createThreeMmdMaterials` followed by `applyThreeMmdMaterialTextures`. Sphere mapping requires an enabled sphere mode and a loaded sphere texture. |
+| `./three` | `attachMmdOutlineExpansion` | For model outlines, use the `outline` option of `ThreeMmdLoader.loadModel`. There is no direct replacement for this hook. |
+| `./three` | `attachMmdSdefSkinning` | `ThreeMmdLoader.loadModel` applies skinning to model materials for geometry with SDEF or QDEF. |
 | `./three` | `computeMmdSdefSkinnedPosition`, `computeMmdSdefSkinnedNormal`, `computeQdefSkinnedPosition`, `computeQdefSkinnedNormal`, `MmdSdefSkinningInput`, `MmdSdefNormalSkinningInput`, `MmdQdefSkinningInput`, `MmdQdefNormalSkinningInput` | CPU reference implementation for tests. No replacement. |
 | `./three` | `mmdMaterialAlphaTest`, `mmdMaterialCastsShadow`, `mmdMaterialDepthWrite`, `mmdMaterialSuppressesColorAtAlpha`, `materialHasTextureMap`, `mmdSphereModeToUniform`, `computeMmdMaterialRenderOrder`, `MmdMaterialRenderOrderEntry` | No replacement. |
 | `./three` | `mmdMaterialTransparencyMode`, `materialTransparencyMode` | Read model.diagnostics.materials[i].finalTransparencyMode. |
