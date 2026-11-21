@@ -17,6 +17,7 @@ import { createCcdIkStaticBones, readIkChains, solvePreparedIk } from "./ik-brid
 import type { SolvePreparedIkScratch } from "./ik-bridge.js";
 import { CcdIkSolver } from "./ik/index.js";
 import type { CcdIkPreparedChain } from "./ik/index.js";
+import { IkEnableState } from "./ikEnableState.js";
 import {
   normalizeFrameRate,
   prepareQuaternionScratchArray,
@@ -58,11 +59,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private readonly physicsMode: "none" | "stateful-spring" | "external";
   private readonly physicsBackend: MmdPhysicsBackend | undefined;
   private physicsDisabled = false;
-  private preparedIkChains: CcdIkPreparedChain[] = [];
-  private readonly activeIkChains: CcdIkPreparedChain[] = [];
-  private currentIkPropertyFrame: MmdAnimation["propertyFrames"][number] | undefined;
-  private currentIkPropertyFrameIndex = -1;
-  private readonly disabledIkBoneNames = new Set<string>();
+  private readonly ikEnableState = new IkEnableState();
   private readonly scratchAppendTranslations: THREE.Vector3[] = [];
   private readonly scratchAppendRotations: THREE.Quaternion[] = [];
   private cachedAppendTransformOrder: number[] = [];
@@ -129,7 +126,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     writeFrameState(this.state, seconds, this.frameRate);
     if (this.mesh && (this.mmdAnimation || options?.morphOverrides || this.hadMorphOverrides)) {
       this.applyCurrentMmdAnimation(this.state.frame, options?.morphOverrides);
-      this.updateCurrentIkStates(this.state.frame);
+      this.ikEnableState.update(this.mmdAnimation?.propertyFrames, this.state.frame, this.mesh.skeleton.bones);
       this.captureDebugStage("vmdInterpolation");
     }
     this.hadMorphOverrides = (options?.morphOverrides?.indices.length ?? 0) > 0;
@@ -199,10 +196,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   clearAnimation(): void {
     this.mmdAnimation = undefined;
     this.bonePhysicsToggles = {};
-    this.activeIkChains.length = 0;
-    this.currentIkPropertyFrame = undefined;
-    this.currentIkPropertyFrameIndex = -1;
-    this.disabledIkBoneNames.clear();
+    this.ikEnableState.clear();
     this.scratchCameraFrameHint.index = 0;
   }
 
@@ -245,11 +239,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     );
     this.externalPhysicsStepper.bind(undefined);
     this.bonePhysicsToggles = {};
-    this.preparedIkChains = [];
-    this.activeIkChains.length = 0;
-    this.currentIkPropertyFrame = undefined;
-    this.currentIkPropertyFrameIndex = -1;
-    this.disabledIkBoneNames.clear();
+    this.ikEnableState.setChains([]);
     this.scratchCameraFrameHint.index = 0;
     this.debugStages = createEmptyDebugStages();
     this.externalPhysicsStepper.markEvaluated(undefined);
@@ -266,16 +256,12 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
     this.prepareAnimationTarget(mesh);
     this.mmdAnimation = animation;
-    this.preparedIkChains = this.ikSolver.prepareChains(
+    this.ikEnableState.setChains(this.ikSolver.prepareChains(
       readIkChains(mesh),
       createCcdIkStaticBones(mesh)
-    );
-    this.activeIkChains.length = 0;
-    this.currentIkPropertyFrame = undefined;
-    this.currentIkPropertyFrameIndex = -1;
-    this.disabledIkBoneNames.clear();
+    ));
     this.applyCurrentMmdAnimation(this.state.frame);
-    this.updateCurrentIkStates(this.state.frame);
+    this.ikEnableState.update(animation.propertyFrames, this.state.frame, mesh.skeleton.bones);
   }
 
   private prepareAnimationTarget(mesh: THREE.SkinnedMesh): void {
@@ -359,7 +345,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 
   private solveIk(): Set<number> {
-    const chains = this.currentEnabledIkChains();
+    const chains = this.ikEnableState.enabledChains();
     if (!this.hasHandTwistIkChain()) {
       const sourceBoneIndices = solvePreparedIk(this.mesh, this.ikSolver, chains, this.scratchIk);
       this.reapplyCurrentAppendTransformsForSources(sourceBoneIndices);
@@ -385,56 +371,12 @@ export class DefaultMmdRuntime implements MmdRuntime {
     return changedBoneIndices;
   }
 
-  private currentEnabledIkChains(): readonly CcdIkPreparedChain[] {
-    if (this.disabledIkBoneNames.size === 0) {
-      return this.preparedIkChains;
-    }
-    return this.activeIkChains;
-  }
-
-  private rebuildActiveIkChains(): void {
-    this.activeIkChains.length = 0;
-    const bones = this.mesh?.skeleton.bones;
-    if (!bones) {
-      return;
-    }
-    for (const chain of this.preparedIkChains) {
-      if (this.isIkChainEnabled(chain, bones)) {
-        this.activeIkChains.push(chain);
-      }
-    }
-  }
-
-  private isIkChainEnabled(
-    chain: CcdIkPreparedChain,
-    bones: readonly THREE.Bone[]
-  ): boolean {
-    const bone = bones[chain.goalBoneIndex];
-    if (!bone) {
-      return true;
-    }
-    if (this.disabledIkBoneNames.has(bone.name)) {
-      return false;
-    }
-    const userData = readMmdBoneUserData(bone);
-    const mmdName = userData.mmdBoneName;
-    if (typeof mmdName === "string" && this.disabledIkBoneNames.has(mmdName)) {
-      return false;
-    }
-    const ikStateName = userData.mmdIkStateName;
-    if (typeof ikStateName === "string" && this.disabledIkBoneNames.has(ikStateName)) {
-      return false;
-    }
-    const englishName = userData.mmdEnglishBoneName;
-    return !(typeof englishName === "string" && this.disabledIkBoneNames.has(englishName));
-  }
-
   private hasHandTwistIkChain(): boolean {
     const bones = this.mesh?.skeleton.bones;
     if (!bones) {
       return false;
     }
-    for (const chain of this.preparedIkChains) {
+    for (const chain of this.ikEnableState.chains) {
       const bone = bones[chain.goalBoneIndex];
       const userData = bone ? readMmdBoneUserData(bone) : undefined;
       if (
@@ -469,47 +411,6 @@ export class DefaultMmdRuntime implements MmdRuntime {
     syncMorphSplitTargetInfluences(mesh);
     this.bonePhysicsToggles = bonePhysicsToggles;
   }
-
-  private updateCurrentIkStates(frame: number): void {
-    const propertyFrame = this.sampleCurrentPropertyFrame(frame);
-    if (propertyFrame === this.currentIkPropertyFrame) {
-      return;
-    }
-    this.currentIkPropertyFrame = propertyFrame;
-    this.disabledIkBoneNames.clear();
-    this.activeIkChains.length = 0;
-    if (!propertyFrame) {
-      return;
-    }
-    for (const state of propertyFrame.ikStates) {
-      if (!state.enabled) {
-        this.disabledIkBoneNames.add(state.boneName);
-      }
-    }
-    if (this.disabledIkBoneNames.size > 0) {
-      this.rebuildActiveIkChains();
-    }
-  }
-
-  private sampleCurrentPropertyFrame(frame: number): MmdAnimation["propertyFrames"][number] | undefined {
-    const frames = this.mmdAnimation?.propertyFrames;
-    if (!frames || frames.length === 0 || frame < (frames[0]?.frame ?? Number.POSITIVE_INFINITY)) {
-      this.currentIkPropertyFrameIndex = -1;
-      return undefined;
-    }
-    let index = this.currentIkPropertyFrameIndex;
-    const current = index >= 0 && index < frames.length ? frames[index] : undefined;
-    if (!current || current.frame > frame) {
-      index = findPropertyFrameIndex(frames, frame);
-    } else {
-      while (index + 1 < frames.length && (frames[index + 1]?.frame ?? Number.POSITIVE_INFINITY) <= frame) {
-        index += 1;
-      }
-    }
-    this.currentIkPropertyFrameIndex = index;
-    return frames[index];
-  }
-
 
   private applyCurrentAppendTransforms(): void {
     applyAppendTransforms(
@@ -579,24 +480,6 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
     captureRuntimeDebugStageInto(mesh, this.debugStages[stage]);
   }
-}
-
-function findPropertyFrameIndex(
-  frames: readonly MmdAnimation["propertyFrames"][number][],
-  frame: number
-): number {
-  let low = 0;
-  let high = frames.length - 1;
-  while (low <= high) {
-    const middle = (low + high) >> 1;
-    const middleFrame = frames[middle]?.frame ?? Number.POSITIVE_INFINITY;
-    if (middleFrame <= frame) {
-      low = middle + 1;
-    } else {
-      high = middle - 1;
-    }
-  }
-  return Math.max(0, high);
 }
 
 function clearDebugStage(stage: MmdRuntimeDebugState["stages"]["physics"]): void {
