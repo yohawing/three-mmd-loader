@@ -4,14 +4,14 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ThreeMmdLoader } from "../../../src/index.js";
+import { MmdRuntimeTransferablePosePool } from "../../../src/worker/transferablePool.js";
+import { MmdRuntimeWorkerHost } from "../../../src/worker/host.js";
 import {
-  MmdRuntimeTransferablePosePool,
-  MmdRuntimeWorkerHost,
   applyMmdRuntimePoseToMesh,
-  copyMmdRuntimePoseInto,
-  createMmdRuntimePoseApplyScratch,
-  serializeMmdRuntimeModelDescriptor
-} from "../../../src/worker/index.js";
+  createMmdRuntimePoseApplyScratch
+} from "../../../src/worker/applyPose.js";
+import { copyMmdRuntimePoseInto } from "../../../src/worker/protocol.js";
+import { serializeMmdRuntimeModelDescriptor } from "../../../src/worker/modelDescriptor.js";
 import { extractMmdWorldMatrices } from "../../helpers/runtimeParity.js";
 
 describe("transferable runtime poses", () => {

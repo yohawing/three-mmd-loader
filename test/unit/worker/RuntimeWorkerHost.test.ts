@@ -5,12 +5,12 @@ import { describe, expect, it } from "vitest";
 
 import { ThreeMmdLoader } from "../../../src/index.js";
 import { DefaultMmdRuntime } from "../../../src/runtime/index.js";
+import { MmdRuntimeWorkerHost } from "../../../src/worker/host.js";
 import {
-  MmdRuntimeWorkerHost,
   buildShadowMmdSkinnedMesh,
-  isCurrentMmdRuntimePose,
   serializeMmdRuntimeModelDescriptor
-} from "../../../src/worker/index.js";
+} from "../../../src/worker/modelDescriptor.js";
+import { isCurrentMmdRuntimePose } from "../../../src/worker/protocol.js";
 import type { MmdRuntimeDebugState } from "../../../src/runtime/index.js";
 
 describe("in-process MMD runtime worker host", () => {

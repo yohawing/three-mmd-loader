@@ -836,54 +836,54 @@ function   validateConcreteMmdPhysicsStepContext
 function   validateMmdPhysicsStepContext
 
 ## ./worker (52)
-function   acquireMmdRuntimeSharedPoseWriteSlot
-function   applyMmdRuntimePoseToMesh
-function   buildShadowMmdSkinnedMesh
-function   captureMmdRuntimePoseInto
-function   copyMmdRuntimePoseInto
-function   createMmdRuntimePoseApplyScratch
-function   createMmdRuntimePoseBuffer
-function   createMmdRuntimeSharedPoseReadBuffer
-function   createMmdRuntimeSharedPoseSlots
+const      acquireMmdRuntimeSharedPoseWriteSlot  @deprecated
+const      applyMmdRuntimePoseToMesh  @deprecated
+const      buildShadowMmdSkinnedMesh  @deprecated
+const      captureMmdRuntimePoseInto  @deprecated
+const      copyMmdRuntimePoseInto  @deprecated
+const      createMmdRuntimePoseApplyScratch  @deprecated
+const      createMmdRuntimePoseBuffer  @deprecated
+const      createMmdRuntimeSharedPoseReadBuffer  @deprecated
+const      createMmdRuntimeSharedPoseSlots  @deprecated
 const      createWorkerMmdRuntime  @deprecated
 function   createWorkerMmdRuntimeFactory
 interface  CustomBulletWorkerPhysicsConfig
 function   getDefaultMmdRuntimeWorkerPoolSize
-function   isCurrentMmdRuntimePose
-const      MMD_RUNTIME_POSE_PROTOCOL_VERSION
+const      isCurrentMmdRuntimePose  @deprecated
+const      MMD_RUNTIME_POSE_PROTOCOL_VERSION  @deprecated
 interface  MmdRuntimeBoneDescriptor
 interface  MmdRuntimeModelDescriptor
-interface  MmdRuntimePoseApplyScratch
+type       MmdRuntimePoseApplyScratch  @deprecated
 interface  MmdRuntimePoseBuffer
 interface  MmdRuntimeSharedPoseSlot
-class      MmdRuntimeTransferablePosePool
+const+type MmdRuntimeTransferablePosePool  @deprecated
 type       MmdRuntimeWorkerCommand
-interface  MmdRuntimeWorkerCommandEnvelope
-class      MmdRuntimeWorkerDispatcher
-type       MmdRuntimeWorkerDispatcherCommand
-type       MmdRuntimeWorkerDispatcherMessagePort
-class      MmdRuntimeWorkerEndpoint
-interface  MmdRuntimeWorkerEndpointOptions
+type       MmdRuntimeWorkerCommandEnvelope  @deprecated
+const+type MmdRuntimeWorkerDispatcher  @deprecated
+type       MmdRuntimeWorkerDispatcherCommand  @deprecated
+type       MmdRuntimeWorkerDispatcherMessagePort  @deprecated
+const+type MmdRuntimeWorkerEndpoint  @deprecated
+type       MmdRuntimeWorkerEndpointOptions  @deprecated
 type       MmdRuntimeWorkerEvent
-interface  MmdRuntimeWorkerEventEnvelope
-class      MmdRuntimeWorkerHost
-interface  MmdRuntimeWorkerHostOptions
+type       MmdRuntimeWorkerEventEnvelope  @deprecated
+const+type MmdRuntimeWorkerHost  @deprecated
+type       MmdRuntimeWorkerHostOptions  @deprecated
 interface  MmdRuntimeWorkerLease
 interface  MmdRuntimeWorkerLike
-interface  MmdRuntimeWorkerMessagePort
-type       MmdRuntimeWorkerMultiplexedCommand
-type       MmdRuntimeWorkerMultiplexedEvent
-interface  MmdRuntimeWorkerMultiplexedMessagePort
+type       MmdRuntimeWorkerMessagePort  @deprecated
+type       MmdRuntimeWorkerMultiplexedCommand  @deprecated
+type       MmdRuntimeWorkerMultiplexedEvent  @deprecated
+type       MmdRuntimeWorkerMultiplexedMessagePort  @deprecated
 type       MmdRuntimeWorkerPhysicalFactory
 class      MmdRuntimeWorkerPool
 interface  MmdRuntimeWorkerPoolOptions
 type       MmdRuntimeWorkerRuntimeId
-function   publishMmdRuntimeSharedPose
-function   readMmdRuntimeSharedPoseInto
-function   releaseMmdRuntimeSharedPoseReadSlot
-function   resetMmdRuntimeSharedPoseSlot
+const      publishMmdRuntimeSharedPose  @deprecated
+const      readMmdRuntimeSharedPoseInto  @deprecated
+const      releaseMmdRuntimeSharedPoseReadSlot  @deprecated
+const      resetMmdRuntimeSharedPoseSlot  @deprecated
 function   resolveMmdRuntimeWorkerPoolSize
-function   serializeMmdRuntimeModelDescriptor
+const      serializeMmdRuntimeModelDescriptor  @deprecated
 class      WorkerMmdRuntime
 interface  WorkerMmdRuntimeFactory
 type       WorkerMmdRuntimeFactoryOptions  @deprecated

@@ -2501,24 +2501,24 @@ function validateMmdPhysicsStepContext
   (context: MmdPhysicsStepContext, options?: MmdPhysicsStepContextValidationOptions): MmdPhysicsStepContextValidationResult
 
 ## ./worker
-function acquireMmdRuntimeSharedPoseWriteSlot
-  (slots: readonly MmdRuntimeSharedPoseSlot[]): MmdRuntimeSharedPoseSlot | undefined
-function applyMmdRuntimePoseToMesh
-  (pose: MmdRuntimePoseBuffer, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>, scratch: MmdRuntimePoseApplyScratch): void
-function buildShadowMmdSkinnedMesh
-  (descriptor: MmdRuntimeModelDescriptor): SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>
-function captureMmdRuntimePoseInto
-  (mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>, frameState: MmdFrameState, epoch: number, sequence: number, target: MmdRuntimePoseBuffer): MmdRuntimePoseBuffer
-function copyMmdRuntimePoseInto
-  (source: MmdRuntimePoseBuffer, target: MmdRuntimePoseBuffer): MmdRuntimePoseBuffer
-function createMmdRuntimePoseApplyScratch
-  (mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>): MmdRuntimePoseApplyScratch
-function createMmdRuntimePoseBuffer
-  (boneCount: number, morphCount: number): MmdRuntimePoseBuffer
-function createMmdRuntimeSharedPoseReadBuffer
-  (boneCount: number, morphCount: number): MmdRuntimePoseBuffer
-function createMmdRuntimeSharedPoseSlots
-  (boneCount: number, morphCount: number, capacity?: number): MmdRuntimeSharedPoseSlot[]
+const acquireMmdRuntimeSharedPoseWriteSlot  @deprecated
+  : (slots: readonly MmdRuntimeSharedPoseSlot[]) => MmdRuntimeSharedPoseSlot | undefined
+const applyMmdRuntimePoseToMesh  @deprecated
+  : (pose: MmdRuntimePoseBuffer, mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>, scratch: MmdRuntimePoseApplyScratch) => void
+const buildShadowMmdSkinnedMesh  @deprecated
+  : (descriptor: MmdRuntimeModelDescriptor) => SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>
+const captureMmdRuntimePoseInto  @deprecated
+  : (mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>, frameState: MmdFrameState, epoch: number, sequence: number, target: MmdRuntimePoseBuffer) => MmdRuntimePoseBuffer
+const copyMmdRuntimePoseInto  @deprecated
+  : (source: MmdRuntimePoseBuffer, target: MmdRuntimePoseBuffer) => MmdRuntimePoseBuffer
+const createMmdRuntimePoseApplyScratch  @deprecated
+  : (mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>) => MmdRuntimePoseApplyScratch
+const createMmdRuntimePoseBuffer  @deprecated
+  : (boneCount: number, morphCount: number) => MmdRuntimePoseBuffer
+const createMmdRuntimeSharedPoseReadBuffer  @deprecated
+  : (boneCount: number, morphCount: number) => MmdRuntimePoseBuffer
+const createMmdRuntimeSharedPoseSlots  @deprecated
+  : (boneCount: number, morphCount: number, capacity?: number) => MmdRuntimeSharedPoseSlot[]
 const createWorkerMmdRuntime  @deprecated
   : (context: ThreeMmdRuntimeFactoryContext, options?: WorkerMmdRuntimeOptions) => MmdRuntime
 function createWorkerMmdRuntimeFactory
@@ -2530,9 +2530,9 @@ interface CustomBulletWorkerPhysicsConfig
   readonly wasmUrl?: string | undefined
 function getDefaultMmdRuntimeWorkerPoolSize
   (): number
-function isCurrentMmdRuntimePose
-  (pose: MmdRuntimePoseBuffer, epoch: number, lastAppliedSequence?: number): boolean
-const MMD_RUNTIME_POSE_PROTOCOL_VERSION
+const isCurrentMmdRuntimePose  @deprecated
+  : (pose: MmdRuntimePoseBuffer, epoch: number, lastAppliedSequence?: number) => boolean
+const MMD_RUNTIME_POSE_PROTOCOL_VERSION  @deprecated
   : 1
 interface MmdRuntimeBoneDescriptor
   readonly name: string
@@ -2550,7 +2550,7 @@ interface MmdRuntimeModelDescriptor
   readonly name: string
   readonly userData: Readonly<Record<string, unknown>>
   readonly version: 1
-interface MmdRuntimePoseApplyScratch
+type MmdRuntimePoseApplyScratch  @deprecated
   readonly localMatrix: Matrix4
   readonly parentIndices: Int32Array<ArrayBufferLike>
   readonly parentInverse: Matrix4
@@ -2569,37 +2569,37 @@ interface MmdRuntimeSharedPoseSlot
   readonly morphWeights: Float32Array<SharedArrayBuffer>
   readonly timing: Float64Array<SharedArrayBuffer>
   readonly worldMatricesColumnMajor: Float32Array<SharedArrayBuffer>
-class MmdRuntimeTransferablePosePool
-  new (boneCount: number, morphCount: number, capacity?: number): MmdRuntimeTransferablePosePool
+const+type MmdRuntimeTransferablePosePool  @deprecated
+  : typeof MmdRuntimeTransferablePosePool
   acquire(): MmdRuntimePoseBuffer | undefined
   availableCount(): number
   release(pose: MmdRuntimePoseBuffer): boolean
 type MmdRuntimeWorkerCommand
   = { readonly type: "init"; readonly descriptor: MmdRuntimeModelDescriptor; readonly runtimeOptions?: Omit<DefaultMmdRuntimeOptions, "physicsBackend"> | undefined; readonly sharedPoseSlots?: readonly MmdRuntimeSharedPoseSlot[] | undefined; readonly externalPhysics?: CustomBulletWorkerPhysicsConfig | undefined; } | { readonly type: "setAnimation"; readonly epoch: number; readonly animation: MmdAnimation; } | { readonly type: "tick"; readonly epoch: number; readonly seconds: number; readonly options?: MmdRuntimeEvaluateOptions | undefined; readonly requestId?: number | undefined; } | { readonly type: "seek"; readonly epoch: number; readonly seconds: number; } | { readonly type: "resetPose"; readonly epoch: number; } | { readonly type: "clearAnimation"; readonly epoch: number; } | { readonly type: "recycle"; readonly pose: MmdRuntimePoseBuffer; } | { readonly type: "sharedRelease"; } | { readonly type: "dispose"; }
-interface MmdRuntimeWorkerCommandEnvelope
+type MmdRuntimeWorkerCommandEnvelope  @deprecated
   readonly command: MmdRuntimeWorkerCommand
   readonly runtimeId: number
-class MmdRuntimeWorkerDispatcher
-  new (port: MmdRuntimeWorkerMultiplexedMessagePort): MmdRuntimeWorkerDispatcher
+const+type MmdRuntimeWorkerDispatcher  @deprecated
+  : typeof MmdRuntimeWorkerDispatcher
   handle(message: MmdRuntimeWorkerCommandEnvelope): void
   runtimeCount(): number
-type MmdRuntimeWorkerDispatcherCommand
+type MmdRuntimeWorkerDispatcherCommand  @deprecated
   readonly command: MmdRuntimeWorkerCommand
   readonly runtimeId: number
-type MmdRuntimeWorkerDispatcherMessagePort
+type MmdRuntimeWorkerDispatcherMessagePort  @deprecated
   postMessage(message: MmdRuntimeWorkerEventEnvelope, transfer?: Transferable[] | undefined): void
-class MmdRuntimeWorkerEndpoint
-  new (port: MmdRuntimeWorkerMessagePort, options?: MmdRuntimeWorkerEndpointOptions): MmdRuntimeWorkerEndpoint
+const+type MmdRuntimeWorkerEndpoint  @deprecated
+  : typeof MmdRuntimeWorkerEndpoint
   handle(command: MmdRuntimeWorkerCommand): void
-interface MmdRuntimeWorkerEndpointOptions
+type MmdRuntimeWorkerEndpointOptions  @deprecated
   readonly createExternalPhysicsBackend?: ((config: CustomBulletWorkerPhysicsConfig) => Promise<MmdPhysicsBackend>) | undefined
 type MmdRuntimeWorkerEvent
   = { readonly type: "ready"; readonly epoch: number; } | { readonly type: "pose"; readonly pose: MmdRuntimePoseBuffer; readonly requestId?: number | undefined; } | { readonly type: "sharedPose"; readonly slot: number; readonly requestId?: number | undefined; } | { readonly type: "disposed"; } | { readonly type: "error"; readonly message: string; }
-interface MmdRuntimeWorkerEventEnvelope
+type MmdRuntimeWorkerEventEnvelope  @deprecated
   readonly event: MmdRuntimeWorkerEvent
   readonly runtimeId: number
-class MmdRuntimeWorkerHost
-  new (descriptor: MmdRuntimeModelDescriptor, options?: MmdRuntimeWorkerHostOptions): MmdRuntimeWorkerHost
+const+type MmdRuntimeWorkerHost  @deprecated
+  : typeof MmdRuntimeWorkerHost
   clearAnimation(): MmdRuntimePoseBuffer
   debugState(): MmdRuntimeDebugState
   dispose(): void
@@ -2611,7 +2611,7 @@ class MmdRuntimeWorkerHost
   resetPose(): MmdRuntimePoseBuffer
   seek(seconds: number): MmdFrameState
   setAnimation(animation: MmdAnimation): MmdRuntimePoseBuffer
-interface MmdRuntimeWorkerHostOptions
+type MmdRuntimeWorkerHostOptions  @deprecated
   readonly runtime?: MmdRuntime | undefined
   readonly runtimeOptions?: DefaultMmdRuntimeOptions | undefined
 interface MmdRuntimeWorkerLease
@@ -2629,15 +2629,15 @@ interface MmdRuntimeWorkerLike
   postMessage(message: MmdRuntimeWorkerCommand, transfer?: Transferable[] | undefined): void
   removeEventListener?: ((type: string, listener: (event: { readonly data: MmdRuntimeWorkerEvent; }) => void) => void) | undefined
   terminate?: (() => void | Promise<number>) | undefined
-interface MmdRuntimeWorkerMessagePort
+type MmdRuntimeWorkerMessagePort  @deprecated
   postMessage(message: MmdRuntimeWorkerEvent, transfer?: Transferable[] | undefined): void
-type MmdRuntimeWorkerMultiplexedCommand
+type MmdRuntimeWorkerMultiplexedCommand  @deprecated
   readonly command: MmdRuntimeWorkerCommand
   readonly runtimeId: number
-type MmdRuntimeWorkerMultiplexedEvent
+type MmdRuntimeWorkerMultiplexedEvent  @deprecated
   readonly event: MmdRuntimeWorkerEvent
   readonly runtimeId: number
-interface MmdRuntimeWorkerMultiplexedMessagePort
+type MmdRuntimeWorkerMultiplexedMessagePort  @deprecated
   postMessage(message: MmdRuntimeWorkerEventEnvelope, transfer?: Transferable[] | undefined): void
 type MmdRuntimeWorkerPhysicalFactory
   (context: ThreeMmdRuntimeFactoryContext): MmdRuntimeWorkerLike
@@ -2655,18 +2655,18 @@ interface MmdRuntimeWorkerPoolOptions
   readonly workerUrl?: string | URL | undefined
 type MmdRuntimeWorkerRuntimeId
   = number
-function publishMmdRuntimeSharedPose
-  (slot: MmdRuntimeSharedPoseSlot, source: MmdRuntimePoseBuffer): void
-function readMmdRuntimeSharedPoseInto
-  (slot: MmdRuntimeSharedPoseSlot, target: MmdRuntimePoseBuffer): MmdRuntimePoseBuffer | undefined
-function releaseMmdRuntimeSharedPoseReadSlot
-  (slot: MmdRuntimeSharedPoseSlot): void
-function resetMmdRuntimeSharedPoseSlot
-  (slot: MmdRuntimeSharedPoseSlot): void
+const publishMmdRuntimeSharedPose  @deprecated
+  : (slot: MmdRuntimeSharedPoseSlot, source: MmdRuntimePoseBuffer) => void
+const readMmdRuntimeSharedPoseInto  @deprecated
+  : (slot: MmdRuntimeSharedPoseSlot, target: MmdRuntimePoseBuffer) => MmdRuntimePoseBuffer | undefined
+const releaseMmdRuntimeSharedPoseReadSlot  @deprecated
+  : (slot: MmdRuntimeSharedPoseSlot) => void
+const resetMmdRuntimeSharedPoseSlot  @deprecated
+  : (slot: MmdRuntimeSharedPoseSlot) => void
 function resolveMmdRuntimeWorkerPoolSize
   (hardwareConcurrency: number | undefined): number
-function serializeMmdRuntimeModelDescriptor
-  (mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>): MmdRuntimeModelDescriptor
+const serializeMmdRuntimeModelDescriptor  @deprecated
+  : (mesh: SkinnedMesh<BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>, Material<MaterialEventMap> | Material<MaterialEventMap>[], Object3DEventMap>) => MmdRuntimeModelDescriptor
 class WorkerMmdRuntime
   new (context: ThreeMmdRuntimeFactoryContext, options?: WorkerMmdRuntimeOptions): WorkerMmdRuntime
   cameraState(): CameraState | undefined

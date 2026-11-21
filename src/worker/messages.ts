@@ -5,6 +5,7 @@ import type { MmdRuntimePoseBuffer } from "./protocol.js";
 import type { MmdRuntimeSharedPoseSlot } from "./sharedPose.js";
 import type { CustomBulletWorkerPhysicsConfig } from "./externalPhysics.js";
 
+/** Internal worker protocol. Message contents are outside the semver guarantee. */
 export type MmdRuntimeWorkerCommand =
   | {
       readonly type: "init";
@@ -29,6 +30,7 @@ export type MmdRuntimeWorkerCommand =
   | { readonly type: "sharedRelease" }
   | { readonly type: "dispose" };
 
+/** Internal worker protocol. Message contents are outside the semver guarantee. */
 export type MmdRuntimeWorkerEvent =
   | { readonly type: "ready"; readonly epoch: number }
   | { readonly type: "pose"; readonly pose: MmdRuntimePoseBuffer; readonly requestId?: number }

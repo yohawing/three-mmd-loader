@@ -7,15 +7,13 @@ import { ThreeMmdLoader } from "../../../src/index.js";
 import {
   createMmdRuntimeSharedPoseReadBuffer,
   createMmdRuntimeSharedPoseSlots,
-  MmdRuntimeWorkerEndpoint,
   readMmdRuntimeSharedPoseInto,
-  releaseMmdRuntimeSharedPoseReadSlot,
-  serializeMmdRuntimeModelDescriptor
-} from "../../../src/worker/index.js";
-import type {
-  MmdRuntimeWorkerEvent,
-  MmdRuntimeWorkerMessagePort
-} from "../../../src/worker/index.js";
+  releaseMmdRuntimeSharedPoseReadSlot
+} from "../../../src/worker/sharedPose.js";
+import { MmdRuntimeWorkerEndpoint } from "../../../src/worker/endpoint.js";
+import { serializeMmdRuntimeModelDescriptor } from "../../../src/worker/modelDescriptor.js";
+import type { MmdRuntimeWorkerEvent } from "../../../src/worker/index.js";
+import type { MmdRuntimeWorkerMessagePort } from "../../../src/worker/messages.js";
 import type {
   MmdPhysicsBackend,
   MmdPhysicsStepContext,

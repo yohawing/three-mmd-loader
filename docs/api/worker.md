@@ -7,6 +7,8 @@ Workerはアニメーション評価をメインスレッドから移し、受�
 
 ## ファクトリーを接続する
 
+Low-level pose helpers and worker transport components are deprecated in 0.9.0 and will leave the public API in 1.0.0. Pass `createWorkerMmdRuntimeFactory(options)` to `ThreeMmdLoader` as `runtimeFactory`.
+
 `scene`は作成済みのシーンです。配布環境でWorkerのエントリーと依存JS・WASMを配信しておきます。
 
 ```ts

@@ -35,6 +35,7 @@ These exports remain available in 0.9.x and will be removed from the public API 
 | `./runtime` | `reset()` | Use seek, resetPose, or clearAnimation. |
 | `./worker` | `MmdRuntimeWorkerPool.release(slot, lease)` | Use lease.release() or lease.dispose(). |
 | `./worker` | `createWorkerMmdRuntime`, `WorkerMmdRuntimeFactoryOptions` | Use createWorkerMmdRuntimeFactory and WorkerMmdRuntimeOptions, respectively. |
+| `./worker` | Low-level pose and model helpers, transferable pose pool, worker host, endpoint, dispatcher, and their transport types | Pass `createWorkerMmdRuntimeFactory(options)` to `ThreeMmdLoader` as `runtimeFactory`. |
 | `./webgpu` | `MmdTslPipelineAttachOptions.selfShadow` | Use selfShadowEnabled. |
 | `./physics` | `MmdPhysicsEulerTuple` | No replacement. |
 
