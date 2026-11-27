@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.9.0] - 2026-11-21
 
-This release deprecates APIs ahead of the 1.0.0 public API freeze. The deprecated APIs remain available throughout 0.9.x; see the [migration guide](docs/guides/migration-to-1-0.md) for replacements. This release also includes the physics fixes from mmd-anim v0.5.5.
+This release deprecates APIs ahead of the 1.0.0 public API freeze. The deprecated APIs remain available throughout 0.9.x; see the migration table under Deprecated for replacements. This release also includes the physics fixes from mmd-anim v0.5.5.
 
 ### Added
 

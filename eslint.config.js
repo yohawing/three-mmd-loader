@@ -9,8 +9,6 @@ export default tseslint.config(
       "artifacts/mmd-anim/**",
       "emsdk-cache/**",
       "deploy/**",
-      "docs-site/dist/**",
-      "docs-site/.blume/**",
       "examples/viewer/.mmd-anim-wasm/**",
       "native/mmd-anim-bullet/dist/**",
       "native/bullet-mmd/dist/**",
