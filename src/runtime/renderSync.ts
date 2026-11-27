@@ -9,17 +9,37 @@ export function syncRuntimeMeshForRender(mesh: THREE.Object3D | undefined): void
   updateSkinnedMeshSkeletons(mesh);
 }
 
-function updateSkinnedMeshSkeletons(object: THREE.Object3D): void {
+type UpdatedSkeletons = THREE.Skeleton | Set<THREE.Skeleton> | undefined;
+
+// Most models bind all render proxies to one skeleton. Only allocate a set
+// when we encounter a second skeleton, and keep it local to this traversal.
+function updateSkinnedMeshSkeletons(
+  object: THREE.Object3D,
+  updated?: UpdatedSkeletons
+): UpdatedSkeletons {
   if (isSkinnedMesh(object)) {
-    object.skeleton.update();
+    const skeleton = object.skeleton;
+    if (updated === undefined) {
+      skeleton.update();
+      updated = skeleton;
+    } else if (updated !== skeleton) {
+      if (!(updated instanceof Set)) {
+        updated = new Set([updated]);
+      }
+      if (!updated.has(skeleton)) {
+        updated.add(skeleton);
+        skeleton.update();
+      }
+    }
   }
   const children = object.children;
   for (let index = 0; index < children.length; index += 1) {
     const child = children[index];
     if (child) {
-      updateSkinnedMeshSkeletons(child);
+      updated = updateSkinnedMeshSkeletons(child, updated);
     }
   }
+  return updated;
 }
 
 export function isObject3D(value: unknown): value is THREE.Object3D {
