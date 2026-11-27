@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Lists every public symbol reachable from the package.json "exports" entry points.
 // Used by test/unit/package/PublicApiReport.test.ts to pin the public surface:
 // adding, removing, or deprecating an export must show up as a reviewed snapshot diff.
