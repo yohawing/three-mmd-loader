@@ -21,7 +21,7 @@ This release deprecates APIs ahead of the 1.0.0 public API freeze. The deprecate
 
 - Update the bundled mmd-anim runtime to v0.5.5 to correct PMX rigid body rotation order, use current Bullet solver transforms, and account for append poses in physics input.
 - Reuse external physics pose buffers and scratch storage across frames in both runtimes.
-- Made `@types/three` an optional peer dependency. TypeScript users should install `@types/three` matching their `three` version.
+- Made `@types/three` an optional peer dependency. TypeScript users should install `@types/three` matching their `three` version. Declarations for the experimental `./webgpu` subpath need a recent `@types/three` (checked with 0.184); the other entries are checked with 0.176 and 0.184.
 - The step context passed to `MmdPhysicsBackend.step` is reused between calls. Copy values needed after the call returns.
 - The experimental `./webgpu` subpath remains outside semver guarantees in 1.x. Minor releases may introduce breaking changes.
 

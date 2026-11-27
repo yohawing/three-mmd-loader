@@ -75,6 +75,18 @@ export class ExternalPhysicsStepper {
 
   bind(data: RuntimeExternalPhysicsData | undefined): void {
     this.externalPhysicsData = data;
+    this.context.skeleton = undefined;
+    this.context.rigidBodies = undefined;
+    this.context.joints = undefined;
+    this.context.morphImpulses = undefined;
+    this.context.inputTranslations = undefined;
+    this.context.inputRotations = undefined;
+    this.context.inputWorldMatricesColumnMajor = undefined;
+    this.context.bonePhysicsToggles = undefined;
+    this.output.translations = undefined;
+    this.output.rotations = undefined;
+    this.output.worldMatricesColumnMajor = undefined;
+    this.output.updatedBoneIndices = undefined;
     const count = data?.bones.length ?? 0;
     if (this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer.length < count) {
       this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer = new Uint8Array(count);

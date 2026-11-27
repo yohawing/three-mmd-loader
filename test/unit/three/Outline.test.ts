@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { describe, expect, it } from "vitest";
 
 import { computeMmdMaterialRenderOrder } from "../../../src/three/material/material-metadata.js";
@@ -267,6 +268,33 @@ describe("MMD outline meshes", () => {
       }
     }
   );
+
+  it("preserves proxy draw ranges, raycasts and shared morph geometry after SkeletonUtils.clone", () => {
+    const { geometry, mesh, materials } = createTwoMaterialQuad();
+    geometry.setDrawRange(0, 0);
+    const root = new THREE.Group();
+    root.add(mesh, ...createMmdMaterialRenderOrderMeshes({ mesh, materials }), ...createMmdOutlineMeshes({ mesh, materials }));
+    const cloned = clone(root);
+    cloned.updateMatrixWorld(true);
+    const renderer = createRendererMock(64, 64);
+    const ray = new THREE.Raycaster(new THREE.Vector3(0.25, 0.25, 5), new THREE.Vector3(0, 0, -1));
+    expect(cloned.children).toHaveLength(5);
+    for (const child of cloned.children) {
+      const proxy = child as THREE.SkinnedMesh;
+      expect(proxy.geometry).toBe(geometry);
+      const group = proxy.userData.mmdMaterialRenderProxy ?? proxy.userData.mmdOutlineProxy;
+      if (!group) continue;
+      const args = [renderer, new THREE.Scene(), new THREE.Camera(), geometry, proxy.material as THREE.Material, null] as const;
+      proxy.onBeforeRender(...args);
+      expect(geometry.drawRange).toEqual({ start: group.start, count: group.count });
+      proxy.onAfterRender(...args);
+      expect(geometry.drawRange).toEqual({ start: 0, count: 0 });
+      if (proxy.userData.mmdMaterialRenderProxy) {
+        expect(ray.intersectObject(proxy, false).map(hit => hit.faceIndex)).toEqual(group.start === 0 ? [0] : []);
+        expect(geometry.drawRange).toEqual({ start: 0, count: 0 });
+      }
+    }
+  });
 
   it("keeps the outline viewport sync chained with the draw-range hook", () => {
     const { geometry, mesh, materials } = createTwoMaterialQuad();

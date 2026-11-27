@@ -21,25 +21,6 @@ try {
 
   const packagePath = join(workDir, packedPackage.filename);
   await writeFile(
-    join(workDir, "package.json"),
-    JSON.stringify(
-      {
-        private: true,
-        type: "module",
-        dependencies: {
-          "@yohawing/three-mmd-loader": `file:${packagePath.replaceAll("\\", "/")}`,
-          three: "^0.184.0"
-        },
-        devDependencies: {
-          "@types/three": "^0.184.1",
-          typescript: "^5.8.3"
-        }
-      },
-      null,
-      2
-    )
-  );
-  await writeFile(
     join(workDir, "tsconfig.json"),
     JSON.stringify(
       {
@@ -51,7 +32,7 @@ try {
           skipLibCheck: false,
           noEmit: true
         },
-        include: ["consumer.ts"]
+        include: ["consumer.ts", "webgpu-consumer.ts"]
       },
       null,
       2
@@ -75,14 +56,6 @@ import {
   fitMmdSelfShadowDirectionalLightToBox,
   MMD_SELF_SHADOW_LAYER
 } from "@yohawing/three-mmd-loader/three";
-import {
-  MMD_TSL_DEFAULT_LIGHT_COLOR,
-  createMmdTslToonMaterial,
-  syncMmdTslMaterialState,
-  type MmdTslMaterialAssemblyOptions,
-  type MmdTslMaterialCoreOptions,
-  type MmdTslMaterialUniforms
-} from "@yohawing/three-mmd-loader/webgpu";
 import {
   createCustomBulletMmdPhysicsBackend,
   createDisabledMmdPhysicsBackend,
@@ -113,9 +86,6 @@ hostRuntime.tick(0, { ik: false });
 hostRuntime.clearHostRig();
 declare const parserWasm: { parseMmdFormatJson(data: Uint8Array, fileName?: string | null): string };
 declare const exporterWasm: { exportVmdAnimationJsonBytes(json: string): Uint8Array };
-declare const webgpuCoreOptions: MmdTslMaterialCoreOptions;
-declare const webgpuAssemblyOptions: MmdTslMaterialAssemblyOptions;
-declare const webgpuUniforms: MmdTslMaterialUniforms;
 model.root.add(model.mesh);
 new Scene().add(model.root);
 model.setAnimation(animation);
@@ -150,25 +120,71 @@ void disposeMmdModel;
 void findMmdModelFiles;
 void findMmdMotionFiles;
 void createMmdTextureMapFromFiles;
+void createCustomBulletMmdPhysicsBackend;
+void loadCustomBulletMmdModule;
+`
+  );
+
+  // ./webgpu is experimental and its declarations use TSL node generics that
+  // older @types/three releases do not have, so it is checked only against the
+  // newest types (see the version loop below).
+  await writeFile(
+    join(workDir, "webgpu-consumer.ts"),
+    `import {
+  MMD_TSL_DEFAULT_LIGHT_COLOR,
+  createMmdTslToonMaterial,
+  syncMmdTslMaterialState,
+  type MmdTslMaterialAssemblyOptions,
+  type MmdTslMaterialCoreOptions,
+  type MmdTslMaterialUniforms
+} from "@yohawing/three-mmd-loader/webgpu";
+declare const webgpuCoreOptions: MmdTslMaterialCoreOptions;
+declare const webgpuAssemblyOptions: MmdTslMaterialAssemblyOptions;
+declare const webgpuUniforms: MmdTslMaterialUniforms;
 void MMD_TSL_DEFAULT_LIGHT_COLOR;
 void createMmdTslToonMaterial;
 void syncMmdTslMaterialState;
 void webgpuCoreOptions;
 void webgpuAssemblyOptions;
 void webgpuUniforms;
-void createCustomBulletMmdPhysicsBackend;
-void loadCustomBulletMmdModule;
 `
   );
 
-  execFileSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], {
-    cwd: workDir,
-    stdio: "inherit"
-  });
-  execFileSync("npx", ["tsc", "--noEmit"], {
-    cwd: workDir,
-    stdio: "inherit"
-  });
+  await writeFile(
+    join(workDir, "tsconfig.core.json"),
+    JSON.stringify({ extends: "./tsconfig.json", include: ["consumer.ts"] }, null, 2)
+  );
+
+  for (const [three, types, webgpu] of [["^0.176.0", "~0.176.0", false], ["^0.184.0", "^0.184.1", true]]) {
+    console.log(`Checking three@${three} with @types/three@${types}${webgpu ? " including ./webgpu" : ""}`);
+    await writeFile(
+      join(workDir, "package.json"),
+      JSON.stringify(
+        {
+          private: true,
+          type: "module",
+          dependencies: {
+            "@yohawing/three-mmd-loader": `file:${packagePath.replaceAll("\\", "/")}`,
+            three
+          },
+          devDependencies: {
+            "@types/three": types,
+            typescript: "^5.8.3"
+          }
+        },
+        null,
+        2
+      )
+    );
+    execFileSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], {
+      cwd: workDir,
+      stdio: "inherit"
+    });
+    execFileSync("npx", ["tsc", "--noEmit", ...(webgpu ? [] : ["--project", "tsconfig.core.json"])], {
+      cwd: workDir,
+      stdio: "inherit"
+    });
+  }
 } finally {
   await rm(workDir, { recursive: true, force: true });
 }

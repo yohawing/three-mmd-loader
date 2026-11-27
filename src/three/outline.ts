@@ -70,7 +70,7 @@ export function createMmdOutlineMeshes(
       options,
       hasVertexEdgeScale
     );
-    const outline = new THREE.SkinnedMesh(model.mesh.geometry, outlineMaterial);
+    const outline = new MmdOutlineProxyMesh(model.mesh.geometry, outlineMaterial, group.start, group.count);
     outline.name = `${model.mesh.name || "mmd"} outline material ${materialIndex}`;
     outline.scale.setScalar(options.scale ?? 1);
     outline.bind(model.mesh.skeleton, model.mesh.bindMatrix);
@@ -88,8 +88,6 @@ export function createMmdOutlineMeshes(
       start: group.start,
       count: group.count
     };
-    attachMmdOutlineViewportUpdate(outline);
-    attachMmdMaterialProxyDrawRange(outline, group.start, group.count);
     meshes.push(outline);
   }
   return meshes;
@@ -251,12 +249,33 @@ function attachMmdPmxOutlineExpansion(
   material.needsUpdate = true;
 }
 
-function attachMmdOutlineViewportUpdate(outline: THREE.SkinnedMesh): void {
-  const previousOnBeforeRender = outline.onBeforeRender;
-  outline.onBeforeRender = (renderer, scene, camera, geometry, material, group) => {
-    previousOnBeforeRender.call(outline, renderer, scene, camera, geometry, material, group);
-    syncMmdOutlineViewport(outline.material, renderer);
-  };
+class MmdMaterialProxyMesh extends THREE.SkinnedMesh {
+  constructor(
+    geometry?: THREE.BufferGeometry,
+    material?: THREE.Material,
+    public groupStart = 0,
+    public groupCount = 0
+  ) {
+    super(geometry, material);
+    attachMmdMaterialProxyDrawRange(this);
+  }
+
+  override copy(source: this, recursive = true): this {
+    super.copy(source, recursive);
+    this.groupStart = source.groupStart;
+    this.groupCount = source.groupCount;
+    return this;
+  }
+}
+
+class MmdOutlineProxyMesh extends MmdMaterialProxyMesh {
+  override onBeforeRender(
+    renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera,
+    geometry: THREE.BufferGeometry, material: THREE.Material, group: THREE.Group
+  ): void {
+    super.onBeforeRender(renderer, scene, camera, geometry, material, group);
+    syncMmdOutlineViewport(this.material, renderer);
+  }
 }
 
 function syncMmdOutlineViewport(
@@ -324,9 +343,11 @@ export function createMmdMaterialRenderOrderMeshes(
     if (!group || !material) {
       continue;
     }
-    const mesh = new THREE.SkinnedMesh(
+    const mesh = new MmdMaterialProxyMesh(
       model.mesh.geometry,
-      options.shadowOnly ? createShadowOnlyMaterial(material) : material
+      options.shadowOnly ? createShadowOnlyMaterial(material) : material,
+      group.start,
+      group.count
     );
     mesh.name = `${model.mesh.name || "mmd"} material ${entry.materialIndex}`;
     mesh.bind(model.mesh.skeleton, model.mesh.bindMatrix);
@@ -345,7 +366,6 @@ export function createMmdMaterialRenderOrderMeshes(
       mesh.customDepthMaterial = createMmdShadowDepthMaterial(material);
     }
     mesh.userData.mmdMaterialRenderProxy = { ...entry, start: group.start, count: group.count };
-    attachMmdMaterialProxyDrawRange(mesh, group.start, group.count);
     meshes.push(mesh);
   }
   return meshes;
@@ -397,11 +417,7 @@ function mmdMaterialRenderOrderMap(
  * rather than a fixed (0, 0) because morph-split outlines share a body mesh
  * geometry that renders with its full range.
  */
-function attachMmdMaterialProxyDrawRange(
-  proxy: THREE.SkinnedMesh,
-  groupStart: number,
-  groupCount: number
-): void {
+function attachMmdMaterialProxyDrawRange(proxy: MmdMaterialProxyMesh): void {
   let renderStart = 0;
   let renderCount = 0;
   let shadowStart = 0;
@@ -415,8 +431,8 @@ function attachMmdMaterialProxyDrawRange(
     const drawRange = proxy.geometry.drawRange;
     renderStart = drawRange.start;
     renderCount = drawRange.count;
-    drawRange.start = groupStart;
-    drawRange.count = groupCount;
+    drawRange.start = proxy.groupStart;
+    drawRange.count = proxy.groupCount;
   };
   proxy.onAfterRender = (renderer, scene, camera, geometry, material, group) => {
     const drawRange = proxy.geometry.drawRange;
@@ -438,8 +454,8 @@ function attachMmdMaterialProxyDrawRange(
     const drawRange = proxy.geometry.drawRange;
     shadowStart = drawRange.start;
     shadowCount = drawRange.count;
-    drawRange.start = groupStart;
-    drawRange.count = groupCount;
+    drawRange.start = proxy.groupStart;
+    drawRange.count = proxy.groupCount;
   };
   proxy.onAfterShadow = (renderer, scene, camera, shadowCamera, geometry, depthMaterial, group) => {
     const drawRange = proxy.geometry.drawRange;
@@ -460,8 +476,8 @@ function attachMmdMaterialProxyDrawRange(
     const drawRange = proxy.geometry.drawRange;
     const previousStart = drawRange.start;
     const previousCount = drawRange.count;
-    drawRange.start = groupStart;
-    drawRange.count = groupCount;
+    drawRange.start = proxy.groupStart;
+    drawRange.count = proxy.groupCount;
     try {
       THREE.SkinnedMesh.prototype.raycast.call(proxy, raycaster, intersects);
     } finally {

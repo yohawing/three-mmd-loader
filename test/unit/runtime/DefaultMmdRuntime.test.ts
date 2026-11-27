@@ -847,7 +847,7 @@ describe("DefaultMmdRuntime", () => {
     expect(runtime.debugState().stages.physics.worldMatricesColumnMajor[14]).toBe(3);
   });
 
-  it("writes external physics input directly into backend-owned step buffers", () => {
+  it("writes directly into backend-owned buffers and releases step context references on reset", () => {
     const bone = new THREE.Bone();
     bone.name = "physics";
     bone.userData.mmdBoneName = "physics";
@@ -894,6 +894,14 @@ describe("DefaultMmdRuntime", () => {
     expect(backend.lastContext?.bonePhysicsToggles).toBe(backend.buffers.bonePhysicsToggles);
     expect(backend.buffers.inputRotations[3]).toBe(1);
     expect(bone.position.toArray()).toEqual([4, 5, -6]);
+    const context = backend.lastContext;
+    runtime.reset();
+    expect(context).toMatchObject({
+      skeleton: undefined, rigidBodies: undefined, joints: undefined, morphImpulses: undefined,
+      inputTranslations: undefined, inputRotations: undefined, inputWorldMatricesColumnMajor: undefined,
+      bonePhysicsToggles: undefined,
+      output: { translations: undefined, rotations: undefined, worldMatricesColumnMajor: undefined, updatedBoneIndices: undefined }
+    });
   });
 
   it("skips and resets external physics when evaluate disables physics", () => {
@@ -1202,7 +1210,7 @@ class DirectBufferPhysicsBackend implements MmdDirectBufferPhysicsBackend {
   }
 
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
-    this.lastContext = { ...context, output: { ...context.output } };
+    this.lastContext = context;
     context.output?.translations?.set([4, 5, 6], 0);
     context.output?.rotations?.set([0, 0, 0, 1], 0);
     if (context.output?.updatedBoneIndices instanceof Uint32Array) {
