@@ -11,6 +11,7 @@ import type { LoaderMmdModelData } from "./internalModelData.js";
 import type { MaterialTransparencyDiagnostic, TextureLoadDiagnostic } from "./materials.js";
 import type { LoaderPerformanceMeasure } from "./performance.js";
 import { MMD_SELF_SHADOW_LAYER } from "./shadow.js";
+import { createMaterialMorphAlphaSync } from "./material/material-morph-alpha.js";
 import type { ModelSource, ModelSourceDiagnostic } from "./modelSource.js";
 import {
   mmdMaterialCastsSelfShadow,
@@ -87,7 +88,7 @@ export interface ThreeMmdModel {
   updateAsync(seconds: number, options?: MmdRuntimeAsyncEvaluateOptions): Promise<MmdFrameState>;
 }
 
-export function createThreeMmdModel(options: {
+export function createThreeMmdModel({ morphs, ...options }: {
   readonly mesh: THREE.SkinnedMesh;
   readonly runtime: MmdRuntime;
   readonly source: ThreeMmdModelSourceDescriptor;
@@ -97,6 +98,7 @@ export function createThreeMmdModel(options: {
   readonly materialDiagnostics: readonly MaterialTransparencyDiagnostic[];
   readonly performanceDiagnostics: readonly LoaderPerformanceMeasure[];
   readonly materials: readonly LoaderMmdModelData["materials"][number][];
+  readonly morphs: LoaderMmdModelData["morphs"];
   readonly outlines: boolean;
   readonly renderOrderProxies: boolean;
 } & Pick<ThreeMmdModel, "metadata" | "bones" | "rigidBodies" | "joints">): ThreeMmdModel {
@@ -137,6 +139,7 @@ export function createThreeMmdModel(options: {
   object.name = options.mesh.name;
   object.add(options.mesh, ...bodyMeshes, ...renderOrderMeshes, ...outlineMeshes);
   const runtimeTickOptions: MutableMmdRuntimeTickOptions = { mesh: object };
+  const syncAlpha = createMaterialMorphAlphaSync(options.mesh, options.materials, morphs, renderOrderMeshes, outlineMeshes);
   return {
     root: object,
     get object() {
@@ -173,7 +176,9 @@ export function createThreeMmdModel(options: {
       runtimeTickOptions.physics = updateOptions?.physics;
       runtimeTickOptions.ik = updateOptions?.ik;
       runtimeTickOptions.morphOverrides = updateOptions?.morphOverrides;
-      return options.runtime.tick(seconds, runtimeTickOptions);
+      const state = options.runtime.tick(seconds, runtimeTickOptions);
+      syncAlpha?.();
+      return state;
     },
     updateAsync(seconds, updateOptions) {
       runtimeTickOptions.physics = updateOptions?.physics;
@@ -181,12 +186,14 @@ export function createThreeMmdModel(options: {
       runtimeTickOptions.morphOverrides = updateOptions?.morphOverrides;
       const tickAsync = options.runtime.tickAsync;
       if (tickAsync) {
-        return tickAsync.call(options.runtime, seconds, {
+        const pending = tickAsync.call(options.runtime, seconds, {
           ...runtimeTickOptions,
           signal: updateOptions?.signal
         });
+        return syncAlpha ? pending.then(state => { syncAlpha(); return state; }) : pending;
       }
       const state = options.runtime.tick(seconds, runtimeTickOptions);
+      syncAlpha?.();
       return Promise.resolve({
         seconds: state.seconds,
         frame: state.frame,

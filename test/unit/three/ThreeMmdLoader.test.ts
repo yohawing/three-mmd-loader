@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { MmdAnimRuntime } from "../../../src/runtime/index.js";
+import { DefaultMmdRuntime, MmdAnimRuntime } from "../../../src/runtime/index.js";
 import { FallbackCore } from "../../../src/parser/index.js";
 import { MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
 import type {
@@ -570,6 +570,65 @@ describe("ThreeMmdLoader", () => {
     expect(model.mesh.geometry.morphAttributes.position).toBeUndefined();
     expect(model.mesh.morphTargetDictionary).toHaveProperty("morph0", 0);
     expect(model.mesh.morphTargetInfluences).toHaveLength(1000);
+  });
+
+  it.each([
+    { morphSplit: true, outline: true },
+    { morphSplit: false, outline: true },
+    { morphSplit: false, outline: false }
+  ])("updates and restores material morph alpha on the drawn materials ($morphSplit, $outline)", async (options) => {
+    const data = createSparseMorphStressModel({ edge: true });
+    const materials = data.materials();
+    materials[0].diffuse[3] = 0;
+    materials[0].edgeColor[3] = 0;
+    const morphs = data.morphs();
+    const offset = (materialIndex: number, operation: "add" | "multiply", diffuse: number, edge: number):
+      (typeof morphs)[number]["materialOffsets"][number] => ({
+      materialIndex, operation, diffuse: [0, 0, 0, diffuse], edgeColor: [0, 0, 0, edge],
+      specular: [0, 0, 0], specularPower: 0, ambient: [0, 0, 0], edgeSize: 0,
+      textureFactor: [0, 0, 0, 0], sphereTextureFactor: [0, 0, 0, 0], toonTextureFactor: [0, 0, 0, 0]
+    });
+    morphs[2].type = "group";
+    morphs[2].groupOffsets = [{ morphIndex: 3, weight: 1 }];
+    morphs[3].type = "material";
+    morphs[3].materialOffsets = [offset(-1, "multiply", 0, 1), offset(0, "add", 1, 0.5)];
+    const loader = new ThreeMmdLoader({
+      core: { ...createIkFlagCore(), loadModel: () => ({ ...data, materials: () => materials, morphs: () => morphs }) },
+      runtimeFactory: () => {
+        const runtime = new DefaultMmdRuntime();
+        // Cover both the delayed tickAsync path and the synchronous fallback.
+        if (options.morphSplit) return Object.assign(runtime, {
+          tickAsync: async (seconds: number, input: Parameters<NonNullable<MmdRuntime["tickAsync"]>>[1]) => {
+            await Promise.resolve();
+            return runtime.tick(seconds, input);
+          }
+        });
+        return runtime;
+      }
+    });
+    const model = await loader.loadModel(new Uint8Array([1]), options);
+    model.setAnimation(createEmptyMmdAnimation());
+    const [body, other] = model.mesh.material as THREE.Material[];
+    const proxy = model.renderOrderMeshes[0]?.material as THREE.Material | undefined;
+    const edge = model.outlineMeshes[0]?.material as THREE.Material | undefined;
+    const flags = () => [body.visible, body.colorWrite, body.depthWrite, body.transparent, body.alphaTest,
+      other.visible, other.transparent, edge?.visible];
+    const rest = flags();
+    for (const weight of [0, 0.5, 1, 0]) {
+      const input = { morphOverrides: { indices: Uint32Array.of(2), weights: Float32Array.of(weight) } };
+      if (weight === 1) await model.updateAsync(0, input);
+      else model.update(0, input);
+      expect(body.opacity).toBe(weight);
+      expect(other.opacity).toBe(1 - weight);
+      expect(body.colorWrite).toBe(weight > 0);
+      if (edge) expect(edge.opacity).toBe(weight * 0.5);
+      if (proxy) {
+        expect(proxy.opacity).toBe(weight);
+        if (!options.outline) expect([proxy.colorWrite, proxy.depthWrite]).toEqual([false, false]);
+      }
+      if (options.morphSplit) expect(model.mesh.userData.mmdMorphSplitBodyMeshes[0].material[0]).toBe(body);
+    }
+    expect(flags()).toEqual(rest);
   });
 
   it("uses split body meshes directly instead of duplicate render-order proxies", async () => {

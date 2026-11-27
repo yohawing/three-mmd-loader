@@ -702,7 +702,8 @@ const VISUAL_CASES = {
           {
             materialIndex: 1,
             operation: "add",
-            diffuse: [0, 0, 0, -1]
+            diffuse: [0, 0, 0, -1],
+            edgeColor: [0, 0, 0, -1]
           }
         ]
       }
