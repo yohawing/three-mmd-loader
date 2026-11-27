@@ -1,5 +1,6 @@
 /* global document */
-import { attachMmdMaterialFactors, syncMmdSpecularDirection } from "../../dist/three/index.js";
+import { syncMmdSpecularDirection } from "../../dist/three/index.js";
+import { attachMmdMaterialFactors } from "../../dist/three/material/material-shader-hooks.js";
 import { attachMmdReferenceShadow } from "../../dist/three/material/material-reference-shadow.js";
 import { getMmdShadowProjection } from "../../dist/three/mmd-shadow-projection.js";
 import { createMmdTslShadowVisibilityNode } from "../../dist/webgpu/shadow-visibility.js";

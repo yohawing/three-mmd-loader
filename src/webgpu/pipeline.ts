@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { validateMmdTslSkinningCapacity } from "./skinning-capacity.js";
 import { getMmdShadowProjection } from "../three/mmd-shadow-projection.js";
 
 import type { MaterialRuntimeState } from "../parser/model/modelTypes.js";
@@ -45,7 +46,7 @@ export interface MmdTslPipelineAttachOptions {
   /** Backgrounds can opt out of the sparse position-morph compute path. */
   readonly sparseMorphs?: boolean;
   readonly selfShadowEnabled?: boolean;
-  /** Alias for selfShadowEnabled for callers that use the feature name. */
+  /** @deprecated Use selfShadowEnabled. Will be removed in 1.0.0. */
   readonly selfShadow?: boolean;
 }
 
@@ -121,8 +122,9 @@ interface TslOutlineMetadata {
  * Returns the load flags required by the native WebGPU TSL path.
  * Overrides are intentionally structural so this helper can be passed to
  * ThreeMmdLoader without importing the renderer-neutral loader types here.
+ * @experimental
  */
-export function createModelLoadOptions(
+export function createMmdTslModelLoadOptions(
   overrides: Partial<MmdTslModelLoadOptions> = {}
 ): MmdTslModelLoadOptions {
   const defaults: MmdTslModelLoadOptions = {
@@ -139,9 +141,16 @@ export function createModelLoadOptions(
 }
 
 /**
+ * @experimental
+ * @deprecated Use createMmdTslModelLoadOptions or pipeline.createModelLoadOptions().
+ */
+export const createModelLoadOptions = createMmdTslModelLoadOptions;
+
+/**
  * Creates the native WebGPU TSL facade after backend initialization.
  * The factory is async because WebGPURenderer.init() performs adapter/device
  * acquisition and may reject when WebGPU is unavailable.
+ * @experimental
  */
 export async function createMmdTslPipeline(
   renderer: THREE.WebGPURenderer,
@@ -192,7 +201,7 @@ function createInitializedPipeline(
       return light;
     },
     createModelLoadOptions(overrides = {}) {
-      return createModelLoadOptions(overrides);
+      return createMmdTslModelLoadOptions(overrides);
     },
     attach(model, attachOptions = {}) {
       if (disposed) {
@@ -203,6 +212,7 @@ function createInitializedPipeline(
       if (existing) {
         return false;
       }
+      validateMmdTslSkinningCapacity(model.mesh, renderer);
       if (attachOptions.light) {
         if (light && light !== attachOptions.light) {
           throw new Error("MMD_TSL_PIPELINE_LIGHT_MISMATCH");

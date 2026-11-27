@@ -36,8 +36,7 @@ export function parseLoaderMmdModelData(bytes: Uint8Array): LoaderMmdModelData {
   });
 }
 
-export function createLoaderMmdModelDataFromModel(model: MmdModel): LoaderMmdModelData {
-  const metadata = model.metadata();
+export function createLoaderMmdModelDataFromModel(model: MmdModel, metadata: ReturnType<MmdModel["metadata"]>, skeleton: SkeletonData): LoaderMmdModelData {
   return createLoaderMmdModelData({
     coordinateSystem: "mmd-right-handed-y-up",
     metadata: {
@@ -53,7 +52,7 @@ export function createLoaderMmdModelDataFromModel(model: MmdModel): LoaderMmdMod
     geometry: model.geometry(),
     materials: model.materials(),
     morphs: model.morphs(),
-    skeleton: createThreeMmdSkeletonData(model.skeleton()),
+    skeleton: createThreeMmdSkeletonData(skeleton),
     displayFrames: model.displayFrames(),
     rigidBodies: model.rigidBodies(),
     joints: model.joints(),

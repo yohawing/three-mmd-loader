@@ -3,11 +3,16 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { TextEncoder } from "node:util";
 
+import { DefaultMmdRuntime as PackageRootDefaultMmdRuntime } from "@yohawing/three-mmd-loader/runtime";
 import {
-  DefaultMmdRuntime as PackageRootDefaultMmdRuntime,
   ThreeMmdLoader as PackageRootThreeMmdLoader,
-  createMmdBuiltInToonTextureMap as createPackageRootMmdBuiltInToonTextureMap,
+  createMmdBuiltInToonTextureMap as createPackageRootMmdBuiltInToonTextureMap
+} from "@yohawing/three-mmd-loader";
+import {
   mmdWorldMatrixToThree as packageRootMmdWorldMatrixToThree,
+  resolveMappedTexture as resolvePackageRootMappedTexture
+} from "@yohawing/three-mmd-loader/three";
+import {
   parsePmdMetadata as parsePackageRootPmdMetadata,
   parsePmdSectionInventory as parsePackageRootPmdSectionInventory,
   parsePmxMetadata as parsePackageRootPmxMetadata,
@@ -16,9 +21,8 @@ import {
   parseVmdSectionInventory as parsePackageRootVmdSectionInventory,
   parseVpdMetadata as parsePackageRootVpdMetadata,
   parseVpdPoseInventory as parsePackageRootVpdPoseInventory,
-  resolveMappedTexture as resolvePackageRootMappedTexture,
   parseVpdPose as parsePackageRootVpdPose
-} from "@yohawing/three-mmd-loader";
+} from "@yohawing/three-mmd-loader/parser";
 import {
   parsePmdMetadata as parsePackageParserPmdMetadata,
   parsePmdSectionInventory as parsePackageParserPmdSectionInventory,
@@ -42,12 +46,19 @@ import {
   mmdWorldMatrixToThree as packageMmdWorldMatrixToThree,
   ThreeMmdLoader as PackageThreeMmdLoader
 } from "@yohawing/three-mmd-loader/three";
+import { DefaultMmdRuntime as RootDefaultMmdRuntime } from "../dist/runtime/index.js";
 import {
-  DefaultMmdRuntime as RootDefaultMmdRuntime,
   ThreeMmdLoader as RootThreeMmdLoader,
-  createMmdBuiltInToonTextureMap as createRootMmdBuiltInToonTextureMap,
-  createDisabledMmdPhysicsBackend as createRootDisabledMmdPhysicsBackend,
+  createMmdBuiltInToonTextureMap as createRootMmdBuiltInToonTextureMap
+} from "../dist/index.js";
+import {
+  createDisabledMmdPhysicsBackend as createRootDisabledMmdPhysicsBackend
+} from "../dist/physics/index.js";
+import {
   mmdWorldMatrixToThree as rootMmdWorldMatrixToThree,
+  resolveMappedTexture as resolveRootMappedTexture
+} from "../dist/three/index.js";
+import {
   parsePmdMetadata as parseRootPmdMetadata,
   parsePmdSectionInventory as parseRootPmdSectionInventory,
   parsePmxMetadata as parseRootPmxMetadata,
@@ -56,9 +67,8 @@ import {
   parseVmdSectionInventory as parseRootVmdSectionInventory,
   parseVpdMetadata as parseRootVpdMetadata,
   parseVpdPoseInventory as parseRootVpdPoseInventory,
-  resolveMappedTexture as resolveRootMappedTexture,
   parseVpdPose as parseRootVpdPose
-} from "../dist/index.js";
+} from "../dist/parser/index.js";
 import {
   detectModelFormat,
   parsePmdMetadata,

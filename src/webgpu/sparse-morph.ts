@@ -3,7 +3,7 @@ import {
   type DenseMorphProvider,
   type SparsePositionMorphOffsets
 } from "../parser/model/denseMorphProvider.js";
-import type { ThreeMmdGeometryMorph } from "../three/geometry.js";
+import type { ThreeMmdGeometryMorph } from "../three/geometry-morph.js";
 
 type DenseProviderMorph = ThreeMmdGeometryMorph & {
   readonly [denseMorphProviderSymbol]?: DenseMorphProvider;

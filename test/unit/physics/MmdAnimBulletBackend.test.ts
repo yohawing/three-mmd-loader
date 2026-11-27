@@ -83,8 +83,10 @@ function makeFakeModule() {
       if (outContacts !== 0 && capacity > 0) {
         const heapI32 = new Int32Array(buffer);
         const base = outContacts >>> 2;
-        heapI32[base] = 3;
-        heapI32[base + 1] = 7;
+        for (let index = 0; index < Math.min(contactCount, capacity); index++) {
+          heapI32[base + index * 12] = 3 + index;
+          heapI32[base + index * 12 + 1] = 7 + index;
+        }
         heap[base + 2] = -0.25;
         heap.set([1, 2, 3], base + 3);
         heap.set([4, 5, 6], base + 6);
@@ -154,6 +156,32 @@ describe("mmd-anim Bullet physics backend", () => {
 
     expect(backend.debugContactCount?.()).toBe(0);
     expect(backend.debugPhysicsContacts?.()).toEqual([]);
+  });
+
+  it("filters either endpoint across the entire native contact buffer", () => {
+    const fake = makeFakeModule();
+    const backend = createCustomBulletMmdPhysicsBackend(fake.module);
+    fake.setContactCount(1);
+    expect(backend.debugPhysicsContactsForRigidBodyRange(3, 5)).toHaveLength(1);
+    fake.setContactCount(600);
+    const contacts = backend.debugPhysicsContactsForRigidBodyRange(602, 1);
+    expect(contacts.map(point => [point.rigidBodyIndexA, point.rigidBodyIndexB]))
+      .toEqual([[598, 602], [602, 606]]);
+    expect(backend.debugPhysicsContactsForRigidBodyRange(0, 3)).toEqual([]);
+    expect(backend.debugPhysicsContactsForRigidBodyRange(607, 1)).toEqual([]);
+    backend.dispose();
+  });
+
+  it("validates both range arguments before collecting contacts", () => {
+    const fake = makeFakeModule();
+    const backend = createCustomBulletMmdPhysicsBackend(fake.module);
+    expect(backend.debugPhysicsContactsForRigidBodyRange(3, 0)).toEqual([]);
+    for (const invalid of [-1, 0.5, NaN, Infinity]) {
+      expect(() => backend.debugPhysicsContactsForRigidBodyRange(invalid, 0)).toThrow(RangeError);
+      expect(() => backend.debugPhysicsContactsForRigidBodyRange(0, invalid)).toThrow(RangeError);
+    }
+    expect(fake.contactCalls).toEqual([]);
+    backend.dispose();
   });
 
   it("uploads rotations in the native Bullet ZYX encoding", () => {

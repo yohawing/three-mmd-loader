@@ -3,17 +3,19 @@ import { describe, expect, it } from "vitest";
 import {
   DisabledMmdPhysicsBackend,
   createDisabledMmdPhysicsBackend,
-  normalizeMmdPhysicsDebugSnapshot,
-  type MmdPhysicsBackend,
-  type MmdPhysicsContact,
-  type MmdPhysicsDebugSnapshot,
-  type MmdPhysicsJoint,
-  type MmdPhysicsMorphImpulse,
-  type MmdPhysicsOutputBuffers,
-  type MmdPhysicsRigidBody,
-  type MmdPhysicsRigidBodyTransform,
-  type MmdPhysicsSkeleton,
-  type MmdPhysicsStepContext
+  normalizeMmdPhysicsDebugSnapshot
+} from "../../../src/physics/index.js";
+import type {
+  MmdPhysicsBackend,
+  MmdPhysicsContact,
+  MmdPhysicsDebugSnapshot,
+  MmdPhysicsJoint,
+  MmdPhysicsMorphImpulse,
+  MmdPhysicsOutputBuffers,
+  MmdPhysicsRigidBody,
+  MmdPhysicsRigidBodyTransform,
+  MmdPhysicsSkeleton,
+  MmdPhysicsStepContext
 } from "../../../src/index.js";
 import type { MmdPhysicsBackend as RuntimePhysicsBackend } from "../../../src/runtime/index.js";
 

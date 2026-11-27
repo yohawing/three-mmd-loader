@@ -4,6 +4,72 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.9.0] - 2026-11-21
+
+This release deprecates APIs ahead of the 1.0.0 public API freeze. The deprecated APIs remain available throughout 0.9.x; see the migration table under Deprecated for replacements. This release also includes the physics fixes from mmd-anim v0.5.5.
+
+### Added
+
+- Added `CustomBulletMmdPhysicsBackend.debugPhysicsContactsForRigidBodyRange` to collect contacts involving either endpoint in a world rigid body index range.
+- Added read-only `metadata`, `bones`, `rigidBodies`, and `joints` properties to `ThreeMmdModel`.
+- Added `ThreeMmdLoader.createCameraTrackSampler` and `createLightTrackSampler` for sampling VMD camera and light tracks into reusable state with either backend.
+- Added the shared `MmdCameraState`, `MmdLightState`, `MmdSelfShadowState`, `MmdDiagnostic`, `MmdDiagnosticCategory`, `MmdRuntimeOptions` types at the root and their respective subpaths.
+- Add `createMmdTslModelLoadOptions` to `./webgpu`.
+- Export types used in public signatures, including `MaterialInfo`, `MaterialRuntimeState`, `BoneData`, `MmdCoreModelFormat`, and `ThreeMmdMaterialTextureOptions`.
+
+### Changed
+
+- Update the bundled mmd-anim runtime to v0.5.5 to correct PMX rigid body rotation order, use current Bullet solver transforms, and account for append poses in physics input.
+- Reuse external physics pose buffers and scratch storage across frames in both runtimes.
+- Made `@types/three` an optional peer dependency. TypeScript users should install `@types/three` matching their `three` version. Declarations for the experimental `./webgpu` subpath need a recent `@types/three` (checked with 0.184); the other entries are checked with 0.176 and 0.184.
+- The step context passed to `MmdPhysicsBackend.step` is reused between calls. Copy values needed after the call returns.
+- The experimental `./webgpu` subpath remains outside semver guarantees in 1.x. Minor releases may introduce breaking changes.
+
+### Fixed
+
+- Share the model’s source geometry across render-order and outline proxies so Three.js allocates a single morph-target texture per model. Previously, morph VRAM usage grew with the material count, reaching about 5.6 GB for one reported model (#42).
+- Fixed loading the experimental `./webgpu` entry point and rendering MMD self-shadows with Three.js r186 and r187.
+- Prevent browser bundlers from resolving Node builtins when importing the WASM parser.
+- The types used by `MmdPose.metadata`, entries in `MmdPose.bones`, and `MmdAnimation.metadata` previously shared names with distinct parser types and could not be imported by name. They are now available as `MmdPoseMetadata`, `MmdPoseBone`, and `MmdAnimationMetadata`, respectively.
+
+### Deprecated
+
+- Deprecated loader methods `createCameraTrack` and `createLightTrack`, and runtime helpers `createMmdAnimWasmCameraTrack`, `createMmdAnimWasmLightTrack`, `sampleMmdAnimWasmCameraTrackInto`, and `sampleMmdAnimWasmLightTrackInto`. Use the corresponding loader sampler instead.
+- Deprecated `CameraState`, `LightState`, `SelfShadowState`, `Diagnostic`, `DiagnosticCategory`, `DefaultMmdRuntimeOptions` in favor of their new Mmd-prefixed names.
+- Deprecated `syncThreeMmdRuntimeToMesh`, `syncThreeMmdRuntimeToModel`, `MmdRuntimeMeshSyncSource`, `ThreeMmdRuntimeSyncTarget`. Model updates and runtime ticks already synchronize the mesh.
+
+In 1.0.0 the root entry will stop re-exporting parser functions, runtime classes, low-level three helpers, physics helpers, and their standalone types. Import them from `@yohawing/three-mmd-loader/parser`, `/runtime`, `/three`, or `/physics` under the same package name. The root keeps `ThreeMmdLoader`, model disposal, folder and texture helpers, camera, light and shadow playback helpers, and the types reachable through their public signatures.
+
+These exports remain available in 0.9.x and will be removed from the public API in 1.0.0.
+
+| Entry | Symbol | Migration |
+| --- | --- | --- |
+| `./three` | `attachMmdMaterialMetadata` | `ThreeMmdLoader.loadModel` and `createThreeMmdMaterials` attach material metadata. |
+| `./three` | `attachMmdMaterialFactors` | Use `ThreeMmdLoader.loadModel`, or `createThreeMmdMaterials` followed by `applyThreeMmdMaterialTextures`. |
+| `./three` | `attachMmdSphereTexture` | Use `ThreeMmdLoader.loadModel`, or `createThreeMmdMaterials` followed by `applyThreeMmdMaterialTextures`. Sphere mapping requires an enabled sphere mode and a loaded sphere texture. |
+| `./three` | `attachMmdOutlineExpansion` | For model outlines, use the `outline` option of `ThreeMmdLoader.loadModel`. There is no direct replacement for this hook. |
+| `./three` | `attachMmdSdefSkinning` | `ThreeMmdLoader.loadModel` applies skinning to model materials for geometry with SDEF or QDEF. |
+| `./three` | `computeMmdSdefSkinnedPosition`, `computeMmdSdefSkinnedNormal`, `computeQdefSkinnedPosition`, `computeQdefSkinnedNormal`, `MmdSdefSkinningInput`, `MmdSdefNormalSkinningInput`, `MmdQdefSkinningInput`, `MmdQdefNormalSkinningInput` | CPU reference implementation for tests. No replacement. |
+| `./three` | `mmdMaterialAlphaTest`, `mmdMaterialCastsShadow`, `mmdMaterialDepthWrite`, `mmdMaterialSuppressesColorAtAlpha`, `materialHasTextureMap`, `mmdSphereModeToUniform`, `computeMmdMaterialRenderOrder`, `MmdMaterialRenderOrderEntry` | No replacement. |
+| `./three` | `mmdMaterialTransparencyMode`, `materialTransparencyMode` | Read model.diagnostics.materials[i].finalTransparencyMode. |
+| `./three` | `mmdMaterialMorphCanAffectAlpha` | Read model.diagnostics.materials[i].morphAlphaTransparent. |
+| `./three` | `getDefaultToonGradientMap`, `normalizeMmdTexturePath`, `isMmdDdsTexturePath`, `resolveMmdToonTextureReference`, `defaultSharedToonTexturePath`, `MmdToonTextureReference` | Use createTextureResolver, resolveMappedTexture, or createMmdBuiltInToonTextureMap. |
+| `./three` | `syncMmdOutlineMaterialStates`, `createMmdOutlineMeshes`, `createMmdMaterialRenderOrderMeshes`, `MmdOutlineModelSource`, `MmdOutlineOptions`, `MmdMaterialRenderOrderMeshOptions` | Use the outline and materialRenderOrder load options instead of outlines and renderOrderProxies. |
+| `./runtime` | `CcdIkSolver`, `CcdIkBone`, `CcdIkChain`, `CcdIkLink`, `CcdIkLinkAngleLimit`, `CcdIkPose`, `CcdIkPreparedChain`, `CcdIkPreparedSolveInput`, `CcdIkSolveInput`, `CcdIkSolveResult`, `MutableQuatTuple`, `QuatTuple`, `Vec3Tuple`, `createCcdIkSolveInputFromMmdIk`, `mmdIkChainToCcdIkChain`, `CreateCcdIkSolveInputFromMmdIkInput`, `MmdIkRuntimeBone`, `MmdIkRuntimeChain`, `MmdIkRuntimeLink` | DefaultMmdRuntime and MmdAnimRuntime solve IK internally. No replacement. |
+| `./runtime` | `mmdAnimWasmVmdDtoToAnimation` | Use loadMmdAnimWasmVmd. |
+| `./runtime` | `mmdAnimWasmVpdDtoToPose` | Use loadMmdAnimWasmVpd. |
+| `./three` | `ReadModelSourceOptions`, `ReadModelSourceResult`, `ThreeMmdSphereMappedToonMaterial`, `MmdToonTextureMaterial` | No replacement. |
+| `./three` | `ThreeMmdModel.object`, `ThreeMmdModel.textureDiagnostics` | Use root and diagnostics.textures, respectively. |
+| `./three` | `ThreeMmdLoadModelOptions.outlines`, `ThreeMmdLoadModelOptions.renderOrderProxies` | Use outline and materialRenderOrder, respectively. |
+| `./runtime` | `tick(seconds, mesh, options)` | Use `tick(seconds, { mesh, ...options })`. |
+| `./runtime` | `reset()` | Use seek, resetPose, or clearAnimation. |
+| `./worker` | `MmdRuntimeWorkerPool.release(slot, lease)` | Use lease.release() or lease.dispose(). |
+| `./worker` | `createWorkerMmdRuntime`, `WorkerMmdRuntimeFactoryOptions` | Use createWorkerMmdRuntimeFactory and WorkerMmdRuntimeOptions, respectively. |
+| `./worker` | Low-level pose and model helpers, transferable pose pool, worker host, endpoint, dispatcher, and their transport types | Pass `createWorkerMmdRuntimeFactory(options)` to `ThreeMmdLoader` as `runtimeFactory`. |
+| `./webgpu` | `MmdTslPipelineAttachOptions.selfShadow` | Use selfShadowEnabled. |
+| `./webgpu` | `createModelLoadOptions` | Use `createMmdTslModelLoadOptions` or `pipeline.createModelLoadOptions()`. |
+| `./physics` | `MmdPhysicsEulerTuple` | No replacement. |
+
 ## [0.8.6] - 2026-11-05
 
 ### Changed

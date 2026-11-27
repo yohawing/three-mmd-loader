@@ -1,3 +1,4 @@
+import type * as NodeFs from "node:fs/promises";
 import type { InitCoreOptions, MmdCore } from "../model/modelTypes.js";
 import type * as MmdAnimWasmGenerated from "./generated/mmd_anim_wasm.js";
 import { FallbackCore } from "./FallbackCore.js";
@@ -38,12 +39,11 @@ async function initMmdAnimWasm(
     return;
   }
   if (isNodeLikeRuntime()) {
-    const [{ readFile }, { fileURLToPath }] = await Promise.all([
-      import("node:fs/promises"),
-      import("node:url")
-    ]);
-    const wasmPath = fileURLToPath(new URL("./generated/mmd_anim_wasm_bg.wasm", import.meta.url));
-    const bytes = await readFile(wasmPath);
+    // Keep the Node builtin out of browser bundlers' module graphs.
+    const fsModule = "node:fs/promises";
+    const { readFile }: typeof NodeFs =
+      await import(/* @vite-ignore */ /* webpackIgnore: true */ fsModule);
+    const bytes = await readFile(new URL("./generated/mmd_anim_wasm_bg.wasm", import.meta.url));
     await mmdAnimWasm.default({ module_or_path: bytes });
     return;
   }

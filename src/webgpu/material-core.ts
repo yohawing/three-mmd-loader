@@ -5,7 +5,9 @@ import * as TSL from "three/tsl";
 import { mmdMaterialDepthWrite, mmdMaterialSuppressesColorAtAlpha } from "../three/material/material-metadata.js";
 import { clampColor } from "../three/utils.js";
 
+/** @experimental */
 export const MMD_TSL_DEFAULT_LIGHT_COLOR = 154 / 255;
+/** @experimental */
 export const MMD_TSL_DEFAULT_TOON_COORD_OFFSET = 0.45;
 
 const defaultLightDirection = new THREE.Vector3(0.5, 1.0, 0.5).normalize();
@@ -94,6 +96,7 @@ export interface MmdTslMaterialUniforms {
   readonly dedicatedShadowEnabled: ReturnType<typeof TSL.float> & { value: number };
 }
 
+/** @experimental */
 export function createMmdTslToonMaterial(options: MmdTslMaterialCoreOptions = {}): THREE.MeshToonNodeMaterial {
   const material = new MmdTslToonNodeMaterial({ color: 0xffffff });
   const uniforms = createMmdTslMaterialUniforms(options);
@@ -135,6 +138,7 @@ function applySphereComposite(
         : base;
 }
 
+/** @experimental */
 export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   readonly uniforms?: MmdTslMaterialUniforms;
 } = {}) {
@@ -286,6 +290,7 @@ export function createMmdTslBaseColorNode(options: MmdTslMaterialCoreOptions & {
   return TSL.mix(legacyColor, dedicatedColor, uniforms.dedicatedShadowEnabled) as ReturnType<typeof TSL.vec3>;
 }
 
+/** @experimental */
 export function syncMmdTslMaterialState(
   material: THREE.Material,
   state: MaterialRuntimeState

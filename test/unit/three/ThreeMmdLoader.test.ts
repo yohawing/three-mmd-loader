@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { MmdAnimRuntime, FallbackCore, MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
+import { MmdAnimRuntime } from "../../../src/runtime/index.js";
+import { FallbackCore } from "../../../src/parser/index.js";
+import { MMD_SELF_SHADOW_LAYER, ThreeMmdLoader } from "../../../src/index.js";
 import type {
   MmdAnimation,
   MmdCore,
@@ -14,7 +16,7 @@ import type {
   ThreeMmdLoaderOptions,
   ThreeMmdTextureLoader
 } from "../../../src/index.js";
-import * as Textures from "../../../src/three/textures.js";
+import * as Textures from "../../../src/three/texture-alpha.js";
 import { syncMorphSplitTargetInfluences } from "../../../src/runtime/morphSplitSync.js";
 
 describe("ThreeMmdLoader", () => {
@@ -86,6 +88,14 @@ describe("ThreeMmdLoader", () => {
       ...model.outlineMeshes
     ]);
     expect(model.mesh.skeleton.bones).toHaveLength(1);
+    expect(model.metadata).toBe(model.mesh.userData.mmdModel.metadata);
+    expect(model.bones).toBe(model.mesh.userData.mmdModel.bones);
+    expect(model.bones).toHaveLength(1);
+    expect(model.bones[0]?.name).toBe(model.mesh.skeleton.bones[0]?.userData.mmdBoneName);
+    expect(model.rigidBodies).toBe(model.mesh.userData.mmdPhysics.rigidBodies);
+    expect(model.joints).toBe(model.mesh.userData.mmdPhysics.joints);
+    expect(model.rigidBodies).toHaveLength(model.metadata.counts.rigidBodies);
+    expect(model.joints).toHaveLength(model.metadata.counts.joints);
     expect(model.mesh.geometry.getAttribute("position").count).toBe(14);
     expect(model.mesh.geometry.index?.count).toBe(36);
     expect(model.source).toEqual({ kind: "bytes", byteLength: source.byteLength });
@@ -488,6 +498,63 @@ describe("ThreeMmdLoader", () => {
     expect(model.outlineMeshes).toEqual([]);
     expect(model.renderOrderMeshes).toEqual([]);
     expect(model.root.children).toEqual([model.mesh]);
+  });
+
+  it("shares one morph-target geometry across the mesh and every material and outline proxy", async () => {
+    const loader = new ThreeMmdLoader({ core: createSparseMorphStressCore({ edge: true }) });
+
+    const model = await loader.loadModel(new Uint8Array([1]), { morphSplit: false });
+
+    expect(model.renderOrderMeshes).toHaveLength(2);
+    expect(model.outlineMeshes).toHaveLength(2);
+    // three caches the morph DataArrayTexture per geometry object, so one geometry
+    // means one morph texture regardless of material count.
+    const morphGeometries = new Set<THREE.BufferGeometry>();
+    model.root.traverse((object) => {
+      const geometry = (object as Partial<THREE.Mesh>).geometry;
+      if (geometry && Object.keys(geometry.morphAttributes).length > 0) {
+        morphGeometries.add(geometry);
+      }
+    });
+    expect(morphGeometries.size).toBe(1);
+    for (const proxy of [...model.renderOrderMeshes, ...model.outlineMeshes]) {
+      expect(proxy.geometry).toBe(model.mesh.geometry);
+    }
+    expect(model.mesh.geometry.drawRange).toEqual({ start: 0, count: 0 });
+    expect(
+      model.renderOrderMeshes.map((proxy) => [
+        proxy.userData.mmdMaterialRenderProxy.start,
+        proxy.userData.mmdMaterialRenderProxy.count
+      ])
+    ).toEqual([
+      [0, 3],
+      [3, 3]
+    ]);
+  });
+
+  it("keeps morph-split body meshes at full range while their outline proxies draw", async () => {
+    const loader = new ThreeMmdLoader({ core: createSparseMorphStressCore({ edge: true }) });
+
+    const model = await loader.loadModel(new Uint8Array([1]));
+
+    const bodyMeshes = model.mesh.userData.mmdMorphSplitBodyMeshes as THREE.SkinnedMesh[];
+    expect(bodyMeshes).toHaveLength(2);
+    expect(model.outlineMeshes).toHaveLength(2);
+    model.outlineMeshes.forEach((outline, index) => {
+      const body = bodyMeshes[index];
+      if (!body) {
+        throw new Error("Expected split body mesh");
+      }
+      expect(outline.geometry).toBe(body.geometry);
+      const material = outline.material as THREE.Material;
+      const renderer = {
+        getCurrentViewport: (target: THREE.Vector4) => target.set(0, 0, 1, 1)
+      } as THREE.WebGLRenderer;
+      outline.onBeforeRender(renderer, {} as THREE.Scene, {} as THREE.Camera, body.geometry, material, null);
+      expect(body.geometry.drawRange.count).toBe(outline.userData.mmdOutlineProxy.count);
+      outline.onAfterRender(renderer, {} as THREE.Scene, {} as THREE.Camera, body.geometry, material, null);
+      expect(body.geometry.drawRange).toEqual({ start: 0, count: Infinity });
+    });
   });
 
   it("can omit dense morph attributes without dropping runtime morph weights", async () => {
@@ -1085,8 +1152,8 @@ function createIkFlagCore(): MmdCore {
   };
 }
 
-function createSparseMorphStressCore(): MmdCore {
-  const model = createSparseMorphStressModel();
+function createSparseMorphStressCore(options: { readonly edge?: boolean } = {}): MmdCore {
+  const model = createSparseMorphStressModel(options);
   return {
     version: () => "sparse-morph-stress-core",
     healthCheck: () => true,
@@ -1103,7 +1170,7 @@ function createSparseMorphStressCore(): MmdCore {
   };
 }
 
-function createSparseMorphStressModel(): MmdModel {
+function createSparseMorphStressModel(options: { readonly edge?: boolean } = {}): MmdModel {
   const vertexCount = 6000;
   const positions = new Float32Array(vertexCount * 3);
   const normals = new Float32Array(vertexCount * 3);
@@ -1171,7 +1238,7 @@ function createSparseMorphStressModel(): MmdModel {
       skinIndices,
       skinWeights
     }),
-    materials: () => [createStressMaterial(0), createStressMaterial(1)],
+    materials: () => [createStressMaterial(0, options), createStressMaterial(1, options)],
     skeleton: () => ({
       bones: [createIkFlagBone("root", -1, true)]
     }),
@@ -1184,7 +1251,10 @@ function createSparseMorphStressModel(): MmdModel {
   };
 }
 
-function createStressMaterial(index: number): ReturnType<MmdModel["materials"]>[number] {
+function createStressMaterial(
+  index: number,
+  options: { readonly edge?: boolean } = {}
+): ReturnType<MmdModel["materials"]>[number] {
   return {
     name: `mat${index}`,
     englishName: `mat${index}`,
@@ -1198,13 +1268,13 @@ function createStressMaterial(index: number): ReturnType<MmdModel["materials"]>[
     specularPower: 1,
     ambient: [0.2, 0.2, 0.2],
     edgeColor: [0, 0, 0, 1],
-    edgeSize: 0,
+    edgeSize: options.edge ? 1 : 0,
     flags: {
       doubleSided: false,
       groundShadow: false,
       selfShadowMap: index === 0,
       selfShadow: index === 1,
-      edge: false,
+      edge: !!options.edge,
       vertexColor: false,
       pointDraw: false,
       lineDraw: false

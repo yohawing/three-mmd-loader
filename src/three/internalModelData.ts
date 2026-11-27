@@ -1,6 +1,6 @@
 import type { MmdModelFormat, PmdMetadata, PmdSectionInventory, PmxMetadata, PmxSectionInventory } from "../parser/index.js";
 import type {
-  Diagnostic,
+  MmdDiagnostic,
   DisplayFrameData,
   JointData,
   MaterialInfo,
@@ -26,7 +26,7 @@ export interface LoaderMmdModelMetadata {
   readonly englishName: string;
   readonly comment: string;
   readonly englishComment: string;
-  readonly diagnostics: readonly Diagnostic[];
+  readonly diagnostics: readonly MmdDiagnostic[];
 }
 
 export interface LoaderMmdModelData {
@@ -115,7 +115,7 @@ function sanitizeGeometryNormals(modelData: LoaderMmdModelData): void {
       positions,
       normals,
       indices,
-      modelData.metadata.diagnostics as Diagnostic[]
+      modelData.metadata.diagnostics as MmdDiagnostic[]
     );
   }
 }

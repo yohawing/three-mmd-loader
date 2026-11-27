@@ -6,7 +6,8 @@ import { promisify } from "node:util";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import { DefaultMmdRuntime, ThreeMmdLoader } from "../../../src/index.js";
+import { DefaultMmdRuntime } from "../../../src/runtime/index.js";
+import { ThreeMmdLoader } from "../../../src/index.js";
 import type { MmdAnimation, VmdBoneFrame, VmdBoneTrack } from "../../../src/index.js";
 
 const execFileAsync = promisify(execFile);

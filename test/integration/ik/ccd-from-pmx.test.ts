@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  CcdIkSolver,
-  createCcdIkSolveInputFromMmdIk,
-  type MmdIkRuntimeChain
-} from "../../../src/runtime/index.js";
+import { CcdIkSolver } from "../../../src/runtime/ik/CcdIkSolver.js";
+import { createCcdIkSolveInputFromMmdIk, type MmdIkRuntimeChain } from "../../../src/runtime/ik/MmdIkChain.js";
 import { parseLoaderMmdModelData } from "../../../src/three/modelAssembly.js";
 import { loadFixtureBytes } from "../../helpers/fixtures.js";
 

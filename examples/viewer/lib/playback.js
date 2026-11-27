@@ -12,7 +12,7 @@ import {
 } from "./performance.js";
 import { currentMmdFrame, currentMmdSeconds, hasCurrentMotion, state } from "./state.js";
 import { markWorkerRuntimesReady, updateWorkerRuntimeTelemetry } from "./runtime-worker.js";
-import { sampleMmdAnimWasmLightTrackInto, sampleMmdLightTrackInto, sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
+import { sampleMmdSelfShadowTrackInto } from "../../../dist/runtime/index.js";
 import {
   applyMmdLightStateToThreeDirectionalLight,
   applyMmdSelfShadowStateToThreeDirectionalLight,
@@ -201,16 +201,8 @@ function reportSettledRenderError(error) {
 
 function applyLightMotion() {
   const cameraMotion = state.currentCameraMotion;
-  const lightState = cameraMotion?.lightTrack
-    ? sampleMmdAnimWasmLightTrackInto(
-        cameraMotion.lightTrack,
-        currentMmdFrame(),
-        state.lightSampleScratch,
-        state.lightStateScratch
-      )
-    : cameraMotion?.lightFrames?.length > 0
-      ? sampleMmdLightTrackInto(cameraMotion.lightFrames, currentMmdFrame(), state.lightStateScratch)
-      : state.currentModel?.runtime?.lightState?.();
+  const lightState = cameraMotion?.lightTrack.sampleInto(currentMmdFrame(), state.lightStateScratch)
+    ?? state.currentModel?.runtime?.lightState?.();
   if (!lightState || !state.keyLight) {
     return;
   }

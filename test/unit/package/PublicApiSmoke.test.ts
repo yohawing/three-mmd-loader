@@ -18,11 +18,13 @@ import {
 import {
   DefaultMmdRuntime,
   MmdAnimRuntime,
-  ThreeMmdLoader,
   createMmdAnimWasmCameraTrack,
   createMmdAnimWasmLightTrack,
   sampleMmdAnimWasmCameraTrackInto,
-  sampleMmdAnimWasmLightTrackInto,
+  sampleMmdAnimWasmLightTrackInto
+} from "../../../src/runtime/index.js";
+import {
+  ThreeMmdLoader,
   sampleMmdCameraTrackInto,
   sampleMmdLightTrackInto,
   sampleMmdSelfShadowTrackInto,
@@ -32,22 +34,26 @@ import {
   fitMmdSelfShadowDirectionalLightToBox,
   MMD_SELF_SHADOW_LAYER,
   createMmdTextureMapFromFiles,
-  createThreeBufferGeometry,
-  createThreeSkeleton,
-  createDisabledMmdPhysicsBackend,
   createMmdBuiltInToonTextureMap,
   disposeMmdModel,
   findMmdModelFiles,
   findMmdMotionFiles,
+  isModelSource,
+  normalizeMmdRelativePath
+} from "../../../src/index.js";
+import {
+  createThreeBufferGeometry,
+  createThreeSkeleton,
+  mmdWorldMatrixToThree,
+  resolveMappedTexture
+} from "../../../src/three/index.js";
+import {
+  createDisabledMmdPhysicsBackend,
   createCustomBulletMmdPhysicsBackend,
   customBulletMmdScriptPath,
-  isModelSource,
   loadCustomBulletMmdModule,
-  mmdWorldMatrixToThree,
-  normalizeMmdRelativePath,
-  resolveCustomBulletMmdScriptUrl,
-  resolveMappedTexture
-} from "../../../src/index.js";
+  resolveCustomBulletMmdScriptUrl
+} from "../../../src/physics/index.js";
 import * as publicApi from "../../../src/index.js";
 
 describe("public API smoke", () => {

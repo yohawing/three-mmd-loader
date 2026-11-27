@@ -1,7 +1,7 @@
 import { toUint8Array } from "../binary/index.js";
 import { detectModelFormat } from "../formatDetection.js";
 import type {
-  Diagnostic,
+  MmdDiagnostic,
   DisplayFrameData,
   GeometryBuffers,
   JointData,
@@ -374,10 +374,10 @@ function hasEnabledDeformVertex(enabled: Float32Array): boolean {
   return false;
 }
 
-function buildAdapterDiagnostics(j: Record<string, unknown>): Diagnostic[] {
+function buildAdapterDiagnostics(j: Record<string, unknown>): MmdDiagnostic[] {
   const skeleton = asRecord(j["skeleton"]);
   const bones = asArray<Record<string, unknown>>(skeleton["bones"]);
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: MmdDiagnostic[] = [];
   if (bones.some((bone) => {
     const ik = asRecord(bone["ik"]);
     return asArray<Record<string, unknown>>(ik["links"]).some((link) => link["limits"] != null);
@@ -418,8 +418,8 @@ function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
-function asDiagnostics(value: unknown): Diagnostic[] {
-  return asArray<Diagnostic>(value);
+function asDiagnostics(value: unknown): MmdDiagnostic[] {
+  return asArray<MmdDiagnostic>(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

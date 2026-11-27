@@ -1,15 +1,16 @@
 import type { MmdAnimation } from "../parser/model/modelTypes.js";
-import type { DefaultMmdRuntimeOptions, MmdRuntimeEvaluateOptions } from "../runtime/types.js";
+import type { MmdRuntimeOptions, MmdRuntimeEvaluateOptions } from "../runtime/types.js";
 import type { MmdRuntimeModelDescriptor } from "./modelDescriptor.js";
 import type { MmdRuntimePoseBuffer } from "./protocol.js";
 import type { MmdRuntimeSharedPoseSlot } from "./sharedPose.js";
 import type { CustomBulletWorkerPhysicsConfig } from "./externalPhysics.js";
 
+/** Internal worker protocol. Message contents are outside the semver guarantee. */
 export type MmdRuntimeWorkerCommand =
   | {
       readonly type: "init";
       readonly descriptor: MmdRuntimeModelDescriptor;
-      readonly runtimeOptions?: Omit<DefaultMmdRuntimeOptions, "physicsBackend">;
+      readonly runtimeOptions?: Omit<MmdRuntimeOptions, "physicsBackend">;
       readonly sharedPoseSlots?: readonly MmdRuntimeSharedPoseSlot[];
       readonly externalPhysics?: CustomBulletWorkerPhysicsConfig;
     }
@@ -29,6 +30,7 @@ export type MmdRuntimeWorkerCommand =
   | { readonly type: "sharedRelease" }
   | { readonly type: "dispose" };
 
+/** Internal worker protocol. Message contents are outside the semver guarantee. */
 export type MmdRuntimeWorkerEvent =
   | { readonly type: "ready"; readonly epoch: number }
   | { readonly type: "pose"; readonly pose: MmdRuntimePoseBuffer; readonly requestId?: number }

@@ -4,7 +4,7 @@ import {
   denseMorphProviderSymbol,
   type DenseMorphProvider
 } from "../../../src/parser/model/denseMorphProvider.js";
-import type { ThreeMmdGeometryMorph } from "../../../src/three/geometry.js";
+import type { ThreeMmdGeometryMorph } from "../../../src/three/geometry-morph.js";
 import {
   packMmdPositionMorphsToVertexCsr,
   packMmdUvMorphsToVertexCsr

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { attachMmdMaterialFactors, attachMmdSphereTexture, syncMmdSpecularDirection } from "../../dist/three/index.js";
+import { syncMmdSpecularDirection } from "../../dist/three/index.js";
+import { attachMmdMaterialFactors, attachMmdSphereTexture } from "../../dist/three/material/material-shader-hooks.js";
 
 // Independent pixel oracles from MikuDanceStudio 0e969951, skin_effect_sm3.fx:
 // BShadowSphiaTexture_VS/PS: interpolate normal XY, v = .5 - y*.5,

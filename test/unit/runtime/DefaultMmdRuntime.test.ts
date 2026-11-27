@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
-import { DefaultMmdRuntime } from "../../../src/index.js";
+import { DefaultMmdRuntime } from "../../../src/runtime/index.js";
 import type { MmdAnimation, VmdBoneFrame, VmdBoneTrack, VmdMorphFrame, VmdMorphTrack } from "../../../src/index.js";
 import type {
   MmdDirectBufferPhysicsBackend,
@@ -85,18 +85,20 @@ describe("DefaultMmdRuntime", () => {
 
   it("keeps tick render sync on the hot path allocation-free", async () => {
     const source = await readFile("src/runtime/core.ts", "utf8");
+    const renderSource = await readFile("src/runtime/renderSync.ts", "utf8");
 
     expect(source).not.toContain("function normalizeTickOptions");
     expect(source).not.toContain("const { mesh, evaluateOptions } =");
     expect(source).not.toContain("evaluate(seconds: number, options: MmdRuntimeEvaluateOptions = {})");
     expect(source).not.toContain("this.state = createFrameState(seconds, this.frameRate);");
     expect(source).not.toContain(".traverse((");
+    expect(renderSource).not.toContain(".traverse((");
     expect(source).toContain("let mesh: THREE.Object3D | null | undefined;");
     expect(source).toContain("let evaluateOptions: MmdRuntimeEvaluateOptions | undefined;");
     expect(source).toContain("evaluate(seconds: number, options?: MmdRuntimeEvaluateOptions)");
     expect(source).toContain("writeFrameState(this.state, seconds, this.frameRate);");
     expect(source).toContain("return copyFrameStateInto(this.evaluateReturnState, this.state);");
-    expect(source).toContain("function updateSkinnedMeshSkeletons(");
+    expect(renderSource).toContain("function updateSkinnedMeshSkeletons(");
   });
 
   it("ticks evaluation and syncs renderer-facing skeleton matrices", () => {
@@ -477,6 +479,46 @@ describe("DefaultMmdRuntime", () => {
     expect(appendB.quaternion.w).toBeCloseTo(appendA.quaternion.w, 5);
   });
 
+  it("updates the next IK goal through append rotation for a Japanese hand-twist name", () => {
+    function evaluateSecondEffector(goalName: string): THREE.Vector3 {
+      const source = new THREE.Bone();
+      const tip = new THREE.Bone();
+      tip.position.x = 1;
+      source.add(tip);
+      const goal = new THREE.Bone();
+      goal.name = goalName;
+      goal.position.y = 1;
+
+      // The second goal starts on +X and moves to +Y when it inherits the first link's turn.
+      const append = new THREE.Bone();
+      append.userData.mmdAppendTransform = { parentIndex: 0, weight: 1 };
+      append.userData.mmdFlags = { appendRotate: true };
+      const secondGoal = new THREE.Bone();
+      secondGoal.position.x = 1;
+      append.add(secondGoal);
+      const secondLink = new THREE.Bone();
+      const secondTip = new THREE.Bone();
+      secondTip.position.x = 1;
+      secondLink.add(secondTip);
+
+      const mesh = new THREE.SkinnedMesh();
+      mesh.add(source, goal, append, secondLink);
+      mesh.bind(new THREE.Skeleton([source, tip, goal, append, secondGoal, secondLink, secondTip]));
+      mesh.userData.mmdIkChains = [
+        { goalBoneIndex: 2, effectorBoneIndex: 1, iterationCount: 4, maxAnglePerIteration: Math.PI, links: [{ boneIndex: 0 }] },
+        { goalBoneIndex: 4, effectorBoneIndex: 6, iterationCount: 4, maxAnglePerIteration: Math.PI, links: [{ boneIndex: 5 }] }
+      ];
+
+      const runtime = new DefaultMmdRuntime();
+      runtime.setAnimation(createEmptyMmdAnimation(), mesh);
+      runtime.evaluate(0);
+      return secondTip.getWorldPosition(new THREE.Vector3());
+    }
+
+    expect(evaluateSecondEffector("左手捩IK").distanceTo(new THREE.Vector3(0, 1, 0))).toBeLessThan(1e-5);
+    expect(evaluateSecondEffector("左腕IK").distanceTo(new THREE.Vector3(1, 0, 0))).toBeLessThan(1e-5);
+  });
+
   it("evaluates append transforms by PMX layer before bone array order", () => {
     const source = new THREE.Bone();
     source.name = "source";
@@ -609,7 +651,7 @@ describe("DefaultMmdRuntime", () => {
     expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
   });
 
-  it("honors VMD property frame IK enable states", () => {
+  it("honors VMD property frame IK enable states across backward seeks", () => {
     const ikSource = new THREE.Bone();
     ikSource.name = "ikSource";
     const effector = new THREE.Bone();
@@ -646,6 +688,12 @@ describe("DefaultMmdRuntime", () => {
           visible: true,
           physicsSimulation: true,
           ikStates: [{ boneName: "足ＩＫ", enabled: true }]
+        },
+        {
+          frame: 2,
+          visible: true,
+          physicsSimulation: true,
+          ikStates: [{ boneName: "足ＩＫ", enabled: false }]
         }
       ]
     };
@@ -664,6 +712,11 @@ describe("DefaultMmdRuntime", () => {
     runtime.setAnimation(animation, mesh);
     runtime.evaluate(1 / 30, { physics: false });
 
+    expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
+
+    runtime.evaluate(2 / 30, { physics: false });
+    expect(ikSource.quaternion.equals(new THREE.Quaternion())).toBe(true);
+    runtime.evaluate(1 / 30, { physics: false });
     expect(Math.abs(ikSource.quaternion.z)).toBeGreaterThan(0.5);
   });
 
@@ -708,6 +761,44 @@ describe("DefaultMmdRuntime", () => {
 
     expectBonePoseClose(secondA, firstA);
     expectBonePoseClose(secondB, firstB);
+  });
+
+  it("reports external physics timing across forward, backward and resumed evaluation", () => {
+    const backend = new TranslatingPhysicsBackend([0, 0, 0]);
+    const bone = new THREE.Bone();
+    const mesh = new THREE.SkinnedMesh();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    const runtime = new DefaultMmdRuntime({ physics: "external", physicsBackend: backend });
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
+    const steps = [];
+    for (const [seconds, physics] of [[1 / 32, true], [3 / 32, true], [2 / 32, true], [4 / 32, false], [5 / 32, true]] as const) {
+      runtime.evaluate(seconds, { physics });
+      steps.push([backend.stepCount, backend.lastContext?.seeking, backend.lastContext?.deltaSeconds]);
+    }
+    expect(steps).toEqual([
+      [1, true, 1 / 32],
+      [2, false, 2 / 32],
+      [3, true, 0],
+      [3, true, 0],
+      [4, true, 1 / 32]
+    ]);
+  });
+
+  it("does not step external physics on reset or subsequent unbound evaluation", () => {
+    const backend = new TranslatingPhysicsBackend([0, 0, 0]);
+    const bone = new THREE.Bone();
+    const mesh = new THREE.SkinnedMesh();
+    mesh.add(bone);
+    mesh.bind(new THREE.Skeleton([bone]));
+    const runtime = new DefaultMmdRuntime({ physics: "external", physicsBackend: backend });
+    runtime.setAnimation(createEmptyMmdAnimation(), mesh);
+    runtime.evaluate(0);
+    expect(backend.stepCount).toBe(1);
+    runtime.reset(0.5);
+    expect(backend.stepCount).toBe(1);
+    runtime.evaluate(0.5);
+    expect(backend.stepCount).toBe(1);
   });
 
   it("steps an external physics backend and applies updated local bone transforms", () => {
@@ -756,7 +847,7 @@ describe("DefaultMmdRuntime", () => {
     expect(runtime.debugState().stages.physics.worldMatricesColumnMajor[14]).toBe(3);
   });
 
-  it("writes external physics input directly into backend-owned step buffers", () => {
+  it("writes directly into backend-owned buffers and releases step context references on reset", () => {
     const bone = new THREE.Bone();
     bone.name = "physics";
     bone.userData.mmdBoneName = "physics";
@@ -803,6 +894,14 @@ describe("DefaultMmdRuntime", () => {
     expect(backend.lastContext?.bonePhysicsToggles).toBe(backend.buffers.bonePhysicsToggles);
     expect(backend.buffers.inputRotations[3]).toBe(1);
     expect(bone.position.toArray()).toEqual([4, 5, -6]);
+    const context = backend.lastContext;
+    runtime.reset();
+    expect(context).toMatchObject({
+      skeleton: undefined, rigidBodies: undefined, joints: undefined, morphImpulses: undefined,
+      inputTranslations: undefined, inputRotations: undefined, inputWorldMatricesColumnMajor: undefined,
+      bonePhysicsToggles: undefined,
+      output: { translations: undefined, rotations: undefined, worldMatricesColumnMajor: undefined, updatedBoneIndices: undefined }
+    });
   });
 
   it("skips and resets external physics when evaluate disables physics", () => {
@@ -1059,7 +1158,7 @@ class TranslatingPhysicsBackend implements MmdPhysicsBackend {
 
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
     this.stepCount += 1;
-    this.lastContext = context;
+    this.lastContext = structuredClone(context);
     context.output?.translations?.set(this.translation, 0);
     context.output?.updatedBoneIndices?.push(0);
     return { simulated: true };
@@ -1077,7 +1176,7 @@ class InspectingPhysicsBackend implements MmdPhysicsBackend {
   lastContext: MmdPhysicsStepContext | undefined;
 
   step(context: MmdPhysicsStepContext): MmdPhysicsStepResult {
-    this.lastContext = context;
+    this.lastContext = structuredClone(context);
     return { simulated: true };
   }
 }

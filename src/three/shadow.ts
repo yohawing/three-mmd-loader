@@ -1,4 +1,4 @@
-import type { SelfShadowState } from "../parser/model/modelTypes.js";
+import type { MmdSelfShadowState } from "../parser/model/modelTypes.js";
 import * as THREE from "three";
 
 export const MMD_SELF_SHADOW_LAYER = 1;
@@ -222,7 +222,7 @@ function setWorldPosition(object: THREE.Object3D, worldPosition: THREE.Vector3):
 
 export function applyMmdSelfShadowStateToThreeDirectionalLight(
   light: THREE.DirectionalLight,
-  state: SelfShadowState | undefined,
+  state: MmdSelfShadowState | undefined,
   options?: ApplyMmdSelfShadowStateOptions
 ): THREE.DirectionalLight {
   if (!state) {

@@ -35,7 +35,7 @@ export function updateDiagnosticsPanel(model) {
   if (!dom.debugDiagnostics || !dom.debugDiagnosticsList) {
     return;
   }
-  const metadata = model?.mesh?.userData?.mmdModel?.metadata;
+  const metadata = model?.metadata;
   const diagnostics = metadata?.diagnostics ?? [];
   if (diagnostics.length === 0) {
     dom.debugDiagnostics.hidden = true;

@@ -33,6 +33,11 @@ export type CustomBulletMmdModule = MmdAnimBulletModule;
 export interface CustomBulletMmdPhysicsBackend extends MmdDirectBufferPhysicsBackend {
   debugContactCount(): number;
   debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[];
+  /**
+   * Returns contacts where either world rigid body index is in [firstRigidBodyIndex, firstRigidBodyIndex + rigidBodyCount).
+   * This debug API writes all native contacts to the buffer and materializes only matches in JS.
+   */
+  debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex: number, rigidBodyCount: number): readonly MmdAnimBulletContactPoint[];
 }
 
 type CustomBulletMmdFactory = (
@@ -141,5 +146,9 @@ class CustomBulletMmdCompatibilityBackend implements CustomBulletMmdPhysicsBacke
 
   debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[] {
     return this.backend.debugPhysicsContacts();
+  }
+
+  debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex: number, rigidBodyCount: number): readonly MmdAnimBulletContactPoint[] {
+    return this.backend.debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex, rigidBodyCount);
   }
 }

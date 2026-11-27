@@ -1,5 +1,5 @@
 import type {
-  Diagnostic,
+  MmdDiagnostic,
   DisplayFrameData,
   JointData,
   MaterialInfo,
@@ -15,8 +15,8 @@ export function createModelDiagnostics(
   rigidBodies: readonly RigidBodyData[] = [],
   joints: readonly JointData[] = [],
   displayFrames: readonly DisplayFrameData[] = []
-): Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
+): MmdDiagnostic[] {
+  const diagnostics: MmdDiagnostic[] = [];
   if (
     materials.some(
       (material) =>

@@ -1,8 +1,37 @@
-import { readFile as readRawFile } from "node:fs/promises";
+import { readdir, readFile as readRawFile } from "node:fs/promises";
 
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 describe("example viewer source", () => {
+  it("limits viewer imports from dist to public entries and four internal modules", async () => {
+    const viewer = "examples/viewer";
+    const pkg = JSON.parse(await readFile("package.json", "utf8")) as {
+      exports: Record<string, { default: string }>;
+    };
+    const publicPaths = new Set(Object.values(pkg.exports).map(entry => entry.default.slice(2)));
+    const internalPaths = new Set<string>();
+    for (const file of await readdir(viewer, { recursive: true })) {
+      if (!/\.(?:js|ts|html)$/.test(file)) continue;
+      const source = await readFile(`${viewer}/${file}`, "utf8");
+      const scripts = file.endsWith(".html")
+        ? Array.from(source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi), match => match[1])
+        : [source];
+      for (const script of scripts) {
+        for (const { fileName } of ts.preProcessFile(script, true, true).importedFiles) {
+          const path = fileName.match(/(?:^|\/)(dist\/[^?#]+)/)?.[1];
+          if (path && !publicPaths.has(path)) internalPaths.add(path);
+        }
+      }
+    }
+    expect([...internalPaths].sort()).toEqual([
+      "dist/three/mmd-shadow-projection.js",
+      "dist/three/reference-shadow-pass.js",
+      "dist/webgpu/self-shadow-pass.js",
+      "dist/webgpu/skinning-capacity.js"
+    ]);
+  });
+
   it("keeps one shadow strategy without projection or sampling selectors", async () => {
     const state = await readFile("examples/viewer/lib/state.js", "utf8");
     const pipeline = await readFile("examples/viewer/lib/viewer-pipeline.js", "utf8");
@@ -553,7 +582,7 @@ describe("example viewer source", () => {
     const domSource = await readFile("examples/viewer/lib/dom.js", "utf8");
     const i18nSource = await readFile("examples/viewer/lib/i18n.js", "utf8");
     const styles = await readFile("examples/viewer/styles.css", "utf8");
-    const threeSource = await readFile("src/three/index.ts", "utf8");
+    const threeSource = await readFile("src/three/model-mesh.ts", "utf8");
 
     expect(threeSource).toContain("comment: modelData.metadata.comment");
     expect(threeSource).toContain("englishComment: modelData.metadata.englishComment");
@@ -698,11 +727,11 @@ describe("example viewer source", () => {
     expect(cameraSource).not.toContain("parseVmd");
     expect(cameraSource).toContain("state.animationLoader.loadAnimation(url)");
     expect(cameraSource).toContain("state.animationLoader.loadAnimation(file)");
-    expect(cameraSource).toContain("sampleMmdAnimWasmCameraTrackInto");
-    expect(cameraSource).toContain("state.cameraSampleScratch");
-    expect(cameraSource).toContain("state.animationLoader.createCameraTrack(loadedAnimation)");
-    expect(cameraSource).toContain("lightFrames: animation.lightFrames");
-    expect(cameraSource).toContain("state.animationLoader.createLightTrack(loadedAnimation)");
+    expect(cameraSource).not.toContain("sampleMmdAnimWasmCameraTrackInto");
+    expect(cameraSource).toContain("cameraTrack.sampleInto(currentMmdFrame(), state.cameraStateScratch)");
+    expect(cameraSource).toContain("state.animationLoader.createCameraTrackSampler(loadedAnimation)");
+    expect(cameraSource).toContain("lightTrack.dispose()");
+    expect(cameraSource).toContain("state.animationLoader.createLightTrackSampler(loadedAnimation)");
     expect(cameraSource).not.toContain("state.renderer.render(");
 
     const dropHandler = modelSource.slice(
@@ -929,7 +958,7 @@ describe("example viewer source", () => {
     expect(cameraSource).toContain("syncTimelineRangeToCurrentMotion()");
     expect(cameraSource).toContain("currentMotionDurationSeconds()");
     expect(cameraSource).not.toContain("existingMax");
-    expect(cameraSource).toContain("cameraMotion.frameIndexHint");
+    expect(cameraSource).toContain("cameraTrack.dispose()");
     expect(cameraSource).toContain("currentMmdFrame()");
     expect(cameraSource).toContain("/ state.mmdFrameRate");
     expect(cameraSource).toContain("applyMmdCameraStateToThreeCamera(");
@@ -951,8 +980,8 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("cameraQuaternionScratch: new THREE.Quaternion()");
     expect(stateSource).toContain("quaternion: state.cameraQuaternionScratch");
     expect(stateSource).toContain("cameraStateScratch: {");
-    expect(stateSource).toContain("cameraSampleScratch: new Float32Array(9)");
-    expect(stateSource).toContain("lightSampleScratch: new Float32Array(6)");
+    expect(stateSource).not.toContain("cameraSampleScratch");
+    expect(stateSource).not.toContain("lightSampleScratch");
     expect(stateSource).toContain("lightStateScratch: {");
     expect(stateSource).toContain("orthographicCamera: undefined");
     expect(stateSource).toContain("get orthographicCamera()");
@@ -1188,12 +1217,12 @@ describe("example viewer source", () => {
     expect(stateSource).toContain("runtimePhysicsDisabledOptionsScratch");
     expect(stateSource).toContain("audioNoEvaluateOptionsScratch");
     expect(stateSource).toContain("selfShadowLightOptionsScratch");
-    expect(stateSource).toContain("cameraSampleScratch: new Float32Array(9)");
-    expect(stateSource).toContain("lightSampleScratch: new Float32Array(6)");
-    expect(cameraSource).toContain("sampleMmdAnimWasmCameraTrackInto(");
-    expect(playbackSource).toContain("sampleMmdAnimWasmLightTrackInto(");
-    expect(playbackSource).toContain("state.lightSampleScratch");
-    expect(playbackSource).toContain("sampleMmdLightTrackInto(cameraMotion.lightFrames");
+    expect(stateSource).not.toContain("cameraSampleScratch");
+    expect(stateSource).not.toContain("lightSampleScratch");
+    expect(cameraSource).not.toContain("sampleMmdAnimWasmCameraTrackInto(");
+    expect(playbackSource).not.toContain("sampleMmdAnimWasmLightTrackInto(");
+    expect(playbackSource).toContain("lightTrack.sampleInto(currentMmdFrame(), state.lightStateScratch)");
+    expect(playbackSource).not.toContain("sampleMmdLightTrackInto(cameraMotion.lightFrames");
     expect(cameraSource).not.toContain(".sampleJson(");
     expect(cameraSource).not.toContain(".sampleArray(");
     expect(playbackSource).not.toContain(".sampleJson(");
@@ -1687,7 +1716,7 @@ describe("example viewer source", () => {
     const html = await readFile("examples/viewer/index.html", "utf8");
 
     expect(modelSource).toContain('import { detectStandardBones } from "../../../dist/parser/index.js"');
-    expect(modelSource).toContain("detectStandardBones(");
+    expect(modelSource.match(/detectStandardBones\(state\.currentModel\.bones\)/g)).toHaveLength(3);
     expect(modelSource).toContain("updateBoneDetectionPanel(");
     expect(modelSource).toContain("clearBoneDetectionPanel()");
     expect(diagnosticsSource).toContain("function updateBoneDetectionPanel(");

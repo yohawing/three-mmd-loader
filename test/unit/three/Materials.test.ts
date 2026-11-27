@@ -1,18 +1,17 @@
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { attachMmdMaterialFactors, attachMmdSphereTexture } from "../../../src/three/material/material-shader-hooks.js";
 import {
-  attachMmdMaterialFactors,
-  attachMmdSphereTexture,
   applyThreeMmdMaterialTextures,
   createThreeMmdMaterials,
-  getDefaultToonGradientMap,
   syncMmdMaterialStates,
   syncMmdSpecularDirection
 } from "../../../src/three/index.js";
+import { getDefaultToonGradientMap } from "../../../src/three/textures.js";
 import type { MaterialInfo, MorphData } from "../../../src/parser/model/modelTypes.js";
 import type { ThreeMmdTextureLoader } from "../../../src/three/index.js";
-import * as Textures from "../../../src/three/textures.js";
+import * as Textures from "../../../src/three/texture-alpha.js";
 
 function createMaterialInfo(overrides: Partial<MaterialInfo> = {}): MaterialInfo {
   return {
@@ -121,6 +120,15 @@ function createAlphaMaterialMorph(materialIndex = 0): MorphData[] {
 }
 
 describe("Three.js MMD materials", () => {
+  it("applies material factors to a standalone material without textures", async () => {
+    const mmdMaterials = [createMaterialInfo()];
+    const materials = createThreeMmdMaterials(mmdMaterials);
+
+    await applyThreeMmdMaterialTextures(materials, mmdMaterials);
+
+    expect(materials[0].userData.mmdMaterialFactors.shaderApplied).toBe(true);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

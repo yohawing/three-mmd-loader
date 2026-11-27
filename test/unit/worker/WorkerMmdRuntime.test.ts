@@ -6,11 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import { ThreeMmdLoader } from "../../../src/index.js";
 import { DefaultMmdRuntime } from "../../../src/runtime/index.js";
+import { createMmdRuntimePoseBuffer } from "../../../src/worker/protocol.js";
 import {
-  createMmdRuntimePoseBuffer,
   acquireMmdRuntimeSharedPoseWriteSlot,
+  publishMmdRuntimeSharedPose
+} from "../../../src/worker/sharedPose.js";
+import {
   createWorkerMmdRuntimeFactory,
-  publishMmdRuntimeSharedPose,
   type MmdRuntimeWorkerEvent,
   type MmdRuntimeWorkerCommand,
   type MmdRuntimeWorkerLike,

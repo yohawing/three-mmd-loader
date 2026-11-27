@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   acquireMmdRuntimeSharedPoseWriteSlot,
-  createMmdRuntimePoseBuffer,
   createMmdRuntimeSharedPoseReadBuffer,
   createMmdRuntimeSharedPoseSlots,
   publishMmdRuntimeSharedPose,
   readMmdRuntimeSharedPoseInto,
   releaseMmdRuntimeSharedPoseReadSlot
-} from "../../../src/worker/index.js";
+} from "../../../src/worker/sharedPose.js";
+import { createMmdRuntimePoseBuffer } from "../../../src/worker/protocol.js";
 
 describe("MMD runtime shared pose slots", () => {
   it("publishes through a structured-cloned SAB triple buffer", () => {

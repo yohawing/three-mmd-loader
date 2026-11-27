@@ -68,6 +68,7 @@ export interface MmdTslMaterialAssemblyOptions {
   readonly reversedDepth?: boolean;
 }
 
+/** @experimental */
 export function createMmdTslMaterialFromSource(
   sourceMaterial: THREE.Material,
   options: MmdTslMaterialAssemblyOptions = {}
@@ -146,6 +147,7 @@ function disposeSourceMaterialOnce(sourceMaterial: THREE.Material): () => void {
   };
 }
 
+/** @experimental */
 export function replaceMmdModelMaterialsWithTsl(
   mesh: THREE.Mesh,
   options: MmdTslMaterialAssemblyOptions = {}
@@ -164,6 +166,7 @@ export function replaceMmdModelMaterialsWithTsl(
   }
 }
 
+/** @experimental */
 export function appendMmdTslOutlineGroups(
   mesh: THREE.Mesh,
   options: MmdTslMaterialAssemblyOptions = {}

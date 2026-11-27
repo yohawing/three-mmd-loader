@@ -88,7 +88,18 @@ function mmdQuaternionToThree(
 }
 
 function threeQuaternionToMmd(quaternion: THREE.Quaternion): [number, number, number, number] {
-  return [-quaternion.x, -quaternion.y, quaternion.z, quaternion.w];
+  return threeQuaternionToMmdInto(quaternion, [0, 0, 0, 1]);
+}
+
+export function threeQuaternionToMmdInto(
+  quaternion: THREE.Quaternion,
+  target: [number, number, number, number]
+): [number, number, number, number] {
+  target[0] = -quaternion.x;
+  target[1] = -quaternion.y;
+  target[2] = quaternion.z;
+  target[3] = quaternion.w;
+  return target;
 }
 
 const zeroVector3 = new THREE.Vector3();
@@ -169,6 +180,20 @@ function prepareQuaternionScratchArray(
   for (const quaternion of target) {
     quaternion.identity();
   }
+  return target;
+}
+
+export function copyFloat32ArrayToScratch(
+  source: Float32Array,
+  scratch: Float32Array
+): Float32Array<ArrayBuffer> {
+  const target = ensureFloat32ArrayLength(scratch, source.length);
+  target.set(source);
+  return target;
+}
+
+export function resetNumberArray(target: number[]): number[] {
+  target.length = 0;
   return target;
 }
 
@@ -264,3 +289,14 @@ function writeQuaternionToBuffer(
 }
 
 export { clamp, clampOffsetVector, copyNumbersToFloat32Scratch, ensureFloat32ArrayLength, interpolateBezier, isTuple3, lerp, mmdQuaternionToThree, normalizeFrameRate, normalizeQuaternion, prepareQuaternionScratchArray, prepareVector3ScratchArray, readMmdRestPosition, slerp, slerpIdentityQuaternionInto, threeQuaternionToMmd, weightedThreeQuaternion, writeQuaternionToBuffer, writeVector3ToBuffer, zeroVector3 };
+
+export function interpolationRatio(previousFrame: number, nextFrame: number, frame: number): number {
+  const span = nextFrame - previousFrame;
+  if (span <= 0) {
+    return 0;
+  }
+  if (span <= 1) {
+    return frame >= nextFrame ? 1 : 0;
+  }
+  return (frame - previousFrame) / span;
+}

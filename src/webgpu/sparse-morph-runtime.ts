@@ -23,13 +23,14 @@ interface MmdSparseMorphAttributeState {
   readonly hadMorphAttributes: boolean;
 }
 
-interface MmdWebGpuRenderer {
+export interface MmdWebGpuRenderer {
   readonly backend?: { readonly isWebGPUBackend?: boolean };
   compute(node: THREE.Node | THREE.Node[]): Promise<void> | undefined;
 }
 
 const sparsePositionMorphStates = new WeakMap<THREE.SkinnedMesh, MmdSparsePositionMorphState>();
 
+/** @experimental */
 export function enableMmdTslSparsePositionMorphs(mesh: THREE.SkinnedMesh): boolean {
   if (sparsePositionMorphStates.has(mesh)) {
     return true;
@@ -99,7 +100,10 @@ export function enableMmdTslSparsePositionMorphs(mesh: THREE.SkinnedMesh): boole
   return true;
 }
 
-/** Restores the replaced dense attributes and disposes the public compute nodes. */
+/**
+ * Restores the replaced dense attributes and disposes the public compute nodes.
+ * @experimental
+ */
 export function disposeMmdTslSparsePositionMorphs(mesh: THREE.SkinnedMesh): boolean {
   const state = sparsePositionMorphStates.get(mesh);
   if (!state) {
@@ -132,6 +136,7 @@ export function disposeMmdTslSparsePositionMorphs(mesh: THREE.SkinnedMesh): bool
   return true;
 }
 
+/** @experimental */
 export function computeMmdTslSparsePositionMorphs(
   renderer: MmdWebGpuRenderer,
   mesh: THREE.SkinnedMesh

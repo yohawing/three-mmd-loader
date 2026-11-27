@@ -141,8 +141,6 @@ export const state = {
     fov: 1,
     perspective: true
   },
-  cameraSampleScratch: new Float32Array(9),
-  lightSampleScratch: new Float32Array(6),
   lightStateScratch: {
     color: [0, 0, 0],
     direction: [0, 0, 0]

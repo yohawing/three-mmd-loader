@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import type { CameraState } from "../parser/model/modelTypes.js";
+import type { MmdCameraState } from "../parser/model/modelTypes.js";
 
 export interface ApplyMmdCameraStateOptions {
   readonly target?: THREE.Vector3;
@@ -28,7 +28,7 @@ const defaultOutsideParentScratch = new THREE.Vector3();
 
 export function applyMmdCameraStateToThreeCamera(
   camera: THREE.PerspectiveCamera,
-  state: CameraState,
+  state: MmdCameraState,
   options?: ApplyMmdCameraStateOptions
 ): THREE.PerspectiveCamera | THREE.OrthographicCamera {
   const activeCamera =

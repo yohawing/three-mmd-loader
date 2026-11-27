@@ -1,15 +1,13 @@
 import * as THREE from "three";
 import { validateMorphOverrides } from "./morphOverrides.js";
-import type { CameraState, LightState, MmdAnimation } from "../parser/model/modelTypes.js";
-import { writeBonePhysicsToggleBuffer } from "../physics/legacyPhysicsBridge.js";
-import type { MmdDirectBufferPhysicsBackend, MmdPhysicsBackend, MmdPhysicsStepBuffers, MmdPhysicsStepContext } from "../physics/index.js";
+import type { MmdCameraState, MmdLightState, MmdAnimation } from "../parser/model/modelTypes.js";
+import type { MmdPhysicsBackend } from "../physics/index.js";
 import {
   applyMmdAnimation,
   isMmdAnimation,
-  preparePreAppendTransforms,
-  sampleMmdCameraTrackInto,
-  sampleMmdLightTrackInto
+  preparePreAppendTransforms
 } from "./animation.js";
+import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./sceneTrackSampling.js";
 import {
   appendTransformOrder,
   applyAppendTransforms,
@@ -19,29 +17,27 @@ import { createCcdIkStaticBones, readIkChains, solvePreparedIk } from "./ik-brid
 import type { SolvePreparedIkScratch } from "./ik-bridge.js";
 import { CcdIkSolver } from "./ik/index.js";
 import type { CcdIkPreparedChain } from "./ik/index.js";
+import { IkEnableState } from "./ikEnableState.js";
 import {
-  copyNumbersToFloat32Scratch,
-  ensureFloat32ArrayLength,
   normalizeFrameRate,
   prepareQuaternionScratchArray,
-  prepareVector3ScratchArray,
-  threeQuaternionToMmd,
-  writeQuaternionToBuffer,
-  writeVector3ToBuffer
+  prepareVector3ScratchArray
 } from "./math.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
-import { StatefulSpringPhysicsSimulation, applyPhysicsOutputToSkeleton, captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStages, createPhysicsResetContext, createPrePhysicsInputBuffersIfNeeded, extractMmdWorldMatricesInto, mergePhysicsOutputDeltas, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
-import type { PrePhysicsScratch } from "./physics.js";
-import type { DefaultMmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeExternalPhysicsData, RuntimeRestTransform } from "./types.js";
+import { StatefulSpringPhysicsSimulation, readRuntimeExternalPhysics, readRuntimePhysics } from "./physics.js";
+import { captureRuntimeDebugStageInto, cloneDebugStage, createEmptyDebugStages } from "./debugState.js";
+import { createPhysicsResetContext } from "./physicsPose.js";
+import { ExternalPhysicsStepper } from "./externalPhysicsStepper.js";
+import type { MmdRuntimeOptions, MmdFrameState, MmdRuntime, MmdRuntimeDebugState, MmdRuntimeEvaluateOptions, MmdRuntimeTickOptions, RuntimeRestTransform } from "./types.js";
 import { readMmdBoneUserData, readMmdMeshRuntimeData } from "./userData.js";
+import { ensureTuple3ScratchLength } from "./defaultPhysics.js";
+import { copyFrameStateInto, createFrameState, writeFrameState } from "./frameState.js";
+import type { MutableFrameState } from "./frameState.js";
+import { isObject3D, syncRuntimeMeshForRender } from "./renderSync.js";
+
 type MutableDebugStages = {
   -readonly [K in keyof MmdRuntimeDebugState["stages"]]: MmdRuntimeDebugState["stages"][K];
 };
-type MutableFrameState = {
-  -readonly [K in keyof MmdFrameState]: MmdFrameState[K];
-};
-
-const mmdMatrixAxisSigns = [1, 1, -1, 1] as const;
 
 export class DefaultMmdRuntime implements MmdRuntime {
   private readonly frameRate: number;
@@ -51,7 +47,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   private restTransforms: RuntimeRestTransform[] = [];
   private preAppendTransforms: RuntimeRestTransform[] = [];
   private physicsSimulation: StatefulSpringPhysicsSimulation | undefined;
-  private externalPhysicsData: RuntimeExternalPhysicsData | undefined;
+  private readonly externalPhysicsStepper: ExternalPhysicsStepper;
   private bonePhysicsToggles: Record<string, number> = {};
   private debugStages: MutableDebugStages = createEmptyDebugStages();
   private readonly state: MutableFrameState;
@@ -62,13 +58,8 @@ export class DefaultMmdRuntime implements MmdRuntime {
   };
   private readonly physicsMode: "none" | "stateful-spring" | "external";
   private readonly physicsBackend: MmdPhysicsBackend | undefined;
-  private previousEvaluateSeconds: number | undefined;
   private physicsDisabled = false;
-  private preparedIkChains: CcdIkPreparedChain[] = [];
-  private readonly activeIkChains: CcdIkPreparedChain[] = [];
-  private currentIkPropertyFrame: MmdAnimation["propertyFrames"][number] | undefined;
-  private currentIkPropertyFrameIndex = -1;
-  private readonly disabledIkBoneNames = new Set<string>();
+  private readonly ikEnableState = new IkEnableState();
   private readonly scratchAppendTranslations: THREE.Vector3[] = [];
   private readonly scratchAppendRotations: THREE.Quaternion[] = [];
   private cachedAppendTransformOrder: number[] = [];
@@ -103,7 +94,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   };
   private readonly scratchSingleIkChain: CcdIkPreparedChain[] = [];
   private readonly scratchChangedIkBoneIndices = new Set<number>();
-  private readonly scratchCameraState: CameraState = {
+  private readonly scratchCameraState: MmdCameraState = {
     distance: 0,
     position: [0, 0, 0],
     rotation: [0, 0, 0],
@@ -111,41 +102,17 @@ export class DefaultMmdRuntime implements MmdRuntime {
     perspective: true
   };
   private readonly scratchCameraFrameHint = { index: 0 };
-  private readonly scratchLightState: LightState = {
+  private readonly scratchLightState: MmdLightState = {
     color: [0, 0, 0],
     direction: [0, 0, 0]
   };
   private readonly scratchStatefulSpringTranslations: Array<[number, number, number]> = [];
-  private readonly scratchExternalPhysicsInput = {
-    translations: new Float32Array(0),
-    rotations: new Float32Array(0),
-    worldMatricesColumnMajor: new Float32Array(0),
-    outputTranslations: new Float32Array(0),
-    outputRotations: new Float32Array(0),
-    outputWorldMatricesColumnMajor: new Float32Array(0),
-    updatedBoneIndices: [] as number[],
-    bonePhysicsToggleBuffer: new Uint8Array(0),
-    worldMatricesColumnMajorNumbers: [] as number[]
-  };
-  private readonly scratchPrePhysics: PrePhysicsScratch = {
-    preTranslations: new Float32Array(0),
-    preRotations: new Float32Array(0),
-    preWorldMatricesColumnMajor: new Float32Array(0),
-    composeWorldPositions: [],
-    composeWorldRotations: [],
-    composeMatrix: new THREE.Matrix4(),
-    composeUnitScale: new THREE.Vector3(1, 1, 1),
-    mergeTargetRotation: new THREE.Quaternion(),
-    mergePreRotation: new THREE.Quaternion(),
-    mergePhysicsRotation: new THREE.Quaternion(),
-    localPosition: new THREE.Vector3(),
-    localRotation: new THREE.Quaternion()
-  };
 
-  constructor(options: DefaultMmdRuntimeOptions = {}) {
+  constructor(options: MmdRuntimeOptions = {}) {
     this.frameRate = normalizeFrameRate(options.frameRate ?? 30);
     this.physicsMode = options.physics ?? "none";
     this.physicsBackend = options.physicsBackend;
+    this.externalPhysicsStepper = new ExternalPhysicsStepper(this.physicsBackend, { directBuffers: true });
     this.state = createFrameState(options.initialSeconds ?? 0, this.frameRate);
   }
 
@@ -159,7 +126,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     writeFrameState(this.state, seconds, this.frameRate);
     if (this.mesh && (this.mmdAnimation || options?.morphOverrides || this.hadMorphOverrides)) {
       this.applyCurrentMmdAnimation(this.state.frame, options?.morphOverrides);
-      this.updateCurrentIkStates(this.state.frame);
+      this.ikEnableState.update(this.mmdAnimation?.propertyFrames, this.state.frame, this.mesh.skeleton.bones);
       this.captureDebugStage("vmdInterpolation");
     }
     this.hadMorphOverrides = (options?.morphOverrides?.indices.length ?? 0) > 0;
@@ -176,12 +143,12 @@ export class DefaultMmdRuntime implements MmdRuntime {
       this.physicsDisabled = true;
     } else {
       this.stepStatefulSpringPhysics();
-      this.stepExternalPhysics(previousSeconds);
+      this.externalPhysicsStepper.step(this.mesh, this.state, previousSeconds, this.bonePhysicsToggles);
       this.physicsDisabled = false;
     }
     this.mesh?.skeleton.update();
     this.captureDebugStage("physics");
-    this.previousEvaluateSeconds = options?.physics === false ? undefined : seconds;
+    this.externalPhysicsStepper.markEvaluated(options?.physics === false ? undefined : seconds);
     return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
 
@@ -229,14 +196,11 @@ export class DefaultMmdRuntime implements MmdRuntime {
   clearAnimation(): void {
     this.mmdAnimation = undefined;
     this.bonePhysicsToggles = {};
-    this.activeIkChains.length = 0;
-    this.currentIkPropertyFrame = undefined;
-    this.currentIkPropertyFrameIndex = -1;
-    this.disabledIkBoneNames.clear();
+    this.ikEnableState.clear();
     this.scratchCameraFrameHint.index = 0;
   }
 
-  cameraState(): CameraState | undefined {
+  cameraState(): MmdCameraState | undefined {
     const frames = this.mmdAnimation?.cameraFrames;
     if (!frames || frames.length === 0) {
       this.scratchCameraFrameHint.index = 0;
@@ -250,7 +214,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
     );
   }
 
-  lightState(): LightState | undefined {
+  lightState(): MmdLightState | undefined {
     const frames = this.mmdAnimation?.lightFrames;
     if (!frames || frames.length === 0) {
       return undefined;
@@ -273,16 +237,12 @@ export class DefaultMmdRuntime implements MmdRuntime {
     this.physicsBackend?.reset?.(
       createPhysicsResetContext(createFrameState(seconds, this.frameRate))
     );
-    this.externalPhysicsData = undefined;
+    this.externalPhysicsStepper.bind(undefined);
     this.bonePhysicsToggles = {};
-    this.preparedIkChains = [];
-    this.activeIkChains.length = 0;
-    this.currentIkPropertyFrame = undefined;
-    this.currentIkPropertyFrameIndex = -1;
-    this.disabledIkBoneNames.clear();
+    this.ikEnableState.setChains([]);
     this.scratchCameraFrameHint.index = 0;
     this.debugStages = createEmptyDebugStages();
-    this.previousEvaluateSeconds = undefined;
+    this.externalPhysicsStepper.markEvaluated(undefined);
     this.physicsDisabled = false;
     return copyFrameStateInto(this.evaluateReturnState, this.state);
   }
@@ -296,16 +256,12 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
     this.prepareAnimationTarget(mesh);
     this.mmdAnimation = animation;
-    this.preparedIkChains = this.ikSolver.prepareChains(
+    this.ikEnableState.setChains(this.ikSolver.prepareChains(
       readIkChains(mesh),
       createCcdIkStaticBones(mesh)
-    );
-    this.activeIkChains.length = 0;
-    this.currentIkPropertyFrame = undefined;
-    this.currentIkPropertyFrameIndex = -1;
-    this.disabledIkBoneNames.clear();
+    ));
     this.applyCurrentMmdAnimation(this.state.frame);
-    this.updateCurrentIkStates(this.state.frame);
+    this.ikEnableState.update(animation.propertyFrames, this.state.frame, mesh.skeleton.bones);
   }
 
   private prepareAnimationTarget(mesh: THREE.SkinnedMesh): void {
@@ -327,12 +283,13 @@ export class DefaultMmdRuntime implements MmdRuntime {
         ? new StatefulSpringPhysicsSimulation(readRuntimePhysics(mesh))
         : undefined;
     this.physicsSimulation?.reset(0);
-    this.externalPhysicsData =
+    this.externalPhysicsStepper.bind(
       this.physicsMode === "external" && this.physicsBackend
         ? readRuntimeExternalPhysics(mesh)
-        : undefined;
+        : undefined
+    );
     this.physicsBackend?.reset?.(createPhysicsResetContext(this.state));
-    this.previousEvaluateSeconds = undefined;
+    this.externalPhysicsStepper.markEvaluated(undefined);
     this.physicsDisabled = false;
   }
 
@@ -388,7 +345,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 
   private solveIk(): Set<number> {
-    const chains = this.currentEnabledIkChains();
+    const chains = this.ikEnableState.enabledChains();
     if (!this.hasHandTwistIkChain()) {
       const sourceBoneIndices = solvePreparedIk(this.mesh, this.ikSolver, chains, this.scratchIk);
       this.reapplyCurrentAppendTransformsForSources(sourceBoneIndices);
@@ -414,56 +371,12 @@ export class DefaultMmdRuntime implements MmdRuntime {
     return changedBoneIndices;
   }
 
-  private currentEnabledIkChains(): readonly CcdIkPreparedChain[] {
-    if (this.disabledIkBoneNames.size === 0) {
-      return this.preparedIkChains;
-    }
-    return this.activeIkChains;
-  }
-
-  private rebuildActiveIkChains(): void {
-    this.activeIkChains.length = 0;
-    const bones = this.mesh?.skeleton.bones;
-    if (!bones) {
-      return;
-    }
-    for (const chain of this.preparedIkChains) {
-      if (this.isIkChainEnabled(chain, bones)) {
-        this.activeIkChains.push(chain);
-      }
-    }
-  }
-
-  private isIkChainEnabled(
-    chain: CcdIkPreparedChain,
-    bones: readonly THREE.Bone[]
-  ): boolean {
-    const bone = bones[chain.goalBoneIndex];
-    if (!bone) {
-      return true;
-    }
-    if (this.disabledIkBoneNames.has(bone.name)) {
-      return false;
-    }
-    const userData = readMmdBoneUserData(bone);
-    const mmdName = userData.mmdBoneName;
-    if (typeof mmdName === "string" && this.disabledIkBoneNames.has(mmdName)) {
-      return false;
-    }
-    const ikStateName = userData.mmdIkStateName;
-    if (typeof ikStateName === "string" && this.disabledIkBoneNames.has(ikStateName)) {
-      return false;
-    }
-    const englishName = userData.mmdEnglishBoneName;
-    return !(typeof englishName === "string" && this.disabledIkBoneNames.has(englishName));
-  }
-
   private hasHandTwistIkChain(): boolean {
     const bones = this.mesh?.skeleton.bones;
     if (!bones) {
       return false;
     }
-    for (const chain of this.preparedIkChains) {
+    for (const chain of this.ikEnableState.chains) {
       const bone = bones[chain.goalBoneIndex];
       const userData = bone ? readMmdBoneUserData(bone) : undefined;
       if (
@@ -498,47 +411,6 @@ export class DefaultMmdRuntime implements MmdRuntime {
     syncMorphSplitTargetInfluences(mesh);
     this.bonePhysicsToggles = bonePhysicsToggles;
   }
-
-  private updateCurrentIkStates(frame: number): void {
-    const propertyFrame = this.sampleCurrentPropertyFrame(frame);
-    if (propertyFrame === this.currentIkPropertyFrame) {
-      return;
-    }
-    this.currentIkPropertyFrame = propertyFrame;
-    this.disabledIkBoneNames.clear();
-    this.activeIkChains.length = 0;
-    if (!propertyFrame) {
-      return;
-    }
-    for (const state of propertyFrame.ikStates) {
-      if (!state.enabled) {
-        this.disabledIkBoneNames.add(state.boneName);
-      }
-    }
-    if (this.disabledIkBoneNames.size > 0) {
-      this.rebuildActiveIkChains();
-    }
-  }
-
-  private sampleCurrentPropertyFrame(frame: number): MmdAnimation["propertyFrames"][number] | undefined {
-    const frames = this.mmdAnimation?.propertyFrames;
-    if (!frames || frames.length === 0 || frame < (frames[0]?.frame ?? Number.POSITIVE_INFINITY)) {
-      this.currentIkPropertyFrameIndex = -1;
-      return undefined;
-    }
-    let index = this.currentIkPropertyFrameIndex;
-    const current = index >= 0 && index < frames.length ? frames[index] : undefined;
-    if (!current || current.frame > frame) {
-      index = findPropertyFrameIndex(frames, frame);
-    } else {
-      while (index + 1 < frames.length && (frames[index + 1]?.frame ?? Number.POSITIVE_INFINITY) <= frame) {
-        index += 1;
-      }
-    }
-    this.currentIkPropertyFrameIndex = index;
-    return frames[index];
-  }
-
 
   private applyCurrentAppendTransforms(): void {
     applyAppendTransforms(
@@ -595,166 +467,6 @@ export class DefaultMmdRuntime implements MmdRuntime {
     }
   }
 
-  private stepExternalPhysics(previousSeconds: number): void {
-    const mesh = this.mesh;
-    const data = this.externalPhysicsData;
-    const backend = this.physicsBackend;
-    if (!mesh || !data || !backend || backend.disabled || backend.disposed) {
-      return;
-    }
-
-    mesh.updateWorldMatrix(false, true);
-    const boneCount = mesh.skeleton.bones.length;
-    const directBuffers = acquireDirectStepBuffersIfPossible(backend, data, boneCount);
-    let inputTranslations: Float32Array<ArrayBuffer>;
-    if (directBuffers) {
-      inputTranslations = directBuffers.inputTranslations;
-    } else {
-      inputTranslations = ensureFloat32ArrayLength(
-        this.scratchExternalPhysicsInput.translations,
-        boneCount * 3
-      );
-      this.scratchExternalPhysicsInput.translations = inputTranslations;
-    }
-    inputTranslations.fill(0, 0, mesh.skeleton.bones.length * 3);
-    let inputRotations: Float32Array<ArrayBuffer>;
-    if (directBuffers) {
-      inputRotations = directBuffers.inputRotations;
-    } else {
-      inputRotations = ensureFloat32ArrayLength(
-        this.scratchExternalPhysicsInput.rotations,
-        boneCount * 4
-      );
-      this.scratchExternalPhysicsInput.rotations = inputRotations;
-    }
-    inputRotations.fill(0, 0, boneCount * 4);
-    for (let index = 0; index < boneCount; index += 1) {
-      const bone = mesh.skeleton.bones[index];
-      if (!bone) {
-        continue;
-      }
-      writeVector3ToBuffer(inputTranslations, index, [
-        bone.position.x,
-        bone.position.y,
-        -bone.position.z
-      ]);
-      writeQuaternionToBuffer(inputRotations, index, threeQuaternionToMmd(bone.quaternion));
-    }
-    let inputWorldMatricesColumnMajor: Float32Array<ArrayBuffer>;
-    if (directBuffers) {
-      inputWorldMatricesColumnMajor = extractMmdWorldMatricesIntoFloat32(
-        mesh,
-        directBuffers.inputWorldMatricesColumnMajor
-      );
-    } else {
-      inputWorldMatricesColumnMajor = copyNumbersToFloat32Scratch(
-        extractMmdWorldMatricesInto(
-          mesh,
-          this.scratchExternalPhysicsInput.worldMatricesColumnMajorNumbers
-        ),
-        this.scratchExternalPhysicsInput.worldMatricesColumnMajor
-      );
-      this.scratchExternalPhysicsInput.worldMatricesColumnMajor = inputWorldMatricesColumnMajor;
-    }
-    const prePhysics = createPrePhysicsInputBuffersIfNeeded(
-      data.skeleton,
-      inputTranslations,
-      inputRotations,
-      inputWorldMatricesColumnMajor,
-      this.scratchPrePhysics
-    );
-    const physicsInputTranslations = prePhysics?.translations ?? inputTranslations;
-    const physicsInputRotations = prePhysics?.rotations ?? inputRotations;
-    const physicsInputWorldMatricesColumnMajor =
-      prePhysics?.worldMatricesColumnMajor ?? inputWorldMatricesColumnMajor;
-    let outputTranslations: Float32Array<ArrayBuffer>;
-    if (directBuffers) {
-      outputTranslations = directBuffers.outputTranslations;
-      outputTranslations.set(physicsInputTranslations);
-    } else {
-      outputTranslations = copyFloat32ArrayToScratch(
-        physicsInputTranslations,
-        this.scratchExternalPhysicsInput.outputTranslations
-      );
-      this.scratchExternalPhysicsInput.outputTranslations = outputTranslations;
-    }
-    let outputRotations: Float32Array<ArrayBuffer>;
-    if (directBuffers) {
-      outputRotations = directBuffers.outputRotations;
-      outputRotations.set(physicsInputRotations);
-    } else {
-      outputRotations = copyFloat32ArrayToScratch(
-        physicsInputRotations,
-        this.scratchExternalPhysicsInput.outputRotations
-      );
-      this.scratchExternalPhysicsInput.outputRotations = outputRotations;
-    }
-    let outputWorldMatricesColumnMajor: Float32Array<ArrayBuffer>;
-    if (directBuffers) {
-      outputWorldMatricesColumnMajor = directBuffers.outputWorldMatricesColumnMajor;
-      outputWorldMatricesColumnMajor.set(physicsInputWorldMatricesColumnMajor);
-    } else {
-      outputWorldMatricesColumnMajor = copyFloat32ArrayToScratch(
-        physicsInputWorldMatricesColumnMajor,
-        this.scratchExternalPhysicsInput.outputWorldMatricesColumnMajor
-      );
-      this.scratchExternalPhysicsInput.outputWorldMatricesColumnMajor =
-        outputWorldMatricesColumnMajor;
-    }
-    if (
-      !directBuffers &&
-      this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer.length < data.bones.length
-    ) {
-      this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer = new Uint8Array(data.bones.length);
-    }
-    const bonePhysicsToggleBuffer = writeBonePhysicsToggleBuffer(
-      data.bones,
-      this.bonePhysicsToggles,
-      directBuffers?.bonePhysicsToggles ?? this.scratchExternalPhysicsInput.bonePhysicsToggleBuffer
-    );
-    const context: MmdPhysicsStepContext = {
-      seconds: this.state.seconds,
-      deltaSeconds: Math.max(0, this.state.seconds - previousSeconds),
-      frame: this.state.frame,
-      frameRate: this.state.frameRate,
-      seeking:
-        this.previousEvaluateSeconds === undefined ||
-        this.state.seconds < this.previousEvaluateSeconds,
-      skeleton: data.skeleton,
-      rigidBodies: data.rigidBodies,
-      joints: data.joints,
-      inputTranslations: physicsInputTranslations,
-      inputRotations: physicsInputRotations,
-      inputWorldMatricesColumnMajor: physicsInputWorldMatricesColumnMajor,
-      output: {
-        translations: outputTranslations,
-        rotations: outputRotations,
-        worldMatricesColumnMajor: outputWorldMatricesColumnMajor,
-        updatedBoneIndices:
-          resetDirectUpdatedBoneIndices(directBuffers?.updatedBoneIndices) ??
-          resetNumberArray(this.scratchExternalPhysicsInput.updatedBoneIndices)
-      },
-      bonePhysicsToggles: bonePhysicsToggleBuffer,
-      morphImpulses: data.morphImpulses
-    };
-
-    const result = backend.step(context);
-    const updatedBoneCount = result.updatedBoneCount ?? context.output?.updatedBoneIndices?.length ?? 0;
-    if (!result.simulated && updatedBoneCount === 0) {
-      return;
-    }
-    if (prePhysics) {
-      mergePhysicsOutputDeltas(
-        context,
-        inputTranslations,
-        inputRotations,
-        prePhysics,
-        this.scratchPrePhysics
-      );
-    }
-    applyPhysicsOutputToSkeleton(mesh, context, updatedBoneCount);
-  }
-
   private resetPhysicsState(): void {
     this.physicsSimulation?.reset(this.state.seconds);
     this.physicsBackend?.reset?.(createPhysicsResetContext(this.state));
@@ -770,197 +482,7 @@ export class DefaultMmdRuntime implements MmdRuntime {
   }
 }
 
-
-function findPropertyFrameIndex(
-  frames: readonly MmdAnimation["propertyFrames"][number][],
-  frame: number
-): number {
-  let low = 0;
-  let high = frames.length - 1;
-  while (low <= high) {
-    const middle = (low + high) >> 1;
-    const middleFrame = frames[middle]?.frame ?? Number.POSITIVE_INFINITY;
-    if (middleFrame <= frame) {
-      low = middle + 1;
-    } else {
-      high = middle - 1;
-    }
-  }
-  return Math.max(0, high);
-}
-
-function syncRuntimeMeshForRender(mesh: THREE.Object3D | undefined): void {
-  if (!mesh) {
-    return;
-  }
-  // Keep renderer-facing world and bone matrices in sync after runtime evaluation.
-  mesh.updateMatrixWorld(true);
-  updateSkinnedMeshSkeletons(mesh);
-}
-
-function updateSkinnedMeshSkeletons(object: THREE.Object3D): void {
-  if (isSkinnedMesh(object)) {
-    object.skeleton.update();
-  }
-  const children = object.children;
-  for (let index = 0; index < children.length; index += 1) {
-    const child = children[index];
-    if (child) {
-      updateSkinnedMeshSkeletons(child);
-    }
-  }
-}
-
-function isObject3D(value: unknown): value is THREE.Object3D {
-  return value instanceof THREE.Object3D || hasBooleanFlag(value, "isObject3D");
-}
-
-function isSkinnedMesh(value: THREE.Object3D): value is THREE.SkinnedMesh {
-  return value instanceof THREE.SkinnedMesh || hasBooleanFlag(value, "isSkinnedMesh");
-}
-
-function hasBooleanFlag(value: unknown, key: "isObject3D" | "isSkinnedMesh"): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<typeof key, unknown>)[key] === true
-  );
-}
-
-function ensureTuple3ScratchLength(
-  scratch: Array<[number, number, number]>,
-  length: number
-): Array<[number, number, number]> {
-  for (let index = scratch.length; index < length; index += 1) {
-    scratch.push([0, 0, 0]);
-  }
-  scratch.length = length;
-  return scratch;
-}
-
-function copyFloat32ArrayToScratch(
-  source: Float32Array,
-  scratch: Float32Array
-): Float32Array<ArrayBuffer> {
-  const target = ensureFloat32ArrayLength(scratch, source.length);
-  target.set(source);
-  return target;
-}
-
-function resetNumberArray(target: number[]): number[] {
-  target.length = 0;
-  return target;
-}
-
 function clearDebugStage(stage: MmdRuntimeDebugState["stages"]["physics"]): void {
   (stage.worldMatricesColumnMajor as number[]).length = 0;
   (stage.morphWeights as number[]).length = 0;
-}
-
-function resetDirectUpdatedBoneIndices(
-  target: MmdPhysicsStepBuffers["updatedBoneIndices"] | undefined
-): MmdPhysicsStepBuffers["updatedBoneIndices"] | undefined {
-  if (Array.isArray(target)) {
-    target.length = 0;
-  }
-  return target;
-}
-
-function acquireDirectStepBuffersIfPossible(
-  backend: MmdPhysicsBackend,
-  data: RuntimeExternalPhysicsData,
-  boneCount: number
-): MmdPhysicsStepBuffers | undefined {
-  if (!isDirectBufferPhysicsBackend(backend) || requiresPrePhysicsRestPose(data)) {
-    return undefined;
-  }
-  const buffers = backend.acquireStepBuffers({
-    boneCount,
-    translationValueCount: boneCount * 3,
-    rotationValueCount: boneCount * 4,
-    worldMatrixValueCount: boneCount * 16
-  });
-  return buffers && hasDirectStepBufferCapacity(buffers, boneCount) ? buffers : undefined;
-}
-
-function isDirectBufferPhysicsBackend(
-  backend: MmdPhysicsBackend
-): backend is MmdDirectBufferPhysicsBackend {
-  return typeof (backend as { acquireStepBuffers?: unknown }).acquireStepBuffers === "function";
-}
-
-function requiresPrePhysicsRestPose(data: RuntimeExternalPhysicsData): boolean {
-  for (const bone of data.skeleton.bones) {
-    if (bone.transformAfterPhysics === true) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function hasDirectStepBufferCapacity(buffers: MmdPhysicsStepBuffers, boneCount: number): boolean {
-  return (
-    buffers.inputTranslations.length >= boneCount * 3 &&
-    buffers.inputRotations.length >= boneCount * 4 &&
-    buffers.inputWorldMatricesColumnMajor.length >= boneCount * 16 &&
-    buffers.outputTranslations.length >= boneCount * 3 &&
-    buffers.outputRotations.length >= boneCount * 4 &&
-    buffers.outputWorldMatricesColumnMajor.length >= boneCount * 16 &&
-    buffers.bonePhysicsToggles.length >= boneCount &&
-    (buffers.updatedBoneIndices === undefined || buffers.updatedBoneIndices.length >= boneCount)
-  );
-}
-
-function extractMmdWorldMatricesIntoFloat32(
-  mesh: THREE.SkinnedMesh,
-  matrices: Float32Array<ArrayBuffer>
-): Float32Array<ArrayBuffer> {
-  for (let boneIndex = 0; boneIndex < mesh.skeleton.bones.length; boneIndex += 1) {
-    const bone = mesh.skeleton.bones[boneIndex];
-    const elements = bone.matrixWorld.elements;
-    const base = boneIndex * 16;
-    for (let column = 0; column < 4; column += 1) {
-      for (let row = 0; row < 4; row += 1) {
-        matrices[base + column * 4 + row] =
-          mmdMatrixAxisSigns[row] * elements[column * 4 + row] * mmdMatrixAxisSigns[column];
-      }
-    }
-  }
-  return matrices;
-}
-
-function createFrameState(seconds: number, frameRate: number): MmdFrameState {
-  return writeFrameState(
-    {
-      seconds: 0,
-      frame: 0,
-      frameRate: 30
-    },
-    seconds,
-    frameRate
-  );
-}
-
-function writeFrameState(
-  target: MutableFrameState,
-  seconds: number,
-  frameRate: number
-): MutableFrameState {
-  if (!Number.isFinite(seconds)) {
-    throw new RangeError("MMD runtime seconds must be finite");
-  }
-  target.seconds = seconds;
-  target.frame = seconds * frameRate;
-  target.frameRate = frameRate;
-  return target;
-}
-
-function copyFrameStateInto(
-  target: MutableFrameState,
-  source: MmdFrameState
-): MmdFrameState {
-  target.seconds = source.seconds;
-  target.frame = source.frame;
-  target.frameRate = source.frameRate;
-  return target;
 }

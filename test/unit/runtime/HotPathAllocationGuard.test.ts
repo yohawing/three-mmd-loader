@@ -2,6 +2,53 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("runtime hot path allocation guards", () => {
+  it("samples camera and light tracks without temporary buffers or frame-pair objects", async () => {
+    const sampler = await readFile("src/three/trackSampler.ts", "utf8");
+    const sampling = await readFile("src/runtime/sceneTrackSampling.ts", "utf8");
+    const tracks = await readFile("src/runtime/mmdAnimTracks.ts", "utf8");
+    const loader = await readFile("src/three/loader.ts", "utf8");
+    const delegates = loader.match(/return tsTrackSampler\(.*$/gm) ?? [];
+    expect(delegates).toHaveLength(2);
+    expectNoForbiddenPatterns([
+      ...delegates,
+      extractMethodBody(sampler.slice(sampler.indexOf("export function tsTrackSampler")), "sampleInto"),
+      extractMethodBody(sampler.slice(sampler.indexOf("export function wasmTrackSampler")), "sampleInto"),
+      ...["sampleMmdCameraTrackInto", "sampleMmdLightTrackInto", "nextLightFrameIndex"]
+        .map((name) => extractFunctionBody(sampling, name)),
+      ...["readCameraState", "readLightState"].map((name) => extractFunctionBody(tracks, name))
+    ], [
+      ["constructor", /\bnew\s+/],
+      ["object or array literal", /(?:[=(,]|\breturn)\s*[[{]/],
+      ["copying array methods", /\.(?:map|filter|slice|subarray)\s*\(/]
+    ], "track sampling");
+  });
+
+  it("keeps external physics stepping free of per-frame allocations", async () => {
+    const stepper = await readFile("src/runtime/externalPhysicsStepper.ts", "utf8");
+    const pose = await readFile("src/runtime/physicsPose.ts", "utf8");
+    const direct = await readFile("src/runtime/defaultPhysics.ts", "utf8");
+    const math = await readFile("src/runtime/math.ts", "utf8");
+    const bodies = [
+      extractMethodBody(stepper, "step"),
+      extractFunctionBody(math, "threeQuaternionToMmdInto"),
+      extractFunctionBody(math, "writeQuaternionToBuffer"),
+      extractFunctionBody(direct, "acquireDirectStepBuffersIfPossible"),
+      extractFunctionBody(direct, "extractMmdWorldMatricesIntoFloat32"),
+      ...["transformsAfterPhysics", "createPrePhysicsInputBuffersIfNeeded",
+        "composeMmdWorldMatricesFromLocalBuffers", "mergePhysicsOutputDeltas",
+        "applyPhysicsOutputToSkeleton", "applyPhysicsOutputToBone"
+      ].map((name) => extractFunctionBody(pose, name))
+    ];
+    expectNoForbiddenPatterns(bodies, [
+      ["constructor", /\bnew\s+/],
+      ["array or object literal", /(?:[=(,]|\breturn)\s*[[{]/],
+      ["empty array", /\[\s*\]/],
+      ["copying array methods", /\.(?:map|filter|slice|subarray)\s*\(/],
+      ["allocating quaternion conversion", /\bthreeQuaternionToMmd\s*\(/],
+      ["inline callback", /=>/]
+    ], "external physics stepping");
+  });
+
   it("keeps append transform hot paths free of source-level allocation patterns", async () => {
     const source = await readFile("src/runtime/append.ts", "utf8");
     const hotPathBodies = [
@@ -32,15 +79,16 @@ describe("runtime hot path allocation guards", () => {
 
   it("keeps applyMmdAnimation bone sampling hot paths free of source-level allocation patterns", async () => {
     const source = await readFile("src/runtime/animation.ts", "utf8");
+    const sampling = await readFile("src/runtime/boneTrackSampling.ts", "utf8");
     const hotPathBodies = [
       extractFunctionBody(source, "applyMmdAnimation"),
-      extractFunctionBody(source, "sampleBoneTrackInto"),
-      extractFunctionBody(source, "samplePackedBoneTrackInto"),
-      extractFunctionBody(source, "readPackedBoneFrameInto"),
-      extractFunctionBody(source, "readInterpolatedPackedBoneFrameInto"),
-      extractFunctionBody(source, "interpolatePackedCurve"),
-      extractFunctionBody(source, "slerpPackedRotationInto"),
-      extractFunctionBody(source, "normalizeSampleRotationInto"),
+      extractFunctionBody(sampling, "sampleBoneTrackInto"),
+      extractFunctionBody(sampling, "samplePackedBoneTrackInto"),
+      extractFunctionBody(sampling, "readPackedBoneFrameInto"),
+      extractFunctionBody(sampling, "readInterpolatedPackedBoneFrameInto"),
+      extractFunctionBody(sampling, "interpolatePackedCurve"),
+      extractFunctionBody(sampling, "slerpPackedRotationInto"),
+      extractFunctionBody(sampling, "normalizeSampleRotationInto"),
       extractFunctionBody(source, "copyPreAppendTransforms"),
       extractFunctionBody(source, "clearNumberRecord")
     ];
@@ -66,16 +114,19 @@ describe("runtime hot path allocation guards", () => {
 
   it("keeps IK apply entry points free of source-level allocation patterns", async () => {
     const solverSource = await readFile("src/runtime/ik/CcdIkSolver.ts", "utf8");
+    const chainSolveSource = await readFile("src/runtime/ik/chainSolve.ts", "utf8");
+    const planeLinkSource = await readFile("src/runtime/ik/planeLink.ts", "utf8");
+    const worldMatricesSource = await readFile("src/runtime/ik/worldMatrices.ts", "utf8");
     const bridgeSource = await readFile("src/runtime/ik-bridge.ts", "utf8");
     const hotPathBodies = [
       extractMethodBody(solverSource, "applyPrepared"),
       extractMethodBody(solverSource, "runPrepared"),
-      extractFunctionBody(solverSource, "solveChain"),
-      extractFunctionBody(solverSource, "solvePlaneLink"),
-      extractFunctionBody(solverSource, "composeWorldMatrices"),
-      extractFunctionBody(solverSource, "composeWorldMatrix"),
-      extractFunctionBody(solverSource, "composeWorldMatrixInOrder"),
-      extractFunctionBody(solverSource, "composeColumnMajorMatrixInto"),
+      extractFunctionBody(chainSolveSource, "solveChain"),
+      extractFunctionBody(planeLinkSource, "solvePlaneLink"),
+      extractFunctionBody(worldMatricesSource, "composeWorldMatrices"),
+      extractFunctionBody(worldMatricesSource, "composeWorldMatrix"),
+      extractFunctionBody(worldMatricesSource, "composeWorldMatrixInOrder"),
+      extractFunctionBody(worldMatricesSource, "composeColumnMajorMatrixInto"),
       extractFunctionBody(bridgeSource, "solvePreparedIk")
     ];
     const forbiddenPatterns: Array<readonly [string, RegExp]> = [
@@ -96,23 +147,26 @@ describe("runtime hot path allocation guards", () => {
   });
 
   it("keeps selected IK helper allocations out of chain solve loops", async () => {
-    const solverSource = await readFile("src/runtime/ik/CcdIkSolver.ts", "utf8");
+    const chainSolveSource = await readFile("src/runtime/ik/chainSolve.ts", "utf8");
+    const planeLinkSource = await readFile("src/runtime/ik/planeLink.ts", "utf8");
+    const mathSource = await readFile("src/runtime/ik/math.ts", "utf8");
+    const linkLimitsSource = await readFile("src/runtime/ik/linkLimits.ts", "utf8");
     const hotPathBodies = [
-      extractFunctionBody(solverSource, "solveChain"),
-      extractFunctionBody(solverSource, "solvePlaneLink"),
-      extractFunctionBody(solverSource, "signedProjectedAngleInto"),
-      extractFunctionBody(solverSource, "projectVectorOnPlaneInto"),
-      extractFunctionBody(solverSource, "axisAngleQuaternionInto"),
-      extractFunctionBody(solverSource, "multiplyQuaternionsInto"),
-      extractFunctionBody(solverSource, "normalizeQuaternionInto"),
-      extractFunctionBody(solverSource, "invertQuaternionInto"),
-      extractFunctionBody(solverSource, "rotateVectorByQuaternionInto"),
-      extractFunctionBody(solverSource, "quaternionToRotation3Into"),
-      extractFunctionBody(solverSource, "decomposeEulerXyzInto"),
-      extractFunctionBody(solverSource, "chooseEulerCandidate"),
-      extractFunctionBody(solverSource, "eulerXyzToQuaternionInto"),
-      extractFunctionBody(solverSource, "clampLimitedRotationInto"),
-      extractFunctionBody(solverSource, "applyEffectiveRotation")
+      extractFunctionBody(chainSolveSource, "solveChain"),
+      extractFunctionBody(planeLinkSource, "solvePlaneLink"),
+      extractFunctionBody(mathSource, "signedProjectedAngleInto"),
+      extractFunctionBody(mathSource, "projectVectorOnPlaneInto"),
+      extractFunctionBody(mathSource, "axisAngleQuaternionInto"),
+      extractFunctionBody(mathSource, "multiplyQuaternionsInto"),
+      extractFunctionBody(mathSource, "normalizeQuaternionInto"),
+      extractFunctionBody(mathSource, "invertQuaternionInto"),
+      extractFunctionBody(mathSource, "rotateVectorByQuaternionInto"),
+      extractFunctionBody(mathSource, "quaternionToRotation3Into"),
+      extractFunctionBody(mathSource, "decomposeEulerXyzInto"),
+      extractFunctionBody(mathSource, "chooseEulerCandidate"),
+      extractFunctionBody(mathSource, "eulerXyzToQuaternionInto"),
+      extractFunctionBody(linkLimitsSource, "clampLimitedRotationInto"),
+      extractFunctionBody(mathSource, "applyEffectiveRotation")
     ];
     const forbiddenPatterns: Array<readonly [string, RegExp]> = [
       ["new Float32Array", /new\s+Float32Array\s*\(/],
@@ -154,15 +208,21 @@ describe("runtime hot path allocation guards", () => {
   it("keeps runtime debug capture paths using caller-owned arrays", async () => {
     const coreSource = await readFile("src/runtime/core.ts", "utf8");
     const wasmRuntimeSource = await readFile("src/runtime/mmdAnimRuntime.ts", "utf8");
-    const physicsSource = await readFile("src/runtime/physics.ts", "utf8");
+    const debugStateSource = await readFile("src/runtime/debugState.ts", "utf8");
+    const wasmCaptureBody = extractMethodBody(wasmRuntimeSource, "captureDebugStage");
+    expect(wasmRuntimeSource).not.toMatch(/\bfunction\s+copyArrayLikeToNumberArray\b/);
+    expect(wasmRuntimeSource).toMatch(
+      /import\s*\{[^}]*\bcopyArrayLikeToNumberArray\b[^}]*\}\s*from\s*"\.\/debugState\.js"/
+    );
+    expect(wasmCaptureBody).toContain("copyArrayLikeToNumberArray(this.worldMatrices, target.worldMatricesColumnMajor)");
+    expect(wasmCaptureBody).toContain("copyArrayLikeToNumberArray(this.morphWeights, target.morphWeights)");
     const hotPathBodies = [
       extractMethodBody(coreSource, "captureDebugStage"),
-      extractMethodBody(wasmRuntimeSource, "captureDebugStage"),
+      wasmCaptureBody,
       extractMethodBody(wasmRuntimeSource, "capturePhysicsDebugStage"),
-      extractFunctionBody(wasmRuntimeSource, "copyArrayLikeToNumberArray"),
-      extractFunctionBody(physicsSource, "captureRuntimeDebugStageInto"),
-      extractFunctionBody(physicsSource, "extractMmdWorldMatricesInto"),
-      extractFunctionBody(physicsSource, "copyArrayLikeToNumberArray")
+      extractFunctionBody(debugStateSource, "captureRuntimeDebugStageInto"),
+      extractFunctionBody(debugStateSource, "extractMmdWorldMatricesInto"),
+      extractFunctionBody(debugStateSource, "copyArrayLikeToNumberArray")
     ];
     const forbiddenPatterns: Array<readonly [string, RegExp]> = [
       ["new Array", /new\s+Array\s*\(/],

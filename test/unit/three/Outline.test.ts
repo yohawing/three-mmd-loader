@@ -1,12 +1,10 @@
 import * as THREE from "three";
+import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { describe, expect, it } from "vitest";
 
-import {
-  computeMmdMaterialRenderOrder,
-  createMmdMaterialRenderOrderMeshes,
-  createMmdOutlineMeshes,
-  MMD_SELF_SHADOW_LAYER
-} from "../../../src/three/index.js";
+import { computeMmdMaterialRenderOrder } from "../../../src/three/material/material-metadata.js";
+import { createMmdMaterialRenderOrderMeshes, createMmdOutlineMeshes } from "../../../src/three/outline.js";
+import { MMD_SELF_SHADOW_LAYER } from "../../../src/three/index.js";
 import type { MaterialInfo } from "../../../src/parser/model/modelTypes.js";
 
 describe("MMD outline meshes", () => {
@@ -172,12 +170,16 @@ describe("MMD outline meshes", () => {
     });
 
     expect(outlines).toHaveLength(2);
-    expect(outlines[0]?.geometry).not.toBe(geometry);
+    expect(outlines.every((outline) => outline.geometry === geometry)).toBe(true);
     expect(outlines[0]?.geometry.getAttribute("position")).toBe(positions);
-    expect(outlines[0]?.geometry.index).toBe(geometry.index);
-    expect(outlines.map((outline) => outline.geometry.groups)).toEqual([
-      [{ start: 0, count: 3, materialIndex: 0 }],
-      [{ start: 3, count: 3, materialIndex: 0 }]
+    expect(
+      outlines.map((outline) => ({
+        start: outline.userData.mmdOutlineProxy.start,
+        count: outline.userData.mmdOutlineProxy.count
+      }))
+    ).toEqual([
+      { start: 0, count: 3 },
+      { start: 3, count: 3 }
     ]);
     expect(outlines.map((outline) => outline.userData.mmdOutlineProxy.sourceMaterialIndex)).toEqual([
       0,
@@ -198,6 +200,16 @@ describe("MMD outline meshes", () => {
         createMaterialInfo({ name: "second", edgeSize: 0.6, flags: { ...createMaterialInfo().flags, selfShadowMap: true } })
       ]
     });
+    expect(materialMeshes.every((proxy) => proxy.geometry === geometry)).toBe(true);
+    expect(
+      materialMeshes.map((proxy) => ({
+        start: proxy.userData.mmdMaterialRenderProxy.start,
+        count: proxy.userData.mmdMaterialRenderProxy.count
+      }))
+    ).toEqual([
+      { start: 0, count: 3 },
+      { start: 3, count: 3 }
+    ]);
     expect(materialMeshes.map((proxy) => proxy.renderOrder)).toEqual([0, 1]);
     expect(materialMeshes.map((proxy) => !Array.isArray(proxy.material) && proxy.material.transparent)).toEqual([
       false,
@@ -212,6 +224,119 @@ describe("MMD outline meshes", () => {
     expect(Math.max(...materialMeshes.map((proxy) => proxy.renderOrder))).toBeLessThan(
       Math.min(...outlines.map((outline) => outline.renderOrder))
     );
+  });
+
+  it.each([
+    ["resting (0, 0)", 0, 0],
+    ["full", 0, Number.POSITIVE_INFINITY]
+  ])(
+    "narrows the shared drawRange to the proxy group only around draws and restores a %s range",
+    (_label, restStart, restCount) => {
+      const { geometry, mesh, materials } = createTwoMaterialQuad();
+      geometry.setDrawRange(restStart, restCount);
+      const proxies = [
+        ...createMmdMaterialRenderOrderMeshes({ mesh, materials }),
+        ...createMmdOutlineMeshes({ mesh, materials })
+      ];
+      expect(proxies).toHaveLength(4);
+      const renderer = createRendererMock(64, 64);
+      for (const proxy of proxies) {
+        const metadata = (proxy.userData.mmdMaterialRenderProxy ?? proxy.userData.mmdOutlineProxy) as {
+          start: number;
+          count: number;
+        };
+        const material = proxy.material as THREE.Material;
+        proxy.onBeforeRender(renderer, {} as THREE.Scene, {} as THREE.Camera, geometry, material, null);
+        expect(geometry.drawRange).toEqual({ start: metadata.start, count: metadata.count });
+        proxy.onAfterRender(renderer, {} as THREE.Scene, {} as THREE.Camera, geometry, material, null);
+        expect(geometry.drawRange).toEqual({ start: restStart, count: restCount });
+
+        const shadowCamera = new THREE.Camera();
+        const shadowArgs = [
+          renderer,
+          {} as THREE.Scene,
+          {} as THREE.Camera,
+          shadowCamera,
+          geometry,
+          material,
+          {} as THREE.Group
+        ] as const;
+        proxy.onBeforeShadow(...shadowArgs);
+        expect(geometry.drawRange).toEqual({ start: metadata.start, count: metadata.count });
+        proxy.onAfterShadow(...shadowArgs);
+        expect(geometry.drawRange).toEqual({ start: restStart, count: restCount });
+      }
+    }
+  );
+
+  it("preserves proxy draw ranges, raycasts and shared morph geometry after SkeletonUtils.clone", () => {
+    const { geometry, mesh, materials } = createTwoMaterialQuad();
+    geometry.setDrawRange(0, 0);
+    const root = new THREE.Group();
+    root.add(mesh, ...createMmdMaterialRenderOrderMeshes({ mesh, materials }), ...createMmdOutlineMeshes({ mesh, materials }));
+    const cloned = clone(root);
+    cloned.updateMatrixWorld(true);
+    const renderer = createRendererMock(64, 64);
+    const ray = new THREE.Raycaster(new THREE.Vector3(0.25, 0.25, 5), new THREE.Vector3(0, 0, -1));
+    expect(cloned.children).toHaveLength(5);
+    for (const child of cloned.children) {
+      const proxy = child as THREE.SkinnedMesh;
+      expect(proxy.geometry).toBe(geometry);
+      const group = proxy.userData.mmdMaterialRenderProxy ?? proxy.userData.mmdOutlineProxy;
+      if (!group) continue;
+      const args = [renderer, new THREE.Scene(), new THREE.Camera(), geometry, proxy.material as THREE.Material, null] as const;
+      proxy.onBeforeRender(...args);
+      expect(geometry.drawRange).toEqual({ start: group.start, count: group.count });
+      proxy.onAfterRender(...args);
+      expect(geometry.drawRange).toEqual({ start: 0, count: 0 });
+      if (proxy.userData.mmdMaterialRenderProxy) {
+        expect(ray.intersectObject(proxy, false).map(hit => hit.faceIndex)).toEqual(group.start === 0 ? [0] : []);
+        expect(geometry.drawRange).toEqual({ start: 0, count: 0 });
+      }
+    }
+  });
+
+  it("keeps the outline viewport sync chained with the draw-range hook", () => {
+    const { geometry, mesh, materials } = createTwoMaterialQuad();
+    geometry.setDrawRange(0, 0);
+    const [outline] = createMmdOutlineMeshes({ mesh, materials });
+    const material = outline?.material as THREE.Material;
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader: ["#include <common>", "#include <project_vertex>"].join("\n"),
+      fragmentShader: ""
+    };
+    material.onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, createRendererMock(512, 512));
+
+    outline?.onBeforeRender(createRendererMock(300, 200), {} as THREE.Scene, {} as THREE.Camera, geometry, material, null);
+
+    expect(shader.uniforms.mmdOutlineViewport?.value).toEqual(new THREE.Vector2(300, 200));
+    expect(geometry.drawRange).toEqual({ start: 0, count: 3 });
+  });
+
+  it("raycasts only the proxy group triangles and restores the shared drawRange", () => {
+    const { geometry, mesh, materials } = createTwoMaterialQuad();
+    geometry.setDrawRange(0, 0);
+    const proxies = createMmdMaterialRenderOrderMeshes({ mesh, materials });
+    const root = new THREE.Group();
+    root.add(mesh, ...proxies);
+    root.updateMatrixWorld(true);
+    mesh.skeleton.update();
+
+    // Ray through (0.25, 0.25) hits only triangle 0 (vertices 0, 1, 2); (0.75, 0.75)
+    // hits only triangle 1 (vertices 1, 3, 2).
+    const raycaster = new THREE.Raycaster();
+    const hitsFor = (x: number, y: number) =>
+      proxies.map((proxy) => {
+        raycaster.set(new THREE.Vector3(x, y, 5), new THREE.Vector3(0, 0, -1));
+        const intersects: THREE.Intersection[] = [];
+        proxy.raycast(raycaster, intersects);
+        expect(geometry.drawRange).toEqual({ start: 0, count: 0 });
+        return intersects.map((hit) => hit.faceIndex);
+      });
+
+    expect(hitsFor(0.25, 0.25)).toEqual([[0], []]);
+    expect(hitsFor(0.75, 0.75)).toEqual([[], [1]]);
   });
 
   it("does not force opaque source materials into transparent sorting for render-order proxies", () => {
@@ -345,6 +470,39 @@ describe("MMD outline meshes", () => {
     expect(material?.userData.mmdOutlineMaterial.alphaCutout).toBe(false);
   });
 });
+
+function createTwoMaterialQuad(): {
+  geometry: THREE.BufferGeometry;
+  mesh: THREE.SkinnedMesh;
+  materials: MaterialInfo[];
+} {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0], 3));
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+  geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(new Array(16).fill(0), 4));
+  geometry.setAttribute(
+    "skinWeight",
+    new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4)
+  );
+  geometry.setIndex([0, 1, 2, 1, 3, 2]);
+  geometry.addGroup(0, 3, 0);
+  geometry.addGroup(3, 3, 1);
+  geometry.morphAttributes.position = [
+    new THREE.Float32BufferAttribute(new Array(12).fill(0), 3)
+  ];
+  const mesh = new THREE.SkinnedMesh(geometry, [
+    new THREE.MeshToonMaterial({ side: THREE.DoubleSide }),
+    new THREE.MeshToonMaterial({ side: THREE.DoubleSide })
+  ]);
+  const bone = new THREE.Bone();
+  mesh.add(bone);
+  mesh.bind(new THREE.Skeleton([bone]));
+  return {
+    geometry,
+    mesh,
+    materials: [createMaterialInfo({ name: "first" }), createMaterialInfo({ name: "second" })]
+  };
+}
 
 function createRendererMock(width: number, height: number, pixelRatio?: number): THREE.WebGLRenderer {
   return {
