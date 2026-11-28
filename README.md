@@ -2,7 +2,7 @@
 
 A library for loading and playing back MMD models and motions on Three.js.
 
-[日本語](./docs/README.ja.md) / [Live demo](https://three.mmd.yohawing.com/)
+[日本語ドキュメント](https://yohawing.github.io/three-mmd-loader/) / [Live demo](https://three.mmd.yohawing.com/)
 
 ![three-mmd-loader viewer screenshot](./docs/assets/screenshots.png)
 
@@ -140,4 +140,4 @@ renderer.setAnimationLoop(() => {
 
 ## Development
 
-Development notes are in [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md).
+Development notes are in the [development guide](https://yohawing.github.io/three-mmd-loader/project/development) (Japanese).

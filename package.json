@@ -147,8 +147,6 @@
   "files": [
     "dist",
     "docs/assets",
-    "docs/DEVELOPMENT.md",
-    "docs/README.ja.md",
     "CHANGELOG.md"
   ]
 }
