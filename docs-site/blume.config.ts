@@ -4,6 +4,10 @@ export default defineConfig({
   title: "three-mmd-loader",
   description: "TypeScript-first Three.js MMD loading and playback.",
   feedback: false,
+  deployment: {
+    site: "https://yohawing.github.io",
+    base: "/three-mmd-loader"
+  },
   github: {
     owner: "yohawing",
     repo: "three-mmd-loader",
