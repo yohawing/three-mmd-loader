@@ -86,27 +86,6 @@ export function syncMorphWeights(mesh: THREE.SkinnedMesh, weights: Float32Array)
   }
 }
 
-export function syncRuntimeObjectForRender(object: THREE.Object3D | undefined): void {
-  if (!object) {
-    return;
-  }
-  object.updateMatrixWorld(true);
-  updateSkinnedMeshSkeletons(object);
-}
-
-function updateSkinnedMeshSkeletons(object: THREE.Object3D): void {
-  if (isSkinnedMesh(object)) {
-    object.skeleton.update();
-  }
-  const children = object.children;
-  for (let index = 0; index < children.length; index += 1) {
-    const child = children[index];
-    if (child) {
-      updateSkinnedMeshSkeletons(child);
-    }
-  }
-}
-
 export function ensureScratchMatrixArrayLength(
   matrices: THREE.Matrix4[],
   length: number

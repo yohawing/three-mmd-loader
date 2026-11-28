@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 
 import {
+  DefaultMmdRuntime,
   MmdAnimRuntime,
   exportMmdAnimWasmFormatBytes,
   exportMmdAnimWasmVmdAnimationJsonBytes,
@@ -340,6 +341,39 @@ describe("MmdAnimRuntime", () => {
       /exportVpdPoseJsonBytes/
     );
   });
+});
+
+it.each(["JS", "WASM"])("%s tick updates each distinct render skeleton once", (kind) => {
+  const runtime = kind === "JS"
+    ? new DefaultMmdRuntime()
+    : MmdAnimRuntime.fromPmxBytes(createFakeWasmModule(), new Uint8Array([1]));
+  const root = new THREE.Group();
+  const group = new THREE.Group();
+  const bone = new THREE.Bone();
+  const body = new THREE.Skeleton([bone], [new THREE.Matrix4()]);
+  const other = new THREE.Skeleton([bone], [new THREE.Matrix4().makeTranslation(-1, 0, 0)]);
+  const [mesh, otherMesh, outline, otherOutline] = [body, other, body, other].map((skeleton) => {
+    const skin = new THREE.SkinnedMesh();
+    skin.bind(skeleton, new THREE.Matrix4());
+    return skin;
+  });
+  root.add(mesh, group, bone);
+  group.add(otherMesh, outline, otherOutline);
+  const bodyUpdate = vi.spyOn(body, "update");
+  const otherUpdate = vi.spyOn(other, "update");
+
+  // Pass only the render root so the separate pose-evaluation update is excluded.
+  bone.position.x = 3;
+  runtime.tick(0, { mesh: root });
+  expect([body.boneMatrices[12], other.boneMatrices[12]]).toEqual([3, 2]);
+  expect([bodyUpdate.mock.calls.length, otherUpdate.mock.calls.length]).toEqual([1, 1]);
+
+  mesh.bind(other, new THREE.Matrix4());
+  group.remove(outline);
+  bone.position.x = 7;
+  runtime.tick(0, { mesh: root });
+  expect([body.boneMatrices[12], other.boneMatrices[12]]).toEqual([3, 6]);
+  expect([bodyUpdate.mock.calls.length, otherUpdate.mock.calls.length]).toEqual([1, 2]);
 });
 
 interface FakeWasmModule extends MmdAnimRuntimeWasmModule {

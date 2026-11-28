@@ -7,6 +7,7 @@ import { sampleMmdCameraTrackInto, sampleMmdLightTrackInto } from "./sceneTrackS
 import { DefaultMmdRuntime } from "./core.js";
 import { ExternalPhysicsStepper } from "./externalPhysicsStepper.js";
 import { normalizeFrameRate } from "./math.js";
+import { syncRuntimeMeshForRender } from "./renderSync.js";
 import { syncMorphSplitTargetInfluences } from "./morphSplitSync.js";
 import type { MmdHostRigDefinition, MmdHostRigPose, MmdAnimRuntimeWasmHostRig } from "./hostRig.js";
 import { HostRigPhysics } from "./hostRigPhysics.js";
@@ -40,7 +41,6 @@ import {
   syncWorldMatricesToSkeleton,
   writeParentBoneIndices,
   syncMorphWeights,
-  syncRuntimeObjectForRender,
   ensureScratchMatrixArrayLength,
   isObject3D,
   isSkinnedMesh
@@ -381,7 +381,7 @@ export class MmdAnimRuntime implements MmdRuntime {
       evaluateOptions = meshOrOptions;
     }
     const state = this.evaluate(seconds, evaluateOptions);
-    syncRuntimeObjectForRender(renderObject ?? this.mesh);
+    syncRuntimeMeshForRender(renderObject ?? this.mesh);
     return state;
   }
 
