@@ -160,6 +160,7 @@ export class ThreeMmdLoader {
           materialDiagnostics,
           performanceDiagnostics: profile?.measures ?? [],
           materials: modelData.materials,
+          morphs: modelData.morphs,
           outlines: effectiveOutlines,
           renderOrderProxies: options.materialRenderOrder ?? options.renderOrderProxies ?? true
         });
