@@ -3,11 +3,11 @@ title: API
 description: 用途から公開APIの入口を選びます。
 ---
 
-通常のモデル表示はルートの`ThreeMmdLoader`から始めます。必要に応じて用途別のサブパスを使います。
+`@yohawing/three-mmd-loader`は、ルートと6つのサブパスで公開APIを提供しています。通常のモデル表示はルートの`ThreeMmdLoader`から始め、必要に応じて用途別のサブパスをimportしてください。
 
 | import先 | 用途 |
 | --- | --- |
-| `@yohawing/three-mmd-loader` | parser、runtime、three、physicsの再export |
+| `@yohawing/three-mmd-loader` | `ThreeMmdLoader`と主要なモデル・描画ヘルパー |
 | `@yohawing/three-mmd-loader/parser` | ファイル解析と構造化データ |
 | `@yohawing/three-mmd-loader/runtime` | アニメーション評価と状態取得 |
 | `@yohawing/three-mmd-loader/three` | ローダーとThree.jsへの同期 |
@@ -15,10 +15,20 @@ description: 用途から公開APIの入口を選びます。
 | `@yohawing/three-mmd-loader/webgpu` | TSLマテリアルとパイプライン |
 | `@yohawing/three-mmd-loader/worker` | Worker実行と通信 |
 
-WebGPUとWorkerは専用サブパスから読み込みます。`dist`内の個別ファイルを直接importする実装は、公開exportと同じ互換性の対象ではありません。
+`0.9.x`では、parser、runtime、three、physicsの各exportもルートから再exportされていますが、一部は非推奨です。`1.0.0`では該当APIをサブパスからのimportに一本化します。詳しくは[1.0.0への移行](/guides/migration-to-1-0)を参照してください。
 
-## 目的から探す
+WebGPUとWorkerは専用サブパスから読み込みます。`dist`内の個別ファイルを直接importする使い方は、公開exportと同じ互換性保証の対象外です。
 
-[ローダー](/api/loader)、[Parser](/api/parser)、[Runtime](/api/runtime)、[Three.jsヘルパー](/api/three)、[Physics](/api/physics)、[WebGPU](/api/webgpu)、[Worker](/api/worker)に主要APIの選び方をまとめています。
+## モジュール別の入口
 
-全ての引数、戻り値、型はソースから生成する[APIリファレンス](/api/reference)を参照してください。生成リファレンスはこのサイトをビルドしたソースに対応します。使用中のnpmバージョンとの差がある場合は、そのパッケージに同梱された型定義を確認します。
+各モジュールの使い分けは個別ページにまとめています。
+
+- [ThreeMmdLoader](/api/loader)
+- [Parser](/api/parser)
+- [Runtime](/api/runtime)
+- [Three.jsヘルパー](/api/three)
+- [Physics](/api/physics)
+- [WebGPU](/api/webgpu)
+- [Worker](/api/worker)
+
+すべての引数、戻り値、型はソースから生成される[APIリファレンス](/api/reference)を参照してください。生成リファレンスはこのサイトをビルドしたソースに対応するため、使用中のnpmバージョンと差がある場合は、パッケージ同梱の型定義を見てください。

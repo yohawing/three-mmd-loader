@@ -3,6 +3,6 @@ import { defineMeta } from "blume";
 export default defineMeta({
   title: "プロジェクト",
   icon: "github",
-  order: 5,
-  pages: ["index", "contributing", "release-policy"]
+  order: 6,
+  pages: ["index", "contributing", "development", "release-policy"]
 });

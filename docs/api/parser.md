@@ -3,15 +3,21 @@ title: Parser
 description: 描画せずにMMDファイルを解析します。
 ---
 
-`/parser`はファイルの内容を調べるための入口です。Three.jsのシーンやレンダラーを作る必要はありません。
+`@yohawing/three-mmd-loader/parser`は、Three.jsのシーンやレンダラーを作らずにMMDファイルを解析し、構造化データを取得するためのモジュールです。
 
 ## 必要な情報量で選ぶ
 
-`parsePmxMetadata()`と`parsePmdMetadata()`はモデルのメタデータ、`parsePmxSectionInventory()`と`parsePmdSectionInventory()`はセクションの情報を取得します。モデル全体を読み込む場合は`initCore()`で`MmdCore`を初期化して使います。
+| 取得したい情報 | 主なAPI |
+| --- | --- |
+| モデルのメタデータ | `parsePmxMetadata()`、`parsePmdMetadata()` |
+| モデルのセクション情報 | `parsePmxSectionInventory()`、`parsePmdSectionInventory()` |
+| モデル全体のデータ | `initCore()`で初期化した`MmdCore` |
+| モーションの解析 | `parseVmd()` |
+| ポーズの解析 | `parseVpd()` |
 
-VMDは`parseVmd()`、VPDは`parseVpd()`で扱います。各関数が受け付ける入力は個別の型定義を確認してください。ローダーのURL入力と異なり、低水準の解析関数へURLを渡しても自動取得されません。
+各関数が受け付ける入力型は個別の型定義を参照してください。ローダーのURL入力と異なり、低水準の解析関数へURLを渡しても自動取得されません。
 
-PMXのメタデータを取得する例です。
+PMXのバイト列を取得し、メタデータを解析する例です。
 
 ```ts
 import { parsePmxMetadata } from "@yohawing/three-mmd-loader/parser";
@@ -24,8 +30,8 @@ console.log(parsePmxMetadata(bytes));
 
 ## WASMと診断
 
-`initCore()`はWASMの初期化失敗を例外として返します。`initCoreWithFallback()`は失敗時にTypeScriptの`FallbackCore`を返します。解析できたことと、全ての要素を描画・再生できることは別です。
+`initCore()`はWASMの初期化失敗を例外として返します。`initCoreWithFallback()`は失敗時にTypeScript実装の`FallbackCore`を返します。解析できたことと、すべての要素を描画・再生できることは別です。
 
-PMMは`parsePmmDocument()`や`parsePmmManifest()`、アクセサリは`parseAccessory()`で構造を調べます。解析結果の診断と[対応形式](/reference/formats)を確認してから、アプリケーション側の表示・変換処理へ進みます。
+PMMの構造解析には`parsePmmDocument()`や`parsePmmManifest()`、アクセサリの解析には`parseAccessory()`を使えます。解析結果の診断と[対応形式](/reference/formats)を見比べてから、アプリケーション側の表示や変換処理を組んでください。
 
 [Parserの全API](/api/reference/parser) / [MmdCore](/api/reference/parser/interfaces/MmdCore)

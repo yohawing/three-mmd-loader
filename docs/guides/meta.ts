@@ -8,10 +8,10 @@ export default defineMeta({
     "index",
     "assets-and-textures",
     "animation-camera-light",
-    "rendering",
     "physics",
-    "webgpu",
+    "rendering",
     "performance-and-disposal",
+    "webgpu",
     "debugging",
     "migration-to-1-0"
   ]
